@@ -29,9 +29,17 @@
 
 **Install:**
 ```bash
+# macOS / Linux
+brew install mbourmaud/tap/hive-ai
+
+# Or build from source
 git clone https://github.com/mbourmaud/hive.git
-cd hive
-hive init  # Interactive setup wizard
+cd hive && make install
+```
+
+**Setup:**
+```bash
+hive init  # Interactive wizard (email, token, workspace)
 ```
 
 **Use:**
