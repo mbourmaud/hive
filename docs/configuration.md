@@ -4,14 +4,188 @@ This guide covers all configuration options for Hive.
 
 ## Configuration Files
 
-Hive uses two environment files:
+Hive uses a combination of YAML and environment files:
 
 | File | Purpose | Committed to Git |
 |------|---------|------------------|
-| `.env` | Hive configuration | ❌ No (gitignored) |
-| `.env.project` | Project secrets | ❌ No (gitignored) |
+| `hive.yaml` | Hive settings (workers, images, etc.) | ✅ Yes (recommended) |
+| `hive.yaml.example` | Template for `hive.yaml` | ✅ Yes |
+| `.env` | Secrets (tokens, credentials) | ❌ No (gitignored) |
+| `.env.project` | Project secrets (API keys, DB) | ❌ No (gitignored) |
 | `.env.example` | Template for `.env` | ✅ Yes |
 | `.env.project.example` | Template for `.env.project` | ✅ Yes |
+
+**Recommended:**
+- ✅ Use `hive.yaml` for all non-secret config (version control this)
+- ✅ Use `.env` for secrets only (never commit)
+- ✅ Use `.env.project` for project-specific secrets
+
+---
+
+## YAML Configuration (hive.yaml)
+
+**New in v0.3:** Hive now supports YAML configuration for better version control and IDE support.
+
+### Quick Start
+
+```bash
+# Create from template
+cp hive.yaml.example hive.yaml
+
+# Or use hive init
+hive init  # Creates both .env and hive.yaml
+```
+
+### Full Example
+
+```yaml
+# hive.yaml
+workspace:
+  name: my-project
+  git_url: https://github.com/user/repo.git  # Optional
+
+redis:
+  port: 6380
+
+agents:
+  queen:
+    model: opus                        # sonnet, opus, haiku
+    dockerfile: docker/Dockerfile.node
+    env:
+      CUSTOM_QUEEN_VAR: value
+
+  workers:
+    count: 5                           # Number of workers (1-10)
+    model: sonnet
+    dockerfile: docker/Dockerfile.go
+    env:
+      CUSTOM_WORKER_VAR: value
+```
+
+### Configuration Priority
+
+When you run `hive start`:
+
+1. **CLI arguments** (highest priority)
+   ```bash
+   hive start 8  # Uses 8 workers (ignores hive.yaml)
+   ```
+
+2. **hive.yaml** (if exists)
+   ```yaml
+   agents:
+     workers:
+       count: 5
+   ```
+
+3. **Default values** (lowest priority)
+   - 2 workers, sonnet model, Node.js image
+
+### Options
+
+#### workspace
+
+```yaml
+workspace:
+  name: my-project        # Required: workspace directory name
+  git_url: ""             # Optional: auto-clone on first start
+```
+
+#### redis
+
+```yaml
+redis:
+  port: 6380              # Redis port (1024-65535)
+```
+
+#### agents.queen
+
+```yaml
+agents:
+  queen:
+    model: sonnet         # Claude model: sonnet | opus | haiku
+    dockerfile: docker/Dockerfile.node
+    env:                  # Optional: custom environment variables
+      VAR_NAME: value
+```
+
+#### agents.workers
+
+```yaml
+agents:
+  workers:
+    count: 2              # Number of workers (1-10)
+    model: sonnet         # Claude model
+    dockerfile: docker/Dockerfile.node
+    env:                  # Optional: custom environment variables
+      VAR_NAME: value
+```
+
+### Available Dockerfiles
+
+```yaml
+# Minimal (~500MB): Just Claude + git
+dockerfile: docker/Dockerfile.minimal
+
+# Node.js (~1.5GB): Default, full-stack web
+dockerfile: docker/Dockerfile.node
+
+# Go (~1GB): Go development
+dockerfile: docker/Dockerfile.go
+
+# Python (~800MB): Data science
+dockerfile: docker/Dockerfile.python
+
+# Rust (~2GB): Systems programming
+dockerfile: docker/Dockerfile.rust
+```
+
+### Available Models
+
+```yaml
+model: sonnet  # Fast and capable (recommended, default)
+model: opus    # Most capable, slower, expensive
+model: haiku   # Fastest, less capable, cheapest
+```
+
+### Validation
+
+Hive validates your config on startup:
+
+- ✅ `workspace.name` must not be empty
+- ✅ `redis.port` must be 1024-65535
+- ✅ `agents.workers.count` must be 1-10
+
+### Examples
+
+**Minimal config:**
+```yaml
+workspace:
+  name: my-project
+```
+
+**Development config:**
+```yaml
+workspace:
+  name: my-api
+  git_url: https://github.com/user/my-api.git
+
+agents:
+  workers:
+    count: 3
+    dockerfile: docker/Dockerfile.go
+```
+
+**Production testing:**
+```yaml
+agents:
+  queen:
+    model: opus  # Best quality for orchestration
+
+  workers:
+    count: 8     # Maximum parallelism
+    model: sonnet
+```
 
 ---
 
