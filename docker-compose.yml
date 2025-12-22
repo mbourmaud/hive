@@ -10,6 +10,8 @@ x-agent-common: &agent-common
   tty: true
   env_file:
     - .env
+    - path: .env.project
+      required: false
   group_add:
     - "0"
   environment: &agent-env

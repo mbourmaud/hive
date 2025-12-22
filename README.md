@@ -113,6 +113,43 @@ GITHUB_TOKEN=your_github_token
 # GITLAB_HOST=gitlab.com
 ```
 
+### Project Secrets (.env.project)
+
+For your **project-specific secrets** (API keys, database credentials, etc.), create a `.env.project` file:
+
+```bash
+# Copy the template
+cp .env.project.example .env.project
+
+# Edit with your project secrets
+vim .env.project
+```
+
+**What goes where:**
+- **`.env`** → Hive configuration (git user, workspace name, Claude token)
+- **`.env.project`** → Your project secrets (database, API keys, etc.)
+
+Example `.env.project`:
+```bash
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+
+# API Keys
+OPENAI_API_KEY=sk-...
+AWS_ACCESS_KEY_ID=AKIA...
+STRIPE_SECRET_KEY=sk_test_...
+
+# Auth
+JWT_SECRET=your-super-secret-jwt-key
+```
+
+These variables are automatically available in **all agents** (Queen + Workers).
+
+**Security:**
+- `.env.project` is gitignored (never committed)
+- Shared across all agents for consistency
+- Use `.env.project.example` to document required secrets (commit this)
+
 ## Commands
 
 ### HIVE CLI (host)
@@ -322,6 +359,14 @@ A: Yes! Hive mounts your `~/.claude` directory, so all your MCPs, skills, and se
 
 **Q: What if I don't have a project repository yet?**
 A: Leave `GIT_REPO_URL` empty in `.env`. Hive will create an empty workspace. You can initialize a git repo manually inside the Queen container.
+
+**Q: How do I manage project secrets (API keys, database passwords)?**
+A: Use `.env.project` for your project-specific secrets:
+```bash
+cp .env.project.example .env.project
+# Edit with your secrets (DATABASE_URL, API keys, etc.)
+```
+These variables are automatically loaded in all agents. The file is gitignored for security. Use `.env.project.example` (committed) to document required secrets for your team.
 
 ### Usage
 
