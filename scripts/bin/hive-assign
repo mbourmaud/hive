@@ -1,0 +1,69 @@
+#!/bin/bash
+# Quick task assignment (for Queen)
+# Usage: hive-assign <drone-id> <title> <description> [jira-ticket]
+
+set -e
+
+if [ $# -lt 3 ]; then
+    cat << 'EOF'
+Usage: hive-assign <drone-id> <title> <description> [jira-ticket]
+
+Examples:
+  hive-assign drone-1 "Fix login bug" "Update validation in auth service"
+  hive-assign drone-2 "Add tests" "Create unit tests for user API" "ML-1234"
+
+Available drones: drone-1, drone-2, drone-3, ... drone-10
+EOF
+    exit 1
+fi
+
+DRONE_ID="$1"
+TITLE="$2"
+DESCRIPTION="$3"
+JIRA="${4:-}"
+
+TASK_ID="task-${DRONE_ID}-$(date +%s)"
+BRANCH=""
+
+if [ -n "$JIRA" ]; then
+    BRANCH_SUFFIX=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+    BRANCH="feature/${JIRA}-${BRANCH_SUFFIX}"
+fi
+
+# Use jq to properly encode JSON (handles quotes, newlines, special chars)
+TASK_JSON=$(jq -n \
+    --arg id "$TASK_ID" \
+    --arg drone "$DRONE_ID" \
+    --arg status "pending" \
+    --argjson priority 1 \
+    --arg created_at "$(date -Iseconds)" \
+    --arg title "$TITLE" \
+    --arg description "$DESCRIPTION" \
+    --arg branch "$BRANCH" \
+    --arg jira "$JIRA" \
+    '{
+        id: $id,
+        drone: $drone,
+        status: $status,
+        priority: $priority,
+        created_at: $created_at,
+        title: $title,
+        description: $description,
+        branch: $branch,
+        jira_ticket: $jira
+    }'
+)
+
+echo "📋 Creating task for $DRONE_ID:"
+echo "   Title: $TITLE"
+echo "   Jira: ${JIRA:-N/A}"
+echo ""
+
+# Find the enqueue script
+ENQUEUE_SCRIPT="/scripts/redis/task-enqueue.sh"
+if [ ! -f "$ENQUEUE_SCRIPT" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    ENQUEUE_SCRIPT="${SCRIPT_DIR}/../redis/task-enqueue.sh"
+fi
+
+"$ENQUEUE_SCRIPT" "$DRONE_ID" "$TASK_JSON"

@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            asset_name: hive-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            asset_name: hive-linux-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            asset_name: hive-darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            asset_name: hive-darwin-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -o ${{ matrix.asset_name }} -ldflags="-s -w" .
+          chmod +x ${{ matrix.asset_name }}
+
+      - name: Create tarball
+        run: |
+          tar czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ matrix.asset_name }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    name: Update Homebrew Formula
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate Homebrew formula
+        run: |
+          cat > hive.rb <<EOF
+          class Hive < Formula
+            desc "Multi-Agent Claude System for parallel development"
+            homepage "https://github.com/mbourmaud/hive"
+            version "${{ steps.version.outputs.VERSION }}"
+
+            if OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/mbourmaud/hive/releases/download/v${{ steps.version.outputs.VERSION }}/hive-darwin-arm64.tar.gz"
+            elsif OS.mac?
+              url "https://github.com/mbourmaud/hive/releases/download/v${{ steps.version.outputs.VERSION }}/hive-darwin-amd64.tar.gz"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/mbourmaud/hive/releases/download/v${{ steps.version.outputs.VERSION }}/hive-linux-arm64.tar.gz"
+            else
+              url "https://github.com/mbourmaud/hive/releases/download/v${{ steps.version.outputs.VERSION }}/hive-linux-amd64.tar.gz"
+            end
+
+            def install
+              bin.install Dir["hive-*"].first => "hive"
+            end
+
+            test do
+              assert_match "hive", shell_output("#{bin}/hive --help")
+            end
+          end
+          EOF
+
+      - name: Comment on release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## 🍺 Homebrew Installation\n\n```bash\nbrew install mbourmaud/tap/hive\n```\n\nFormula has been generated and is available in this release.'
+            })

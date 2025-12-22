@@ -1,0 +1,43 @@
+# Secrets and credentials
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.token
+credentials.json
+
+# Hive runtime data
+workspaces/
+tasks/
+.hive/
+
+# Docker volumes
+*.log
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+hive
+*.test
+*.out
+go.work
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp

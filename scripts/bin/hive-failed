@@ -1,0 +1,14 @@
+#!/bin/bash
+# List failed tasks (for Queen)
+
+echo "❌ Failed Tasks:"
+echo ""
+
+FAILED=$(redis-cli -h localhost -p 6380 ZRANGE "hive:failed" 0 -1 2>/dev/null)
+
+if [ -z "$FAILED" ] || [ "$FAILED" = "" ]; then
+    echo "No failed tasks"
+    exit 0
+fi
+
+echo "$FAILED" | jq -r '.[] | "[\(.drone)] \(.title)\n  Error: \(.error)\n  Failed at: \(.failed_at)\n"' 2>/dev/null || echo "$FAILED"
