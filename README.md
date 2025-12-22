@@ -281,7 +281,209 @@ MIT
 
 ## Contributing
 
-Contributions welcome! Open an issue or PR.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## FAQ
+
+### General
+
+**Q: What is Hive?**
+A: Hive is a multi-agent orchestration system that lets you run multiple Claude Code agents in parallel. Instead of working on tasks sequentially, you can break down work and execute it concurrently with a Queen (orchestrator) and Workers (executors).
+
+**Q: How is this different from just opening multiple terminals?**
+A: Hive provides:
+- Task queue management (Redis-based, atomic operations)
+- Isolated workspaces (each agent has its own git clone)
+- Shared configuration (MCPs, skills, settings shared across agents)
+- Built-in coordination commands (hive-assign, my-tasks, task-done)
+- Pre-configured development environments (Node, Go, Python, Rust)
+
+**Q: Do I need to know Redis or Docker?**
+A: No! Hive handles all the infrastructure. You just need Docker installed and run `hive init`.
+
+### Setup
+
+**Q: What are the system requirements?**
+A:
+- Docker Desktop installed and running
+- 8GB+ RAM (more RAM = more workers)
+- 10GB+ free disk space
+- macOS, Linux, or Windows (WSL2)
+
+**Q: How do I get a Claude Code OAuth token?**
+A: Run this in your terminal:
+```bash
+claude setup-token
+```
+Copy the token and use it in `hive init`.
+
+**Q: Can I use my existing Claude Code configuration?**
+A: Yes! Hive mounts your `~/.claude` directory, so all your MCPs, skills, and settings are automatically available to all agents.
+
+**Q: What if I don't have a project repository yet?**
+A: Leave `GIT_REPO_URL` empty in `.env`. Hive will create an empty workspace. You can initialize a git repo manually inside the Queen container.
+
+### Usage
+
+**Q: How many workers should I start?**
+A: Start with 2-3 workers and scale up based on your workload:
+- 2 workers: Good for learning Hive
+- 3-4 workers: Typical feature development
+- 5-8 workers: Large features or bug fixing sprints
+- 10 workers: Maximum (large teams, parallel experiments)
+
+Each worker uses ~1-2GB RAM.
+
+**Q: Can I use a different programming language/stack?**
+A: Yes! Set `HIVE_DOCKERFILE` in your `.env`:
+```bash
+HIVE_DOCKERFILE=docker/Dockerfile.go      # For Go projects
+HIVE_DOCKERFILE=docker/Dockerfile.python  # For Python
+HIVE_DOCKERFILE=docker/Dockerfile.rust    # For Rust
+HIVE_DOCKERFILE=docker/Dockerfile.minimal # Generic (no language)
+```
+
+See [examples/](examples/) for language-specific guides.
+
+**Q: How do I share code between workers?**
+A: Each worker has its own git clone. Workers should:
+1. Pull latest changes: `git pull origin main`
+2. Work on separate branches
+3. Push their branches when done
+4. Create merge requests
+
+The Queen can coordinate merges and resolve conflicts.
+
+**Q: What happens if a worker gets stuck?**
+A:
+```bash
+# Mark task as failed
+task-failed "Reason for failure"
+
+# Queen can reassign to another worker
+hive-assign drone-2 "Continue task X" "..."
+```
+
+**Q: Can I stop Hive without losing my work?**
+A: Yes! Your code is in `./workspaces/` on the host. Run:
+```bash
+hive stop  # Stops containers but keeps data
+```
+
+Later:
+```bash
+hive start 3  # Restart with your code intact
+```
+
+### Workflow
+
+**Q: Should I create tasks for trivial changes?**
+A: No. Use workers for substantial work that takes >15 minutes:
+- ✅ Good: "Add user authentication API" (1-2 hours)
+- ❌ Bad: "Fix typo in README" (1 minute)
+
+**Q: How do I handle dependencies between tasks?**
+A: Two approaches:
+
+1. **Sequential phases:**
+```bash
+# Phase 1: Parallel (independent)
+hive-assign drone-1 "Create database schema"
+hive-assign drone-2 "Create UI mockups"
+hive-assign drone-3 "Write tests"
+
+# Wait for Phase 1 to complete...
+
+# Phase 2: Integration (depends on Phase 1)
+hive-assign drone-1 "Wire up API to DB"
+hive-assign drone-2 "Connect UI to API"
+```
+
+2. **Mock dependencies:**
+```bash
+# Parallel (with mocks)
+hive-assign drone-1 "Create real API"
+hive-assign drone-2 "Create UI with mock API"  # Uses fake data
+
+# Later: drone-2 swaps mock for real API
+```
+
+**Q: When should I use `task-done`?**
+A: Only when:
+- ✅ All tests pass
+- ✅ Code builds without errors
+- ✅ CI is green (if applicable)
+- ✅ Code is committed
+
+Never use `task-done` if there are failures. Use `task-failed` instead.
+
+**Q: How do I review code from workers?**
+A: Each worker creates a branch. Review via:
+```bash
+# In Queen
+gh pr list                    # List all PRs
+gh pr diff 123                # View diff
+gh pr review 123 --approve    # Approve
+```
+
+Or use GitLab:
+```bash
+glab mr list
+glab mr view 45
+```
+
+### Troubleshooting
+
+**Q: "Connection refused" when running `hive connect`**
+A: Check if containers are running:
+```bash
+hive status
+# If not running:
+hive start 3
+```
+
+**Q: "No space left on device"**
+A: Docker is out of space. Clean up:
+```bash
+docker system prune -a
+# Restart Hive
+hive stop && hive start 3
+```
+
+**Q: Worker can't push to git**
+A: Check git credentials:
+```bash
+hive connect 1
+git config user.email  # Should show your email
+git push origin my-branch  # Test push
+```
+
+If it fails, check that `GIT_USER_EMAIL` and `GIT_USER_NAME` are set in `.env`.
+
+**Q: Changes made in one worker don't appear in another**
+A: Each worker has its own git clone. Workers need to push/pull:
+```bash
+# Worker 1
+git push origin my-feature
+
+# Worker 2
+git fetch origin
+git checkout my-feature
+```
+
+**Q: How do I update Hive to the latest version?**
+A:
+```bash
+# If installed via Homebrew
+brew upgrade hive
+
+# If installed manually
+cd ~/path/to/hive
+git pull origin main
+make install
+```
+
+For more issues, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Documentation
 
@@ -289,6 +491,15 @@ Contributions welcome! Open an issue or PR.
 - 🏗️ [Architecture](docs/architecture.md) - How Hive works internally
 - 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 - 🐳 [Docker Images](docker/README.md) - Available Dockerfiles for different tech stacks
+
+## Examples
+
+Language-specific examples with complete workflows:
+
+- 🟢 [Node.js Monorepo](examples/nodejs-monorepo/) - Full-stack TypeScript development
+- 🔵 [Go REST API](examples/golang-api/) - Microservices and gRPC
+- 🟡 [Python ML Project](examples/python-ml/) - Parallel model training
+- 🟠 [Rust CLI Tool](examples/rust-cli/) - Systems programming
 
 ## Support
 
