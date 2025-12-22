@@ -1,0 +1,430 @@
+# Configuration Guide
+
+This guide covers all configuration options for Hive.
+
+## Configuration Files
+
+Hive uses two environment files:
+
+| File | Purpose | Committed to Git |
+|------|---------|------------------|
+| `.env` | Hive configuration | ❌ No (gitignored) |
+| `.env.project` | Project secrets | ❌ No (gitignored) |
+| `.env.example` | Template for `.env` | ✅ Yes |
+| `.env.project.example` | Template for `.env.project` | ✅ Yes |
+
+---
+
+## Hive Configuration (.env)
+
+Create from template:
+```bash
+cp .env.example .env
+```
+
+### Required Variables
+
+#### Git Configuration
+```bash
+GIT_USER_EMAIL=you@example.com
+GIT_USER_NAME=Your Name
+```
+Used for git commits in all agents.
+
+#### Workspace
+```bash
+WORKSPACE_NAME=my-project
+```
+Name of your project workspace directory.
+
+#### Claude Authentication
+```bash
+CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token
+```
+
+Get token:
+```bash
+claude setup-token
+```
+
+### Optional Variables
+
+#### Auto-clone Repository
+```bash
+GIT_REPO_URL=https://github.com/user/repo.git
+```
+If set, Hive will clone this repo on first start.
+
+#### GitHub Integration
+```bash
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+Enables `gh` CLI commands in containers.
+
+#### GitLab Integration
+```bash
+GITLAB_TOKEN=glpat-xxxxxxxxxxxx
+GITLAB_HOST=gitlab.com
+```
+Enables `glab` CLI commands in containers.
+
+#### Docker Image Selection
+```bash
+HIVE_DOCKERFILE=docker/Dockerfile.node
+```
+
+Available options:
+- `docker/Dockerfile.minimal` (~500MB): Just Claude + git
+- `docker/Dockerfile.node` (~1.5GB): Node.js 22 + pnpm + Playwright (default)
+- `docker/Dockerfile.go` (~1GB): Go 1.22 + development tools
+- `docker/Dockerfile.python` (~800MB): Python 3.12 + data science libs
+- `docker/Dockerfile.rust` (~2GB): Rust 1.75 + cargo tools
+
+#### Workspace Location
+```bash
+HIVE_WORKSPACES=./workspaces
+```
+Where agent workspaces are stored on the host.
+
+#### Tasks Location
+```bash
+HIVE_TASKS=./tasks
+```
+Where task metadata is stored.
+
+---
+
+## Project Secrets (.env.project)
+
+For **your project's** secrets (API keys, database passwords, etc.):
+
+```bash
+cp .env.project.example .env.project
+```
+
+### Common Variables
+
+#### Database
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+
+# Or individual variables
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=mydb
+DB_USER=myuser
+DB_PASSWORD=changeme
+```
+
+#### API Keys
+```bash
+OPENAI_API_KEY=sk-...
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+STRIPE_SECRET_KEY=sk_test_...
+SENDGRID_API_KEY=SG...
+```
+
+#### Authentication
+```bash
+JWT_SECRET=your-super-secret-jwt-key
+SESSION_SECRET=your-session-secret
+
+# OAuth
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+#### Application
+```bash
+NODE_ENV=development
+API_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
+```
+
+See [`.env.project.example`](../.env.project.example) for complete list.
+
+### Security Best Practices
+
+1. **Never commit `.env.project`**
+   - Already in `.gitignore`
+   - Contains real secrets
+
+2. **Use `.env.project.example`**
+   - Commit this to git
+   - Documents required variables for your team
+   - Use placeholder values, not real secrets
+
+3. **Rotate secrets regularly**
+   - API keys
+   - JWT secrets
+   - Database passwords
+
+4. **Use different secrets per environment**
+   - Development: weak secrets OK
+   - Production: strong, unique secrets
+
+---
+
+## Docker Compose Overrides
+
+For advanced customization, create `docker-compose.override.yml`:
+
+```yaml
+# docker-compose.override.yml
+services:
+  queen:
+    environment:
+      - CUSTOM_VAR=value
+    volumes:
+      - ./my-custom-mount:/custom
+
+  drone-1:
+    cpus: 2
+    memory: 4g
+```
+
+This file is automatically loaded by Docker Compose and can override any settings.
+
+---
+
+## Environment Variable Priority
+
+Variables are loaded in this order (later overrides earlier):
+
+1. `docker-compose.yml` defaults
+2. `.env` (Hive configuration)
+3. `.env.project` (project secrets)
+4. `docker-compose.override.yml`
+5. CLI environment variables
+
+Example:
+```bash
+# In .env
+WORKSPACE_NAME=my-project
+
+# Override at runtime
+WORKSPACE_NAME=other-project hive start
+```
+
+---
+
+## Per-Worker Configuration
+
+Currently, all workers share the same configuration. To customize per worker:
+
+1. Use `docker-compose.override.yml`:
+```yaml
+services:
+  drone-1:
+    environment:
+      - PORT=3001
+
+  drone-2:
+    environment:
+      - PORT=3002
+```
+
+2. Or dynamically in the worker:
+```bash
+# Inside drone-1
+export PORT=3001
+```
+
+---
+
+## Claude Configuration
+
+Claude Code configuration is shared from your host machine:
+
+- **Location**: `~/.claude/`
+- **Shared**:
+  - MCPs (`settings.json`)
+  - Skills (`skills/`)
+  - Global settings
+- **Isolated per agent**:
+  - Conversation history (`history.jsonl`)
+  - Session environment (`session-env/`)
+
+### Configure MCPs
+
+MCPs must be configured on your **host machine**:
+
+```bash
+# On host (not in container)
+claude mcp add playwright
+claude mcp add github
+```
+
+These are then available in all agents. See [mcp-setup.md](mcp-setup.md) for details.
+
+---
+
+## Redis Configuration
+
+Redis is used for the task queue. Default configuration:
+
+```yaml
+# docker-compose.yml
+redis:
+  image: redis:7-alpine
+  ports:
+    - "6380:6379"  # Host:Container
+```
+
+To customize:
+
+```yaml
+# docker-compose.override.yml
+services:
+  redis:
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+```
+
+---
+
+## Network Configuration
+
+Hive uses `network_mode: host` by default, which means:
+
+- ✅ Agents can access services on `localhost` (PostgreSQL, Redis, etc.)
+- ✅ No port mapping needed
+- ✅ Simplifies service access
+- ⚠️ Port conflicts possible
+
+To use bridge networking instead:
+
+```yaml
+# docker-compose.override.yml
+x-agent-common: &agent-common
+  network_mode: bridge
+  networks:
+    - hive-network
+
+networks:
+  hive-network:
+    driver: bridge
+```
+
+---
+
+## Resource Limits
+
+To prevent workers from consuming too much:
+
+```yaml
+# docker-compose.override.yml
+services:
+  drone-1:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+```
+
+---
+
+## Logging Configuration
+
+### Change Log Level
+
+```yaml
+# docker-compose.override.yml
+services:
+  queen:
+    environment:
+      - LOG_LEVEL=debug  # debug, info, warn, error
+```
+
+### Persist Logs
+
+```yaml
+services:
+  queen:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+---
+
+## Validation
+
+### Validate Configuration
+
+```bash
+# Check docker-compose syntax
+docker compose config
+
+# Validate with actual .env
+docker compose config | less
+```
+
+### Test Configuration
+
+```bash
+# Dry run
+hive start --dry-run  # Coming soon
+
+# Start with verbose output
+docker compose up --no-start
+docker compose ps
+```
+
+---
+
+## Troubleshooting
+
+### "env file .env not found"
+
+**Cause**: Missing `.env` file.
+
+**Fix**:
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
+
+### Variables not loaded
+
+**Cause**: Containers need restart after changing `.env`.
+
+**Fix**:
+```bash
+hive stop
+hive start 3
+```
+
+### "Invalid value" errors
+
+**Cause**: Syntax error in `.env`.
+
+**Fix**:
+```bash
+# Check for:
+# - Missing quotes around values with spaces
+# - Comments on same line as value
+# - Special characters not escaped
+
+# Good:
+GIT_USER_NAME="John Doe"
+
+# Bad:
+GIT_USER_NAME=John Doe  # Missing quotes
+```
+
+---
+
+## See Also
+
+- [FAQ](faq.md) - Common questions
+- [MCP Setup](mcp-setup.md) - Configure MCPs
+- [Troubleshooting](troubleshooting.md) - Fix issues
