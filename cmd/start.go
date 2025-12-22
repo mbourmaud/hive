@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 
+	"github.com/mbourmaud/hive/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,11 @@ var startCmd = &cobra.Command{
 	Long:  "Start the hive with queen and specified number of workers (default: 2)",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		count := 2
+		// Load config (from hive.yaml or defaults)
+		cfg := config.LoadOrDefault()
+
+		// CLI argument takes precedence over config
+		count := cfg.Agents.Workers.Count
 		if len(args) > 0 {
 			var err error
 			count, err = strconv.Atoi(args[0])

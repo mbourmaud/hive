@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mbourmaud/hive/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -86,7 +87,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := writeEnvFile(config); err != nil {
 		return fmt.Errorf("failed to write .env: %w", err)
 	}
-	fmt.Println("✅ Created .env file\n")
+	fmt.Println("✅ Created .env file")
+
+	// Write hive.yaml file
+	if err := writeHiveYAML(config["WORKSPACE_NAME"], config["GIT_REPO_URL"], flagWorkers); err != nil {
+		return fmt.Errorf("failed to write hive.yaml: %w", err)
+	}
+	fmt.Println("✅ Created hive.yaml\n")
 
 	// Build and install CLI
 	fmt.Println("🔨 Building and installing CLI...")
@@ -248,6 +255,19 @@ func fileExists(path string) bool {
 	absPath, _ := filepath.Abs(path)
 	_, err := os.Stat(absPath)
 	return err == nil
+}
+
+func writeHiveYAML(workspace, gitURL string, workers int) error {
+	cfg := config.Default()
+
+	// Update with user values
+	cfg.Workspace.Name = workspace
+	if gitURL != "" {
+		cfg.Workspace.GitURL = gitURL
+	}
+	cfg.Agents.Workers.Count = workers
+
+	return cfg.Save("hive.yaml")
 }
 
 func printSuccessMessage(workers int) {
