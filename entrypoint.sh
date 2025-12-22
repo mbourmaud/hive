@@ -17,75 +17,21 @@ log "Initializing Claude Agent ${AGENT_ID:-unknown}..."
 # Claude Configuration Setup
 # ============================================
 
-# Copy .claude/ from template (mounted read-only)
-if [ -d /home/agent/.claude-template ]; then
-    log "[+] Copying Claude configuration..."
-    mkdir -p ~/.claude
-    cp -r /home/agent/.claude-template/* ~/.claude/ 2>/dev/null || true
+# ~/.claude is now SHARED across all agents (mounted from host)
+# Only history.jsonl and session-env are ISOLATED per agent
+
+log "[+] Claude configuration: SHARED (MCPs, skills, settings)"
+log "[+] Conversation history: ISOLATED (this agent only)"
+
+# Ensure isolated conversation files exist
+if [ ! -f ~/.claude/history.jsonl ]; then
+    touch ~/.claude/history.jsonl
+    log "[+] Created isolated history.jsonl"
 fi
 
-# Setup isolated session data (mounted from workspace/.claude-data)
-if [ -d /home/agent/.claude-data ]; then
-    log "[+] Setting up isolated session data..."
-    mkdir -p /home/agent/.claude-data/session-env
-
-    # Symlink session-env directory
-    if [ ! -L ~/.claude/session-env ]; then
-        rm -rf ~/.claude/session-env 2>/dev/null || true
-        ln -s /home/agent/.claude-data/session-env ~/.claude/session-env
-    fi
-
-    # Symlink history.jsonl
-    if [ ! -L ~/.claude/history.jsonl ]; then
-        rm -f ~/.claude/history.jsonl 2>/dev/null || true
-        ln -s /home/agent/.claude-data/history.jsonl ~/.claude/history.jsonl
-    fi
-
-    # Persist .claude.json in .claude-data
-    PERSISTENT_CONFIG="/home/agent/.claude-data/claude.json"
-
-    # Initialize or update persistent config
-    if [ ! -f "$PERSISTENT_CONFIG" ]; then
-        log "[+] Creating persistent .claude.json from template..."
-        if [ -f /home/agent/.claude.json.template ]; then
-            cp /home/agent/.claude.json.template "$PERSISTENT_CONFIG"
-        else
-            echo '{}' > "$PERSISTENT_CONFIG"
-        fi
-    fi
-
-    # Ensure template params are set
-    if [ -f /home/agent/.claude.json.template ] && command -v jq &> /dev/null; then
-        CLAUDE_VERSION=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        THEME="dark-high-contrast"
-        if [ "$AGENT_ROLE" = "orchestrator" ]; then
-            THEME="dark"
-        fi
-
-        # Merge template params into existing config
-        jq --slurpfile template /home/agent/.claude.json.template \
-           --arg version "${CLAUDE_VERSION:-2.0.75}" \
-           --arg theme "$THEME" \
-           --arg token "${CLAUDE_CODE_OAUTH_TOKEN:-}" \
-           '
-           # Merge template setup flags
-           ($template[0] // {}) as $tpl |
-           . + {
-             version: $version,
-             theme: $theme,
-             auth: (.auth // {} | . + {oauthToken: $token})
-           } +
-           # Keep setup flags from template (showSetupPrompt, etc.)
-           ($tpl | with_entries(select(.key | test("^(showSetupPrompt|bypassPermissionsAccepted)$"))))
-           ' "$PERSISTENT_CONFIG" > "$PERSISTENT_CONFIG.tmp" && \
-           mv "$PERSISTENT_CONFIG.tmp" "$PERSISTENT_CONFIG"
-    fi
-
-    # Symlink to persistent config
-    if [ ! -L ~/.claude/claude.json ]; then
-        rm -f ~/.claude/claude.json 2>/dev/null || true
-        ln -s "$PERSISTENT_CONFIG" ~/.claude/claude.json
-    fi
+if [ ! -d ~/.claude/session-env ]; then
+    mkdir -p ~/.claude/session-env
+    log "[+] Created isolated session-env directory"
 fi
 
 # ============================================

@@ -62,10 +62,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/queen:/workspace
-      # Claude config (template copied by entrypoint)
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      # Isolated session data
-      - ${HIVE_WORKSPACES:-./workspaces}/queen/.claude-data:/home/agent/.claude-data
+      # SHARED Claude config (MCPs, skills, settings)
+      - ${HOME}/.claude:/home/agent/.claude
+      # ISOLATED conversation history per agent
+      - ${HIVE_WORKSPACES:-./workspaces}/queen/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/queen/session-env:/home/agent/.claude/session-env
       # SSH & Git
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
@@ -92,8 +93,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-1:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-1/.claude-data:/home/agent/.claude-data
+      # SHARED Claude config (MCPs, skills, settings)
+      - ${HOME}/.claude:/home/agent/.claude
+      # ISOLATED conversation history per agent
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-1/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-1/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -113,8 +117,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-2/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-2/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-2/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -134,8 +139,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-3/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-3/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-3/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -155,8 +161,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-4/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-4/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-4/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -176,8 +183,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-5/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-5/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-5/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -197,8 +205,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-6/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-6/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-6/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -218,8 +227,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-7/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-7/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-7/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -239,8 +249,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-8/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-8/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-8/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -260,8 +271,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-9/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-9/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-9/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -281,8 +293,9 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10:/workspace
-      - ${HOME}/.claude:/home/agent/.claude-template:ro
-      - ${HIVE_WORKSPACES:-./workspaces}/drone-10/.claude-data:/home/agent/.claude-data
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-10/history.jsonl:/home/agent/.claude/history.jsonl
+      - ${HIVE_WORKSPACES:-./workspaces}/drone-10/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
       - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
       - /var/run/docker.sock:/var/run/docker.sock
