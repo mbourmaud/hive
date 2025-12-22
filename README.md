@@ -283,8 +283,14 @@ MIT
 
 Contributions welcome! Open an issue or PR.
 
+## Documentation
+
+- 📖 [MCP Setup Guide](docs/mcp-setup.md) - Configure Model Context Protocol servers
+- 🏗️ [Architecture](docs/architecture.md) - How Hive works internally
+- 🔧 [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+- 🐳 [Docker Images](docker/README.md) - Available Dockerfiles for different tech stacks
+
 ## Support
 
 - 🐛 [Report a bug](https://github.com/mbourmaud/hive/issues)
 - 💡 [Request a feature](https://github.com/mbourmaud/hive/issues)
-- 📖 [Documentation](https://github.com/mbourmaud/hive/wiki)
