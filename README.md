@@ -16,19 +16,38 @@ Run multiple Claude Code agents in parallel with simple task coordination.
 ## Quick Start
 
 ```bash
-# 1. Install CLI
+# Clone Hive
+git clone https://github.com/mbourmaud/hive.git
 cd hive
+
+# One-command setup (interactive wizard)
+hive init
+
+# Or non-interactive (for automation/Claude)
+hive init \
+  --email "you@example.com" \
+  --name "Your Name" \
+  --token "$CLAUDE_CODE_OAUTH_TOKEN" \
+  --workspace "my-project" \
+  --workers 3 \
+  --no-interactive
+
+# Check status
+hive status
+```
+
+### Manual Setup (alternative)
+
+```bash
+# 1. Install CLI
 make install
 
 # 2. Setup environment
 cp .env.example .env
-# Edit .env with your tokens and project name
+# Edit .env with your tokens
 
-# 3. Start HIVE (Queen + 3 workers)
+# 3. Start HIVE
 hive start 3
-
-# 4. Check status
-hive status
 ```
 
 ## Example: Fix 3 Bugs in Parallel
