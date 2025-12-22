@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            asset_name: hive-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            asset_name: hive-linux-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            asset_name: hive-darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            asset_name: hive-darwin-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -o ${{ matrix.asset_name }} -ldflags="-s -w -X main.version=${GITHUB_REF#refs/tags/}" .
+          chmod +x ${{ matrix.asset_name }}
+
+      - name: Create tarball
+        run: |
+          tar czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
+          shasum -a 256 ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ matrix.asset_name }}.tar.gz
+            ${{ matrix.asset_name }}.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-notes:
+    name: Generate Release Notes
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          PREV_TAG=$(git describe --tags --abbrev=0 ${VERSION}^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" > CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..$VERSION >> CHANGELOG.md
+          else
+            echo "## Initial Release" > CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          fi
+
+          cat >> CHANGELOG.md << 'EOF'
+
+          ## Installation
+
+          ### macOS (Homebrew)
+          ```bash
+          brew tap mbourmaud/tap
+          brew install hive
+          ```
+
+          ### Manual Install
+          Download the appropriate binary for your platform below.
+
+          **Linux:**
+          ```bash
+          curl -LO https://github.com/mbourmaud/hive/releases/download/${VERSION}/hive-linux-amd64.tar.gz
+          tar xzf hive-linux-amd64.tar.gz
+          sudo mv hive-linux-amd64 /usr/local/bin/hive
+          ```
+
+          **macOS Intel:**
+          ```bash
+          curl -LO https://github.com/mbourmaud/hive/releases/download/${VERSION}/hive-darwin-amd64.tar.gz
+          tar xzf hive-darwin-amd64.tar.gz
+          sudo mv hive-darwin-amd64 /usr/local/bin/hive
+          ```
+
+          **macOS Apple Silicon:**
+          ```bash
+          curl -LO https://github.com/mbourmaud/hive/releases/download/${VERSION}/hive-darwin-arm64.tar.gz
+          tar xzf hive-darwin-arm64.tar.gz
+          sudo mv hive-darwin-arm64 /usr/local/bin/hive
+          ```
+
+          Verify installation:
+          ```bash
+          hive --version
+          ```
+
+          ## Checksums
+          Download `.sha256` files to verify integrity.
+          EOF
+
+      - name: Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
