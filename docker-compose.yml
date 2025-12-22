@@ -4,7 +4,7 @@
 x-agent-common: &agent-common
   build:
     context: .
-    dockerfile: Dockerfile
+    dockerfile: ${HIVE_DOCKERFILE:-docker/Dockerfile.node}
   network_mode: host
   stdin_open: true
   tty: true
