@@ -57,7 +57,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(".env already exists. Use 'rm .env' to reinitialize or edit it manually")
 	}
 
-	fmt.Println("🐝 Welcome to HIVE - Multi-Agent Claude System\n")
+	fmt.Println("🐝 Welcome to HIVE - Multi-Agent Claude System")
 
 	var config map[string]string
 
@@ -75,7 +75,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		// Interactive mode
-		fmt.Println("Let's set up your hive in 3 steps:\n")
+		fmt.Println("Let's set up your hive in 3 steps:")
 		var err error
 		config, err = interactiveWizard()
 		if err != nil {
@@ -93,7 +93,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := writeHiveYAML(config["WORKSPACE_NAME"], config["GIT_REPO_URL"], flagWorkers); err != nil {
 		return fmt.Errorf("failed to write hive.yaml: %w", err)
 	}
-	fmt.Println("✅ Created hive.yaml\n")
+	fmt.Println("✅ Created hive.yaml")
 
 	// Build and install CLI
 	fmt.Println("🔨 Building and installing CLI...")
@@ -104,7 +104,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println("⚠️  Failed to install CLI (you may need sudo)")
 		fmt.Println("   You can manually run: make install")
 	} else {
-		fmt.Println("✅ CLI installed\n")
+		fmt.Println("✅ CLI installed")
 	}
 
 	// Start Hive
@@ -271,11 +271,11 @@ func writeHiveYAML(workspace, gitURL string, workers int) error {
 }
 
 func printSuccessMessage(workers int) {
-	fmt.Println("\n✅ Setup complete!\n")
+	fmt.Println("\n✅ Setup complete!")
 	fmt.Printf("  Hive is now running with %d workers.\n\n", workers)
 	fmt.Println("  Next steps:")
 	fmt.Println("    hive connect queen  # Connect to orchestrator")
 	fmt.Println("    hive connect 1      # Connect to worker 1")
-	fmt.Println("    hive status         # Check status\n")
-	fmt.Println("  Need help? https://github.com/mbourmaud/hive\n")
+	fmt.Println("    hive status         # Check status")
+	fmt.Println("  Need help? https://github.com/mbourmaud/hive")
 }

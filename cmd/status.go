@@ -14,7 +14,7 @@ var statusCmd = &cobra.Command{
 	Short:   "Show hive status",
 	Long:    "Display running containers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("🐝 HIVE Status\n")
+		fmt.Println("🐝 HIVE Status")
 
 		// Show running containers
 		dockerCmd := exec.Command("docker", "compose", "ps", "--format", "table")
