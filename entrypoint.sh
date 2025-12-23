@@ -140,5 +140,24 @@ log "Role: ${AGENT_ROLE:-worker}"
 log "Model: ${CLAUDE_MODEL:-sonnet}"
 log ""
 
+# ============================================
+# Terminal Title Configuration (xterm OSC standard)
+# ============================================
+
+# Detect agent role and set appropriate emoji and title
+if [ "$AGENT_ROLE" = "orchestrator" ]; then
+    TERMINAL_TITLE="👑 Hive Queen"
+else
+    # Extract drone number from AGENT_ID (e.g., "drone-1" -> "1")
+    DRONE_NUM="${AGENT_ID#drone-}"
+    TERMINAL_TITLE="🐝 Hive Drone-${DRONE_NUM}"
+fi
+
+# Set terminal title using xterm OSC standard sequence
+# OSC 0 = Change both window and tab title (most portable)
+# Works on iTerm2, Terminal.app, Alacritty, tmux, etc.
+printf '\033]0;%s\007' "$TERMINAL_TITLE"
+log "[+] Terminal title: $TERMINAL_TITLE"
+
 # Execute command or start bash
 exec "$@"
