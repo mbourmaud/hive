@@ -157,8 +157,12 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 			Message:   message,
 			Fields:    l.fields,
 		}
-		data, _ := json.Marshal(entry)
-		fmt.Fprintln(l.output, string(data))
+		data, err := json.Marshal(entry)
+		if err != nil {
+			_, _ = fmt.Fprintf(l.output, `{"error":"failed to marshal log entry: %s"}`, err)
+			return
+		}
+		_, _ = fmt.Fprintln(l.output, string(data))
 	} else {
 		// Human-readable format
 		prefix := ""
@@ -178,9 +182,9 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 			for k, v := range l.fields {
 				fieldsStr += fmt.Sprintf(" %s=%v", k, v)
 			}
-			fmt.Fprintf(l.output, "%s %s %s%s\n", timestamp, prefix, message, fieldsStr)
+			_, _ = fmt.Fprintf(l.output, "%s %s %s%s\n", timestamp, prefix, message, fieldsStr)
 		} else {
-			fmt.Fprintf(l.output, "%s %s %s\n", timestamp, prefix, message)
+			_, _ = fmt.Fprintf(l.output, "%s %s %s\n", timestamp, prefix, message)
 		}
 	}
 }

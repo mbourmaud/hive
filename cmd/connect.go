@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -51,12 +50,6 @@ func mapAgentID(id string) string {
 	default:
 		return fmt.Sprintf("claude-agent-%s", id)
 	}
-}
-
-// For proper signal handling
-func execReplaceProcess(cmd *exec.Cmd) error {
-	argv := append([]string{cmd.Path}, cmd.Args[1:]...)
-	return syscall.Exec(cmd.Path, argv, os.Environ())
 }
 
 func init() {

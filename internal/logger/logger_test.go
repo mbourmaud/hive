@@ -10,7 +10,8 @@ import (
 func TestNew(t *testing.T) {
 	l := New()
 	if l == nil {
-		t.Error("New() returned nil")
+		t.Fatal("New() returned nil")
+		return
 	}
 	if l.level != LevelInfo {
 		t.Errorf("expected default level to be INFO, got %s", l.level)

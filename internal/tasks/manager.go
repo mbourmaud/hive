@@ -298,23 +298,30 @@ func (m *Manager) CheckTimeouts() []string {
 
 	// Check for timed out tasks
 	for _, task := range m.tasks {
-		if task.Status == TaskStatusInProgress && task.StartedAt != nil {
-			if now.Sub(*task.StartedAt) > task.Timeout {
-				task.Status = TaskStatusTimedOut
-				task.Retries++
+		if task.Status != TaskStatusInProgress {
+			continue
+		}
 
-				if worker, ok := m.workers[task.WorkerID]; ok {
-					worker.CurrentTask = ""
-				}
+		startedAt := task.StartedAt
+		if startedAt == nil {
+			continue
+		}
 
-				if task.Retries < task.MaxRetries {
-					task.Status = TaskStatusPending
-					task.WorkerID = ""
-					task.AssignedAt = nil
-					task.StartedAt = nil
-					m.queue = append(m.queue, task.ID)
-					redistribted = append(redistribted, task.ID)
-				}
+		if now.Sub(*startedAt) > task.Timeout {
+			task.Status = TaskStatusTimedOut
+			task.Retries++
+
+			if worker, ok := m.workers[task.WorkerID]; ok {
+				worker.CurrentTask = ""
+			}
+
+			if task.Retries < task.MaxRetries {
+				task.Status = TaskStatusPending
+				task.WorkerID = ""
+				task.AssignedAt = nil
+				task.StartedAt = nil
+				m.queue = append(m.queue, task.ID)
+				redistribted = append(redistribted, task.ID)
 			}
 		}
 	}

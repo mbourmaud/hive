@@ -302,7 +302,7 @@ func TestLoadOrDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// Test with no config file (should return default)
 	tmpDir := t.TempDir()

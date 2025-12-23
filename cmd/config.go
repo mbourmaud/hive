@@ -105,7 +105,10 @@ var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Show configuration file paths",
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := os.Getwd()
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "."
+		}
 		fmt.Println("Configuration file paths:")
 		fmt.Println()
 		fmt.Printf("  Working directory: %s\n", cwd)

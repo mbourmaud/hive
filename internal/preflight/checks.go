@@ -37,11 +37,12 @@ func CheckDocker() CheckResult {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		result.Passed = false
-		if strings.Contains(string(output), "Cannot connect") {
+		switch {
+		case strings.Contains(string(output), "Cannot connect"):
 			result.Message = "Docker daemon is not running. Please start Docker."
-		} else if strings.Contains(err.Error(), "executable file not found") {
+		case strings.Contains(err.Error(), "executable file not found"):
 			result.Message = "Docker is not installed. Please install Docker."
-		} else {
+		default:
 			result.Message = fmt.Sprintf("Docker check failed: %s", strings.TrimSpace(string(output)))
 		}
 		return result
@@ -117,7 +118,7 @@ func CheckDockerSocket() CheckResult {
 		result.Message = fmt.Sprintf("Cannot access Docker socket: %v", err)
 		return result
 	}
-	file.Close()
+	_ = file.Close() // nolint:errcheck
 
 	result.Passed = true
 	result.Message = "Docker socket is accessible"
@@ -152,7 +153,7 @@ func CheckWorkspaceDir(workspacePath string) CheckResult {
 	result := CheckResult{Name: "Workspace directory"}
 
 	// Create if doesn't exist
-	if err := os.MkdirAll(workspacePath, 0755); err != nil {
+	if err := os.MkdirAll(workspacePath, 0750); err != nil {
 		result.Passed = false
 		result.Message = fmt.Sprintf("Cannot create workspace directory: %v", err)
 		return result
@@ -160,12 +161,12 @@ func CheckWorkspaceDir(workspacePath string) CheckResult {
 
 	// Check if writable
 	testFile := filepath.Join(workspacePath, ".hive-test")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
 		result.Passed = false
 		result.Message = fmt.Sprintf("Workspace directory is not writable: %v", err)
 		return result
 	}
-	os.Remove(testFile)
+	_ = os.Remove(testFile) // nolint:errcheck
 
 	result.Passed = true
 	result.Message = fmt.Sprintf("Workspace directory is ready: %s", workspacePath)

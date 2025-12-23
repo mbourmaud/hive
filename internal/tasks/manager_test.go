@@ -96,7 +96,7 @@ func TestStartTask(t *testing.T) {
 	m := NewManager(DefaultConfig())
 	m.CreateTask("task-1", "Test task", 0)
 	m.RegisterWorker("worker-1")
-	m.AssignTask("task-1", "worker-1")
+	_ = m.AssignTask("task-1", "worker-1")
 
 	err := m.StartTask("task-1")
 	if err != nil {
@@ -116,8 +116,8 @@ func TestCompleteTask(t *testing.T) {
 	m := NewManager(DefaultConfig())
 	m.CreateTask("task-1", "Test task", 0)
 	m.RegisterWorker("worker-1")
-	m.AssignTask("task-1", "worker-1")
-	m.StartTask("task-1")
+	_ = m.AssignTask("task-1", "worker-1")
+	_ = m.StartTask("task-1")
 
 	err := m.CompleteTask("task-1", "Success!")
 	if err != nil {
@@ -145,8 +145,8 @@ func TestFailTaskWithRetry(t *testing.T) {
 
 	m.CreateTask("task-1", "Test task", 0)
 	m.RegisterWorker("worker-1")
-	m.AssignTask("task-1", "worker-1")
-	m.StartTask("task-1")
+	_ = m.AssignTask("task-1", "worker-1")
+	_ = m.StartTask("task-1")
 
 	err := m.FailTask("task-1", "Something went wrong")
 	if err != nil {
@@ -172,10 +172,10 @@ func TestFailTaskNoRetry(t *testing.T) {
 
 	m.CreateTask("task-1", "Test task", 0)
 	m.RegisterWorker("worker-1")
-	m.AssignTask("task-1", "worker-1")
-	m.StartTask("task-1")
+	_ = m.AssignTask("task-1", "worker-1")
+	_ = m.StartTask("task-1")
 
-	m.FailTask("task-1", "Error 1")
+	_ = m.FailTask("task-1", "Error 1")
 	task, _ := m.GetTask("task-1")
 	if task.Status != TaskStatusFailed {
 		t.Errorf("expected status FAILED, got '%s'", task.Status)
@@ -206,8 +206,8 @@ func TestCheckTimeoutsDeadWorker(t *testing.T) {
 
 	m.CreateTask("task-1", "Test task", 0)
 	m.RegisterWorker("worker-1")
-	m.AssignTask("task-1", "worker-1")
-	m.StartTask("task-1")
+	_ = m.AssignTask("task-1", "worker-1")
+	_ = m.StartTask("task-1")
 
 	// Simulate worker going dead
 	time.Sleep(20 * time.Millisecond)
@@ -235,11 +235,11 @@ func TestCheckTimeoutsTaskTimeout(t *testing.T) {
 
 	m.CreateTask("task-1", "Test task", 10*time.Millisecond)
 	m.RegisterWorker("worker-1")
-	m.AssignTask("task-1", "worker-1")
-	m.StartTask("task-1")
+	_ = m.AssignTask("task-1", "worker-1")
+	_ = m.StartTask("task-1")
 
 	// Keep worker alive
-	m.Heartbeat("worker-1")
+	_ = m.Heartbeat("worker-1")
 
 	// Wait for task to timeout
 	time.Sleep(20 * time.Millisecond)

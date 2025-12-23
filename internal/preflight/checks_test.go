@@ -21,7 +21,7 @@ func TestCheckEnvFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// Test in temp directory without .env
 	tmpDir := t.TempDir()
@@ -51,7 +51,7 @@ func TestCheckDockerComposeFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	// Test in temp directory without docker-compose.yml
 	tmpDir := t.TempDir()

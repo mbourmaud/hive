@@ -95,12 +95,13 @@ func waitForContainersReady(services []string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for _, service := range services {
-		containerName := service
-		if service == "queen" {
+		var containerName string
+		switch service {
+		case "queen":
 			containerName = "claude-queen"
-		} else if service == "redis" {
+		case "redis":
 			containerName = "hive-redis"
-		} else {
+		default:
 			containerName = "claude-" + service
 		}
 

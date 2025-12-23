@@ -72,7 +72,9 @@ func Default() *Config {
 
 // Load reads and parses the hive.yaml file
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	// Clean and validate path to prevent directory traversal
+	cleanPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -103,7 +105,7 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
