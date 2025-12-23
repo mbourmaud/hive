@@ -5,9 +5,16 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/mbourmaud/hive/internal/config"
+	"github.com/mbourmaud/hive/internal/preflight"
 	"github.com/spf13/cobra"
+)
+
+var (
+	startSkipChecks bool
+	startWaitReady  bool
 )
 
 var startCmd = &cobra.Command{
@@ -18,6 +25,14 @@ var startCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config (from hive.yaml or defaults)
 		cfg := config.LoadOrDefault()
+
+		// Run preflight checks unless skipped
+		if !startSkipChecks {
+			results := preflight.RunAllChecks()
+			if !preflight.PrintResults(results) {
+				return fmt.Errorf("preflight checks failed. Use --skip-checks to bypass")
+			}
+		}
 
 		// CLI argument takes precedence over config
 		count := cfg.Agents.Workers.Count
@@ -33,7 +48,11 @@ var startCmd = &cobra.Command{
 			return fmt.Errorf("maximum 10 workers allowed")
 		}
 
-		fmt.Printf("🐝 Starting hive: Queen + %d workers...\n", count)
+		if count < 1 {
+			return fmt.Errorf("minimum 1 worker required")
+		}
+
+		fmt.Printf("Starting hive: Queen + %d workers...\n", count)
 
 		// Build services list (Redis must start first)
 		services := []string{"redis", "queen"}
@@ -51,11 +70,64 @@ var startCmd = &cobra.Command{
 			return fmt.Errorf("failed to start containers: %w", err)
 		}
 
-		fmt.Printf("✅ Hive started: %d containers\n", len(services))
+		// Wait for containers to be healthy if requested
+		if startWaitReady {
+			fmt.Println()
+			fmt.Println("Waiting for containers to be ready...")
+			if err := waitForContainersReady(services, 60*time.Second); err != nil {
+				return err
+			}
+		}
+
+		fmt.Println()
+		fmt.Printf("Hive started: %d containers\n", len(services))
+		fmt.Println()
+		fmt.Println("Next steps:")
+		fmt.Println("  hive connect queen  # Connect to orchestrator")
+		fmt.Println("  hive connect 1      # Connect to worker 1")
+		fmt.Println("  hive status         # Check status")
 		return nil
 	},
 }
 
+// waitForContainersReady waits for all containers to be running
+func waitForContainersReady(services []string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for _, service := range services {
+		containerName := service
+		if service == "queen" {
+			containerName = "claude-queen"
+		} else if service == "redis" {
+			containerName = "hive-redis"
+		} else {
+			containerName = "claude-" + service
+		}
+
+		fmt.Printf("  Waiting for %s...", containerName)
+
+		for {
+			if time.Now().After(deadline) {
+				fmt.Println(" TIMEOUT")
+				return fmt.Errorf("timeout waiting for %s to be ready", containerName)
+			}
+
+			cmd := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", containerName)
+			output, err := cmd.Output()
+			if err == nil && string(output) == "true\n" {
+				fmt.Println(" OK")
+				break
+			}
+
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(startCmd)
+	startCmd.Flags().BoolVar(&startSkipChecks, "skip-checks", false, "Skip preflight checks")
+	startCmd.Flags().BoolVar(&startWaitReady, "wait", false, "Wait for containers to be ready")
 }
