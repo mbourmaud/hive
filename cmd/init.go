@@ -112,7 +112,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if !flagNonInteractive {
 		fmt.Print("\n🚀 Ready to start!\n\n")
 		workersStr := promptWithDefault("  Workers to start", "2")
-		workers, _ = strconv.Atoi(workersStr)
+		if w, err := strconv.Atoi(workersStr); err == nil {
+			workers = w
+		}
 	}
 
 	fmt.Printf("\n🐝 Starting Hive with %d workers...\n", workers)
@@ -183,7 +185,7 @@ func promptRequired(label string, validator func(string) error) string {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Printf("%s: ", label)
-		input, _ := reader.ReadString('\n')
+		input, _ := reader.ReadString('\n') // nolint:errcheck
 		input = strings.TrimSpace(input)
 
 		if input == "" {
@@ -205,7 +207,7 @@ func promptRequired(label string, validator func(string) error) string {
 func promptWithDefault(label, defaultValue string) string {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s (default: %s): ", label, defaultValue)
-	input, _ := reader.ReadString('\n')
+	input, _ := reader.ReadString('\n') // nolint:errcheck
 	input = strings.TrimSpace(input)
 
 	if input == "" {
@@ -217,7 +219,7 @@ func promptWithDefault(label, defaultValue string) string {
 func promptOptional(label, defaultValue string) string {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s: ", label)
-	input, _ := reader.ReadString('\n')
+	input, _ := reader.ReadString('\n') // nolint:errcheck
 	input = strings.TrimSpace(input)
 
 	if input == "" {
@@ -252,8 +254,11 @@ func writeEnvFile(config map[string]string) error {
 }
 
 func fileExists(path string) bool {
-	absPath, _ := filepath.Abs(path)
-	_, err := os.Stat(absPath)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		absPath = path
+	}
+	_, err = os.Stat(absPath)
 	return err == nil
 }
 
