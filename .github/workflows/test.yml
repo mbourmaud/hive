@@ -30,7 +30,7 @@ jobs:
         run: go build -o hive .
 
       - name: Run tests
-        run: go test -v $(go list ./... | grep -v /docker)
+        run: go test -v ./cmd/... ./internal/...
 
       - name: Test CLI commands
         run: |
