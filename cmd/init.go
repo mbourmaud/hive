@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -642,6 +643,10 @@ func createWorktrees(workers int) error {
 func createWorktree(path, branch, agentName string) error {
 	agentBranch := fmt.Sprintf("hive/%s", agentName)
 
+	// ALWAYS prune orphaned worktrees first (critical after hive clean)
+	pruneCmd := exec.Command("git", "worktree", "prune")
+	pruneCmd.Run() // Ignore errors, prune is best-effort
+
 	// Check if worktree already exists and is valid
 	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
 		// Worktree directory exists, verify it's still registered with git
@@ -661,40 +666,39 @@ func createWorktree(path, branch, agentName string) error {
 
 	// Check if the agent branch already exists
 	checkBranchCmd := exec.Command("git", "rev-parse", "--verify", agentBranch)
-	checkBranchCmd.Stdout = nil
-	checkBranchCmd.Stderr = nil
+	var checkOut, checkErr bytes.Buffer
+	checkBranchCmd.Stdout = &checkOut
+	checkBranchCmd.Stderr = &checkErr
 	branchExists := checkBranchCmd.Run() == nil
 
 	if branchExists {
-		// Branch exists, check if it's attached to a worktree
-		listCmd := exec.Command("git", "worktree", "list")
-		output, _ := listCmd.Output()
-		if strings.Contains(string(output), agentBranch) && !strings.Contains(string(output), path) {
-			// Branch is attached to a different worktree, remove old worktree first
-			pruneCmd := exec.Command("git", "worktree", "prune")
-			pruneCmd.Run()
-		}
-
-		// Try to add worktree with existing branch
+		// Branch exists, try to add worktree with existing branch
 		cmd := exec.Command("git", "worktree", "add", path, agentBranch)
-		cmd.Stdout = nil
-		cmd.Stderr = nil
+		var cmdOut, cmdErr bytes.Buffer
+		cmd.Stdout = &cmdOut
+		cmd.Stderr = &cmdErr
 		if err := cmd.Run(); err != nil {
-			// If it still fails, force delete the branch and recreate
+			// If it fails, force delete the branch and recreate from scratch
 			deleteCmd := exec.Command("git", "branch", "-D", agentBranch)
-			deleteCmd.Run()
+			deleteCmd.Run() // Ignore errors
 			branchExists = false
 		} else {
-			return nil
+			return nil // Success!
 		}
 	}
 
 	// Create new worktree with new branch
 	cmd := exec.Command("git", "worktree", "add", "-b", agentBranch, path, branch)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	var cmdOut, cmdErr bytes.Buffer
+	cmd.Stdout = &cmdOut
+	cmd.Stderr = &cmdErr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create worktree for %s: %w", agentName, err)
+		// Show actual git error for debugging
+		errMsg := strings.TrimSpace(cmdErr.String())
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		return fmt.Errorf("failed to create worktree for %s: %s", agentName, errMsg)
 	}
 
 	return nil
