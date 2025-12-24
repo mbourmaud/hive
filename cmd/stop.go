@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/mbourmaud/hive/internal/shell"
+	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -12,17 +14,20 @@ var stopCmd = &cobra.Command{
 	Short: "Stop all hive containers",
 	Long:  "Stop all running hive containers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("\n%s%s🛑 Stopping Hive%s\n\n", colorBold, colorCyan, colorReset)
+		// Header
+		fmt.Print(ui.Header("🛑", "Stopping Hive"))
 
+		// Create shell runner with debug mode
+		runner := shell.NewRunner(DebugMode)
+
+		// Stop containers
 		dockerCmd := exec.Command("docker", "compose", "-f", ".hive/docker-compose.yml", "down")
-		dockerCmd.Stdout = nil
-		dockerCmd.Stderr = nil
-
-		if err := dockerCmd.Run(); err != nil {
+		if err := runner.RunWithTitle(dockerCmd, "Docker Compose Stop"); err != nil {
 			return fmt.Errorf("failed to stop containers: %w", err)
 		}
 
-		fmt.Printf("%s%s✨ Hive stopped successfully!%s\n\n", colorBold, colorGreen, colorReset)
+		// Success message
+		fmt.Printf("\n%s\n\n", ui.Success("Hive stopped successfully!"))
 		return nil
 	},
 }

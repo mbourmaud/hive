@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"os/exec"
 
+	"github.com/mbourmaud/hive/internal/shell"
+	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -14,21 +15,21 @@ var statusCmd = &cobra.Command{
 	Short:   "Show hive status",
 	Long:    "Display running containers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("\n%s%s🐝 Hive Status%s\n\n", colorBold, colorCyan, colorReset)
+		// Header
+		fmt.Print(ui.Header("🐝", "Hive Status"))
+
+		// Create shell runner with debug mode
+		runner := shell.NewRunner(DebugMode)
 
 		// Show running containers
 		dockerCmd := exec.Command("docker", "compose", "-f", ".hive/docker-compose.yml", "ps", "--format", "table")
 
-		var out bytes.Buffer
-		dockerCmd.Stdout = &out
-		dockerCmd.Stderr = &out
-
-		if err := dockerCmd.Run(); err != nil {
-			fmt.Printf("%s❌ Failed to get status%s\n\n", colorYellow, colorReset)
+		// Use runner to execute
+		if err := runner.Run(dockerCmd); err != nil {
+			fmt.Printf("%s\n\n", ui.Error("Failed to get status"))
 			return err
 		}
 
-		fmt.Println(out.String())
 		return nil
 	},
 }

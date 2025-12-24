@@ -1,10 +1,14 @@
 package cmd
 
 import (
-	"fmt"
+	"os"
 
+	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
+
+// DebugMode is a global flag for debug output
+var DebugMode bool
 
 var rootCmd = &cobra.Command{
 	Use:   "hive",
@@ -20,6 +24,12 @@ Core Commands:
 Direct Access:
   queen            Start Queen and launch Claude
   connect <id>     Connect to agent (queen, 1, 2, etc.)`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Check for HIVE_DEBUG environment variable
+		if os.Getenv("HIVE_DEBUG") == "1" || os.Getenv("HIVE_DEBUG") == "true" {
+			DebugMode = true
+		}
+	},
 }
 
 func Execute() error {
@@ -28,10 +38,10 @@ func Execute() error {
 
 // GetVersionString returns the formatted version string
 func GetVersionString() string {
-	return fmt.Sprintf("%s%shive%s %s\n%sCommit: %s%s\n%sBuilt: %s%s\n",
-		colorBold, colorCyan, colorReset, Version,
-		colorDim, GitCommit, colorReset,
-		colorDim, BuildDate, colorReset)
+	title := ui.StyleBold.Render(ui.StyleCyan.Render("hive")) + " " + Version + "\n"
+	commit := ui.StyleDim.Render("Commit: ") + GitCommit + "\n"
+	built := ui.StyleDim.Render("Built: ") + BuildDate + "\n"
+	return title + commit + built
 }
 
 func init() {
@@ -39,4 +49,7 @@ func init() {
 	// Use a PersistentPreRun to set version dynamically
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate(GetVersionString())
+
+	// Add global --debug flag
+	rootCmd.PersistentFlags().BoolVar(&DebugMode, "debug", false, "Enable debug mode (shows all commands)")
 }
