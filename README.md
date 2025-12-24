@@ -37,15 +37,28 @@ git clone https://github.com/mbourmaud/hive.git
 cd hive && make install
 ```
 
-**Setup:**
+**Setup in any project:**
 ```bash
-hive init  # Interactive wizard (email, token, workspace)
+cd your-project/
+hive init    # Auto-detects git config, project type, Claude token
+hive start 2 # Start Queen + 2 workers
 ```
+
+That's it! `hive init` automatically:
+- Detects git user.email & user.name
+- Detects remote origin URL
+- Detects project type (Node.js, Go, Python, Rust)
+- Finds Claude token from `~/.claude`
+- Creates `.hive/` folder (gitignored) with all infrastructure
+- Creates `hive.yaml` config (shareable with team)
 
 **Use:**
 ```bash
-hive start 3        # Start Queen + 3 workers
 hive connect queen  # Open Queen terminal
+hive connect 1      # Open Worker 1 terminal
+hive status         # Check running containers
+hive stop           # Stop all containers
+hive clean          # Remove all hive files from project
 ```
 
 ## Example: Fix 3 Bugs in Parallel
@@ -82,12 +95,28 @@ task-done       # When CI is green
 
 ## Features
 
+- ✅ **Works Anywhere**: `hive init` in any existing Git project
+- ✅ **Zero Config**: Auto-detects git, project type, Claude token
+- ✅ **Clean Structure**: All files in `.hive/` (gitignored), only `hive.yaml` shared
 - ✅ **Multi-Agent**: 1 Queen + up to 10 workers
 - ✅ **Task Queue**: Redis-based atomic task management
-- ✅ **Isolated Workspaces**: Each agent has its own git clone
-- ✅ **Shared Config**: MCPs, skills, settings work across all agents
+- ✅ **Isolated Workspaces**: Each agent has its own git worktree
 - ✅ **Full Stack**: Supports Node.js, Go, Python, Rust
-- ✅ **One Command Setup**: `hive init` gets you started
+
+## Project Structure
+
+After `hive init`, your project looks like:
+```
+your-project/
+├── .hive/                  # All hive infrastructure (gitignored)
+│   ├── docker-compose.yml
+│   ├── .env                # Your secrets (token, etc.)
+│   ├── docker/             # Dockerfiles
+│   ├── scripts/            # Task management scripts
+│   └── workspaces/         # Agent workspaces
+├── hive.yaml               # Shareable config (commit this!)
+└── ... your code ...
+```
 
 ---
 
