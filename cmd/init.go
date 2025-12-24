@@ -567,6 +567,9 @@ func extractHiveFiles(projectType string) error {
 	}
 
 	// Extract worker daemon files for autonomous mode
+	if err := embed.ExtractFile("start-worker.sh", filepath.Join(hiveDir, "start-worker.sh")); err != nil {
+		return fmt.Errorf("failed to extract start-worker.sh: %w", err)
+	}
 	if err := embed.ExtractFile("worker-daemon.py", filepath.Join(hiveDir, "worker-daemon.py")); err != nil {
 		return fmt.Errorf("failed to extract worker-daemon.py: %w", err)
 	}

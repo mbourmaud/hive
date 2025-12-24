@@ -262,5 +262,15 @@ fi
 printf '\033]0;%s\007' "$TERMINAL_TITLE"
 log "[+] Terminal title: $TERMINAL_TITLE"
 
-# Execute command or start bash
-exec "$@"
+# ============================================
+# Automatic Daemon Launch for Workers
+# ============================================
+
+# Check if worker should run in daemon mode
+if [ "$AGENT_ROLE" = "worker" ] && [ -f "/home/agent/start-worker.sh" ]; then
+    # start-worker.sh will check WORKER_N_MODE and launch daemon or bash
+    exec /home/agent/start-worker.sh
+else
+    # Queen or interactive worker: execute command or start bash
+    exec "$@"
+fi

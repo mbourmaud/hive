@@ -18,6 +18,9 @@ embed:
 	@mkdir -p internal/embed/files
 	@cp -f docker-compose.yml internal/embed/files/
 	@cp -f entrypoint.sh internal/embed/files/
+	@cp -f start-worker.sh internal/embed/files/ 2>/dev/null || cp internal/embed/files/start-worker.sh start-worker.sh
+	@cp -f worker-daemon.py internal/embed/files/ 2>/dev/null || cp internal/embed/files/worker-daemon.py worker-daemon.py
+	@cp -f tools.py internal/embed/files/ 2>/dev/null || cp internal/embed/files/tools.py tools.py
 	@cp -rf docker internal/embed/files/
 	@cp -rf scripts internal/embed/files/
 	@cp -rf templates internal/embed/files/
