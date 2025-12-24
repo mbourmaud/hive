@@ -411,16 +411,68 @@ export PORT=3001
 
 ## Claude Configuration
 
-Claude Code configuration is shared from your host machine:
+### Shared Configuration (Selective Mounts)
 
-- **Location**: `~/.claude/`
-- **Shared**:
-  - MCPs (`settings.json`)
-  - Skills (`skills/`)
-  - Global settings
-- **Isolated per agent**:
-  - Conversation history (`history.jsonl`)
-  - Session environment (`session-env/`)
+Only specific subdirectories from `~/.claude/` are mounted:
+
+```yaml
+# docker-compose.yml
+volumes:
+  - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+  - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+  - ${HOME}/.claude/projects:/home/agent/.claude/projects
+```
+
+**Shared across all agents:**
+- MCPs (`~/.claude/mcps/`) - Model Context Protocol servers
+- Plugins (`~/.claude/plugins/`) - Custom Claude plugins
+- Projects (`~/.claude/projects/`) - Project-specific config
+
+**Not shared** (generated per agent):
+- `settings.json` - Permissions configuration
+- `~/.claude.json` - OAuth token and onboarding state
+- `skills/` - Not mounted to avoid conflicts
+
+### Per-Agent Configuration
+
+Each agent gets these files **generated** in their container:
+
+**`~/.claude.json`** (OAuth & onboarding):
+```json
+{
+  "hasCompletedOnboarding": true,
+  "bypassPermissionsModeAccepted": true,
+  "lastOnboardingVersion": "2.0.76",
+  "oauthAccount": {
+    "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}"
+  }
+}
+```
+
+**`~/.claude/settings.json`** (permissions only):
+```json
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}
+```
+
+**Why this approach:**
+- ✅ No OAuth prompts on startup
+- ✅ No theme selection wizard
+- ✅ Each agent starts immediately
+- ✅ Shared MCPs/plugins work everywhere
+- ✅ Isolated conversation history
+
+### Isolated Per Agent
+
+These are mounted from `.hive/workspaces/<agent>/`:
+
+- **Conversation history**: `history.jsonl`
+- **Session state**: `session-env/`
+
+**Why:** Each agent has independent conversations.
 
 ### Configure MCPs
 
@@ -432,7 +484,9 @@ claude mcp add playwright
 claude mcp add github
 ```
 
-These are then available in all agents. See [mcp-setup.md](mcp-setup.md) for details.
+These are then available in all agents via the shared `~/.claude/mcps/` mount.
+
+See [mcp-setup.md](mcp-setup.md) for details.
 
 ---
 

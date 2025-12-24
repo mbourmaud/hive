@@ -177,21 +177,28 @@ task-failed "Error message"
 
 ### Shared (All Agents)
 
-**Mount:** `${HOME}/.claude:/home/agent/.claude`
+**Selective Mounts:**
+- `${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro`
+- `${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro`
+- `${HOME}/.claude/projects:/home/agent/.claude/projects`
 
 **Contains:**
-- `mcp/` - Model Context Protocol servers
-- `skills/` - Custom Claude skills
-- `claude.json` - Settings (theme, permissions, etc.)
+- `mcps/` - Model Context Protocol servers
+- `plugins/` - Custom Claude plugins
 - `projects/` - Project-specific config
 
-**Why:** Configure once, use everywhere
+**Why:** Configure MCPs/plugins once, use everywhere
+
+**Not Shared:**
+- `settings.json` - Generated per agent with permissions only
+- `~/.claude.json` - Generated per agent with OAuth token and onboarding flags
+- `skills/` - Not mounted to avoid conflicts
 
 ### Isolated (Per Agent)
 
 **Mounts:**
-- `workspaces/<agent>/history.jsonl:/home/agent/.claude/history.jsonl`
-- `workspaces/<agent>/session-env:/home/agent/.claude/session-env`
+- `.hive/workspaces/<agent>/history.jsonl:/home/agent/.claude/history.jsonl`
+- `.hive/workspaces/<agent>/session-env:/home/agent/.claude/session-env`
 
 **Contains:**
 - Conversation history
@@ -199,28 +206,88 @@ task-failed "Error message"
 
 **Why:** Each agent has independent conversations
 
+### Authentication
+
+**OAuth Token Persistence:**
+
+Each agent gets `~/.claude.json` created with:
+```json
+{
+  "hasCompletedOnboarding": true,
+  "bypassPermissionsModeAccepted": true,
+  "lastOnboardingVersion": "2.0.76",
+  "oauthAccount": {
+    "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}"
+  }
+}
+```
+
+This bypasses:
+- OAuth login prompts
+- Theme selection wizard
+- Onboarding steps
+
+**Why:** Agents start immediately without manual setup
+
 ## Workspace Isolation
 
-Each agent has its own git clone:
+### Git Worktrees
+
+Each agent has its own **git worktree** (not a clone):
 
 ```
-workspaces/
-├── queen/
-│   ├── <project>/          # Git clone
-│   ├── history.jsonl       # Conversations
-│   └── session-env/        # Session state
-├── drone-1/
-│   ├── <project>/
-│   ├── history.jsonl
-│   └── session-env/
+.hive/workspaces/
+├── queen/              # Git worktree (detached)
+│   ├── .git            # Worktree metadata
+│   ├── src/
+│   └── ... project files ...
+├── drone-1/            # Git worktree (detached)
+│   ├── .git
+│   └── ... project files ...
 ├── drone-2/
 │   └── ...
 ```
 
+**Created during `hive init`:**
+```bash
+git worktree add --detach .hive/workspaces/queen main
+git worktree add --detach .hive/workspaces/drone-1 main
+git worktree add --detach .hive/workspaces/drone-2 main
+```
+
+**Advantages over clones:**
+- ✅ Share `.git/` directory (faster, less disk space)
+- ✅ `--detach` allows multiple worktrees on same branch
+- ✅ No need to fetch/push between workspaces
+- ✅ Automatic cleanup with `git worktree remove`
+
+**Why detached mode:**
+- Normal worktrees can't share the same branch
+- Detached worktrees bypass this restriction
+- Agents can work simultaneously on `main` branch
+- No branch locking or conflicts
+
+**Cleanup:**
+```bash
+hive clean  # Automatically removes all worktrees
+```
+
+### Workspace Structure
+
+Each worktree contains:
+```
+.hive/workspaces/queen/
+├── .git                # Worktree-specific git metadata
+├── history.jsonl       # Claude conversation history
+├── session-env/        # Claude session state
+└── ... project files ...
+```
+
 **Why:**
 - Parallel work without conflicts
-- Different branches per agent
-- Isolated git state
+- Each agent works in isolation
+- Shared repository state
+- No duplicate `.git/` storage
 
 ## Networking
 

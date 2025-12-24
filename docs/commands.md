@@ -150,11 +150,65 @@ hive connect 5        # Connect to Worker 5
 **What it does:**
 1. Attaches to the agent's container
 2. Starts Claude Code session
-3. Loads agent-specific instructions (CLAUDE.md)
+3. **Automatically injects role-specific initial prompt**
+4. Agent reads their instructions from `/home/agent/CLAUDE.md`
+5. Agent executes mandatory startup sequence
+
+**Automatic Startup Behavior:**
+
+**Queen:**
+- Reports: "I am the Queen (Orchestrator)"
+- Runs `hive-status` to check HIVE state
+- Reports current status to you
+
+**Worker:**
+- Reports: "I am drone-N"
+- Runs `my-tasks` to check for assignments
+- Takes appropriate action (picks up task or waits)
 
 **Keyboard shortcuts:**
 - `Ctrl+D` or `exit`: Disconnect (container keeps running)
 - `Ctrl+C`: Interrupt current command
+
+---
+
+### hive clean
+
+Remove all Hive files from the project.
+
+```bash
+hive clean
+```
+
+**What it does:**
+1. Stops and removes all Docker containers
+2. Removes Docker images (`hive-*`)
+3. Removes git worktrees (`.hive/workspaces/`)
+4. Removes `.hive/` directory
+5. Removes `hive.yaml`
+6. Cleans Hive entries from `.gitignore`
+
+**Output:**
+```
+🧹 Cleaning hive (containers, images, worktrees, and files)...
+  🐳 Stopping Docker containers...
+  ✓ Stopped and removed containers
+  🐳 Removing hive Docker images...
+  ✓ Removed hive images
+  🌳 Removing git worktrees...
+  ✓ Removed 3 worktree(s)
+  ✓ Removed .hive/
+  ✓ Removed hive.yaml
+  ✓ Cleaned .gitignore
+
+✅ Hive cleaned from project
+```
+
+**Notes:**
+- **Irreversible**: All Hive data is deleted
+- **Your code is safe**: Only removes Hive infrastructure
+- **Git history preserved**: Your commits remain intact
+- Run `hive init` to reinstall Hive
 
 ---
 

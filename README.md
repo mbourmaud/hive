@@ -1,223 +1,368 @@
-# 🐝 Hive - Multi-Agent Claude System
+# 🐝 Hive - Multi-Agent System
 
-**Parallel development with Claude Code.** Run multiple AI agents simultaneously—one Queen orchestrates, workers execute tasks in parallel.
+**Orchestrate multiple Claude agents working together.** One Queen coordinates, workers execute tasks in parallel.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/github/v/release/mbourmaud/hive)](https://github.com/mbourmaud/hive/releases)
 
+---
+
+## 🎯 What is Hive?
+
+Hive turns one Claude into many. **Run multiple Claude Code agents simultaneously** - one orchestrator (Queen) delegates tasks to autonomous workers (Drones) who execute in parallel.
+
+**Perfect for:**
+- 🔧 Fixing multiple bugs simultaneously
+- ⚡ Developing features in parallel
+- 🔄 Large-scale refactoring
+- 🧪 Running tests while building features
+- 📝 Writing docs while coding
+
+```mermaid
+graph TD
+    User[👤 You] -->|Request| Queen[👑 Queen<br/>Orchestrator]
+    Queen -->|Task 1| D1[🐝 Drone 1<br/>Worker]
+    Queen -->|Task 2| D2[🐝 Drone 2<br/>Worker]
+    Queen -->|Task 3| D3[🐝 Drone 3<br/>Worker]
+
+    D1 -->|Code + PR| Git1[📦 Git Branch]
+    D2 -->|Code + PR| Git2[📦 Git Branch]
+    D3 -->|Code + PR| Git3[📦 Git Branch]
+
+    Redis[(🔴 Redis<br/>Task Queue)] -.->|Tasks| D1
+    Redis -.->|Tasks| D2
+    Redis -.->|Tasks| D3
+
+    Queen -.->|Monitor| Redis
+
+    style Queen fill:#ffd700,stroke:#333,stroke-width:2px
+    style D1 fill:#87ceeb,stroke:#333,stroke-width:2px
+    style D2 fill:#87ceeb,stroke:#333,stroke-width:2px
+    style D3 fill:#87ceeb,stroke:#333,stroke-width:2px
+    style Redis fill:#dc143c,color:#fff,stroke:#333,stroke-width:2px
 ```
-┌─────────────────────────────────────────┐
-│          Queen (Orchestrator)           │
-│  • Analyzes requests                    │
-│  • Creates subtasks                     │
-│  • Monitors progress                    │
-└──────────────┬──────────────────────────┘
-               │
-        ┌──────┼──────┐
-        ↓      ↓      ↓
-     ┌────┐ ┌────┐ ┌────┐
-     │ W1 │ │ W2 │ │ W3 │   Workers
-     └────┘ └────┘ └────┘
-        │      │      │
-        └──────┼──────┘
-               ↓
-        ┌─────────────┐
-        │Redis :6380  │   Task Queue
-        └─────────────┘
-```
 
-## Quick Start
+---
 
-**Install:**
+## 📥 How to Install
+
+### Option 1: Quick Install (Recommended)
+
 ```bash
-# macOS / Linux
-brew install mbourmaud/tap/hive-ai
-
-# Or build from source
-git clone https://github.com/mbourmaud/hive.git
-cd hive && make install
+curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
 ```
 
-**Setup in any project:**
+### Option 2: Homebrew (macOS)
+
+```bash
+brew tap mbourmaud/tap
+brew install hive
+```
+
+### Option 3: From Source
+
+```bash
+git clone https://github.com/mbourmaud/hive
+cd hive
+make install
+```
+
+**Requirements:**
+- Docker Desktop (running)
+- 8GB+ RAM
+- 10GB+ disk space
+
+---
+
+## 🚀 How to Init & Use
+
+### 1. Initialize Hive
+
 ```bash
 cd your-project/
-hive init    # Auto-detects git config, project type, Claude token
-hive start 2 # Start Queen + 2 workers
+hive init
 ```
 
-That's it! `hive init` automatically:
-- Detects git user.email & user.name
-- Detects remote origin URL
-- Detects project type (Node.js, Go, Python, Rust)
-- Finds Claude token from `~/.claude`
-- Creates `.hive/` folder (gitignored) with all infrastructure
-- Creates `hive.yaml` config (shareable with team)
+**What happens:**
+- ✅ Auto-detects git config (user.email, user.name)
+- ✅ Auto-detects Claude OAuth token from `~/.claude`
+- ✅ Auto-detects project type (Node.js, Go, Python, Rust)
+- ✅ Creates `.hive/` directory with all infrastructure
+- ✅ Creates git worktrees for each agent
+- ✅ Creates `hive.yaml` config (commit this!)
+- ✅ Starts containers (Queen + Workers + Redis)
 
-**Use:**
-```bash
-hive connect queen  # Open Queen terminal
-hive connect 1      # Open Worker 1 terminal
-hive status         # Check running containers
-hive stop           # Stop all containers
-hive clean          # Remove all hive files from project
+**Your project structure:**
+```
+your-project/
+├── .hive/                     # 🔒 Gitignored - infrastructure
+│   ├── docker-compose.yml
+│   ├── .env                   # Your secrets
+│   ├── workspaces/            # Git worktrees
+│   │   ├── queen/             # Queen's workspace
+│   │   ├── drone-1/           # Worker 1's workspace
+│   │   └── drone-2/           # Worker 2's workspace
+│   └── ...
+├── hive.yaml                  # ✅ Commit this - team config
+└── ... your code ...
 ```
 
-## Example: Fix 3 Bugs in Parallel
+### 2. Connect to Agents
 
 **Terminal 1 - Queen:**
 ```bash
 hive connect queen
 ```
-Tell Queen:
-```
-Fix these bugs in parallel:
-- Bug #123: Login timeout
-- Bug #124: CSV export empty
-- Bug #125: Email validation
-```
 
-Queen creates tasks:
+The Queen **automatically**:
+- 📖 Reads her role from `/home/agent/CLAUDE.md`
+- 🤖 Reports: "I am the Queen (Orchestrator)"
+- 📊 Runs `hive-status` to check HIVE state
+- 💬 Reports current status to you
+
+**Terminal 2 - Worker:**
 ```bash
-hive-assign drone-1 "Fix #123" "Increase session timeout" "BUG-123"
-hive-assign drone-2 "Fix #124" "Handle empty data case" "BUG-124"
-hive-assign drone-3 "Fix #125" "Update regex pattern" "BUG-125"
+hive connect 1
 ```
 
-**Terminal 2-4 - Workers:**
+The Worker **automatically**:
+- 📖 Reads his role from `/home/agent/CLAUDE.md`
+- 🤖 Reports: "I am drone-1"
+- 📋 Runs `my-tasks` to check for assignments
+- 🏃 Takes action (picks up task or waits)
+
+### 3. Assign Tasks (from Queen)
+
 ```bash
-hive connect 1  # Auto-runs my-tasks, shows assigned task
-# Fix the bug...
-task-done       # When CI is green
+# Create tasks for parallel execution
+hive-assign drone-1 "Fix login bug" "Increase session timeout" "BUG-123"
+hive-assign drone-2 "Add CSV export" "Implement export feature" "FEAT-456"
+hive-assign drone-3 "Update tests" "Add unit tests for auth" "TEST-789"
 ```
 
-**Result:** 3 bugs fixed in parallel instead of sequentially.
+### 4. Monitor Progress
+
+```bash
+# Check HIVE status
+hive-status
+
+# List failed tasks
+hive-failed
+
+# Check container status
+hive status
+```
+
+### 5. When Done
+
+```bash
+# Stop all containers
+hive stop
+
+# Or clean everything
+hive clean  # Removes containers, images, worktrees, .hive/ directory
+```
 
 ---
 
-## Features
+## ✨ Key Features
 
-- ✅ **Works Anywhere**: `hive init` in any existing Git project
-- ✅ **Zero Config**: Auto-detects git, project type, Claude token
-- ✅ **Clean Structure**: All files in `.hive/` (gitignored), only `hive.yaml` shared
-- ✅ **Multi-Agent**: 1 Queen + up to 10 workers
-- ✅ **Task Queue**: Redis-based atomic task management
-- ✅ **Isolated Workspaces**: Each agent has its own git worktree
-- ✅ **Full Stack**: Supports Node.js, Go, Python, Rust
+### 🎭 Automatic Role Injection
+- **No manual prompts**: Agents receive role instructions automatically on startup
+- **Queen knows her role**: Orchestrates, monitors, assigns tasks
+- **Workers know their role**: Execute tasks, run tests, wait for CI
 
-## Project Structure
+### 📂 Git Worktree Isolation
+- **Parallel work**: Each agent has its own git worktree
+- **No conflicts**: Multiple agents work on the same branch
+- **Automatic cleanup**: `hive clean` removes all worktrees
+- **Detached mode**: Agents can work simultaneously without branch locks
 
-After `hive init`, your project looks like:
-```
-your-project/
-├── .hive/                  # All hive infrastructure (gitignored)
-│   ├── docker-compose.yml
-│   ├── .env                # Your secrets (token, etc.)
-│   ├── docker/             # Dockerfiles
-│   ├── scripts/            # Task management scripts
-│   └── workspaces/         # Agent workspaces
-├── hive.yaml               # Shareable config (commit this!)
-└── ... your code ...
-```
+### 🔐 Persistent Authentication
+- **OAuth persistence**: Tokens survive container restarts
+- **No theme prompts**: Setup wizard automatically bypassed
+- **Shared MCPs**: Configure once, available in all agents
+- **Isolated history**: Each agent has independent conversation history
+
+### ⚡ Zero Configuration
+- **Auto-detection**: Git config, project type, Claude token
+- **One command setup**: `hive init` does everything
+- **Sensible defaults**: Works out of the box
+- **Flexible override**: Configure via `hive.yaml` or CLI flags
 
 ---
 
-## Documentation
+## 📖 Example: Fix 3 Bugs in Parallel
+
+**Sequential (normal workflow):**
+```
+Bug #1: 1 hour
+Bug #2: 1 hour
+Bug #3: 1 hour
+─────────────────
+Total: 3 hours ⏱️
+```
+
+**Parallel (with Hive):**
+```
+Bug #1 │ Bug #2 │ Bug #3
+1 hour │ 1 hour │ 1 hour (all at once)
+───────────────────────────
+Total: 1 hour ⚡
+```
+
+**Commands:**
+
+Terminal 1 (Queen):
+```bash
+hive connect queen
+
+# Tell Queen about the bugs
+hive-assign drone-1 "Fix #123" "Auth timeout issue" "BUG-123"
+hive-assign drone-2 "Fix #124" "CSV export empty" "BUG-124"
+hive-assign drone-3 "Fix #125" "Email validation" "BUG-125"
+```
+
+Terminals 2-4 (Workers):
+```bash
+# Each worker automatically:
+# 1. Picks up their assigned task
+# 2. Creates a branch
+# 3. Fixes the bug
+# 4. Runs tests
+# 5. Waits for CI to pass
+# 6. Marks task as done
+
+hive connect 1  # Worker sees task, starts working
+# ... fix bug ...
+task-done       # When CI is green ✅
+```
+
+**Result:** 3 bugs fixed simultaneously = **3x faster** 🚀
+
+---
+
+## 🛠️ Available Commands
+
+### Host Commands
+
+| Command | Description |
+|---------|-------------|
+| `hive init` | Initialize Hive in current project |
+| `hive start [N]` | Start Queen + N workers (default: 2) |
+| `hive stop` | Stop all containers |
+| `hive status` | Show container status |
+| `hive connect <id>` | Connect to agent (queen, 1-10) |
+| `hive clean` | Remove all Hive files and containers |
+
+### Queen Commands (inside Queen container)
+
+| Command | Description |
+|---------|-------------|
+| `hive-status` | Check task queue and worker status |
+| `hive-assign <drone> <title> <desc> [ticket]` | Assign task to worker |
+| `hive-failed` | List all failed tasks |
+
+### Worker Commands (inside Worker containers)
+
+| Command | Description |
+|---------|-------------|
+| `my-tasks` | Check assigned tasks (runs automatically) |
+| `take-task` | Pick up next task from queue |
+| `task-done` | Mark task complete (only when CI is green!) |
+| `task-failed "<reason>"` | Mark task as failed |
+
+---
+
+## 📚 Documentation
 
 ### Core Guides
-- 📘 [**FAQ**](docs/faq.md) - Common questions and answers
-- ⚙️ [**Configuration**](docs/configuration.md) - `.env` setup, secrets management
-- 📋 [**Commands Reference**](docs/commands.md) - All CLI commands
-- ✨ [**Best Practices**](docs/best-practices.md) - Effective parallel development
-
-### Technical Docs
+- 📘 [**Commands Reference**](docs/commands.md) - Complete command documentation
+- ⚙️ [**Configuration**](docs/configuration.md) - Environment variables & settings
 - 🏗️ [**Architecture**](docs/architecture.md) - How Hive works internally
+- ✨ [**Best Practices**](docs/best-practices.md) - Effective parallel development
+- 📋 [**FAQ**](docs/faq.md) - Common questions and answers
+
+### Advanced
 - 🔌 [**MCP Setup**](docs/mcp-setup.md) - Configure Model Context Protocol
 - 🔧 [**Troubleshooting**](docs/troubleshooting.md) - Fix common issues
 - 🐳 [**Docker Images**](docker/README.md) - Available Dockerfiles
+- 🤝 [**Contributing**](CONTRIBUTING.md) - Contribution guidelines
 
 ---
 
-## Examples
-
-Real-world examples with complete workflows:
-
-| Language | Example | What's Included |
-|----------|---------|-----------------|
-| 🟢 **Node.js** | [Full-stack TypeScript](examples/nodejs-monorepo/) | User management, parallel bug fixes, refactoring |
-| 🔵 **Go** | [REST API](examples/golang-api/) | CRUD handlers, search, image upload |
-| 🟡 **Python** | [ML Project](examples/python-ml/) | Parallel model training, MLflow tracking |
-| 🟠 **Rust** | [CLI Tool](examples/rust-cli/) | File search, parallel commands |
-
-Each example includes:
-- Complete code samples
-- Task breakdown for Queen
-- Timeline comparisons (sequential vs parallel)
-- Troubleshooting guides
-
----
-
-## Use Cases
+## 🎯 Use Cases
 
 ### Feature Development
-Break features into parallel tasks:
+Break features into parallel subtasks:
 ```bash
-hive-assign drone-1 "Create database schema"
-hive-assign drone-2 "Build REST API"
-hive-assign drone-3 "Create UI components"
-hive-assign drone-4 "Write tests"
+hive-assign drone-1 "Create database schema" "Add users table migration"
+hive-assign drone-2 "Build REST API" "Implement CRUD endpoints"
+hive-assign drone-3 "Create UI" "Build user management form"
+hive-assign drone-4 "Write tests" "Add integration tests"
 ```
 
 ### Bug Fixing Sprint
 Fix multiple bugs simultaneously:
 ```bash
-hive-assign drone-1 "Fix auth timeout"
-hive-assign drone-2 "Fix CSV export"
-hive-assign drone-3 "Fix email validation"
+hive-assign drone-1 "Fix auth timeout" "Increase session duration"
+hive-assign drone-2 "Fix CSV export" "Handle empty data case"
+hive-assign drone-3 "Fix validation" "Update email regex"
 ```
 
 ### Code Refactoring
 Refactor different modules in parallel:
 ```bash
-hive-assign drone-1 "Refactor auth module"
-hive-assign drone-2 "Migrate to Prisma"
-hive-assign drone-3 "Update tests"
+hive-assign drone-1 "Refactor auth" "Extract to auth service"
+hive-assign drone-2 "Update database" "Migrate to Prisma"
+hive-assign drone-3 "Update tests" "Add missing test coverage"
 ```
 
 ---
 
-## Requirements
+## 🏗️ Architecture Highlights
 
-- **Docker Desktop** - Installed and running
-- **8GB+ RAM** - More RAM = more workers
-- **10GB+ disk** - For Docker images and workspaces
+**Task Queue:**
+- Redis-based atomic operations
+- FIFO task assignment
+- Pub/Sub notifications
+- Persistent task history
 
-**Supported OS:** macOS, Linux, Windows (WSL2)
+**Agent Isolation:**
+- Independent git worktrees per agent
+- Isolated conversation history
+- Shared MCPs and plugins
+- No workspace conflicts
+
+**Claude Integration:**
+- OAuth token persistence
+- Automatic setup bypass
+- Permission bypass mode
+- Role-specific prompts
 
 ---
 
-## Building from Source
-
-```bash
-make build    # Build binary
-make install  # Install to /usr/local/bin
-make clean    # Clean build artifacts
-```
-
----
-
-## Contributing
+## 🤝 Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Support
+## 🆘 Support
 
 - 🐛 [Report a bug](https://github.com/mbourmaud/hive/issues)
 - 💡 [Request a feature](https://github.com/mbourmaud/hive/issues)
 - 📖 [Read the docs](docs/)
+- 💬 [Discussions](https://github.com/mbourmaud/hive/discussions)
+
+---
+
+<p align="center">
+  Made with ☕ and 🐝 by <a href="https://github.com/mbourmaud">@mbourmaud</a>
+</p>
