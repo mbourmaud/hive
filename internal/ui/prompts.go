@@ -5,15 +5,21 @@ import (
 )
 
 // PromptRequired prompts for required input with optional validation
-func PromptRequired(label string, validator ...survey.Validator) (string, error) {
+// validator should be a function with signature func(string) error
+func PromptRequired(label string, validator ...func(string) error) (string, error) {
 	var value string
 	prompt := &survey.Input{
 		Message: label,
 	}
 
 	opts := []survey.AskOpt{survey.WithValidator(survey.Required)}
-	if len(validator) > 0 {
-		opts = append(opts, survey.WithValidator(validator[0]))
+	if len(validator) > 0 && validator[0] != nil {
+		opts = append(opts, survey.WithValidator(func(ans interface{}) error {
+			if str, ok := ans.(string); ok {
+				return validator[0](str)
+			}
+			return nil
+		}))
 	}
 
 	err := survey.AskOne(prompt, &value, opts...)

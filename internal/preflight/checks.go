@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/mbourmaud/hive/internal/ui"
 )
 
 // CheckResult represents the result of a preflight check
@@ -177,16 +179,21 @@ func CheckWorkspaceDir(workspacePath string) CheckResult {
 func PrintResults(results []CheckResult) bool {
 	allPassed := true
 
-	fmt.Println("Preflight Checks:")
-	fmt.Println("=================")
+	fmt.Print(ui.Header("🔍", "Preflight Checks"))
 
 	for _, r := range results {
-		status := "OK"
-		if !r.Passed {
-			status = "FAIL"
+		var status string
+		if r.Passed {
+			status = ui.StyleGreen.Render("✓")
+		} else {
+			status = ui.StyleRed.Render("✗")
 			allPassed = false
 		}
-		fmt.Printf("  [%s] %s: %s\n", status, r.Name, r.Message)
+
+		// Format: "  ✓ Docker daemon: Docker is running"
+		name := ui.StyleBold.Render(r.Name)
+		message := ui.StyleDim.Render(r.Message)
+		fmt.Printf("  %s %s: %s\n", status, name, message)
 	}
 
 	fmt.Println()

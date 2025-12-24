@@ -1,20 +1,18 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/mbourmaud/hive/internal/config"
 	"github.com/mbourmaud/hive/internal/embed"
+	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var (
@@ -60,8 +58,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(".hive/ already exists. Use 'hive clean' to reset")
 	}
 
-	fmt.Printf("\n%s%s🐝 Welcome to HIVE%s\n", colorBold, colorCyan, colorReset)
-	fmt.Printf("%sMulti-Agent Claude System%s\n\n", colorDim, colorReset)
+	fmt.Print(ui.Header("🐝", "Welcome to HIVE"))
+	fmt.Printf("%s\n\n", ui.StyleDim.Render("Multi-Agent Claude System"))
 
 	// Detect project info
 	projectType := detectProjectType()
@@ -110,57 +108,59 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Extract hive files to .hive/ directory
-	fmt.Printf("%s📦 Setting up project...%s\n", colorCyan, colorReset)
+	fmt.Printf("%s\n", ui.StyleCyan.Render("📦 Setting up project..."))
 	if err := extractHiveFiles(cfg["PROJECT_TYPE"]); err != nil {
 		return fmt.Errorf("failed to extract hive files: %w", err)
 	}
-	fmt.Printf("  %s✓ Extracted .hive/%s\n", colorGreen, colorReset)
+	fmt.Print(ui.ProgressLine("Extracted .hive/", "✓"))
 
 	// Write .env file
 	if err := writeEnvFile(cfg); err != nil {
 		return fmt.Errorf("failed to write .hive/.env: %w", err)
 	}
-	fmt.Printf("  %s✓ Created .hive/.env%s\n", colorGreen, colorReset)
+	fmt.Print(ui.ProgressLine("Created .hive/.env", "✓"))
 
 	// Write hive.yaml file
 	workers := flagWorkers
 	if err := writeHiveYAML(cfg["WORKSPACE_NAME"], cfg["GIT_REPO_URL"], workers); err != nil {
 		return fmt.Errorf("failed to write hive.yaml: %w", err)
 	}
-	fmt.Printf("  %s✓ Created hive.yaml%s\n", colorGreen, colorReset)
+	fmt.Print(ui.ProgressLine("Created hive.yaml", "✓"))
 
 	// Update .gitignore
 	if err := updateGitignore(); err != nil {
-		fmt.Printf("  %s⚠️  .gitignore: %v%s\n", colorYellow, err, colorReset)
+		fmt.Printf("  %s\n", ui.Warning(".gitignore: "+err.Error()))
 	} else {
-		fmt.Printf("  %s✓ Updated .gitignore%s\n", colorGreen, colorReset)
+		fmt.Print(ui.ProgressLine("Updated .gitignore", "✓"))
 	}
 
 	// Ask for workers count
 	if !flagNonInteractive {
 		fmt.Println()
-		workersStr := promptWithDefault("🚀 Workers to start", "2")
-		if w, err := strconv.Atoi(workersStr); err == nil {
-			workers = w
+		workersStr, err := ui.PromptDefault("🚀 Workers to start", "2")
+		if err == nil {
+			if w, parseErr := strconv.Atoi(workersStr); parseErr == nil {
+				workers = w
+			}
 		}
 	}
 
 	// Create git worktrees for each agent
 	fmt.Println()
 	if err := createWorktrees(workers); err != nil {
-		fmt.Printf("%s🌳 Worktrees... ⚠️  %v%s\n", colorCyan, err, colorReset)
-		fmt.Printf("%s   Agents will use empty workspaces%s\n", colorDim, colorReset)
+		fmt.Printf("%s\n", ui.StyleCyan.Render(fmt.Sprintf("🌳 Worktrees... ⚠️  %v", err)))
+		fmt.Printf("%s\n", ui.StyleDim.Render("   Agents will use empty workspaces"))
 	}
 
-	fmt.Printf("\n%s%s🚀 Starting Hive%s\n", colorBold, colorCyan, colorReset)
+	fmt.Print(ui.Header("🚀", "Starting Hive"))
 	startCmd := exec.Command("hive", "start", strconv.Itoa(workers))
 	startCmd.Stdout = os.Stdout
 	startCmd.Stderr = os.Stderr
 
 	if err := startCmd.Run(); err != nil {
-		fmt.Printf("\n%s⚠️  Failed to start Hive%s\n", colorYellow, colorReset)
-		fmt.Printf("%sPlease check the error above and run manually:%s\n", colorDim, colorReset)
-		fmt.Printf("  %shive start %d%s\n\n", colorCyan, workers, colorReset)
+		fmt.Printf("\n%s\n", ui.Warning("Failed to start Hive"))
+		fmt.Printf("%s\n", ui.StyleDim.Render("Please check the error above and run manually:"))
+		fmt.Printf("  %s\n\n", ui.StyleCyan.Render(fmt.Sprintf("hive start %d", workers)))
 		return fmt.Errorf("hive start failed")
 	}
 
@@ -175,20 +175,42 @@ func interactiveWizard() (map[string]string, error) {
 
 	// Git Configuration
 	fmt.Println("📧 Git Configuration")
-	config["GIT_USER_EMAIL"] = promptRequired("  Email", validateEmail)
-	config["GIT_USER_NAME"] = promptRequired("  Name", nil)
+	email, err := ui.PromptRequired("  Email", validateEmail)
+	if err != nil {
+		return nil, err
+	}
+	config["GIT_USER_EMAIL"] = email
+
+	name, err := ui.PromptRequired("  Name")
+	if err != nil {
+		return nil, err
+	}
+	config["GIT_USER_NAME"] = name
 	fmt.Println()
 
 	// Claude Authentication
 	fmt.Println("🔑 Claude Authentication")
 	fmt.Println("  Get your token: claude setup-token")
-	config["CLAUDE_CODE_OAUTH_TOKEN"] = promptSecure("  OAuth Token")
+	token, err := ui.PromptSecret("  OAuth Token")
+	if err != nil {
+		return nil, err
+	}
+	config["CLAUDE_CODE_OAUTH_TOKEN"] = token
 	fmt.Println()
 
 	// Project Setup
 	fmt.Println("📂 Project Setup")
-	config["WORKSPACE_NAME"] = promptWithDefault("  Workspace name", "my-project")
-	config["GIT_REPO_URL"] = promptOptional("  Git repo URL (optional)", "")
+	workspace, err := ui.PromptDefault("  Workspace name", "my-project")
+	if err != nil {
+		return nil, err
+	}
+	config["WORKSPACE_NAME"] = workspace
+
+	gitURL, err := ui.PromptOptional("  Git repo URL (optional)")
+	if err != nil {
+		return nil, err
+	}
+	config["GIT_REPO_URL"] = gitURL
 	fmt.Println()
 
 	return config, nil
@@ -229,14 +251,26 @@ func interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeT
 	// Ask for missing git info
 	if email == "" {
 		fmt.Println("📧 Git Configuration")
-		cfg["GIT_USER_EMAIL"] = promptRequired("  Email", validateEmail)
+		emailInput, err := ui.PromptRequired("  Email", validateEmail)
+		if err != nil {
+			return nil, err
+		}
+		cfg["GIT_USER_EMAIL"] = emailInput
 	}
 	if name == "" {
 		if email == "" {
-			cfg["GIT_USER_NAME"] = promptRequired("  Name", nil)
+			nameInput, err := ui.PromptRequired("  Name")
+			if err != nil {
+				return nil, err
+			}
+			cfg["GIT_USER_NAME"] = nameInput
 		} else {
 			fmt.Println("📧 Git Configuration")
-			cfg["GIT_USER_NAME"] = promptRequired("  Name", nil)
+			nameInput, err := ui.PromptRequired("  Name")
+			if err != nil {
+				return nil, err
+			}
+			cfg["GIT_USER_NAME"] = nameInput
 		}
 	}
 
@@ -247,7 +281,11 @@ func interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeT
 	} else {
 		fmt.Println("🔑 Claude Authentication")
 		fmt.Println("   Get your token: claude /auth")
-		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = promptSecure("   OAuth Token")
+		tokenInput, err := ui.PromptSecret("   OAuth Token")
+		if err != nil {
+			return nil, err
+		}
+		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = tokenInput
 	}
 	fmt.Println()
 
@@ -271,94 +309,11 @@ func validateFlags() error {
 }
 
 func validateEmail(email string) error {
-	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	if !re.MatchString(email) {
+	// Use a simple regex for email validation
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
 		return fmt.Errorf("invalid email format: %s", email)
 	}
 	return nil
-}
-
-func promptRequired(label string, validator func(string) error) string {
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Printf("%s: ", label)
-		input, _ := reader.ReadString('\n') // nolint:errcheck
-		input = strings.TrimSpace(input)
-
-		if input == "" {
-			fmt.Println("  ⚠️  This field is required")
-			continue
-		}
-
-		if validator != nil {
-			if err := validator(input); err != nil {
-				fmt.Printf("  ⚠️  %s\n", err)
-				continue
-			}
-		}
-
-		return input
-	}
-}
-
-func promptWithDefault(label, defaultValue string) string {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("%s (default: %s): ", label, defaultValue)
-	input, _ := reader.ReadString('\n') // nolint:errcheck
-	input = strings.TrimSpace(input)
-
-	if input == "" {
-		return defaultValue
-	}
-	return input
-}
-
-func promptOptional(label, defaultValue string) string {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("%s: ", label)
-	input, _ := reader.ReadString('\n') // nolint:errcheck
-	input = strings.TrimSpace(input)
-
-	if input == "" {
-		return defaultValue
-	}
-	return input
-}
-
-// promptSecure prompts for sensitive input (like tokens/passwords) with masked input
-func promptSecure(label string) string {
-	for {
-		fmt.Printf("%s: ", label)
-
-		// Read password (masked input)
-		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println() // Print newline after password input
-
-		if err != nil {
-			fmt.Printf("  ⚠️  Error reading input: %v\n", err)
-			continue
-		}
-
-		input := strings.TrimSpace(string(bytePassword))
-
-		// Strip ANSI escape sequences that terminals sometimes inject
-		input = stripANSI(input)
-
-		if input == "" {
-			fmt.Println("  ⚠️  This field is required")
-			continue
-		}
-
-		return input
-	}
-}
-
-// stripANSI removes ANSI escape sequences from a string
-func stripANSI(str string) string {
-	// Match ANSI escape sequences: ESC [ ... (any chars) ... (letter)
-	// Also match ESC O and ESC I sequences
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[OI]|\x1b`)
-	return ansiRegex.ReplaceAllString(str, "")
 }
 
 func writeEnvFile(cfg map[string]string) error {
@@ -446,12 +401,15 @@ func writeHiveYAML(workspace, gitURL string, workers int) error {
 }
 
 func printSuccessMessage(workers int) {
-	fmt.Printf("\n%s%s✨ Setup complete!%s\n", colorBold, colorGreen, colorReset)
-	fmt.Printf("%sHive is running with %d worker%s%s\n\n", colorDim, workers, pluralize(workers), colorReset)
-	fmt.Printf("%sNext steps:%s\n", colorBold, colorReset)
-	fmt.Printf("  %shive connect queen%s  # Connect to orchestrator\n", colorCyan, colorReset)
-	fmt.Printf("  %shive connect 1%s      # Connect to worker 1\n", colorCyan, colorReset)
-	fmt.Printf("  %shive status%s         # Check status\n\n", colorCyan, colorReset)
+	fmt.Printf("\n%s\n", ui.Success("Setup complete!"))
+	fmt.Printf("%s\n\n", ui.StyleDim.Render(fmt.Sprintf("Hive is running with %d worker%s", workers, pluralize(workers))))
+
+	steps := []ui.Step{
+		{Command: "hive connect queen", Description: "Connect to orchestrator"},
+		{Command: "hive connect 1", Description: "Connect to worker 1"},
+		{Command: "hive status", Description: "Check status"},
+	}
+	fmt.Print(ui.NextSteps(steps))
 }
 
 // detectGitConfig retrieves git configuration from the current repository
@@ -585,12 +543,12 @@ func createWorktrees(workers int) error {
 	}
 	currentBranch := strings.TrimSpace(string(branchOutput))
 
-	fmt.Printf("%s🌳 Creating git worktrees...%s", colorCyan, colorReset)
+	fmt.Printf("  %s ", ui.StyleDim.Render("🌳 Creating git worktrees..."))
 
 	// Create worktree for queen
 	queenPath := ".hive/workspaces/queen"
 	if err := createWorktree(queenPath, currentBranch, "queen"); err != nil {
-		fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
+		fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 		return err
 	}
 
@@ -599,12 +557,12 @@ func createWorktrees(workers int) error {
 		workerPath := fmt.Sprintf(".hive/workspaces/drone-%d", i)
 		workerName := fmt.Sprintf("drone-%d", i)
 		if err := createWorktree(workerPath, currentBranch, workerName); err != nil {
-			fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
+			fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 			return err
 		}
 	}
 
-	fmt.Printf(" %s✓%s (%d worktree%s)\n", colorGreen, colorReset, workers+1, pluralize(workers+1))
+	fmt.Printf("%s (%d worktree%s)\n", ui.StyleGreen.Render("✓"), workers+1, pluralize(workers+1))
 	return nil
 }
 
