@@ -130,6 +130,17 @@ WORKSPACE_DIR="/workspace/${WORKSPACE_NAME:-my-project}"
 if [ -d "/workspace/.git" ] || [ -f "/workspace/.git" ]; then
     log "[+] Workspace already initialized as git worktree"
     WORKSPACE_DIR="/workspace"
+
+    # Fix worktree .git file to point to mounted git directory
+    if [ -f "/workspace/.git" ] && [ -d "/workspace-git" ]; then
+        # Read the gitdir path from .git file
+        GITDIR_PATH=$(cat /workspace/.git | sed 's/gitdir: //')
+        # Extract worktree name from path (e.g., /path/.git/worktrees/queen -> queen)
+        WORKTREE_NAME=$(basename "$GITDIR_PATH")
+        # Update .git file to point to container's mounted git directory
+        echo "gitdir: /workspace-git/worktrees/$WORKTREE_NAME" > /workspace/.git
+        log "[+] Fixed git worktree path to use mounted repository"
+    fi
 else
     # Fallback: Initialize workspace if it doesn't exist
     if [ ! -d "$WORKSPACE_DIR" ]; then
