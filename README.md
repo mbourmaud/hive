@@ -67,11 +67,6 @@ cd hive
 make install
 ```
 
-**Requirements:**
-- Docker Desktop (running)
-- 8GB+ RAM
-- 10GB+ disk space
-
 ---
 
 ## 🚀 How to Init & Use
