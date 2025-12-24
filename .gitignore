@@ -8,7 +8,6 @@
 *.token
 credentials.json
 
-# Hive runtime data
 workspaces/
 tasks/
 .hive/
