@@ -14,6 +14,7 @@ import (
 	"github.com/mbourmaud/hive/internal/config"
 	"github.com/mbourmaud/hive/internal/embed"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -178,7 +179,7 @@ func interactiveWizard() (map[string]string, error) {
 	// Claude Authentication
 	fmt.Println("🔑 Claude Authentication")
 	fmt.Println("  Get your token: claude setup-token")
-	config["CLAUDE_CODE_OAUTH_TOKEN"] = promptRequired("  OAuth Token", nil)
+	config["CLAUDE_CODE_OAUTH_TOKEN"] = promptSecure("  OAuth Token")
 	fmt.Println()
 
 	// Project Setup
@@ -243,7 +244,7 @@ func interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeT
 	} else {
 		fmt.Println("🔑 Claude Authentication")
 		fmt.Println("   Get your token: claude /auth")
-		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = promptRequired("   OAuth Token", nil)
+		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = promptSecure("   OAuth Token")
 	}
 	fmt.Println()
 
@@ -319,6 +320,31 @@ func promptOptional(label, defaultValue string) string {
 		return defaultValue
 	}
 	return input
+}
+
+// promptSecure prompts for sensitive input (like tokens/passwords) with masked input
+func promptSecure(label string) string {
+	for {
+		fmt.Printf("%s: ", label)
+
+		// Read password (masked input)
+		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println() // Print newline after password input
+
+		if err != nil {
+			fmt.Printf("  ⚠️  Error reading input: %v\n", err)
+			continue
+		}
+
+		input := strings.TrimSpace(string(bytePassword))
+
+		if input == "" {
+			fmt.Println("  ⚠️  This field is required")
+			continue
+		}
+
+		return input
+	}
 }
 
 func writeEnvFile(cfg map[string]string) error {
