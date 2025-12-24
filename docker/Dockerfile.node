@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y \
     expect \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python packages for worker daemon
+RUN pip3 install --no-cache-dir redis --break-system-packages
+
 # Docker CLI (for testcontainers) - using static binary
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then ARCH="aarch64"; else ARCH="x86_64"; fi && \
@@ -84,7 +87,8 @@ RUN git config --global --add safe.directory '*' \
 
 # Create necessary directories
 RUN mkdir -p ~/.config ~/.aws ~/.ssh ~/.claude/debug ~/.claude/todos ~/.claude/statsig ~/.claude/projects \
-    && mkdir -p ~/.local/share/pnpm/.tools ~/.local/share/pnpm/state ~/.local/share/pnpm/store
+    && mkdir -p ~/.local/share/pnpm/.tools ~/.local/share/pnpm/state ~/.local/share/pnpm/store \
+    && mkdir -p ~/node_modules_cache
 
 # Copy entrypoint and scripts
 COPY --chown=agent:agent entrypoint.sh /home/agent/entrypoint.sh
