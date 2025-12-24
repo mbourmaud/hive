@@ -25,6 +25,10 @@ class Tools:
 
     def __init__(self, workspace: str = "/workspace"):
         self.workspace = workspace
+        # HIVE-specific environment variables
+        self.redis_host = os.getenv('REDIS_HOST', 'hive-redis')
+        self.redis_port = os.getenv('REDIS_PORT', '6379')
+        self.agent_id = os.getenv('AGENT_ID', '')
 
     def read(self, file_path: str, offset: int = 0, limit: Optional[int] = None) -> str:
         """
@@ -287,6 +291,294 @@ class Tools:
         except Exception as e:
             raise ToolExecutionError(f"Error globbing {pattern}: {str(e)}")
 
+    # ============================================
+    # HIVE Tools
+    # ============================================
+
+    def hive_assign(self, drone_id: str, title: str, description: str,
+                    jira_ticket: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Assign a task to a drone (Queen command).
+
+        Args:
+            drone_id: ID of the drone to assign task to
+            title: Short task title
+            description: Detailed task description
+            jira_ticket: Optional Jira ticket ID
+
+        Returns:
+            Dict with success status and task details
+        """
+        try:
+            cmd = f'hive-assign "{drone_id}" "{title}" "{description}"'
+            if jira_ticket:
+                cmd += f' "{jira_ticket}"'
+
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                raise ToolExecutionError(f"Failed to assign task: {result.stderr}")
+
+            # Parse task ID from output
+            task_id = None
+            for line in result.stdout.split('\n'):
+                if 'task-' in line:
+                    import re
+                    match = re.search(r'(task-\S+)', line)
+                    if match:
+                        task_id = match.group(1)
+
+            return {
+                'success': True,
+                'task_id': task_id,
+                'drone_id': drone_id,
+                'title': title,
+                'output': result.stdout
+            }
+
+        except subprocess.TimeoutExpired:
+            raise ToolExecutionError("hive-assign command timed out")
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_assign: {str(e)}")
+
+    def hive_status(self) -> Dict[str, Any]:
+        """
+        View HIVE status (Queen command).
+
+        Returns:
+            Dict with success status and formatted status output
+        """
+        try:
+            result = subprocess.run(
+                'hive-status',
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            return {
+                'success': True,
+                'status': result.stdout
+            }
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_status: {str(e)}")
+
+    def hive_failed(self) -> Dict[str, Any]:
+        """
+        List failed tasks (Queen command).
+
+        Returns:
+            Dict with success status and failed tasks output
+        """
+        try:
+            result = subprocess.run(
+                'hive-failed',
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            return {
+                'success': True,
+                'failed_tasks': result.stdout
+            }
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_failed: {str(e)}")
+
+    def hive_config(self, key: str, default: Optional[str] = None) -> str:
+        """
+        Read config value (Queen/Worker command).
+
+        Args:
+            key: Config key to read
+            default: Optional default value if key not found
+
+        Returns:
+            Config value string
+        """
+        try:
+            cmd = f'hive-config "{key}"'
+            if default:
+                cmd += f' "{default}"'
+
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if result.returncode != 0:
+                return default if default else ""
+
+            return result.stdout.strip()
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_config: {str(e)}")
+
+    def hive_my_tasks(self) -> Dict[str, Any]:
+        """
+        View my tasks (Worker command).
+
+        Returns:
+            Dict with success status, agent_id, and tasks output
+        """
+        if not self.agent_id:
+            raise ToolExecutionError("AGENT_ID not set (not running as worker)")
+
+        try:
+            result = subprocess.run(
+                'my-tasks',
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            return {
+                'success': True,
+                'agent_id': self.agent_id,
+                'tasks': result.stdout
+            }
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_my_tasks: {str(e)}")
+
+    def hive_take_task(self) -> Dict[str, Any]:
+        """
+        Take next task from queue (Worker command).
+
+        Returns:
+            Dict with success status, has_task flag, and task details
+        """
+        if not self.agent_id:
+            raise ToolExecutionError("AGENT_ID not set (not running as worker)")
+
+        try:
+            result = subprocess.run(
+                'take-task',
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            # Check if no tasks available
+            if "No tasks in queue" in result.stdout or "📭" in result.stdout:
+                return {
+                    'success': True,
+                    'has_task': False,
+                    'message': 'No tasks in queue'
+                }
+
+            # Parse task details
+            task_title = None
+            for line in result.stdout.split('\n'):
+                if line.startswith('📋'):
+                    task_title = line.replace('📋', '').strip()
+
+            return {
+                'success': True,
+                'has_task': True,
+                'title': task_title,
+                'output': result.stdout
+            }
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_take_task: {str(e)}")
+
+    def hive_task_done(self, result: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Mark task as completed (Worker command).
+
+        Args:
+            result: Optional result summary
+
+        Returns:
+            Dict with success status and output
+        """
+        if not self.agent_id:
+            raise ToolExecutionError("AGENT_ID not set (not running as worker)")
+
+        try:
+            cmd = 'task-done'
+            if result:
+                cmd += f' "{result}"'
+
+            result_proc = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result_proc.returncode != 0:
+                raise ToolExecutionError(f"Failed to mark task done: {result_proc.stderr}")
+
+            return {
+                'success': True,
+                'agent_id': self.agent_id,
+                'output': result_proc.stdout
+            }
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_task_done: {str(e)}")
+
+    def hive_task_failed(self, error: str) -> Dict[str, Any]:
+        """
+        Mark task as failed (Worker command).
+
+        Args:
+            error: Error message explaining failure
+
+        Returns:
+            Dict with success status and output
+        """
+        if not self.agent_id:
+            raise ToolExecutionError("AGENT_ID not set (not running as worker)")
+
+        try:
+            result = subprocess.run(
+                f'task-failed "{error}"',
+                shell=True,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                raise ToolExecutionError(f"Failed to mark task failed: {result.stderr}")
+
+            return {
+                'success': True,
+                'agent_id': self.agent_id,
+                'error': error,
+                'output': result.stdout
+            }
+
+        except Exception as e:
+            raise ToolExecutionError(f"Error in hive_task_failed: {str(e)}")
+
     def execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
         """
         Execute a tool by name with the given input.
@@ -334,6 +626,39 @@ class Tools:
                 pattern=tool_input.get("pattern", "*"),
                 path=tool_input.get("path", ".")
             )
+
+        # HIVE tools (Queen)
+        elif tool_name == "hive_assign":
+            return self.hive_assign(
+                drone_id=tool_input.get("drone_id", ""),
+                title=tool_input.get("title", ""),
+                description=tool_input.get("description", ""),
+                jira_ticket=tool_input.get("jira_ticket")
+            )
+        elif tool_name == "hive_status":
+            return self.hive_status()
+        elif tool_name == "hive_failed":
+            return self.hive_failed()
+        elif tool_name == "hive_config":
+            return self.hive_config(
+                key=tool_input.get("key", ""),
+                default=tool_input.get("default")
+            )
+
+        # HIVE tools (Worker)
+        elif tool_name == "hive_my_tasks":
+            return self.hive_my_tasks()
+        elif tool_name == "hive_take_task":
+            return self.hive_take_task()
+        elif tool_name == "hive_task_done":
+            return self.hive_task_done(
+                result=tool_input.get("result")
+            )
+        elif tool_name == "hive_task_failed":
+            return self.hive_task_failed(
+                error=tool_input.get("error", "")
+            )
+
         else:
             raise ToolExecutionError(f"Unknown tool: {tool_name}")
 
@@ -478,6 +803,118 @@ TOOL_DEFINITIONS = [
                 }
             },
             "required": ["pattern"]
+        }
+    },
+
+    # HIVE tools (Queen commands)
+    {
+        "name": "hive_assign",
+        "description": "Assign a task to a specific drone. Creates a task in the drone's queue with optional Jira ticket. Returns task details. (Queen command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drone_id": {
+                    "type": "string",
+                    "description": "ID of the drone to assign task to (e.g., 'drone-1', 'drone-2')"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Short task title (e.g., 'Fix login bug')"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed task description explaining what needs to be done"
+                },
+                "jira_ticket": {
+                    "type": "string",
+                    "description": "Optional Jira ticket ID (e.g., 'ML-1234'). If provided, creates a branch name automatically."
+                }
+            },
+            "required": ["drone_id", "title", "description"]
+        }
+    },
+    {
+        "name": "hive_status",
+        "description": "View the overall status of the HIVE system. Shows queued, active, completed, and failed tasks for all drones. Returns structured status data. (Queen command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "hive_failed",
+        "description": "List all failed tasks across the HIVE. Returns details about each failure including drone, error message, and timestamp. (Queen command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "hive_config",
+        "description": "Read a configuration value from hive.yaml. Returns the config value or default if not found. (Queen/Worker command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Config key to read (e.g., 'queen.monitoring.enabled', 'worker.monitoring.interval')"
+                },
+                "default": {
+                    "type": "string",
+                    "description": "Optional default value if key not found"
+                }
+            },
+            "required": ["key"]
+        }
+    },
+
+    # HIVE tools (Worker commands)
+    {
+        "name": "hive_my_tasks",
+        "description": "View tasks assigned to the current worker. Shows active task and queued tasks. Returns structured task data. Uses AGENT_ID environment variable. (Worker command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "hive_take_task",
+        "description": "Take the next task from the worker's queue. Atomically moves task from queue to active. Returns task details or null if queue is empty. Uses AGENT_ID environment variable. (Worker command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "hive_task_done",
+        "description": "Mark the current active task as completed successfully. Moves task to completed set and publishes completion event. Uses AGENT_ID environment variable. (Worker command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "result": {
+                    "type": "string",
+                    "description": "Optional result summary or details about what was accomplished"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "hive_task_failed",
+        "description": "Mark the current active task as failed. Moves task to failed set with error details. Uses AGENT_ID environment variable. (Worker command)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "description": "Error message explaining why the task failed"
+                }
+            },
+            "required": ["error"]
         }
     }
 ]
