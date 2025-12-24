@@ -144,6 +144,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Create git worktrees for each agent
+	if err := createWorktrees(workers); err != nil {
+		fmt.Printf("\n⚠️  Failed to create worktrees: %v\n", err)
+		fmt.Println("   Agents will use empty workspaces")
+	}
+
 	fmt.Printf("\n🐝 Starting Hive with %d workers...\n", workers)
 	startCmd := exec.Command("hive", "start", strconv.Itoa(workers))
 	startCmd.Stdout = os.Stdout
@@ -518,6 +524,69 @@ func extractHiveFiles(projectType string) error {
 		return fmt.Errorf("failed to create workspaces directory: %w", err)
 	}
 
+	return nil
+}
+
+// createWorktrees creates git worktrees for each agent if in a git repo
+func createWorktrees(workers int) error {
+	// Check if we're in a git repository
+	gitCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	if err := gitCmd.Run(); err != nil {
+		// Not a git repo, skip worktree creation
+		return nil
+	}
+
+	// Get current branch
+	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	branchOutput, err := branchCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get current branch: %w", err)
+	}
+	currentBranch := strings.TrimSpace(string(branchOutput))
+
+	fmt.Println("\n📦 Creating git worktrees for agents...")
+
+	// Create worktree for queen
+	queenPath := ".hive/workspaces/queen"
+	if err := createWorktree(queenPath, currentBranch, "queen"); err != nil {
+		return err
+	}
+
+	// Create worktrees for workers
+	for i := 1; i <= workers; i++ {
+		workerPath := fmt.Sprintf(".hive/workspaces/drone-%d", i)
+		workerName := fmt.Sprintf("drone-%d", i)
+		if err := createWorktree(workerPath, currentBranch, workerName); err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("✅ Created worktrees for all agents")
+	return nil
+}
+
+// createWorktree creates a single git worktree
+func createWorktree(path, branch, agentName string) error {
+	// Check if worktree already exists
+	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
+		fmt.Printf("  ✓ Worktree for %s already exists\n", agentName)
+		return nil
+	}
+
+	// Create parent directory if needed
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", agentName, err)
+	}
+
+	// Create detached worktree (allows multiple worktrees on same branch)
+	cmd := exec.Command("git", "worktree", "add", "--detach", path, branch)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create worktree for %s: %w", agentName, err)
+	}
+
+	fmt.Printf("  ✓ Created worktree for %s\n", agentName)
 	return nil
 }
 

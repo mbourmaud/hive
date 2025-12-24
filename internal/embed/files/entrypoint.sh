@@ -23,24 +23,36 @@ log "Initializing Claude Agent ${AGENT_ID:-unknown}..."
 log "[+] Claude configuration: PARTIAL (MCPs, plugins, projects shared)"
 log "[+] Conversation history: ISOLATED (this agent only)"
 
-# Ensure ~/.claude directory exists
-mkdir -p ~/.claude
+# Ensure ~/.claude directory and subdirectories exist
+mkdir -p ~/.claude/projects ~/.claude/mcps ~/.claude/plugins
 
-# Create settings.json with OAuth token from environment
+# Create ~/.claude.json with OAuth and onboarding flags to bypass setup wizard
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-    log "[+] Configuring Claude OAuth from environment..."
-    cat > ~/.claude/settings.json << EOF
+    log "[+] Configuring Claude OAuth and bypassing setup wizard..."
+    cat > ~/.claude.json << EOF
 {
-  "showSetupPrompt": false,
-  "bypassPermissionsAccepted": true,
+  "hasCompletedOnboarding": true,
+  "bypassPermissionsModeAccepted": true,
+  "lastOnboardingVersion": "2.0.76",
   "oauthAccount": {
     "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}"
   }
 }
 EOF
-    chmod 600 ~/.claude/settings.json
-    log "[+] Created settings.json with OAuth token"
+    chmod 600 ~/.claude.json
+    log "[+] Created ~/.claude.json with OAuth token and onboarding bypass"
 fi
+
+# Create minimal settings.json for permissions only
+cat > ~/.claude/settings.json << 'EOF'
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}
+EOF
+chmod 600 ~/.claude/settings.json
+log "[+] Created minimal settings.json for permissions"
 
 # Ensure isolated conversation files exist
 if [ ! -f ~/.claude/history.jsonl ]; then
@@ -106,22 +118,28 @@ fi
 
 WORKSPACE_DIR="/workspace/${WORKSPACE_NAME:-my-project}"
 
-# Initialize workspace if it doesn't exist
-if [ ! -d "$WORKSPACE_DIR" ]; then
-    log "[+] Initializing workspace: $WORKSPACE_DIR"
-    mkdir -p "$WORKSPACE_DIR"
+# Check if /workspace is already a git worktree (created by hive init)
+if [ -d "/workspace/.git" ] || [ -f "/workspace/.git" ]; then
+    log "[+] Workspace already initialized as git worktree"
+    WORKSPACE_DIR="/workspace"
+else
+    # Fallback: Initialize workspace if it doesn't exist
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        log "[+] Initializing workspace: $WORKSPACE_DIR"
+        mkdir -p "$WORKSPACE_DIR"
 
-    # If git repo URL is provided, clone it
-    if [ -n "$GIT_REPO_URL" ]; then
-        log "[+] Cloning repository: $GIT_REPO_URL"
-        git clone "$GIT_REPO_URL" "$WORKSPACE_DIR"
-    else
-        # Initialize empty git repo
-        cd "$WORKSPACE_DIR"
-        git init
-        echo "# ${WORKSPACE_NAME:-my-project}" > README.md
-        git add README.md
-        git commit -m "Initial commit" || true
+        # If git repo URL is provided, clone it
+        if [ -n "$GIT_REPO_URL" ]; then
+            log "[+] Cloning repository: $GIT_REPO_URL"
+            git clone "$GIT_REPO_URL" "$WORKSPACE_DIR"
+        else
+            # Initialize empty git repo
+            cd "$WORKSPACE_DIR"
+            git init
+            echo "# ${WORKSPACE_NAME:-my-project}" > README.md
+            git add README.md
+            git commit -m "Initial commit" || true
+        fi
     fi
 fi
 

@@ -15,7 +15,7 @@ var cleanCmd = &cobra.Command{
 	Short: "Remove all hive files from the project",
 	Long:  "Remove .hive/ directory, hive.yaml, and hive entries from .gitignore",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("🧹 Cleaning hive (containers, images, and files)...")
+		fmt.Println("🧹 Cleaning hive (containers, images, worktrees, and files)...")
 
 		// Step 1: Stop and remove Docker containers
 		if err := cleanDockerContainers(); err != nil {
@@ -27,7 +27,12 @@ var cleanCmd = &cobra.Command{
 			fmt.Printf("  ⚠ Could not clean Docker images: %v\n", err)
 		}
 
-		// Step 3: Remove .hive directory
+		// Step 3: Remove git worktrees
+		if err := cleanWorktrees(); err != nil {
+			fmt.Printf("  ⚠ Could not clean worktrees: %v\n", err)
+		}
+
+		// Step 4: Remove .hive directory
 		if _, err := os.Stat(".hive"); err == nil {
 			if err := os.RemoveAll(".hive"); err != nil {
 				return fmt.Errorf("failed to remove .hive/: %w", err)
@@ -174,6 +179,56 @@ func cleanDockerImages() error {
 	}
 
 	fmt.Println("  ✓ Removed hive images")
+	return nil
+}
+
+func cleanWorktrees() error {
+	// Check if we're in a git repository
+	gitCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	if err := gitCmd.Run(); err != nil {
+		// Not a git repo, skip worktree cleanup
+		return nil
+	}
+
+	fmt.Println("  🌳 Removing git worktrees...")
+
+	// Check if worktrees directory exists
+	worktreesDir := ".hive/workspaces"
+	if _, err := os.Stat(worktreesDir); os.IsNotExist(err) {
+		fmt.Println("  ✓ No worktrees to remove")
+		return nil
+	}
+
+	// List all worktrees in the directory
+	entries, err := os.ReadDir(worktreesDir)
+	if err != nil {
+		return fmt.Errorf("failed to read worktrees directory: %w", err)
+	}
+
+	removed := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		worktreePath := fmt.Sprintf("%s/%s", worktreesDir, entry.Name())
+
+		// Remove worktree using git worktree remove
+		removeCmd := exec.Command("git", "worktree", "remove", worktreePath, "--force")
+		if err := removeCmd.Run(); err != nil {
+			// If worktree remove fails, try to prune it
+			pruneCmd := exec.Command("git", "worktree", "prune")
+			_ = pruneCmd.Run()
+			fmt.Printf("  ⚠ Could not remove worktree %s: %v\n", entry.Name(), err)
+		} else {
+			removed++
+		}
+	}
+
+	if removed > 0 {
+		fmt.Printf("  ✓ Removed %d worktree(s)\n", removed)
+	}
+
 	return nil
 }
 
