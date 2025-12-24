@@ -192,8 +192,8 @@ func cleanWorktrees(runner *shell.Runner) error {
 		return nil
 	}
 
-	// Prune orphaned worktrees first
-	fmt.Printf("  %s ", ui.StyleDim.Render("🌳 Pruning orphaned worktrees..."))
+	// Prune orphaned worktrees first (clean up git metadata)
+	fmt.Printf("  %s ", ui.StyleDim.Render("🌲 Pruning orphaned worktrees..."))
 	pruneCmd := exec.Command("git", "worktree", "prune")
 	if err := runner.RunQuiet(pruneCmd); err != nil {
 		fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))

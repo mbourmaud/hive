@@ -7,7 +7,7 @@ var (
 	// Primary colors
 	ColorCyan   = lipgloss.AdaptiveColor{Light: "#00CED1", Dark: "#00FFFF"}
 	ColorGreen  = lipgloss.AdaptiveColor{Light: "#00A000", Dark: "#00FF00"}
-	ColorYellow = lipgloss.AdaptiveColor{Light: "#B8860B", Dark: "#FFFF00"}
+	ColorYellow = lipgloss.AdaptiveColor{Light: "#FFD700", Dark: "#FFFF00"} // Bright gold/yellow (bee color)
 	ColorOrange = lipgloss.AdaptiveColor{Light: "#FF6B00", Dark: "#FF8C00"}
 	ColorRed    = lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF0000"}
 

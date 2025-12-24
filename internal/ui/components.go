@@ -8,7 +8,7 @@ import (
 // Header renders a header with emoji and title
 func Header(emoji, title string) string {
 	text := emoji + " " + title
-	return "\n" + StyleHeader.Render(text) + "\n"
+	return StyleHeader.Render(text) + "\n"
 }
 
 // Success renders a success message with emoji
