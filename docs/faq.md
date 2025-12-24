@@ -110,7 +110,7 @@ Yes! Set `HIVE_DOCKERFILE` in your `.env`:
 
 ```bash
 # For Go projects
-HIVE_DOCKERFILE=docker/Dockerfile.go
+HIVE_DOCKERFILE=docker/Dockerfile.golang
 
 # For Python projects
 HIVE_DOCKERFILE=docker/Dockerfile.python

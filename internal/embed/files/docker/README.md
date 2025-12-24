@@ -27,7 +27,7 @@ Hive provides modular Dockerfiles for different tech stacks.
 
 **Size:** ~500 MB
 
-### Dockerfile.go
+### Dockerfile.golang
 **Best for:** Go projects
 
 **Includes:**
@@ -69,7 +69,7 @@ Hive provides modular Dockerfiles for different tech stacks.
 
 ```bash
 # .env
-HIVE_DOCKERFILE=docker/Dockerfile.go
+HIVE_DOCKERFILE=docker/Dockerfile.golang
 ```
 
 ### Option 2: docker-compose Override
@@ -83,7 +83,7 @@ services:
 
   agent-1:
     build:
-      dockerfile: docker/Dockerfile.go
+      dockerfile: docker/Dockerfile.golang
 
   agent-2:
     build:
@@ -94,7 +94,7 @@ services:
 
 ```bash
 # Build specific image
-docker build -f docker/Dockerfile.go -t hive-go .
+docker build -f docker/Dockerfile.golang -t hive-go .
 
 # Use in docker-compose
 services:

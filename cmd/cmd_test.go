@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -32,11 +33,20 @@ func TestGetVersionString(t *testing.T) {
 	GitCommit = "def456"
 	BuildDate = "2024-06-01"
 
-	expected := "hive version 2.0.0 (commit: def456, built: 2024-06-01)"
 	result := GetVersionString()
 
-	if result != expected {
-		t.Errorf("GetVersionString() = %s, expected %s", result, expected)
+	// With lipgloss styling, we verify the content is present rather than exact format
+	requiredStrings := []string{
+		"hive",
+		"2.0.0",
+		"def456",
+		"2024-06-01",
+	}
+
+	for _, required := range requiredStrings {
+		if !strings.Contains(result, required) {
+			t.Errorf("GetVersionString() missing required string %q, got: %s", required, result)
+		}
 	}
 }
 

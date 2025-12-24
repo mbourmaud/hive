@@ -49,7 +49,7 @@ redis:
 agents:
   queen:
     model: opus
-    dockerfile: docker/Dockerfile.go
+    dockerfile: docker/Dockerfile.golang
   workers:
     count: 5
     model: haiku
@@ -162,7 +162,7 @@ func TestSave(t *testing.T) {
 			Workers: WorkersConfig{
 				Count:      7,
 				Model:      "sonnet",
-				Dockerfile: "docker/Dockerfile.go",
+				Dockerfile: "docker/Dockerfile.golang",
 			},
 		},
 	}

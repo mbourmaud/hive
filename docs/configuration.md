@@ -57,7 +57,7 @@ agents:
   workers:
     count: 5                           # Number of workers (1-10)
     model: sonnet
-    dockerfile: docker/Dockerfile.go
+    dockerfile: docker/Dockerfile.golang
     env:
       CUSTOM_WORKER_VAR: value
 ```
@@ -131,7 +131,7 @@ dockerfile: docker/Dockerfile.minimal
 dockerfile: docker/Dockerfile.node
 
 # Go (~1GB): Go development
-dockerfile: docker/Dockerfile.go
+dockerfile: docker/Dockerfile.golang
 
 # Python (~800MB): Data science
 dockerfile: docker/Dockerfile.python
@@ -173,7 +173,7 @@ workspace:
 agents:
   workers:
     count: 3
-    dockerfile: docker/Dockerfile.go
+    dockerfile: docker/Dockerfile.golang
 ```
 
 **Production testing:**
@@ -250,7 +250,7 @@ HIVE_DOCKERFILE=docker/Dockerfile.node
 Available options:
 - `docker/Dockerfile.minimal` (~500MB): Just Claude + git
 - `docker/Dockerfile.node` (~1.5GB): Node.js 22 + pnpm + Playwright (default)
-- `docker/Dockerfile.go` (~1GB): Go 1.22 + development tools
+- `docker/Dockerfile.golang` (~1GB): Go 1.22 + development tools
 - `docker/Dockerfile.python` (~800MB): Python 3.12 + data science libs
 - `docker/Dockerfile.rust` (~2GB): Rust 1.75 + cargo tools
 

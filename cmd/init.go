@@ -309,10 +309,29 @@ func validateFlags() error {
 }
 
 func validateEmail(email string) error {
-	// Use a simple regex for email validation
-	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
-		return fmt.Errorf("invalid email format: %s", email)
+	// Basic email validation: user@domain.tld
+	if email == "" {
+		return fmt.Errorf("email cannot be empty")
 	}
+
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid email format: must contain exactly one @")
+	}
+
+	user, domain := parts[0], parts[1]
+	if user == "" {
+		return fmt.Errorf("invalid email format: missing user part")
+	}
+	if domain == "" || !strings.Contains(domain, ".") {
+		return fmt.Errorf("invalid email format: invalid domain")
+	}
+
+	// Check that domain doesn't start with a dot
+	if strings.HasPrefix(domain, ".") {
+		return fmt.Errorf("invalid email format: domain cannot start with a dot")
+	}
+
 	return nil
 }
 

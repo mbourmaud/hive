@@ -27,7 +27,7 @@ my-api/
 ```bash
 # .env
 WORKSPACE_NAME=my-api
-HIVE_DOCKERFILE=docker/Dockerfile.go
+HIVE_DOCKERFILE=docker/Dockerfile.golang
 GIT_REPO_URL=https://github.com/user/my-api.git
 ```
 

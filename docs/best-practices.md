@@ -411,7 +411,7 @@ HIVE_DOCKERFILE=docker/Dockerfile.minimal
 HIVE_DOCKERFILE=docker/Dockerfile.node
 
 # Go (1GB): Go projects
-HIVE_DOCKERFILE=docker/Dockerfile.go
+HIVE_DOCKERFILE=docker/Dockerfile.golang
 
 # Rust (2GB): Rust projects
 HIVE_DOCKERFILE=docker/Dockerfile.rust
