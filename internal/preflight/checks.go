@@ -23,7 +23,7 @@ func RunAllChecks() []CheckResult {
 	results = append(results, CheckDockerCompose())
 	results = append(results, CheckEnvFile())
 	results = append(results, CheckDockerComposeFile())
-	results = append(results, CheckDockerSocket())
+	// Note: Docker socket check removed - if docker info works, socket is accessible
 	results = append(results, CheckClaudeConfig())
 
 	return results
