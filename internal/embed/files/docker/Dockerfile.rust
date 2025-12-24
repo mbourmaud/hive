@@ -1,0 +1,78 @@
+# Rust Development Agent
+# Includes Rust toolchain, cargo tools, and common utilities
+
+FROM rust:1.75-slim-bookworm
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    jq \
+    openssh-client \
+    ca-certificates \
+    gnupg \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    redis-tools \
+    expect \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (for Claude Code)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code
+RUN npm install -g @anthropic-ai/claude-code
+
+# Install Rust tools
+RUN cargo install cargo-watch cargo-edit cargo-audit
+
+# GitHub CLI
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
+    wget "https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_${ARCH}.deb" \
+        -O /tmp/gh.deb \
+    && dpkg -i /tmp/gh.deb \
+    && rm /tmp/gh.deb
+
+# GitLab CLI
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
+    wget "https://gitlab.com/gitlab-org/cli/-/releases/v1.46.1/downloads/glab_1.46.1_Linux_${ARCH}.deb" \
+        -O /tmp/glab.deb \
+    && dpkg -i /tmp/glab.deb \
+    && rm /tmp/glab.deb
+
+# Create non-root user
+RUN useradd -m -s /bin/bash agent
+
+# Switch to agent user
+USER agent
+WORKDIR /home/agent
+
+# Git global config
+RUN git config --global --add safe.directory '*' \
+    && git config --global init.defaultBranch main
+
+# Create necessary directories
+RUN mkdir -p ~/.config ~/.aws ~/.ssh ~/.claude/debug ~/.claude/todos ~/.claude/statsig ~/.claude/projects \
+    && mkdir -p ~/.cargo/bin
+
+# Copy entrypoint and scripts
+COPY --chown=agent:agent entrypoint.sh /home/agent/entrypoint.sh
+COPY --chown=agent:agent templates/.claude.json.template /home/agent/.claude.json.template
+RUN chmod +x /home/agent/entrypoint.sh
+
+# Copy Redis task management scripts
+COPY --chown=agent:agent scripts/redis/*.sh /scripts/redis/
+RUN chmod +x /scripts/redis/*.sh
+
+# Copy HIVE CLI commands
+COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
+RUN chmod +x /usr/local/bin/*
+
+ENTRYPOINT ["/home/agent/entrypoint.sh"]
+CMD ["bash"]

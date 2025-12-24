@@ -1,0 +1,42 @@
+#!/bin/bash
+# Mark active task as failed (for Workers)
+
+set -e
+
+if [ -z "$AGENT_ID" ]; then
+    echo "❌ Error: AGENT_ID not set"
+    exit 1
+fi
+
+if [ -z "$1" ]; then
+    echo "Usage: task-failed \"error message\""
+    echo ""
+    echo "Example: task-failed \"Tests failed: expected X but got Y\""
+    exit 1
+fi
+
+ERROR_MSG="$1"
+
+# Check if there's an active task
+ACTIVE=$(redis-cli -h localhost -p 6380 LINDEX "hive:active:$AGENT_ID" 0 2>/dev/null)
+if [ -z "$ACTIVE" ] || [ "$ACTIVE" = "(nil)" ]; then
+    echo "❌ No active task to fail"
+    exit 1
+fi
+
+TITLE=$(echo "$ACTIVE" | jq -r '.title // "Untitled"')
+
+# Find the fail script
+FAIL_SCRIPT="/scripts/redis/task-fail.sh"
+if [ ! -f "$FAIL_SCRIPT" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    FAIL_SCRIPT="${SCRIPT_DIR}/../redis/task-fail.sh"
+fi
+
+"$FAIL_SCRIPT" "$AGENT_ID" "$ERROR_MSG"
+
+echo ""
+echo "Task failed: $TITLE"
+echo "Error: $ERROR_MSG"
+echo ""
+echo "💡 The Queen will be notified and can reassign or investigate"

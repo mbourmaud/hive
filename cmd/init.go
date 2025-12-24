@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/mbourmaud/hive/internal/config"
+	"github.com/mbourmaud/hive/internal/embed"
 	"github.com/spf13/cobra"
 )
 
@@ -58,60 +60,85 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("🐝 Welcome to HIVE - Multi-Agent Claude System")
+	fmt.Println()
 
-	var config map[string]string
+	// Detect project info
+	projectType := detectProjectType()
+	email, name, repoURL, workspaceName := detectGitConfig()
+	claudeToken := detectClaudeToken()
+
+	var cfg map[string]string
 
 	if flagNonInteractive {
-		// Non-interactive mode: use flags
+		// Non-interactive mode: use flags (with detected values as fallback)
+		if flagEmail == "" {
+			flagEmail = email
+		}
+		if flagName == "" {
+			flagName = name
+		}
+		if flagToken == "" {
+			flagToken = claudeToken
+		}
+		if flagWorkspace == "my-project" && workspaceName != "" {
+			flagWorkspace = workspaceName
+		}
+		if flagGitURL == "" {
+			flagGitURL = repoURL
+		}
+
 		if err := validateFlags(); err != nil {
 			return err
 		}
-		config = map[string]string{
-			"GIT_USER_EMAIL":       flagEmail,
-			"GIT_USER_NAME":        flagName,
+
+		cfg = map[string]string{
+			"GIT_USER_EMAIL":          flagEmail,
+			"GIT_USER_NAME":           flagName,
 			"CLAUDE_CODE_OAUTH_TOKEN": flagToken,
-			"WORKSPACE_NAME":       flagWorkspace,
-			"GIT_REPO_URL":         flagGitURL,
+			"WORKSPACE_NAME":          flagWorkspace,
+			"GIT_REPO_URL":            flagGitURL,
+			"PROJECT_TYPE":            projectType,
 		}
 	} else {
-		// Interactive mode
-		fmt.Println("Let's set up your hive in 3 steps:")
+		// Interactive mode with auto-detection
 		var err error
-		config, err = interactiveWizard()
+		cfg, err = interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeToken, projectType)
 		if err != nil {
 			return err
 		}
 	}
 
+	// Extract hive files to current directory
+	fmt.Println("📦 Extracting hive files...")
+	if err := extractHiveFiles(cfg["PROJECT_TYPE"]); err != nil {
+		return fmt.Errorf("failed to extract hive files: %w", err)
+	}
+	fmt.Println("✅ Extracted docker/, scripts/, templates/")
+
 	// Write .env file
-	if err := writeEnvFile(config); err != nil {
+	if err := writeEnvFile(cfg); err != nil {
 		return fmt.Errorf("failed to write .env: %w", err)
 	}
-	fmt.Println("✅ Created .env file")
+	fmt.Println("✅ Created .env")
 
 	// Write hive.yaml file
-	if err := writeHiveYAML(config["WORKSPACE_NAME"], config["GIT_REPO_URL"], flagWorkers); err != nil {
+	workers := flagWorkers
+	if err := writeHiveYAML(cfg["WORKSPACE_NAME"], cfg["GIT_REPO_URL"], workers); err != nil {
 		return fmt.Errorf("failed to write hive.yaml: %w", err)
 	}
 	fmt.Println("✅ Created hive.yaml")
 
-	// Build and install CLI
-	fmt.Println("🔨 Building and installing CLI...")
-	buildCmd := exec.Command("make", "install")
-	buildCmd.Stdout = os.Stdout
-	buildCmd.Stderr = os.Stderr
-	if err := buildCmd.Run(); err != nil {
-		fmt.Println("⚠️  Failed to install CLI (you may need sudo)")
-		fmt.Println("   You can manually run: make install")
+	// Update .gitignore
+	if err := updateGitignore(); err != nil {
+		fmt.Printf("⚠️  Failed to update .gitignore: %v\n", err)
 	} else {
-		fmt.Println("✅ CLI installed")
+		fmt.Println("✅ Updated .gitignore")
 	}
 
-	// Start Hive
-	workers := flagWorkers
+	// Ask for workers count
 	if !flagNonInteractive {
-		fmt.Print("\n🚀 Ready to start!\n\n")
-		workersStr := promptWithDefault("  Workers to start", "2")
+		fmt.Println()
+		workersStr := promptWithDefault("🚀 Workers to start", "2")
 		if w, err := strconv.Atoi(workersStr); err == nil {
 			workers = w
 		}
@@ -155,6 +182,66 @@ func interactiveWizard() (map[string]string, error) {
 	fmt.Println()
 
 	return config, nil
+}
+
+// interactiveWizardWithDetection shows detected values and only asks for missing info
+func interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeToken, projectType string) (map[string]string, error) {
+	cfg := make(map[string]string)
+
+	// Show detected project info
+	projectTypeDisplay := map[string]string{
+		"node":    "Node.js",
+		"go":      "Go",
+		"python":  "Python",
+		"rust":    "Rust",
+		"minimal": "Generic",
+	}
+	fmt.Printf("📂 Project detected: %s (%s)\n", workspaceName, projectTypeDisplay[projectType])
+
+	if email != "" {
+		fmt.Printf("   Git email: %s\n", email)
+	}
+	if name != "" {
+		fmt.Printf("   Git name: %s\n", name)
+	}
+	if repoURL != "" {
+		fmt.Printf("   Remote: %s\n", repoURL)
+	}
+	fmt.Println()
+
+	// Use detected values
+	cfg["GIT_USER_EMAIL"] = email
+	cfg["GIT_USER_NAME"] = name
+	cfg["GIT_REPO_URL"] = repoURL
+	cfg["WORKSPACE_NAME"] = workspaceName
+	cfg["PROJECT_TYPE"] = projectType
+
+	// Ask for missing git info
+	if email == "" {
+		fmt.Println("📧 Git Configuration")
+		cfg["GIT_USER_EMAIL"] = promptRequired("  Email", validateEmail)
+	}
+	if name == "" {
+		if email == "" {
+			cfg["GIT_USER_NAME"] = promptRequired("  Name", nil)
+		} else {
+			fmt.Println("📧 Git Configuration")
+			cfg["GIT_USER_NAME"] = promptRequired("  Name", nil)
+		}
+	}
+
+	// Handle Claude token
+	if claudeToken != "" {
+		fmt.Println("🔑 Claude token detected from ~/.claude")
+		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = claudeToken
+	} else {
+		fmt.Println("🔑 Claude Authentication")
+		fmt.Println("   Get your token: claude /auth")
+		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = promptRequired("   OAuth Token", nil)
+	}
+	fmt.Println()
+
+	return cfg, nil
 }
 
 func validateFlags() error {
@@ -228,27 +315,62 @@ func promptOptional(label, defaultValue string) string {
 	return input
 }
 
-func writeEnvFile(config map[string]string) error {
-	// Read .env.example as template
-	templatePath := ".env.example"
-	template, err := os.ReadFile(templatePath)
+func writeEnvFile(cfg map[string]string) error {
+	// Read .env.example from embedded files
+	template, err := embed.GetFile(".env.example")
 	if err != nil {
-		return err
+		// Fallback: generate minimal .env if template not found
+		return writeMinimalEnvFile(cfg)
 	}
 
 	content := string(template)
 
 	// Replace placeholders
-	content = strings.ReplaceAll(content, "your.email@example.com", config["GIT_USER_EMAIL"])
-	content = strings.ReplaceAll(content, "Your Name", config["GIT_USER_NAME"])
-	content = strings.ReplaceAll(content, "your_oauth_token_here", config["CLAUDE_CODE_OAUTH_TOKEN"])
-	content = strings.ReplaceAll(content, "my-project", config["WORKSPACE_NAME"])
+	content = strings.ReplaceAll(content, "your.email@example.com", cfg["GIT_USER_EMAIL"])
+	content = strings.ReplaceAll(content, "Your Name", cfg["GIT_USER_NAME"])
+	content = strings.ReplaceAll(content, "your_oauth_token_here", cfg["CLAUDE_CODE_OAUTH_TOKEN"])
+	content = strings.ReplaceAll(content, "my-project", cfg["WORKSPACE_NAME"])
 
 	// Add git URL if provided
-	if config["GIT_REPO_URL"] != "" {
+	if cfg["GIT_REPO_URL"] != "" {
 		content = strings.ReplaceAll(content, "# GIT_REPO_URL=https://github.com/user/repo.git",
-			"GIT_REPO_URL="+config["GIT_REPO_URL"])
+			"GIT_REPO_URL="+cfg["GIT_REPO_URL"])
 	}
+
+	// Set Dockerfile based on project type
+	if cfg["PROJECT_TYPE"] != "" && cfg["PROJECT_TYPE"] != "node" {
+		content = strings.ReplaceAll(content, "HIVE_DOCKERFILE=docker/Dockerfile.node",
+			"HIVE_DOCKERFILE=docker/Dockerfile."+cfg["PROJECT_TYPE"])
+	}
+
+	return os.WriteFile(".env", []byte(content), 0600)
+}
+
+// writeMinimalEnvFile generates a minimal .env file without template
+func writeMinimalEnvFile(cfg map[string]string) error {
+	dockerfile := "docker/Dockerfile.node"
+	if cfg["PROJECT_TYPE"] != "" {
+		dockerfile = "docker/Dockerfile." + cfg["PROJECT_TYPE"]
+	}
+
+	content := fmt.Sprintf(`# Hive Configuration
+GIT_USER_EMAIL=%s
+GIT_USER_NAME=%s
+CLAUDE_CODE_OAUTH_TOKEN=%s
+WORKSPACE_NAME=%s
+GIT_REPO_URL=%s
+HIVE_DOCKERFILE=%s
+QUEEN_MODEL=opus
+WORKER_MODEL=sonnet
+AUTO_INSTALL_DEPS=true
+`,
+		cfg["GIT_USER_EMAIL"],
+		cfg["GIT_USER_NAME"],
+		cfg["CLAUDE_CODE_OAUTH_TOKEN"],
+		cfg["WORKSPACE_NAME"],
+		cfg["GIT_REPO_URL"],
+		dockerfile,
+	)
 
 	return os.WriteFile(".env", []byte(content), 0600)
 }
@@ -283,4 +405,133 @@ func printSuccessMessage(workers int) {
 	fmt.Println("    hive connect 1      # Connect to worker 1")
 	fmt.Println("    hive status         # Check status")
 	fmt.Println("  Need help? https://github.com/mbourmaud/hive")
+}
+
+// detectGitConfig retrieves git configuration from the current repository
+func detectGitConfig() (email, name, repoURL, workspaceName string) {
+	// git config user.email
+	if out, err := exec.Command("git", "config", "user.email").Output(); err == nil {
+		email = strings.TrimSpace(string(out))
+	}
+
+	// git config user.name
+	if out, err := exec.Command("git", "config", "user.name").Output(); err == nil {
+		name = strings.TrimSpace(string(out))
+	}
+
+	// git remote get-url origin
+	if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+		repoURL = strings.TrimSpace(string(out))
+	}
+
+	// Workspace name from current directory
+	if cwd, err := os.Getwd(); err == nil {
+		workspaceName = filepath.Base(cwd)
+	}
+
+	return
+}
+
+// detectProjectType detects the project type based on config files
+func detectProjectType() string {
+	if fileExists("package.json") {
+		return "node"
+	}
+	if fileExists("go.mod") {
+		return "go"
+	}
+	if fileExists("pyproject.toml") || fileExists("requirements.txt") {
+		return "python"
+	}
+	if fileExists("Cargo.toml") {
+		return "rust"
+	}
+	return "minimal"
+}
+
+// detectClaudeToken attempts to find Claude OAuth token from existing config
+func detectClaudeToken() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	// Try reading from ~/.claude/settings.json
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	if data, err := os.ReadFile(settingsPath); err == nil {
+		var settings map[string]interface{}
+		if err := json.Unmarshal(data, &settings); err == nil {
+			if oauth, ok := settings["oauthAccount"].(map[string]interface{}); ok {
+				if token, ok := oauth["accessToken"].(string); ok && token != "" {
+					return token
+				}
+			}
+		}
+	}
+
+	// Try environment variable
+	if token := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"); token != "" {
+		return token
+	}
+
+	return ""
+}
+
+// extractHiveFiles copies all necessary hive files to the current directory
+func extractHiveFiles(projectType string) error {
+	// Extract docker-compose.yml
+	if err := embed.ExtractFile("docker-compose.yml", "docker-compose.yml"); err != nil {
+		return fmt.Errorf("failed to extract docker-compose.yml: %w", err)
+	}
+
+	// Extract entrypoint.sh
+	if err := embed.ExtractFile("entrypoint.sh", "entrypoint.sh"); err != nil {
+		return fmt.Errorf("failed to extract entrypoint.sh: %w", err)
+	}
+
+	// Extract docker directory
+	if err := embed.ExtractDir("docker", "docker"); err != nil {
+		return fmt.Errorf("failed to extract docker/: %w", err)
+	}
+
+	// Extract scripts directory
+	if err := embed.ExtractDir("scripts", "scripts"); err != nil {
+		return fmt.Errorf("failed to extract scripts/: %w", err)
+	}
+
+	// Extract templates directory
+	if err := embed.ExtractDir("templates", "templates"); err != nil {
+		return fmt.Errorf("failed to extract templates/: %w", err)
+	}
+
+	return nil
+}
+
+// updateGitignore adds hive-specific entries to .gitignore
+func updateGitignore() error {
+	entries := []string{
+		"",
+		"# Hive (multi-agent Claude)",
+		"workspaces/",
+		".env",
+		".env.project",
+	}
+
+	gitignorePath := ".gitignore"
+	var content string
+
+	// Read existing .gitignore if it exists
+	if data, err := os.ReadFile(gitignorePath); err == nil {
+		content = string(data)
+	}
+
+	// Check if hive entries already exist
+	if strings.Contains(content, "# Hive") {
+		return nil // Already configured
+	}
+
+	// Append hive entries
+	content += strings.Join(entries, "\n") + "\n"
+
+	return os.WriteFile(gitignorePath, []byte(content), 0644)
 }

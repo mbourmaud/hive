@@ -1,4 +1,4 @@
-.PHONY: build install clean test lint
+.PHONY: build install clean test lint embed
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -10,8 +10,19 @@ LDFLAGS := -ldflags "-X github.com/mbourmaud/hive/cmd.Version=$(VERSION) \
 	-X github.com/mbourmaud/hive/cmd.GitCommit=$(GIT_COMMIT) \
 	-X github.com/mbourmaud/hive/cmd.BuildDate=$(BUILD_DATE)"
 
-# Build binary
-build:
+# Sync embedded files from root to internal/embed/files/
+embed:
+	@mkdir -p internal/embed/files
+	@cp -f docker-compose.yml internal/embed/files/
+	@cp -f entrypoint.sh internal/embed/files/
+	@cp -rf docker internal/embed/files/
+	@cp -rf scripts internal/embed/files/
+	@cp -rf templates internal/embed/files/
+	@cp -f .env.example internal/embed/files/
+	@echo "Embedded files synced"
+
+# Build binary (syncs embedded files first)
+build: embed
 	go build $(LDFLAGS) -o hive .
 
 # Install to /usr/local/bin

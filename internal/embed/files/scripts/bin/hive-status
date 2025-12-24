@@ -1,0 +1,12 @@
+#!/bin/bash
+# Show HIVE status (for Queen)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REDIS_SCRIPT="${SCRIPT_DIR}/../redis/task-status.sh"
+
+# If running in container, use container path
+if [ -f "/scripts/redis/task-status.sh" ]; then
+    REDIS_SCRIPT="/scripts/redis/task-status.sh"
+fi
+
+exec "$REDIS_SCRIPT"
