@@ -9,7 +9,7 @@ import (
 )
 
 // setupTestRepo creates a test git repository
-func setupTestRepo(t *testing.T) (string, func()) {
+func setupTestRepo(t *testing.T) (string, string, func()) {
 	t.Helper()
 
 	// Create temp directory
@@ -47,21 +47,34 @@ func setupTestRepo(t *testing.T) (string, func()) {
 		}
 	}
 
+	// Detect default branch name (main or master)
+	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	branchOut, err := branchCmd.Output()
+	if err != nil {
+		cleanup := func() {
+			os.Chdir(origDir)
+			os.RemoveAll(tmpDir)
+		}
+		cleanup()
+		t.Fatalf("failed to detect default branch: %v", err)
+	}
+	defaultBranch := strings.TrimSpace(string(branchOut))
+
 	cleanup := func() {
 		os.Chdir(origDir)
 		os.RemoveAll(tmpDir)
 	}
 
-	return tmpDir, cleanup
+	return tmpDir, defaultBranch, cleanup
 }
 
 // TestCreateWorktree_FreshRepo tests creating a worktree in a fresh repo
 func TestCreateWorktree_FreshRepo(t *testing.T) {
-	_, cleanup := setupTestRepo(t)
+	_, defaultBranch, cleanup := setupTestRepo(t)
 	defer cleanup()
 
 	worktreePath := filepath.Join(".hive", "workspaces", "queen")
-	err := createWorktree(worktreePath, "main", "queen")
+	err := createWorktree(worktreePath, defaultBranch, "queen")
 	if err != nil {
 		t.Fatalf("createWorktree failed: %v", err)
 	}
@@ -81,13 +94,13 @@ func TestCreateWorktree_FreshRepo(t *testing.T) {
 
 // TestCreateWorktree_AfterClean simulates state after hive clean
 func TestCreateWorktree_AfterClean(t *testing.T) {
-	_, cleanup := setupTestRepo(t)
+	_, defaultBranch, cleanup := setupTestRepo(t)
 	defer cleanup()
 
 	worktreePath := filepath.Join(".hive", "workspaces", "queen")
 
 	// Create initial worktree
-	if err := createWorktree(worktreePath, "main", "queen"); err != nil {
+	if err := createWorktree(worktreePath, defaultBranch, "queen"); err != nil {
 		t.Fatalf("initial createWorktree failed: %v", err)
 	}
 
@@ -95,7 +108,7 @@ func TestCreateWorktree_AfterClean(t *testing.T) {
 	os.RemoveAll(".hive")
 
 	// Try to create worktree again (should succeed)
-	err := createWorktree(worktreePath, "main", "queen")
+	err := createWorktree(worktreePath, defaultBranch, "queen")
 	if err != nil {
 		t.Fatalf("createWorktree after clean failed: %v", err)
 	}
@@ -108,13 +121,13 @@ func TestCreateWorktree_AfterClean(t *testing.T) {
 
 // TestCreateWorktree_OrphanedDirectory simulates orphaned worktree directory
 func TestCreateWorktree_OrphanedDirectory(t *testing.T) {
-	_, cleanup := setupTestRepo(t)
+	_, defaultBranch, cleanup := setupTestRepo(t)
 	defer cleanup()
 
 	worktreePath := filepath.Join(".hive", "workspaces", "queen")
 
 	// Create initial worktree
-	if err := createWorktree(worktreePath, "main", "queen"); err != nil {
+	if err := createWorktree(worktreePath, defaultBranch, "queen"); err != nil {
 		t.Fatalf("initial createWorktree failed: %v", err)
 	}
 
@@ -123,7 +136,7 @@ func TestCreateWorktree_OrphanedDirectory(t *testing.T) {
 	cmd.Run() // Ignore errors
 
 	// Try to create worktree again (should handle orphaned directory)
-	err := createWorktree(worktreePath, "main", "queen")
+	err := createWorktree(worktreePath, defaultBranch, "queen")
 	if err != nil {
 		t.Fatalf("createWorktree with orphaned directory failed: %v", err)
 	}
@@ -138,7 +151,7 @@ func TestCreateWorktree_OrphanedDirectory(t *testing.T) {
 
 // TestCreateWorktree_ExistingBranch tests creating worktree when branch already exists
 func TestCreateWorktree_ExistingBranch(t *testing.T) {
-	_, cleanup := setupTestRepo(t)
+	_, defaultBranch, cleanup := setupTestRepo(t)
 	defer cleanup()
 
 	worktreePath := filepath.Join(".hive", "workspaces", "queen")
@@ -150,7 +163,7 @@ func TestCreateWorktree_ExistingBranch(t *testing.T) {
 	}
 
 	// Try to create worktree (should use existing branch)
-	err := createWorktree(worktreePath, "main", "queen")
+	err := createWorktree(worktreePath, defaultBranch, "queen")
 	if err != nil {
 		t.Fatalf("createWorktree with existing branch failed: %v", err)
 	}
@@ -163,14 +176,14 @@ func TestCreateWorktree_ExistingBranch(t *testing.T) {
 
 // TestCreateWorktree_MultipleWorkers tests creating multiple worktrees
 func TestCreateWorktree_MultipleWorkers(t *testing.T) {
-	_, cleanup := setupTestRepo(t)
+	_, defaultBranch, cleanup := setupTestRepo(t)
 	defer cleanup()
 
 	agents := []string{"queen", "drone-1", "drone-2"}
 
 	for _, agent := range agents {
 		worktreePath := filepath.Join(".hive", "workspaces", agent)
-		err := createWorktree(worktreePath, "main", agent)
+		err := createWorktree(worktreePath, defaultBranch, agent)
 		if err != nil {
 			t.Fatalf("createWorktree failed for %s: %v", agent, err)
 		}
@@ -192,18 +205,18 @@ func TestCreateWorktree_MultipleWorkers(t *testing.T) {
 
 // TestCreateWorktree_Idempotent tests that calling createWorktree twice is safe
 func TestCreateWorktree_Idempotent(t *testing.T) {
-	_, cleanup := setupTestRepo(t)
+	_, defaultBranch, cleanup := setupTestRepo(t)
 	defer cleanup()
 
 	worktreePath := filepath.Join(".hive", "workspaces", "queen")
 
 	// Create worktree
-	if err := createWorktree(worktreePath, "main", "queen"); err != nil {
+	if err := createWorktree(worktreePath, defaultBranch, "queen"); err != nil {
 		t.Fatalf("first createWorktree failed: %v", err)
 	}
 
 	// Call again (should be no-op)
-	if err := createWorktree(worktreePath, "main", "queen"); err != nil {
+	if err := createWorktree(worktreePath, defaultBranch, "queen"); err != nil {
 		t.Fatalf("second createWorktree failed: %v", err)
 	}
 
