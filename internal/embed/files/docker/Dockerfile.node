@@ -99,9 +99,10 @@ COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
 RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-failed /usr/local/bin/hive-status \
     /usr/local/bin/my-tasks /usr/local/bin/take-task /usr/local/bin/task-done /usr/local/bin/task-failed
 
-# Copy worker daemon for autonomous mode
+# Copy worker daemon and tools for autonomous mode
 COPY --chown=agent:agent worker-daemon.py /workspace/worker-daemon.py
-RUN chmod +x /workspace/worker-daemon.py
+COPY --chown=agent:agent tools.py /workspace/tools.py
+RUN chmod +x /workspace/worker-daemon.py /workspace/tools.py
 
 ENTRYPOINT ["/home/agent/entrypoint.sh"]
 CMD ["bash"]

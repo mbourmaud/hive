@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-HIVE Worker Daemon - Autonomous task executor using Claude Agent SDK
+HIVE Worker Daemon - Autonomous task executor with full tool execution
 
-This daemon polls Redis for tasks and executes them autonomously using the
-Claude Agent SDK. It replaces the interactive CLI mode with a fully autonomous
-agent that can read files, edit code, run tests, and complete tasks without
-human intervention.
+This daemon polls Redis for tasks and executes them autonomously using Claude
+with full tool execution (Read, Edit, Bash, Grep, Glob). It implements a complete
+agentic loop where Claude can use tools to accomplish tasks.
 
 Usage:
     python3 worker-daemon.py
@@ -16,6 +15,7 @@ Environment Variables:
     REDIS_HOST: Redis host (default: "hive-redis")
     REDIS_PORT: Redis port (default: 6379)
     POLL_INTERVAL: Seconds between queue checks (default: 120)
+    MAX_ITERATIONS: Maximum tool use iterations (default: 50)
 """
 
 import os
@@ -25,7 +25,10 @@ import json
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+
+# Add current directory to path for tools import
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     import redis
@@ -39,6 +42,8 @@ except ImportError:
     print("ERROR: anthropic package not installed. Run: pip install anthropic", file=sys.stderr)
     sys.exit(1)
 
+from tools import Tools, TOOL_DEFINITIONS, ToolExecutionError
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -49,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 class HiveWorkerDaemon:
-    """Autonomous HIVE worker that executes tasks using Claude Agent SDK"""
+    """Autonomous HIVE worker with full tool execution capabilities"""
 
     def __init__(self):
         # Get configuration from environment
@@ -57,7 +62,12 @@ class HiveWorkerDaemon:
         self.redis_host = os.getenv('REDIS_HOST', 'hive-redis')
         self.redis_port = int(os.getenv('REDIS_PORT', '6379'))
         self.poll_interval = int(os.getenv('POLL_INTERVAL', '120'))
+        self.max_iterations = int(os.getenv('MAX_ITERATIONS', '50'))
         self.workspace = os.getenv('WORKSPACE_DIR', '/workspace')
+
+        # Determine workspace name from path
+        workspace_parts = self.workspace.rstrip('/').split('/')
+        self.workspace_name = workspace_parts[-1] if workspace_parts else 'unknown'
 
         # Claude API setup
         api_key = os.getenv('CLAUDE_CODE_OAUTH_TOKEN') or os.getenv('ANTHROPIC_API_KEY')
@@ -66,6 +76,10 @@ class HiveWorkerDaemon:
             sys.exit(1)
 
         self.client = Anthropic(api_key=api_key)
+        self.model = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
+
+        # Tools instance
+        self.tools = Tools(workspace=self.workspace)
 
         # Redis connection
         try:
@@ -87,14 +101,13 @@ class HiveWorkerDaemon:
         self.events_channel = "hive:events"
 
         logger.info(f"🐝 HIVE Worker {self.agent_id} initialized (DAEMON mode)")
-        logger.info(f"📂 Workspace: {self.workspace}")
+        logger.info(f"📂 Workspace: {self.workspace} ({self.workspace_name})")
+        logger.info(f"🤖 Model: {self.model}")
         logger.info(f"⏱️  Poll interval: {self.poll_interval}s")
+        logger.info(f"🔧 Max iterations: {self.max_iterations}")
 
     def dequeue_task(self) -> Optional[Dict[str, Any]]:
-        """
-        Atomically dequeue a task from Redis queue to active list.
-        Returns task dict or None if queue is empty.
-        """
+        """Atomically dequeue a task from Redis queue to active list"""
         try:
             task_json = self.redis_client.rpoplpush(self.queue_key, self.active_key)
             if not task_json:
@@ -114,10 +127,7 @@ class HiveWorkerDaemon:
     def mark_task_completed(self, task: Dict[str, Any], result: str):
         """Mark task as completed in Redis"""
         try:
-            # Remove from active
             self.redis_client.rpop(self.active_key)
-
-            # Add completion metadata
             completed_task = {
                 **task,
                 'status': 'completed',
@@ -125,35 +135,19 @@ class HiveWorkerDaemon:
                 'result': result,
                 'worker': self.agent_id
             }
-
-            # Store in completed sorted set (score = timestamp)
             timestamp = time.time()
-            self.redis_client.zadd('hive:completed', {
-                json.dumps(completed_task): timestamp
-            })
-
-            # Store task details in hash
+            self.redis_client.zadd('hive:completed', {json.dumps(completed_task): timestamp})
             task_id = task.get('id', 'unknown')
             self.redis_client.hset(f"hive:task:{task_id}", "data", json.dumps(completed_task))
-
-            # Publish event
-            self.redis_client.publish(
-                self.events_channel,
-                f"task_completed:{self.agent_id}:{task_id}"
-            )
-
+            self.redis_client.publish(self.events_channel, f"task_completed:{self.agent_id}:{task_id}")
             logger.info(f"✅ Task completed: {task.get('title')}")
-
         except redis.RedisError as e:
             logger.error(f"Failed to mark task as completed: {e}")
 
     def mark_task_failed(self, task: Dict[str, Any], error: str):
         """Mark task as failed in Redis"""
         try:
-            # Remove from active
             self.redis_client.rpop(self.active_key)
-
-            # Add failure metadata
             failed_task = {
                 **task,
                 'status': 'failed',
@@ -161,108 +155,152 @@ class HiveWorkerDaemon:
                 'error': error,
                 'worker': self.agent_id
             }
-
-            # Store in failed sorted set
             timestamp = time.time()
-            self.redis_client.zadd('hive:failed', {
-                json.dumps(failed_task): timestamp
-            })
-
-            # Store task details in hash
+            self.redis_client.zadd('hive:failed', {json.dumps(failed_task): timestamp})
             task_id = task.get('id', 'unknown')
             self.redis_client.hset(f"hive:task:{task_id}", "data", json.dumps(failed_task))
-
-            # Publish event
-            self.redis_client.publish(
-                self.events_channel,
-                f"task_failed:{self.agent_id}:{task_id}"
-            )
-
+            self.redis_client.publish(self.events_channel, f"task_failed:{self.agent_id}:{task_id}")
             logger.error(f"❌ Task failed: {task.get('title')} - {error}")
-
         except redis.RedisError as e:
             logger.error(f"Failed to mark task as failed: {e}")
 
     async def execute_task(self, task: Dict[str, Any]):
-        """
-        Execute task using Claude Agent SDK.
-
-        The SDK provides autonomous execution with built-in tools:
-        - Read: Read files
-        - Edit: Edit files
-        - Bash: Execute shell commands
-        - Grep: Search code
-        - Glob: Find files
-        """
+        """Execute task with full agentic loop and tool execution"""
         title = task.get('title', 'Untitled')
         description = task.get('description', '')
         branch = task.get('branch', 'main')
         jira_ticket = task.get('jira_ticket', '')
 
-        # Build comprehensive prompt for the agent
-        prompt = f"""You are Worker {self.agent_id} in the HIVE multi-agent system.
+        # Build system prompt
+        system_prompt = f"""You are Worker {self.agent_id} in the HIVE multi-agent system.
 
-TASK: {title}
+You have access to tools: read, edit, write, bash, grep, glob.
+Use these tools to complete tasks autonomously.
+
+WORKSPACE: {self.workspace} (project: {self.workspace_name})
+BRANCH: {branch}
+JIRA TICKET: {jira_ticket if jira_ticket else 'N/A'}
+
+CRITICAL RULES:
+1. Work autonomously - use tools without asking for permission
+2. Read files before editing them
+3. Run tests after making changes - CI MUST be GREEN
+4. If tests fail, fix them before finishing
+5. Commit changes with clear messages
+6. Create PRs when appropriate
+7. Provide a summary of what you accomplished
+
+Use your tools effectively to complete the task."""
+
+        # Build user message
+        user_message = f"""TASK: {title}
 
 DESCRIPTION:
 {description}
 
-CONTEXT:
-- Branch: {branch}
-- Jira Ticket: {jira_ticket if jira_ticket else 'N/A'}
-- Workspace: {self.workspace}
-
-INSTRUCTIONS:
-Complete this task autonomously following these steps:
-
-1. **Analyze**: Understand the requirement by reading relevant files
-2. **Implement**: Make necessary code changes
-3. **Test**: Run tests to verify your changes (CI MUST be GREEN!)
-4. **Commit**: Commit your changes with a clear message
-5. **PR**: Create a pull request if needed
-6. **Summary**: Provide a concise summary of what you accomplished
-
-IMPORTANT RULES:
-- Work autonomously without asking for confirmation
-- Run tests before marking task complete - CI must be GREEN
-- If tests fail, fix them before finishing
-- Commit with meaningful messages
-- Follow existing code patterns in the project
-- If you encounter blockers, document them clearly
-
-Begin working on the task now.
-"""
+Complete this task now using the available tools."""
 
         logger.info(f"🤖 Starting autonomous execution: {title}")
-        result_text = ""
+
+        # Agentic loop
+        messages = [{"role": "user", "content": user_message}]
+        iteration = 0
+        final_response = ""
 
         try:
-            # Use Claude API with extended thinking for complex tasks
-            # Note: Full Agent SDK with tool use will require anthropic-sdk-python
-            # For now, we'll use the Messages API with a detailed prompt
+            while iteration < self.max_iterations:
+                iteration += 1
+                logger.debug(f"Iteration {iteration}/{self.max_iterations}")
 
-            message = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=8000,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
+                # Call Claude API with tools
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=8000,
+                    system=system_prompt,
+                    tools=TOOL_DEFINITIONS,
+                    messages=messages
+                )
 
-            # Extract response
-            for block in message.content:
-                if hasattr(block, 'text'):
-                    result_text += block.text
+                logger.debug(f"Stop reason: {response.stop_reason}")
 
-            logger.info(f"📝 Agent response received ({len(result_text)} chars)")
+                # Process response
+                assistant_message = {"role": "assistant", "content": response.content}
+                messages.append(assistant_message)
 
-            # For POC, we'll mark as completed
-            # In full implementation, SDK would execute tools and we'd check actual results
-            return result_text
+                # Check stop reason
+                if response.stop_reason == "end_turn":
+                    # Claude finished - extract final text
+                    for block in response.content:
+                        if hasattr(block, 'text'):
+                            final_response += block.text
+                    logger.info(f"✓ Task completed after {iteration} iterations")
+                    break
+
+                elif response.stop_reason == "tool_use":
+                    # Execute tools
+                    tool_results = []
+
+                    for block in response.content:
+                        if block.type == "tool_use":
+                            tool_name = block.name
+                            tool_input = block.input
+                            tool_use_id = block.id
+
+                            logger.info(f"🔧 Executing tool: {tool_name}")
+                            logger.debug(f"Tool input: {json.dumps(tool_input, indent=2)}")
+
+                            try:
+                                # Execute the tool
+                                result = self.tools.execute_tool(tool_name, tool_input)
+
+                                # Format result
+                                if isinstance(result, dict):
+                                    result_str = json.dumps(result, indent=2)
+                                elif isinstance(result, list):
+                                    if len(result) == 0:
+                                        result_str = "No results found"
+                                    else:
+                                        result_str = json.dumps(result[:10], indent=2)  # Limit list results
+                                        if len(result) > 10:
+                                            result_str += f"\n... and {len(result) - 10} more"
+                                else:
+                                    result_str = str(result)
+
+                                logger.info(f"✓ Tool result: {result_str[:200]}...")
+
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_use_id,
+                                    "content": result_str
+                                })
+
+                            except ToolExecutionError as e:
+                                error_msg = str(e)
+                                logger.error(f"Tool execution failed: {error_msg}")
+
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_use_id,
+                                    "content": f"Error: {error_msg}",
+                                    "is_error": True
+                                })
+
+                    # Add tool results to messages
+                    messages.append({"role": "user", "content": tool_results})
+
+                else:
+                    # Unexpected stop reason
+                    logger.warning(f"Unexpected stop reason: {response.stop_reason}")
+                    break
+
+            # Check if we hit max iterations
+            if iteration >= self.max_iterations:
+                raise Exception(f"Max iterations ({self.max_iterations}) reached")
+
+            return final_response if final_response else "Task completed (no summary provided)"
 
         except Exception as e:
-            error_msg = f"SDK execution failed: {str(e)}"
+            error_msg = f"Execution failed: {str(e)}"
             logger.error(error_msg)
             raise Exception(error_msg)
 
@@ -292,7 +330,7 @@ Begin working on the task now.
                 break
             except Exception as e:
                 logger.error(f"Unexpected error in main loop: {e}")
-                await asyncio.sleep(10)  # Brief pause before retrying
+                await asyncio.sleep(10)
 
         logger.info(f"👋 Worker {self.agent_id} shutting down")
 
