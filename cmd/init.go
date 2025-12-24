@@ -55,8 +55,8 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	// Check if already initialized
-	if fileExists(".env") {
-		return fmt.Errorf(".env already exists. Use 'rm .env' to reinitialize or edit it manually")
+	if fileExists(".hive/.env") {
+		return fmt.Errorf(".hive/ already exists. Use 'rm -rf .hive' to reinitialize")
 	}
 
 	fmt.Println("🐝 Welcome to HIVE - Multi-Agent Claude System")
@@ -108,18 +108,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Extract hive files to current directory
-	fmt.Println("📦 Extracting hive files...")
+	// Extract hive files to .hive/ directory
+	fmt.Println("📦 Extracting hive files to .hive/...")
 	if err := extractHiveFiles(cfg["PROJECT_TYPE"]); err != nil {
 		return fmt.Errorf("failed to extract hive files: %w", err)
 	}
-	fmt.Println("✅ Extracted docker/, scripts/, templates/")
+	fmt.Println("✅ Extracted .hive/")
 
 	// Write .env file
 	if err := writeEnvFile(cfg); err != nil {
-		return fmt.Errorf("failed to write .env: %w", err)
+		return fmt.Errorf("failed to write .hive/.env: %w", err)
 	}
-	fmt.Println("✅ Created .env")
+	fmt.Println("✅ Created .hive/.env")
 
 	// Write hive.yaml file
 	workers := flagWorkers
@@ -343,7 +343,8 @@ func writeEnvFile(cfg map[string]string) error {
 			"HIVE_DOCKERFILE=docker/Dockerfile."+cfg["PROJECT_TYPE"])
 	}
 
-	return os.WriteFile(".env", []byte(content), 0600)
+	// Write to .hive/.env
+	return os.WriteFile(".hive/.env", []byte(content), 0600)
 }
 
 // writeMinimalEnvFile generates a minimal .env file without template
@@ -372,7 +373,8 @@ AUTO_INSTALL_DEPS=true
 		dockerfile,
 	)
 
-	return os.WriteFile(".env", []byte(content), 0600)
+	// Write to .hive/.env
+	return os.WriteFile(".hive/.env", []byte(content), 0600)
 }
 
 func fileExists(path string) bool {
@@ -477,31 +479,43 @@ func detectClaudeToken() string {
 	return ""
 }
 
-// extractHiveFiles copies all necessary hive files to the current directory
+// extractHiveFiles copies all necessary hive files to .hive/ directory
 func extractHiveFiles(projectType string) error {
+	hiveDir := ".hive"
+
+	// Create .hive directory
+	if err := os.MkdirAll(hiveDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .hive directory: %w", err)
+	}
+
 	// Extract docker-compose.yml
-	if err := embed.ExtractFile("docker-compose.yml", "docker-compose.yml"); err != nil {
+	if err := embed.ExtractFile("docker-compose.yml", filepath.Join(hiveDir, "docker-compose.yml")); err != nil {
 		return fmt.Errorf("failed to extract docker-compose.yml: %w", err)
 	}
 
 	// Extract entrypoint.sh
-	if err := embed.ExtractFile("entrypoint.sh", "entrypoint.sh"); err != nil {
+	if err := embed.ExtractFile("entrypoint.sh", filepath.Join(hiveDir, "entrypoint.sh")); err != nil {
 		return fmt.Errorf("failed to extract entrypoint.sh: %w", err)
 	}
 
 	// Extract docker directory
-	if err := embed.ExtractDir("docker", "docker"); err != nil {
+	if err := embed.ExtractDir("docker", filepath.Join(hiveDir, "docker")); err != nil {
 		return fmt.Errorf("failed to extract docker/: %w", err)
 	}
 
 	// Extract scripts directory
-	if err := embed.ExtractDir("scripts", "scripts"); err != nil {
+	if err := embed.ExtractDir("scripts", filepath.Join(hiveDir, "scripts")); err != nil {
 		return fmt.Errorf("failed to extract scripts/: %w", err)
 	}
 
 	// Extract templates directory
-	if err := embed.ExtractDir("templates", "templates"); err != nil {
+	if err := embed.ExtractDir("templates", filepath.Join(hiveDir, "templates")); err != nil {
 		return fmt.Errorf("failed to extract templates/: %w", err)
+	}
+
+	// Create workspaces directory inside .hive
+	if err := os.MkdirAll(filepath.Join(hiveDir, "workspaces"), 0755); err != nil {
+		return fmt.Errorf("failed to create workspaces directory: %w", err)
 	}
 
 	return nil
@@ -512,9 +526,7 @@ func updateGitignore() error {
 	entries := []string{
 		"",
 		"# Hive (multi-agent Claude)",
-		"workspaces/",
-		".env",
-		".env.project",
+		".hive/",
 	}
 
 	gitignorePath := ".gitignore"
@@ -526,7 +538,7 @@ func updateGitignore() error {
 	}
 
 	// Check if hive entries already exist
-	if strings.Contains(content, "# Hive") {
+	if strings.Contains(content, ".hive/") {
 		return nil // Already configured
 	}
 

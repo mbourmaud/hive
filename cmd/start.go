@@ -55,7 +55,8 @@ var startCmd = &cobra.Command{
 
 		// Create history files to prevent Docker from creating them as directories
 		// Docker bind mounts create directories when the source doesn't exist
-		workspacesDir := "./workspaces"
+		hiveDir := ".hive"
+		workspacesDir := filepath.Join(hiveDir, "workspaces")
 		agents := []string{"queen"}
 		for i := 1; i <= count; i++ {
 			agents = append(agents, fmt.Sprintf("drone-%d", i))
@@ -81,11 +82,13 @@ var startCmd = &cobra.Command{
 			services = append(services, fmt.Sprintf("agent-%d", i))
 		}
 
-		// Start docker compose services
-		cmdArgs := append([]string{"compose", "up", "-d"}, services...)
+		// Start docker compose services from .hive directory
+		cmdArgs := append([]string{"compose", "-f", filepath.Join(hiveDir, "docker-compose.yml"), "up", "-d"}, services...)
 		dockerCmd := exec.Command("docker", cmdArgs...)
 		dockerCmd.Stdout = os.Stdout
 		dockerCmd.Stderr = os.Stderr
+		// Set working directory to .hive for proper path resolution
+		dockerCmd.Dir = hiveDir
 
 		if err := dockerCmd.Run(); err != nil {
 			return fmt.Errorf("failed to start containers: %w", err)

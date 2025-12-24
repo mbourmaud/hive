@@ -70,33 +70,33 @@ func CheckDockerCompose() CheckResult {
 	return result
 }
 
-// CheckEnvFile verifies .env file exists
+// CheckEnvFile verifies .hive/.env file exists
 func CheckEnvFile() CheckResult {
-	result := CheckResult{Name: ".env file"}
+	result := CheckResult{Name: ".hive/.env file"}
 
-	if _, err := os.Stat(".env"); os.IsNotExist(err) {
+	if _, err := os.Stat(".hive/.env"); os.IsNotExist(err) {
 		result.Passed = false
-		result.Message = ".env file not found. Run 'hive init' to create it."
+		result.Message = ".hive/.env file not found. Run 'hive init' to create it."
 		return result
 	}
 
 	result.Passed = true
-	result.Message = ".env file exists"
+	result.Message = ".hive/.env file exists"
 	return result
 }
 
-// CheckDockerComposeFile verifies docker-compose.yml exists
+// CheckDockerComposeFile verifies .hive/docker-compose.yml exists
 func CheckDockerComposeFile() CheckResult {
-	result := CheckResult{Name: "docker-compose.yml"}
+	result := CheckResult{Name: ".hive/docker-compose.yml"}
 
-	if _, err := os.Stat("docker-compose.yml"); os.IsNotExist(err) {
+	if _, err := os.Stat(".hive/docker-compose.yml"); os.IsNotExist(err) {
 		result.Passed = false
-		result.Message = "docker-compose.yml not found in current directory."
+		result.Message = ".hive/docker-compose.yml not found. Run 'hive init' to create it."
 		return result
 	}
 
 	result.Passed = true
-	result.Message = "docker-compose.yml exists"
+	result.Message = ".hive/docker-compose.yml exists"
 	return result
 }
 
