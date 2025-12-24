@@ -183,6 +183,7 @@ func cleanDockerImages(runner *shell.Runner) error {
 	return nil
 }
 
+// cleanWorktrees removes all hive worktrees and prunes orphaned entries
 func cleanWorktrees(runner *shell.Runner) error {
 	// Check if we're in a git repository
 	gitCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
@@ -192,8 +193,13 @@ func cleanWorktrees(runner *shell.Runner) error {
 	}
 
 	// Prune orphaned worktrees first
+	fmt.Printf("  %s ", ui.StyleDim.Render("🌳 Pruning orphaned worktrees..."))
 	pruneCmd := exec.Command("git", "worktree", "prune")
-	_ = runner.RunQuiet(pruneCmd) // Silent prune
+	if err := runner.RunQuiet(pruneCmd); err != nil {
+		fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
+	} else {
+		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
+	}
 
 	// Check if worktrees directory exists
 	worktreesDir := ".hive/workspaces"
