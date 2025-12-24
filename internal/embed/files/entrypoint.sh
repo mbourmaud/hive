@@ -204,32 +204,5 @@ fi
 printf '\033]0;%s\007' "$TERMINAL_TITLE"
 log "[+] Terminal title: $TERMINAL_TITLE"
 
-# ============================================
-# Worker Mode Selection
-# ============================================
-
-if [ "$AGENT_ROLE" = "worker" ]; then
-    WORKER_MODE="${WORKER_MODE:-interactive}"
-
-    if [ "$WORKER_MODE" = "daemon" ]; then
-        log "[+] Starting worker in DAEMON mode (autonomous)"
-        log "[+] Polling Redis queue: hive:queue:${AGENT_ID}"
-
-        # Check if daemon script exists
-        if [ ! -f "/workspace/worker-daemon.py" ]; then
-            log "[!] ERROR: worker-daemon.py not found in /workspace"
-            log "[!] Falling back to interactive mode"
-            exec bash
-        fi
-
-        # Execute daemon (replaces bash)
-        exec python3 /workspace/worker-daemon.py
-    else
-        log "[+] Starting worker in INTERACTIVE mode"
-        # Execute command or start bash (default behavior)
-        exec "$@"
-    fi
-else
-    # Queen/orchestrator - always interactive
-    exec "$@"
-fi
+# Execute command or start bash
+exec "$@"

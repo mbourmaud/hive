@@ -1,42 +1,36 @@
-# Claude Code Agent Container
-# Generic multi-agent worker with Claude Code and common dev tools
+# Go Development Agent
+# Includes Go toolchain, air (hot reload), and common Go tools
 
-FROM node:22-slim
+FROM golang:1.22-bookworm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     wget \
-    tmux \
     jq \
-    netcat-openbsd \
     openssh-client \
     ca-certificates \
     gnupg \
-    unzip \
-    python3 \
-    python3-pip \
     redis-tools \
     expect \
     && rm -rf /var/lib/apt/lists/*
 
-# Docker CLI (for testcontainers) - using static binary
-RUN ARCH=$(dpkg --print-architecture) && \
-    if [ "$ARCH" = "arm64" ]; then ARCH="aarch64"; else ARCH="x86_64"; fi && \
-    wget "https://download.docker.com/linux/static/stable/${ARCH}/docker-27.4.1.tgz" \
-        -O /tmp/docker.tgz \
-    && tar -xzf /tmp/docker.tgz -C /tmp \
-    && mv /tmp/docker/docker /usr/local/bin/docker \
-    && chmod +x /usr/local/bin/docker \
-    && rm -rf /tmp/docker*
+# Install Node.js (for Claude Code)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-# Node-based CLI tools
-RUN npm install -g \
-    @anthropic-ai/claude-code \
-    pnpm@10.17.0
+# Install Claude Code
+RUN npm install -g @anthropic-ai/claude-code
 
-# GitHub CLI (gh)
+# Install Go tools
+RUN go install github.com/air-verse/air@latest && \
+    go install golang.org/x/tools/gopls@latest && \
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
+    go install github.com/go-delve/delve/cmd/dlv@latest
+
+# GitHub CLI
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
     wget "https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_${ARCH}.deb" \
@@ -44,26 +38,13 @@ RUN ARCH=$(dpkg --print-architecture) && \
     && dpkg -i /tmp/gh.deb \
     && rm /tmp/gh.deb
 
-# GitLab CLI (glab) - optional
+# GitLab CLI
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
     wget "https://gitlab.com/gitlab-org/cli/-/releases/v1.46.1/downloads/glab_1.46.1_Linux_${ARCH}.deb" \
         -O /tmp/glab.deb \
     && dpkg -i /tmp/glab.deb \
     && rm /tmp/glab.deb
-
-# yq (YAML processor)
-RUN ARCH=$(dpkg --print-architecture) && \
-    if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
-    wget "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_${ARCH}" \
-        -O /usr/local/bin/yq \
-    && chmod +x /usr/local/bin/yq
-
-# Playwright (for browser automation)
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
-RUN npm install -g @playwright/mcp@latest \
-    && npx -y playwright install chromium --with-deps \
-    && chmod -R 755 /opt/playwright
 
 # Create non-root user
 RUN useradd -m -s /bin/bash agent
@@ -72,13 +53,16 @@ RUN useradd -m -s /bin/bash agent
 USER agent
 WORKDIR /home/agent
 
+# Copy Go bin to agent PATH
+ENV PATH="/root/go/bin:${PATH}"
+
 # Git global config
 RUN git config --global --add safe.directory '*' \
     && git config --global init.defaultBranch main
 
 # Create necessary directories
 RUN mkdir -p ~/.config ~/.aws ~/.ssh ~/.claude/debug ~/.claude/todos ~/.claude/statsig ~/.claude/projects \
-    && mkdir -p ~/.local/share/pnpm/.tools ~/.local/share/pnpm/state ~/.local/share/pnpm/store
+    && mkdir -p ~/go/bin ~/go/pkg ~/go/src
 
 # Copy entrypoint and scripts
 COPY --chown=agent:agent entrypoint.sh /home/agent/entrypoint.sh
@@ -89,10 +73,9 @@ RUN chmod +x /home/agent/entrypoint.sh
 COPY --chown=agent:agent scripts/redis/*.sh /scripts/redis/
 RUN chmod +x /scripts/redis/*.sh
 
-# Copy HIVE CLI commands (available in PATH)
+# Copy HIVE CLI commands
 COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
-RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-failed /usr/local/bin/hive-status \
-    /usr/local/bin/my-tasks /usr/local/bin/take-task /usr/local/bin/task-done /usr/local/bin/task-failed
+RUN chmod +x /usr/local/bin/*
 
 ENTRYPOINT ["/home/agent/entrypoint.sh"]
 CMD ["bash"]

@@ -36,11 +36,6 @@ RUN npm install -g \
     @anthropic-ai/claude-code \
     pnpm@10.17.0
 
-# Python packages for daemon mode
-RUN pip3 install --no-cache-dir --break-system-packages \
-    redis==5.2.1 \
-    anthropic==0.42.0
-
 # GitHub CLI (gh)
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
@@ -83,7 +78,7 @@ RUN git config --global --add safe.directory '*' \
 
 # Create necessary directories
 RUN mkdir -p ~/.config ~/.aws ~/.ssh ~/.claude/debug ~/.claude/todos ~/.claude/statsig ~/.claude/projects \
-    && mkdir -p ~/.local/share/pnpm/.tools ~/.local/share/pnpm/state
+    && mkdir -p ~/.local/share/pnpm/.tools ~/.local/share/pnpm/state ~/.local/share/pnpm/store
 
 # Copy entrypoint and scripts
 COPY --chown=agent:agent entrypoint.sh /home/agent/entrypoint.sh
@@ -98,11 +93,6 @@ RUN chmod +x /scripts/redis/*.sh
 COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
 RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-failed /usr/local/bin/hive-status \
     /usr/local/bin/my-tasks /usr/local/bin/take-task /usr/local/bin/task-done /usr/local/bin/task-failed
-
-# Copy worker daemon and tools for autonomous mode
-COPY --chown=agent:agent worker-daemon.py /workspace/worker-daemon.py
-COPY --chown=agent:agent tools.py /workspace/tools.py
-RUN chmod +x /workspace/worker-daemon.py /workspace/tools.py
 
 ENTRYPOINT ["/home/agent/entrypoint.sh"]
 CMD ["bash"]
