@@ -82,8 +82,10 @@ hive init
 - ✅ Auto-detects git config (user.email, user.name)
 - ✅ Auto-detects Claude OAuth token from `~/.claude`
 - ✅ Auto-detects project type (Node.js, Go, Python, Rust)
+- ✅ Auto-detects Node.js version from `package.json` or `.nvmrc`
+- ✅ **Asks for worker mode** (Interactive, Autonomous, or Hybrid)
 - ✅ Creates `.hive/` directory with all infrastructure
-- ✅ Creates git worktrees for each agent
+- ✅ Creates git worktrees for each agent with dedicated branches
 - ✅ Creates `hive.yaml` config (commit this!)
 - ✅ Starts containers (Queen + Workers + Redis)
 
@@ -160,6 +162,59 @@ hive clean  # Removes containers, images, worktrees, .hive/ directory
 
 ---
 
+## 🤖 Worker Modes
+
+Hive supports two worker modes, chosen during `hive init`:
+
+### 1. Interactive Mode (Default)
+**Manual control** - You guide workers through CLI:
+```bash
+hive connect 1
+# Worker waits for your commands
+# You manually: read files, edit code, run tests, create PRs
+```
+
+**Best for:**
+- 🎯 Precise control over each step
+- 🔍 Debugging complex issues
+- 📚 Learning and exploration
+- ⚡ Quick one-off tasks
+
+### 2. Autonomous Mode (Daemon)
+**Fully autonomous** - Workers execute tasks end-to-end:
+```bash
+# Worker runs in background, polls Redis queue
+# Automatically: reads files, edits code, runs tests, creates PRs
+# Uses Claude Agent SDK with built-in tools
+```
+
+**Best for:**
+- 🚀 Maximum parallelization
+- ⏰ Long-running tasks
+- 🔄 Repetitive work
+- 🌙 Background execution
+
+**How to enable:**
+```bash
+hive init
+# Choose option 2: Autonomous (daemon mode)
+
+# Or manually in .env:
+echo "WORKER_1_MODE=daemon" >> .hive/.env
+docker compose -f .hive/docker-compose.yml restart agent-1
+```
+
+### 3. Hybrid Mode
+Mix both modes - some workers interactive, some autonomous:
+```bash
+# In .env:
+WORKER_1_MODE=daemon        # Background worker
+WORKER_2_MODE=interactive   # Manual control
+WORKER_3_MODE=daemon        # Background worker
+```
+
+---
+
 ## ✨ Key Features
 
 ### 🎭 Automatic Role Injection
@@ -168,10 +223,11 @@ hive clean  # Removes containers, images, worktrees, .hive/ directory
 - **Workers know their role**: Execute tasks, run tests, wait for CI
 
 ### 📂 Git Worktree Isolation
-- **Parallel work**: Each agent has its own git worktree
-- **No conflicts**: Multiple agents work on the same branch
-- **Automatic cleanup**: `hive clean` removes all worktrees
-- **Detached mode**: Agents can work simultaneously without branch locks
+- **Parallel work**: Each agent has its own git worktree with dedicated branch
+- **Dedicated branches**: `hive/queen`, `hive/drone-1`, `hive/drone-2`, etc.
+- **Full git support**: `git commit`, `git push`, `git pull` work in containers
+- **No conflicts**: Multiple agents work independently
+- **Automatic cleanup**: `hive clean` removes all worktrees and prunes orphaned entries
 
 ### 🔐 Persistent Authentication
 - **OAuth persistence**: Tokens survive container restarts
@@ -180,10 +236,19 @@ hive clean  # Removes containers, images, worktrees, .hive/ directory
 - **Isolated history**: Each agent has independent conversation history
 
 ### ⚡ Zero Configuration
-- **Auto-detection**: Git config, project type, Claude token
+- **Auto-detection**: Git config, project type, Claude token, Node.js version
 - **One command setup**: `hive init` does everything
-- **Sensible defaults**: Works out of the box
-- **Flexible override**: Configure via `hive.yaml` or CLI flags
+- **Sensible defaults**: Works out of the box (4GB memory per worker)
+- **Flexible override**: Configure via `hive.yaml`, `.env`, or CLI flags
+
+### 🎛️ Performance Tuning
+- **Configurable memory**: Adjust Node.js heap size via `NODE_MAX_OLD_SPACE_SIZE` in `.env`
+- **Default**: 4GB per worker (prevents out-of-memory errors)
+- **Easy scaling**: Increase to 8GB or more for large projects
+```bash
+# In .hive/.env
+NODE_MAX_OLD_SPACE_SIZE=8192  # 8GB
+```
 
 ---
 
