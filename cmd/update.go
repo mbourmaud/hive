@@ -65,7 +65,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	runner := shell.NewRunner(DebugMode)
 	composeFile := filepath.Join(hiveDir, "docker-compose.yml")
 
-	// Step 1: Pull base images (optional)
+	// Step 1: Re-extract embedded files to update scripts/configs
+	fmt.Printf("%s ", ui.StyleDim.Render("📦 Updating Hive files..."))
+	if err := extractHiveFiles(""); err != nil {
+		return fmt.Errorf("failed to extract hive files: %w", err)
+	}
+	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
+
+	// Step 2: Pull base images (optional)
 	if updatePull {
 		fmt.Printf("%s ", ui.StyleDim.Render("📥 Pulling latest base images..."))
 		pullCmd := exec.Command("docker", "compose", "-f", composeFile, "pull")
@@ -76,7 +83,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Step 2: Rebuild images
+	// Step 3: Rebuild images
 	fmt.Printf("%s ", ui.StyleDim.Render("🔨 Rebuilding Docker images..."))
 	buildArgs := []string{"compose", "-f", composeFile, "build"}
 	if updateRebuild {
@@ -96,7 +103,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 
-	// Step 3: Recreate containers (preserves volumes)
+	// Step 4: Recreate containers (preserves volumes)
 	fmt.Printf("%s ", ui.StyleDim.Render("🔄 Recreating containers..."))
 	upCmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate")
 	upCmd.Env = append(os.Environ(),
@@ -108,7 +115,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 
-	// Step 4: Wait for health (optional)
+	// Step 5: Wait for health (optional)
 	if updateWait {
 		fmt.Printf("%s\n", ui.StyleCyan.Render("⏳ Waiting for containers..."))
 
