@@ -118,6 +118,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-1
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_1_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -146,6 +147,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-2
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_2_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -174,6 +176,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-3
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_3_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -202,6 +205,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-4
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_4_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -230,6 +234,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-5
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_5_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -258,6 +263,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-6
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_6_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -286,6 +292,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-7
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_7_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -314,6 +321,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-8
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_8_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -342,6 +350,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-9
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_9_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
@@ -370,6 +379,7 @@ services:
       <<: *agent-env
       AGENT_ID: drone-10
       AGENT_ROLE: worker
+      WORKER_MODE: ${WORKER_10_MODE:-interactive}
       HIVE_TASKS_DIR: /hive-tasks
       CLAUDE_MODEL: ${WORKER_MODEL:-sonnet}
 
