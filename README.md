@@ -160,6 +160,35 @@ hive stop
 hive clean  # Removes containers, images, worktrees, .hive/ directory
 ```
 
+### 6. Upgrading Hive
+
+**Non-destructive upgrade** (preserves all data):
+```bash
+# Pull latest Hive version
+cd ~/path/to/hive
+git pull
+make install
+
+# Update containers without losing data
+cd ~/your-project
+hive update
+```
+
+**What's preserved:**
+- ✅ Agent workspaces (code changes)
+- ✅ Conversation history
+- ✅ Redis task queue
+- ✅ Package caches
+
+**Flags:**
+```bash
+hive update                    # Smart rebuild (uses cache)
+hive update --rebuild          # Force rebuild from scratch
+hive update --pull             # Pull latest base images
+hive update --rebuild --pull   # Complete refresh
+hive update --wait             # Wait for containers to be ready
+```
+
 ---
 
 ## 🤖 Worker Modes
@@ -313,6 +342,7 @@ task-done       # When CI is green ✅
 | `hive stop` | Stop all containers |
 | `hive status` | Show container status |
 | `hive connect <id>` | Connect to agent (queen, 1-10) |
+| `hive update` | Update containers with latest code (preserves data) |
 | `hive clean` | Remove all Hive files and containers |
 
 ### Queen Commands (inside Queen container)
