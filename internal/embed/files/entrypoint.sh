@@ -26,6 +26,14 @@ log "[+] Conversation history: ISOLATED (this agent only)"
 # Ensure ~/.claude directory and subdirectories exist
 mkdir -p ~/.claude/projects ~/.claude/mcps ~/.claude/plugins
 
+# Ensure pnpm directories exist and are writable
+mkdir -p ~/.local/share/pnpm/{store,.tools,state}
+chmod -R u+w ~/.local/share/pnpm 2>/dev/null || true
+
+# Ensure node_modules cache directory exists and is writable
+mkdir -p ~/node_modules_cache
+chmod -R u+w ~/node_modules_cache 2>/dev/null || true
+
 # Create ~/.claude.json with OAuth and onboarding flags to bypass setup wizard
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     log "[+] Configuring Claude OAuth and bypassing setup wizard..."
@@ -79,12 +87,17 @@ fi
 
 log "[+] Configuring Git..."
 
-if [ -n "$GIT_USER_EMAIL" ]; then
-    git config --global user.email "$GIT_USER_EMAIL"
-fi
+# Only configure if .gitconfig is writable (not mounted read-only from host)
+if [ -w ~/.gitconfig ] || [ ! -f ~/.gitconfig ]; then
+    if [ -n "$GIT_USER_EMAIL" ]; then
+        git config --global user.email "$GIT_USER_EMAIL" 2>/dev/null || true
+    fi
 
-if [ -n "$GIT_USER_NAME" ]; then
-    git config --global user.name "$GIT_USER_NAME"
+    if [ -n "$GIT_USER_NAME" ]; then
+        git config --global user.name "$GIT_USER_NAME" 2>/dev/null || true
+    fi
+else
+    log "[+] Git config mounted from host (read-only), skipping git config"
 fi
 
 # ============================================

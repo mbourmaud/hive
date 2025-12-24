@@ -32,8 +32,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
     && rm -rf /tmp/docker*
 
 # Node-based CLI tools
-# Set pnpm environment for BuildKit cache
-ENV PNPM_HOME="/pnpm"
+# Set pnpm environment (aligned with volume mount path)
+ENV PNPM_HOME="/home/agent/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
 # Install with BuildKit cache mount for faster rebuilds
