@@ -47,7 +47,14 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -o ${{ matrix.asset_name }} -ldflags="-s -w -X main.version=${GITHUB_REF#refs/tags/}" .
+          VERSION=${GITHUB_REF#refs/tags/}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          go build -o ${{ matrix.asset_name }} \
+            -ldflags="-s -w \
+              -X github.com/mbourmaud/hive/cmd.Version=${VERSION} \
+              -X github.com/mbourmaud/hive/cmd.GitCommit=${COMMIT} \
+              -X github.com/mbourmaud/hive/cmd.BuildDate=${BUILD_DATE}" .
           chmod +x ${{ matrix.asset_name }}
 
       - name: Create tarball
