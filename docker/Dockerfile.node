@@ -84,7 +84,8 @@ RUN chmod +x /scripts/redis/*.sh
 
 # Copy HIVE CLI commands (available in PATH)
 COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
-RUN chmod +x /usr/local/bin/*
+RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-failed /usr/local/bin/hive-status \
+    /usr/local/bin/my-tasks /usr/local/bin/take-task /usr/local/bin/task-done /usr/local/bin/task-failed
 
 ENTRYPOINT ["/home/agent/entrypoint.sh"]
 CMD ["bash"]

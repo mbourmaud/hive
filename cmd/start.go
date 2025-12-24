@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -50,6 +51,26 @@ var startCmd = &cobra.Command{
 
 		if count < 1 {
 			return fmt.Errorf("minimum 1 worker required")
+		}
+
+		// Create history files to prevent Docker from creating them as directories
+		// Docker bind mounts create directories when the source doesn't exist
+		workspacesDir := "./workspaces"
+		agents := []string{"queen"}
+		for i := 1; i <= count; i++ {
+			agents = append(agents, fmt.Sprintf("drone-%d", i))
+		}
+		for _, agent := range agents {
+			historyDir := filepath.Join(workspacesDir, ".history", agent)
+			if err := os.MkdirAll(filepath.Join(historyDir, "session-env"), 0755); err != nil {
+				return fmt.Errorf("failed to create history dir for %s: %w", agent, err)
+			}
+			historyFile := filepath.Join(historyDir, "history.jsonl")
+			if _, err := os.Stat(historyFile); os.IsNotExist(err) {
+				if err := os.WriteFile(historyFile, []byte{}, 0644); err != nil {
+					return fmt.Errorf("failed to create history file for %s: %w", agent, err)
+				}
+			}
 		}
 
 		fmt.Printf("Starting hive: Queen + %d workers...\n", count)
