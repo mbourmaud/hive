@@ -17,11 +17,30 @@ log "Initializing Claude Agent ${AGENT_ID:-unknown}..."
 # Claude Configuration Setup
 # ============================================
 
-# ~/.claude is now SHARED across all agents (mounted from host)
-# Only history.jsonl and session-env are ISOLATED per agent
+# ~/.claude is now PARTIALLY SHARED (MCPs, plugins, projects from host)
+# settings.json, history.jsonl, and session-env are ISOLATED per agent
 
-log "[+] Claude configuration: SHARED (MCPs, skills, settings)"
+log "[+] Claude configuration: PARTIAL (MCPs, plugins, projects shared)"
 log "[+] Conversation history: ISOLATED (this agent only)"
+
+# Ensure ~/.claude directory exists
+mkdir -p ~/.claude
+
+# Create settings.json with OAuth token from environment
+if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    log "[+] Configuring Claude OAuth from environment..."
+    cat > ~/.claude/settings.json << EOF
+{
+  "showSetupPrompt": false,
+  "bypassPermissionsAccepted": true,
+  "oauthAccount": {
+    "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}"
+  }
+}
+EOF
+    chmod 600 ~/.claude/settings.json
+    log "[+] Created settings.json with OAuth token"
+fi
 
 # Ensure isolated conversation files exist
 if [ ! -f ~/.claude/history.jsonl ]; then

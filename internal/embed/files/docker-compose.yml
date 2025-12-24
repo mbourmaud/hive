@@ -64,8 +64,10 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/queen:/workspace
-      # SHARED Claude config (MCPs, skills, settings)
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
       # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/queen/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/queen/session-env:/home/agent/.claude/session-env
@@ -95,8 +97,10 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-1:/workspace
-      # SHARED Claude config (MCPs, skills, settings)
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
       # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-1/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-1/session-env:/home/agent/.claude/session-env
@@ -119,7 +123,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -141,7 +149,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -163,7 +175,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -185,7 +201,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -207,7 +227,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -229,7 +253,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -251,7 +279,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -273,7 +305,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -295,7 +331,11 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10:/workspace
-      - ${HOME}/.claude:/home/agent/.claude
+      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
+      - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
+      - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
+      - ${HOME}/.claude/projects:/home/agent/.claude/projects:ro
+      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
