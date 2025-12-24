@@ -144,3 +144,79 @@ jobs:
           body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: mbourmaud/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Update formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Download checksums
+          gh release download v$VERSION -R mbourmaud/hive -p "*.sha256"
+
+          # Extract checksums
+          DARWIN_ARM64=$(cat hive-darwin-arm64.tar.gz.sha256 | cut -d' ' -f1)
+          DARWIN_AMD64=$(cat hive-darwin-amd64.tar.gz.sha256 | cut -d' ' -f1)
+          LINUX_ARM64=$(cat hive-linux-arm64.tar.gz.sha256 | cut -d' ' -f1)
+          LINUX_AMD64=$(cat hive-linux-amd64.tar.gz.sha256 | cut -d' ' -f1)
+
+          # Update formula
+          cat > Formula/hive-ai.rb << EOF
+          class HiveAi < Formula
+            desc "Multi-Agent Claude System for parallel development"
+            homepage "https://github.com/mbourmaud/hive"
+            version "$VERSION"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-darwin-arm64.tar.gz"
+                sha256 "$DARWIN_ARM64"
+              else
+                url "https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-darwin-amd64.tar.gz"
+                sha256 "$DARWIN_AMD64"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-linux-arm64.tar.gz"
+                sha256 "$LINUX_ARM64"
+              else
+                url "https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-linux-amd64.tar.gz"
+                sha256 "$LINUX_AMD64"
+              end
+            end
+
+            depends_on "docker" => :recommended
+
+            def install
+              # The tarball contains a binary named hive-{os}-{arch}
+              os = OS.mac? ? "darwin" : "linux"
+              arch = Hardware::CPU.arm? ? "arm64" : "amd64"
+              binary_name = "hive-#{os}-#{arch}"
+
+              bin.install binary_name => "hive"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/hive --version")
+            end
+          end
+          EOF
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Formula/hive-ai.rb
+          git commit -m "chore: update hive-ai to v$VERSION"
+          git push
