@@ -119,14 +119,45 @@ func runInit(cmd *cobra.Command, args []string) error {
 		cfg["NODE_VERSION"] = nodeVersion
 	}
 
+	// Ask for workers count and mode before writing config files
+	workers := flagWorkers
+	if !flagNonInteractive {
+		fmt.Println()
+		workersStr, err := ui.PromptDefault("🚀 Workers to start", "2")
+		if err == nil {
+			if w, parseErr := strconv.Atoi(workersStr); parseErr == nil {
+				workers = w
+			}
+		}
+
+		// Ask for worker mode
+		fmt.Println()
+		fmt.Println("🤖 Worker mode:")
+		fmt.Println("   1. Interactive (manual CLI control)")
+		fmt.Println("   2. Autonomous (daemon mode, executes tasks automatically)")
+		fmt.Println("   3. Hybrid (configure per-worker in .env)")
+		modeChoice, err := ui.PromptDefault("Choose mode", "1")
+		if err == nil {
+			switch modeChoice {
+			case "1":
+				cfg["WORKER_MODE"] = "interactive"
+			case "2":
+				cfg["WORKER_MODE"] = "daemon"
+			case "3":
+				cfg["WORKER_MODE"] = "hybrid"
+			default:
+				cfg["WORKER_MODE"] = "interactive"
+			}
+		}
+	}
+
 	// Write .env file
-	if err := writeEnvFile(cfg); err != nil {
+	if err := writeEnvFile(cfg, workers); err != nil {
 		return fmt.Errorf("failed to write .hive/.env: %w", err)
 	}
 	fmt.Print(ui.ProgressLine("Created .hive/.env", "✓"))
 
 	// Write hive.yaml file
-	workers := flagWorkers
 	if err := writeHiveYAML(cfg["WORKSPACE_NAME"], cfg["GIT_REPO_URL"], workers); err != nil {
 		return fmt.Errorf("failed to write hive.yaml: %w", err)
 	}
@@ -137,17 +168,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %s\n", ui.Warning(".gitignore: "+err.Error()))
 	} else {
 		fmt.Print(ui.ProgressLine("Updated .gitignore", "✓"))
-	}
-
-	// Ask for workers count
-	if !flagNonInteractive {
-		fmt.Println()
-		workersStr, err := ui.PromptDefault("🚀 Workers to start", "2")
-		if err == nil {
-			if w, parseErr := strconv.Atoi(workersStr); parseErr == nil {
-				workers = w
-			}
-		}
 	}
 
 	// Create git worktrees for each agent
@@ -340,7 +360,7 @@ func validateEmail(email string) error {
 	return nil
 }
 
-func writeEnvFile(cfg map[string]string) error {
+func writeEnvFile(cfg map[string]string, workers int) error {
 	// Read .env.example from embedded files
 	template, err := embed.GetFile(".env.example")
 	if err != nil {
@@ -372,6 +392,20 @@ func writeEnvFile(cfg map[string]string) error {
 	if cfg["NODE_VERSION"] != "" {
 		content += "\n# Node.js version (auto-detected from package.json)\n"
 		content += "NODE_VERSION=" + cfg["NODE_VERSION"] + "\n"
+	}
+
+	// Set worker modes based on user choice
+	if workerMode := cfg["WORKER_MODE"]; workerMode != "" && workerMode != "hybrid" {
+		content += "\n# Worker modes (configured during init)\n"
+		for i := 1; i <= workers; i++ {
+			content += fmt.Sprintf("WORKER_%d_MODE=%s\n", i, workerMode)
+		}
+	} else if workerMode == "hybrid" {
+		content += "\n# Worker modes (configure per-worker)\n"
+		content += "# Uncomment and set each worker mode:\n"
+		for i := 1; i <= workers; i++ {
+			content += fmt.Sprintf("# WORKER_%d_MODE=interactive\n", i)
+		}
 	}
 
 	// Write to .hive/.env
