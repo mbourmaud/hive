@@ -18,13 +18,26 @@ var connectCmd = &cobra.Command{
 
 		// Map shortcuts
 		containerName := mapAgentID(id)
+		isQueen := (id == "queen" || id == "q" || id == "0")
 
 		fmt.Printf("🔗 Connecting to %s...\n", containerName)
 
-		// Launch Claude in the container
+		// Create role-specific initial prompt
+		var initialPrompt string
+		if isQueen {
+			initialPrompt = "Read your role and instructions from /home/agent/CLAUDE.md. You are the Queen (Orchestrator). Execute your mandatory startup sequence immediately: 1. Report your identity, 2. Run hive-status, 3. Report current HIVE state to me."
+		} else {
+			initialPrompt = "Read your role and instructions from /home/agent/CLAUDE.md. Execute your mandatory startup sequence immediately: 1. Report your agent ID, 2. Run my-tasks, 3. Take action based on what you find."
+		}
+
+		// Launch Claude in the container with initial prompt
 		// The workspace name is read from WORKSPACE_NAME env var in container
-		command := []string{"exec", "-it", containerName, "bash", "-l", "-c",
-			`cd /workspace/${WORKSPACE_NAME:-my-project} && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}"`}
+		claudeCmd := fmt.Sprintf(
+			`cd /workspace/${WORKSPACE_NAME:-my-project} && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" "%s"`,
+			initialPrompt,
+		)
+
+		command := []string{"exec", "-it", containerName, "bash", "-l", "-c", claudeCmd}
 
 		dockerCmd := exec.Command("docker", command...)
 		dockerCmd.Stdin = os.Stdin
