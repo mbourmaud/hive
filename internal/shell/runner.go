@@ -27,7 +27,19 @@ func (r *Runner) Run(cmd *exec.Cmd) error {
 }
 
 // RunWithTitle executes a command with a descriptive title for error messages
+// Output is hidden in normal mode (use RunWithOutput to show stdout)
 func (r *Runner) RunWithTitle(cmd *exec.Cmd, title string) error {
+	return r.runInternal(cmd, title, false)
+}
+
+// RunWithOutput executes a command and shows stdout even in normal mode
+// Useful for read commands like 'docker ps', 'git status', etc.
+func (r *Runner) RunWithOutput(cmd *exec.Cmd) error {
+	return r.runInternal(cmd, "", true)
+}
+
+// runInternal is the internal implementation for running commands
+func (r *Runner) runInternal(cmd *exec.Cmd, title string, showOutput bool) error {
 	// Log command in debug mode
 	if r.Debug {
 		cmdStr := r.formatCommand(cmd)
@@ -61,8 +73,8 @@ func (r *Runner) RunWithTitle(cmd *exec.Cmd, title string) error {
 		return err
 	}
 
-	// In normal mode with no error, show stdout if not empty
-	if !r.Debug && stdout.Len() > 0 {
+	// In normal mode, show stdout if requested (for read commands)
+	if !r.Debug && showOutput && stdout.Len() > 0 {
 		fmt.Print(stdout.String())
 	}
 

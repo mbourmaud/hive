@@ -24,8 +24,8 @@ var statusCmd = &cobra.Command{
 		// Show running containers
 		dockerCmd := exec.Command("docker", "compose", "-f", ".hive/docker-compose.yml", "ps", "--format", "table")
 
-		// Use runner to execute
-		if err := runner.Run(dockerCmd); err != nil {
+		// Use runner to execute (RunWithOutput shows stdout even in normal mode)
+		if err := runner.RunWithOutput(dockerCmd); err != nil {
 			fmt.Printf("%s\n\n", ui.Error("Failed to get status"))
 			return err
 		}
