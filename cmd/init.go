@@ -605,11 +605,19 @@ func createWorktree(path, branch, agentName string) error {
 		return fmt.Errorf("failed to create directory for %s: %w", agentName, err)
 	}
 
-	// Create detached worktree (allows multiple worktrees on same branch)
-	cmd := exec.Command("git", "worktree", "add", "--detach", path, branch)
+	// Create dedicated branch for this agent (hive/queen, hive/drone-1, etc.)
+	// This allows each agent to commit and push independently
+	agentBranch := fmt.Sprintf("hive/%s", agentName)
+
+	// Create worktree with dedicated branch based on current branch
+	cmd := exec.Command("git", "worktree", "add", "-b", agentBranch, path, branch)
 	// Capture output silently
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create worktree for %s: %w", agentName, err)
+		// If branch already exists, try without -b (reuse existing branch)
+		cmd = exec.Command("git", "worktree", "add", path, agentBranch)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to create worktree for %s: %w", agentName, err)
+		}
 	}
 
 	return nil
