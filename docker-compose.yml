@@ -35,6 +35,8 @@ x-agent-common: &agent-common
     GITLAB_HOST: ${GITLAB_HOST:-gitlab.com}
     # Workspace config
     WORKSPACE_NAME: ${WORKSPACE_NAME:-my-project}
+    # Node.js memory configuration (in MB)
+    NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-4096}"
 
 services:
   # =============================================
