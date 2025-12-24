@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 
 	"github.com/spf13/cobra"
@@ -13,17 +12,17 @@ var stopCmd = &cobra.Command{
 	Short: "Stop all hive containers",
 	Long:  "Stop all running hive containers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("🛑 Stopping hive...")
+		fmt.Printf("\n%s%s🛑 Stopping Hive%s\n\n", colorBold, colorCyan, colorReset)
 
-		dockerCmd := exec.Command("docker", "compose", "down")
-		dockerCmd.Stdout = os.Stdout
-		dockerCmd.Stderr = os.Stderr
+		dockerCmd := exec.Command("docker", "compose", "-f", ".hive/docker-compose.yml", "down")
+		dockerCmd.Stdout = nil
+		dockerCmd.Stderr = nil
 
 		if err := dockerCmd.Run(); err != nil {
 			return fmt.Errorf("failed to stop containers: %w", err)
 		}
 
-		fmt.Println("✅ Hive stopped")
+		fmt.Printf("%s%s✨ Hive stopped successfully!%s\n\n", colorBold, colorGreen, colorReset)
 		return nil
 	},
 }

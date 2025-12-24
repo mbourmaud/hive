@@ -52,6 +52,13 @@ RUN ARCH=$(dpkg --print-architecture) && \
     && dpkg -i /tmp/glab.deb \
     && rm /tmp/glab.deb
 
+# yq (YAML processor)
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi && \
+    wget "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_${ARCH}" \
+        -O /usr/local/bin/yq \
+    && chmod +x /usr/local/bin/yq
+
 # Playwright (for browser automation)
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN npm install -g @playwright/mcp@latest \

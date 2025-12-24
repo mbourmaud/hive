@@ -10,9 +10,10 @@ import (
 
 // Config represents the Hive configuration
 type Config struct {
-	Workspace WorkspaceConfig `yaml:"workspace"`
-	Redis     RedisConfig     `yaml:"redis"`
-	Agents    AgentsConfig    `yaml:"agents"`
+	Workspace  WorkspaceConfig  `yaml:"workspace"`
+	Redis      RedisConfig      `yaml:"redis"`
+	Agents     AgentsConfig     `yaml:"agents"`
+	Monitoring MonitoringConfig `yaml:"monitoring"`
 }
 
 // WorkspaceConfig contains workspace settings
@@ -47,6 +48,24 @@ type WorkersConfig struct {
 	Env        map[string]string `yaml:"env,omitempty"`
 }
 
+// MonitoringConfig contains background clock/polling settings
+type MonitoringConfig struct {
+	Queen  QueenMonitoringConfig  `yaml:"queen"`
+	Worker WorkerMonitoringConfig `yaml:"worker"`
+}
+
+// QueenMonitoringConfig contains Queen's monitoring settings
+type QueenMonitoringConfig struct {
+	Enabled        bool `yaml:"enabled"`
+	IntervalMinutes int `yaml:"interval_minutes"`
+}
+
+// WorkerMonitoringConfig contains Worker's monitoring settings
+type WorkerMonitoringConfig struct {
+	Enabled        bool `yaml:"enabled"`
+	IntervalMinutes int `yaml:"interval_minutes"`
+}
+
 // Default returns a Config with default values
 func Default() *Config {
 	return &Config{
@@ -65,6 +84,16 @@ func Default() *Config {
 				Count:      2,
 				Model:      "sonnet",
 				Dockerfile: "docker/Dockerfile.node",
+			},
+		},
+		Monitoring: MonitoringConfig{
+			Queen: QueenMonitoringConfig{
+				Enabled:         true,
+				IntervalMinutes: 5,
+			},
+			Worker: WorkerMonitoringConfig{
+				Enabled:         true,
+				IntervalMinutes: 2,
 			},
 		},
 	}

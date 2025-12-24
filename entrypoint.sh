@@ -29,16 +29,24 @@ mkdir -p ~/.claude/projects ~/.claude/mcps ~/.claude/plugins
 # Create ~/.claude.json with OAuth and onboarding flags to bypass setup wizard
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     log "[+] Configuring Claude OAuth and bypassing setup wizard..."
-    cat > ~/.claude.json << EOF
-{
-  "hasCompletedOnboarding": true,
-  "bypassPermissionsModeAccepted": true,
-  "lastOnboardingVersion": "2.0.76",
-  "oauthAccount": {
-    "accessToken": "${CLAUDE_CODE_OAUTH_TOKEN}"
-  }
-}
-EOF
+    jq -n \
+      --arg token "$CLAUDE_CODE_OAUTH_TOKEN" \
+      '{
+        hasCompletedOnboarding: true,
+        bypassPermissionsModeAccepted: true,
+        lastOnboardingVersion: "2.0.76",
+        oauthAccount: {
+          accessToken: $token
+        }
+      }' > ~/.claude.json
+
+    # Validate JSON
+    if ! jq empty ~/.claude.json 2>/dev/null; then
+        log "[!] ERROR: Generated invalid JSON in ~/.claude.json"
+        cat ~/.claude.json
+        exit 1
+    fi
+
     chmod 600 ~/.claude.json
     log "[+] Created ~/.claude.json with OAuth token and onboarding bypass"
 fi

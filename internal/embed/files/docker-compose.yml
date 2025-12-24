@@ -64,6 +64,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/queen:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -97,6 +99,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-1:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -123,6 +127,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -149,6 +155,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -175,6 +183,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -201,6 +211,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -227,6 +239,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -253,6 +267,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -279,6 +295,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -305,6 +323,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -331,6 +351,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10:/workspace
+      # Hive config
+      - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro

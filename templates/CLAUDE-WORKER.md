@@ -41,6 +41,61 @@ Before running `task-done`, you MUST verify:
 
 **DO THIS NOW before doing anything else. This is not optional.**
 
+## 🕐 BACKGROUND TASK POLLING CLOCK
+
+After your startup sequence, you MUST establish a background task polling loop:
+
+**Configuration** (from `hive.yaml`):
+- **Enabled**: `monitoring.worker.enabled` (default: `true`)
+- **Interval**: `monitoring.worker.interval_minutes` (default: `2` minutes)
+
+**When task polling is ENABLED:**
+
+1. **If you have NO active task:**
+   - Start a background clock immediately using the Task tool with `run_in_background: true`
+   - Poll for new assigned tasks at the configured interval
+   - When a new task appears, **wake up and start working on it**
+
+2. **If you are actively working on a task:**
+   - Focus on completing your current task
+   - Only start the polling clock again **after** marking the task as done
+   - **Respect the DEFINITION OF DONE** (CI must be GREEN)
+
+3. **After completing a task** (via `task-done`):
+   - Immediately check `my-tasks` for any queued tasks
+   - If queued tasks exist: `take-task` and start working
+   - If no queued tasks: Start the background polling clock again
+
+**Example polling loop:**
+```bash
+# Read config (returns "true"/"false" and interval in minutes)
+ENABLED=$(hive-config worker.monitoring.enabled)
+INTERVAL=$(hive-config worker.monitoring.interval)
+
+if [ "$ENABLED" = "true" ]; then
+  # Run in background when idle
+  while true; do
+    sleep $(($INTERVAL * 60))
+
+    # Check if I have new tasks assigned
+    TASKS=$(my-tasks)
+
+    # If new task detected, wake up and take it
+    if echo "$TASKS" | grep -q "Queued:"; then
+      # Signal to main thread: "New task available!"
+      break
+    fi
+  done &
+fi
+```
+
+**Important:**
+- The polling clock runs **only when you are IDLE** (no active task)
+- It should **NOT block** your ability to respond to user messages
+- When a task is detected, **immediately stop polling** and start working
+- After task completion (respecting Definition of Done), resume polling if no queued tasks
+- If polling is disabled in config, skip this entirely
+
 ## HIVE Commands (Available to You)
 
 ```bash

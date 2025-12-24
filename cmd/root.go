@@ -28,12 +28,15 @@ func Execute() error {
 
 // GetVersionString returns the formatted version string
 func GetVersionString() string {
-	return fmt.Sprintf("hive version %s (commit: %s, built: %s)", Version, GitCommit, BuildDate)
+	return fmt.Sprintf("%s%shive%s %s\n%sCommit: %s%s\n%sBuilt: %s%s\n",
+		colorBold, colorCyan, colorReset, Version,
+		colorDim, GitCommit, colorReset,
+		colorDim, BuildDate, colorReset)
 }
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	// Use a PersistentPreRun to set version dynamically
 	rootCmd.Version = Version
-	rootCmd.SetVersionTemplate("{{.Version}}\n")
+	rootCmd.SetVersionTemplate(GetVersionString())
 }

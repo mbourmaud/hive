@@ -1,0 +1,60 @@
+#!/bin/bash
+# Hive Config Reader
+# Reads configuration values from hive.yaml
+
+CONFIG_FILE="/hive-config/hive.yaml"
+
+# Check if hive.yaml exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: hive.yaml not found" >&2
+    exit 1
+fi
+
+# Parse config with yq or fallback to grep
+get_config() {
+    local key="$1"
+    local default="$2"
+
+    # Try yq first (if available)
+    if command -v yq &>/dev/null; then
+        value=$(yq eval "$key" "$CONFIG_FILE" 2>/dev/null)
+        if [ "$value" != "null" ] && [ -n "$value" ]; then
+            echo "$value"
+            return
+        fi
+    fi
+
+    # Fallback: use grep + awk
+    # This is a simple parser, won't work for all YAML but good enough for our flat structure
+    value=$(grep -A1 "$key" "$CONFIG_FILE" 2>/dev/null | tail -1 | awk '{print $2}')
+    if [ -n "$value" ]; then
+        echo "$value"
+    else
+        echo "$default"
+    fi
+}
+
+# Usage: hive-config <key> [default]
+case "$1" in
+    queen.monitoring.enabled)
+        get_config ".monitoring.queen.enabled" "true"
+        ;;
+    queen.monitoring.interval)
+        get_config ".monitoring.queen.interval_minutes" "5"
+        ;;
+    worker.monitoring.enabled)
+        get_config ".monitoring.worker.enabled" "true"
+        ;;
+    worker.monitoring.interval)
+        get_config ".monitoring.worker.interval_minutes" "2"
+        ;;
+    *)
+        echo "Usage: hive-config <key> [default]"
+        echo "Available keys:"
+        echo "  queen.monitoring.enabled"
+        echo "  queen.monitoring.interval"
+        echo "  worker.monitoring.enabled"
+        echo "  worker.monitoring.interval"
+        exit 1
+        ;;
+esac

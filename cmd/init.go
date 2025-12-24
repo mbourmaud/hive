@@ -57,11 +57,11 @@ func init() {
 func runInit(cmd *cobra.Command, args []string) error {
 	// Check if already initialized
 	if fileExists(".hive/.env") {
-		return fmt.Errorf(".hive/ already exists. Use 'rm -rf .hive' to reinitialize")
+		return fmt.Errorf(".hive/ already exists. Use 'hive clean' to reset")
 	}
 
-	fmt.Println("🐝 Welcome to HIVE - Multi-Agent Claude System")
-	fmt.Println()
+	fmt.Printf("\n%s%s🐝 Welcome to HIVE%s\n", colorBold, colorCyan, colorReset)
+	fmt.Printf("%sMulti-Agent Claude System%s\n\n", colorDim, colorReset)
 
 	// Detect project info
 	projectType := detectProjectType()
@@ -110,30 +110,30 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Extract hive files to .hive/ directory
-	fmt.Println("📦 Extracting hive files to .hive/...")
+	fmt.Printf("%s📦 Setting up project...%s\n", colorCyan, colorReset)
 	if err := extractHiveFiles(cfg["PROJECT_TYPE"]); err != nil {
 		return fmt.Errorf("failed to extract hive files: %w", err)
 	}
-	fmt.Println("✅ Extracted .hive/")
+	fmt.Printf("  %s✓ Extracted .hive/%s\n", colorGreen, colorReset)
 
 	// Write .env file
 	if err := writeEnvFile(cfg); err != nil {
 		return fmt.Errorf("failed to write .hive/.env: %w", err)
 	}
-	fmt.Println("✅ Created .hive/.env")
+	fmt.Printf("  %s✓ Created .hive/.env%s\n", colorGreen, colorReset)
 
 	// Write hive.yaml file
 	workers := flagWorkers
 	if err := writeHiveYAML(cfg["WORKSPACE_NAME"], cfg["GIT_REPO_URL"], workers); err != nil {
 		return fmt.Errorf("failed to write hive.yaml: %w", err)
 	}
-	fmt.Println("✅ Created hive.yaml")
+	fmt.Printf("  %s✓ Created hive.yaml%s\n", colorGreen, colorReset)
 
 	// Update .gitignore
 	if err := updateGitignore(); err != nil {
-		fmt.Printf("⚠️  Failed to update .gitignore: %v\n", err)
+		fmt.Printf("  %s⚠️  .gitignore: %v%s\n", colorYellow, err, colorReset)
 	} else {
-		fmt.Println("✅ Updated .gitignore")
+		fmt.Printf("  %s✓ Updated .gitignore%s\n", colorGreen, colorReset)
 	}
 
 	// Ask for workers count
@@ -146,19 +146,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create git worktrees for each agent
+	fmt.Println()
 	if err := createWorktrees(workers); err != nil {
-		fmt.Printf("\n⚠️  Failed to create worktrees: %v\n", err)
-		fmt.Println("   Agents will use empty workspaces")
+		fmt.Printf("%s🌳 Worktrees... ⚠️  %v%s\n", colorCyan, err, colorReset)
+		fmt.Printf("%s   Agents will use empty workspaces%s\n", colorDim, colorReset)
 	}
 
-	fmt.Printf("\n🐝 Starting Hive with %d workers...\n", workers)
+	fmt.Printf("\n%s%s🚀 Starting Hive%s\n", colorBold, colorCyan, colorReset)
 	startCmd := exec.Command("hive", "start", strconv.Itoa(workers))
 	startCmd.Stdout = os.Stdout
 	startCmd.Stderr = os.Stderr
 
 	if err := startCmd.Run(); err != nil {
-		fmt.Println("\n⚠️  Failed to start Hive automatically")
-		fmt.Printf("   Run manually: hive start %d\n", workers)
+		fmt.Printf("\n%s⚠️  Failed to start Hive%s\n", colorYellow, colorReset)
+		fmt.Printf("%sPlease check the error above and run manually:%s\n", colorDim, colorReset)
+		fmt.Printf("  %shive start %d%s\n\n", colorCyan, workers, colorReset)
+		return fmt.Errorf("hive start failed")
 	}
 
 	// Print success message
@@ -338,6 +341,9 @@ func promptSecure(label string) string {
 
 		input := strings.TrimSpace(string(bytePassword))
 
+		// Strip ANSI escape sequences that terminals sometimes inject
+		input = stripANSI(input)
+
 		if input == "" {
 			fmt.Println("  ⚠️  This field is required")
 			continue
@@ -345,6 +351,14 @@ func promptSecure(label string) string {
 
 		return input
 	}
+}
+
+// stripANSI removes ANSI escape sequences from a string
+func stripANSI(str string) string {
+	// Match ANSI escape sequences: ESC [ ... (any chars) ... (letter)
+	// Also match ESC O and ESC I sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[OI]|\x1b`)
+	return ansiRegex.ReplaceAllString(str, "")
 }
 
 func writeEnvFile(cfg map[string]string) error {
@@ -432,13 +446,12 @@ func writeHiveYAML(workspace, gitURL string, workers int) error {
 }
 
 func printSuccessMessage(workers int) {
-	fmt.Println("\n✅ Setup complete!")
-	fmt.Printf("  Hive is now running with %d workers.\n\n", workers)
-	fmt.Println("  Next steps:")
-	fmt.Println("    hive connect queen  # Connect to orchestrator")
-	fmt.Println("    hive connect 1      # Connect to worker 1")
-	fmt.Println("    hive status         # Check status")
-	fmt.Println("  Need help? https://github.com/mbourmaud/hive")
+	fmt.Printf("\n%s%s✨ Setup complete!%s\n", colorBold, colorGreen, colorReset)
+	fmt.Printf("%sHive is running with %d worker%s%s\n\n", colorDim, workers, pluralize(workers), colorReset)
+	fmt.Printf("%sNext steps:%s\n", colorBold, colorReset)
+	fmt.Printf("  %shive connect queen%s  # Connect to orchestrator\n", colorCyan, colorReset)
+	fmt.Printf("  %shive connect 1%s      # Connect to worker 1\n", colorCyan, colorReset)
+	fmt.Printf("  %shive status%s         # Check status\n\n", colorCyan, colorReset)
 }
 
 // detectGitConfig retrieves git configuration from the current repository
@@ -557,6 +570,8 @@ func extractHiveFiles(projectType string) error {
 func createWorktrees(workers int) error {
 	// Check if we're in a git repository
 	gitCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	gitCmd.Stdout = nil
+	gitCmd.Stderr = nil
 	if err := gitCmd.Run(); err != nil {
 		// Not a git repo, skip worktree creation
 		return nil
@@ -570,11 +585,12 @@ func createWorktrees(workers int) error {
 	}
 	currentBranch := strings.TrimSpace(string(branchOutput))
 
-	fmt.Println("\n📦 Creating git worktrees for agents...")
+	fmt.Printf("%s🌳 Creating git worktrees...%s", colorCyan, colorReset)
 
 	// Create worktree for queen
 	queenPath := ".hive/workspaces/queen"
 	if err := createWorktree(queenPath, currentBranch, "queen"); err != nil {
+		fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
 		return err
 	}
 
@@ -583,11 +599,12 @@ func createWorktrees(workers int) error {
 		workerPath := fmt.Sprintf(".hive/workspaces/drone-%d", i)
 		workerName := fmt.Sprintf("drone-%d", i)
 		if err := createWorktree(workerPath, currentBranch, workerName); err != nil {
+			fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
 			return err
 		}
 	}
 
-	fmt.Println("✅ Created worktrees for all agents")
+	fmt.Printf(" %s✓%s (%d worktree%s)\n", colorGreen, colorReset, workers+1, pluralize(workers+1))
 	return nil
 }
 
@@ -595,8 +612,7 @@ func createWorktrees(workers int) error {
 func createWorktree(path, branch, agentName string) error {
 	// Check if worktree already exists
 	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
-		fmt.Printf("  ✓ Worktree for %s already exists\n", agentName)
-		return nil
+		return nil // Already exists, silent success
 	}
 
 	// Create parent directory if needed
@@ -606,13 +622,11 @@ func createWorktree(path, branch, agentName string) error {
 
 	// Create detached worktree (allows multiple worktrees on same branch)
 	cmd := exec.Command("git", "worktree", "add", "--detach", path, branch)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Capture output silently
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create worktree for %s: %w", agentName, err)
 	}
 
-	fmt.Printf("  ✓ Created worktree for %s\n", agentName)
 	return nil
 }
 
