@@ -171,7 +171,7 @@ func cleanDockerImages(runner *shell.Runner) error {
 	}
 
 	// Remove images
-	fmt.Printf("  %s ", ui.StyleDim.Render("🗑️  Removing Docker images..."))
+	fmt.Printf("  %s ", ui.StyleDim.Render("🗑️ Removing Docker images..."))
 	rmiCmd := exec.Command("docker", "rmi", "-f")
 	rmiCmd.Args = append(rmiCmd.Args, strings.Split(imageIDs, "\n")...)
 	if err := runner.RunQuiet(rmiCmd); err != nil {

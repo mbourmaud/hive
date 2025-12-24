@@ -20,7 +20,7 @@ var (
 
 // Semantic styles (combining base and color)
 var (
-	StyleHeader  = StyleBold.Copy().Foreground(ColorCyan)
+	StyleHeader  = StyleBold.Copy().Foreground(ColorYellow) // Bee yellow for all headers
 	StyleSuccess = StyleBold.Copy().Foreground(ColorGreen)
 	StyleWarning = StyleBold.Copy().Foreground(ColorYellow)
 	StyleError   = StyleBold.Copy().Foreground(ColorOrange)
