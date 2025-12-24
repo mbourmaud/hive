@@ -69,7 +69,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	if updatePull {
 		fmt.Printf("%s ", ui.StyleDim.Render("📥 Pulling latest base images..."))
 		pullCmd := exec.Command("docker", "compose", "-f", composeFile, "pull")
-		pullCmd.Dir = hiveDir
 		if err := runner.RunQuiet(pullCmd); err != nil {
 			fmt.Printf("%s (continuing anyway)\n", ui.StyleYellow.Render("⚠️"))
 		} else {
@@ -88,7 +87,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	buildCmd := exec.Command("docker", buildArgs...)
-	buildCmd.Dir = hiveDir
 	buildCmd.Env = append(os.Environ(),
 		fmt.Sprintf("HIVE_DOCKERFILE=%s", dockerfile),
 	)
@@ -101,7 +99,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	// Step 3: Recreate containers (preserves volumes)
 	fmt.Printf("%s ", ui.StyleDim.Render("🔄 Recreating containers..."))
 	upCmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate")
-	upCmd.Dir = hiveDir
 	upCmd.Env = append(os.Environ(),
 		fmt.Sprintf("HIVE_DOCKERFILE=%s", dockerfile),
 	)
