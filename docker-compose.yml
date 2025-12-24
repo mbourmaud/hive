@@ -5,7 +5,6 @@ x-agent-common: &agent-common
   build:
     context: .
     dockerfile: ${HIVE_DOCKERFILE:-docker/Dockerfile.node}
-  network_mode: host
   stdin_open: true
   tty: true
   env_file:
@@ -19,6 +18,9 @@ x-agent-common: &agent-common
     # Git config
     GIT_USER_EMAIL: ${GIT_USER_EMAIL:-user@example.com}
     GIT_USER_NAME: ${GIT_USER_NAME:-User Name}
+    # Redis connection
+    REDIS_HOST: hive-redis
+    REDIS_PORT: 6379
     # Docker/Testcontainers
     DOCKER_HOST: unix:///var/run/docker.sock
     TESTCONTAINERS_RYUK_DISABLED: "true"

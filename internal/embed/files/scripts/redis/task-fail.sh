@@ -12,7 +12,7 @@ if [ -z "$DRONE_ID" ]; then
 fi
 
 # Get task from active
-TASK=$(redis-cli -h localhost -p 6380 RPOP "hive:active:$DRONE_ID")
+TASK=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} RPOP "hive:active:$DRONE_ID")
 
 if [ -z "$TASK" ] || [ "$TASK" = "(nil)" ]; then
     echo "No active task for $DRONE_ID"
@@ -25,12 +25,12 @@ FAILED_TASK=$(echo "$TASK" | jq ". + {status: \"failed\", failed_at: \"$(date -I
 
 # Add to failed sorted set (score = timestamp)
 TIMESTAMP=$(date +%s)
-redis-cli -h localhost -p 6380 ZADD "hive:failed" "$TIMESTAMP" "$FAILED_TASK"
+redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} ZADD "hive:failed" "$TIMESTAMP" "$FAILED_TASK"
 
 # Store task details in hash
-redis-cli -h localhost -p 6380 HSET "hive:task:$TASK_ID" "data" "$FAILED_TASK"
+redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} HSET "hive:task:$TASK_ID" "data" "$FAILED_TASK"
 
 # Publish notification
-redis-cli -h localhost -p 6380 PUBLISH "hive:events" "task_failed:$DRONE_ID:$TASK_ID"
+redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} PUBLISH "hive:events" "task_failed:$DRONE_ID:$TASK_ID"
 
 echo "❌ Task $TASK_ID failed: $ERROR"

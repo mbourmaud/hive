@@ -11,7 +11,7 @@ if [ -z "$DRONE_ID" ]; then
 fi
 
 # Atomically pop from queue and push to active
-TASK=$(redis-cli -h localhost -p 6380 RPOPLPUSH "hive:queue:$DRONE_ID" "hive:active:$DRONE_ID")
+TASK=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} RPOPLPUSH "hive:queue:$DRONE_ID" "hive:active:$DRONE_ID")
 
 if [ -z "$TASK" ] || [ "$TASK" = "(nil)" ]; then
     echo "No tasks in queue for $DRONE_ID"

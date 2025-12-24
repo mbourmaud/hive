@@ -4,7 +4,7 @@
 echo "❌ Failed Tasks:"
 echo ""
 
-FAILED=$(redis-cli -h localhost -p 6380 ZRANGE "hive:failed" 0 -1 2>/dev/null)
+FAILED=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} ZRANGE "hive:failed" 0 -1 2>/dev/null)
 
 if [ -z "$FAILED" ] || [ "$FAILED" = "" ]; then
     echo "No failed tasks"

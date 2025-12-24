@@ -13,9 +13,9 @@ if [ -z "$DRONE_ID" ] || [ -z "$TASK_JSON" ]; then
 fi
 
 # Push task to drone's queue
-redis-cli -h localhost -p 6380 LPUSH "hive:queue:$DRONE_ID" "$TASK_JSON"
+redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} LPUSH "hive:queue:$DRONE_ID" "$TASK_JSON"
 
 # Publish notification
-redis-cli -h localhost -p 6380 PUBLISH "hive:events" "task_queued:$DRONE_ID"
+redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} PUBLISH "hive:events" "task_queued:$DRONE_ID"
 
 echo "✅ Task queued for $DRONE_ID"

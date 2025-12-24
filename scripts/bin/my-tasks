@@ -13,7 +13,7 @@ echo ""
 
 # Check active task
 echo "⚡ Active Task:"
-ACTIVE=$(redis-cli -h localhost -p 6380 LINDEX "hive:active:$AGENT_ID" 0 2>/dev/null)
+ACTIVE=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} LINDEX "hive:active:$AGENT_ID" 0 2>/dev/null)
 
 if [ -n "$ACTIVE" ] && [ "$ACTIVE" != "(nil)" ]; then
     TITLE=$(echo "$ACTIVE" | jq -r '.title // "Untitled"')
@@ -33,13 +33,13 @@ echo ""
 
 # Check queue
 echo "📥 Queued Tasks:"
-QUEUE_COUNT=$(redis-cli -h localhost -p 6380 LLEN "hive:queue:$AGENT_ID" 2>/dev/null)
+QUEUE_COUNT=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} LLEN "hive:queue:$AGENT_ID" 2>/dev/null)
 
 if [ "$QUEUE_COUNT" -gt 0 ]; then
     echo "  $QUEUE_COUNT task(s) waiting"
 
     # Show first task in queue
-    NEXT=$(redis-cli -h localhost -p 6380 LINDEX "hive:queue:$AGENT_ID" 0 2>/dev/null)
+    NEXT=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} LINDEX "hive:queue:$AGENT_ID" 0 2>/dev/null)
     if [ -n "$NEXT" ] && [ "$NEXT" != "(nil)" ]; then
         NEXT_TITLE=$(echo "$NEXT" | jq -r '.title // "Untitled"')
         echo "  Next: $NEXT_TITLE"

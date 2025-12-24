@@ -9,7 +9,7 @@ if [ -z "$AGENT_ID" ]; then
 fi
 
 # Check if there's an active task
-ACTIVE=$(redis-cli -h localhost -p 6380 LINDEX "hive:active:$AGENT_ID" 0 2>/dev/null)
+ACTIVE=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} LINDEX "hive:active:$AGENT_ID" 0 2>/dev/null)
 if [ -z "$ACTIVE" ] || [ "$ACTIVE" = "(nil)" ]; then
     echo "❌ No active task to complete"
     exit 1
