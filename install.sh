@@ -81,9 +81,12 @@ tar -xzf "$TMP_DIR/$TARBALL" -C "$TMP_DIR"
 # Create install directory if it doesn't exist
 mkdir -p "$INSTALL_DIR"
 
+# The binary name in the tarball is hive-{os}-{arch}
+BINARY_NAME="hive-${OS}-${ARCH}"
+
 # Move binary to install location
 echo "📋 Installing to $INSTALL_DIR/hive..."
-mv "$TMP_DIR/hive" "$INSTALL_DIR/hive"
+mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/hive"
 chmod +x "$INSTALL_DIR/hive"
 
 # Check if install dir is in PATH
@@ -98,7 +101,7 @@ fi
 
 # Verify installation
 if command -v hive &> /dev/null; then
-    VERSION=$(hive version 2>/dev/null || echo "unknown")
+    VERSION=$(hive --version 2>/dev/null || echo "unknown")
     echo -e "${GREEN}✅ Hive installed successfully!${NC}"
     echo "   Version: $VERSION"
     echo ""
