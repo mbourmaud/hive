@@ -114,6 +114,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Print(ui.ProgressLine("Extracted .hive/", "✓"))
 
+	// Detect Node version from package.json
+	if nodeVersion := detectNodeVersion(); nodeVersion != "" {
+		cfg["NODE_VERSION"] = nodeVersion
+	}
+
 	// Write .env file
 	if err := writeEnvFile(cfg); err != nil {
 		return fmt.Errorf("failed to write .hive/.env: %w", err)
@@ -361,6 +366,12 @@ func writeEnvFile(cfg map[string]string) error {
 	if cfg["PROJECT_TYPE"] != "" && cfg["PROJECT_TYPE"] != "node" {
 		content = strings.ReplaceAll(content, "HIVE_DOCKERFILE=docker/Dockerfile.node",
 			"HIVE_DOCKERFILE=docker/Dockerfile."+cfg["PROJECT_TYPE"])
+	}
+
+	// Set Node version if detected
+	if cfg["NODE_VERSION"] != "" {
+		content += "\n# Node.js version (auto-detected from package.json)\n"
+		content += "NODE_VERSION=" + cfg["NODE_VERSION"] + "\n"
 	}
 
 	// Write to .hive/.env
@@ -621,6 +632,68 @@ func createWorktree(path, branch, agentName string) error {
 	}
 
 	return nil
+}
+
+// detectNodeVersion attempts to detect Node.js version from package.json or .nvmrc
+func detectNodeVersion() string {
+	// Try package.json first
+	if data, err := os.ReadFile("package.json"); err == nil {
+		var pkg struct {
+			Engines struct {
+				Node string `json:"node"`
+			} `json:"engines"`
+		}
+		if err := json.Unmarshal(data, &pkg); err == nil && pkg.Engines.Node != "" {
+			// Extract major version number
+			// Examples: ">=24.0.0" → "24", "^20.5.0" → "20", "24" → "24"
+			nodeVersion := pkg.Engines.Node
+			// Remove common prefixes
+			nodeVersion = strings.TrimPrefix(nodeVersion, ">=")
+			nodeVersion = strings.TrimPrefix(nodeVersion, "^")
+			nodeVersion = strings.TrimPrefix(nodeVersion, "~")
+			nodeVersion = strings.TrimPrefix(nodeVersion, ">")
+			nodeVersion = strings.TrimPrefix(nodeVersion, "<")
+			nodeVersion = strings.TrimSpace(nodeVersion)
+
+			// Extract first number sequence (major version)
+			parts := strings.Split(nodeVersion, ".")
+			if len(parts) > 0 {
+				// Remove any non-numeric characters from major version
+				major := parts[0]
+				var digits strings.Builder
+				for _, ch := range major {
+					if ch >= '0' && ch <= '9' {
+						digits.WriteRune(ch)
+					}
+				}
+				if digits.Len() > 0 {
+					return digits.String()
+				}
+			}
+		}
+	}
+
+	// Try .nvmrc as fallback
+	if data, err := os.ReadFile(".nvmrc"); err == nil {
+		version := strings.TrimSpace(string(data))
+		// Remove 'v' prefix if present (e.g., "v24.0.0" → "24.0.0")
+		version = strings.TrimPrefix(version, "v")
+		// Extract major version
+		parts := strings.Split(version, ".")
+		if len(parts) > 0 {
+			var digits strings.Builder
+			for _, ch := range parts[0] {
+				if ch >= '0' && ch <= '9' {
+					digits.WriteRune(ch)
+				}
+			}
+			if digits.Len() > 0 {
+				return digits.String()
+			}
+		}
+	}
+
+	return "" // Not found, will use default (22)
 }
 
 // updateGitignore adds hive-specific entries to .gitignore
