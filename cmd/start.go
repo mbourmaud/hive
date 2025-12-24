@@ -83,11 +83,11 @@ var startCmd = &cobra.Command{
 		}
 
 		// Start docker compose services from .hive directory
-		cmdArgs := append([]string{"compose", "-f", filepath.Join(hiveDir, "docker-compose.yml"), "up", "-d"}, services...)
+		// Use relative path since we set Dir to hiveDir
+		cmdArgs := append([]string{"compose", "-f", "docker-compose.yml", "up", "-d"}, services...)
 		dockerCmd := exec.Command("docker", cmdArgs...)
 		dockerCmd.Stdout = os.Stdout
 		dockerCmd.Stderr = os.Stderr
-		// Set working directory to .hive for proper path resolution
 		dockerCmd.Dir = hiveDir
 
 		if err := dockerCmd.Run(); err != nil {
