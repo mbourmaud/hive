@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/mbourmaud/hive/internal/shell"
+	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -15,21 +17,25 @@ var cleanCmd = &cobra.Command{
 	Short: "Remove all hive files from the project",
 	Long:  "Remove .hive/ directory, hive.yaml, and hive entries from .gitignore",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("\n%s%s🧹 Cleaning hive...%s\n\n", colorBold, colorCyan, colorReset)
+		// Header
+		fmt.Print(ui.Header("🧹", "Cleaning hive..."))
+
+		// Create shell runner
+		runner := shell.NewRunner(DebugMode)
 
 		// Step 1: Stop and remove Docker containers
-		if err := cleanDockerContainers(); err != nil {
-			fmt.Printf("  %s⚠️  Docker containers: %v%s\n", colorYellow, err, colorReset)
+		if err := cleanDockerContainers(runner); err != nil {
+			fmt.Printf("  %s\n", ui.Warning("Docker containers: "+err.Error()))
 		}
 
 		// Step 2: Remove Docker images
-		if err := cleanDockerImages(); err != nil {
-			fmt.Printf("  %s⚠️  Docker images: %v%s\n", colorYellow, err, colorReset)
+		if err := cleanDockerImages(runner); err != nil {
+			fmt.Printf("  %s\n", ui.Warning("Docker images: "+err.Error()))
 		}
 
 		// Step 3: Remove git worktrees
-		if err := cleanWorktrees(); err != nil {
-			fmt.Printf("  %s⚠️  Git worktrees: %v%s\n", colorYellow, err, colorReset)
+		if err := cleanWorktrees(runner); err != nil {
+			fmt.Printf("  %s\n", ui.Warning("Git worktrees: "+err.Error()))
 		}
 
 		// Step 4: Remove .hive directory
@@ -37,7 +43,7 @@ var cleanCmd = &cobra.Command{
 			if err := os.RemoveAll(".hive"); err != nil {
 				return fmt.Errorf("failed to remove .hive/: %w", err)
 			}
-			fmt.Printf("  %s✓ Removed .hive/%s\n", colorGreen, colorReset)
+			fmt.Print(ui.ProgressLine("Removed .hive/", "✓"))
 		}
 
 		// Step 5: Remove hive.yaml
@@ -45,15 +51,15 @@ var cleanCmd = &cobra.Command{
 			if err := os.Remove("hive.yaml"); err != nil {
 				return fmt.Errorf("failed to remove hive.yaml: %w", err)
 			}
-			fmt.Printf("  %s✓ Removed hive.yaml%s\n", colorGreen, colorReset)
+			fmt.Print(ui.ProgressLine("Removed hive.yaml", "✓"))
 		}
 
 		// Step 6: Clean .gitignore
 		if err := cleanGitignore(); err != nil {
-			fmt.Printf("  %s⚠️  .gitignore: %v%s\n", colorYellow, err, colorReset)
+			fmt.Printf("  %s\n", ui.Warning(".gitignore: "+err.Error()))
 		}
 
-		fmt.Printf("\n%s%s✨ Hive cleaned successfully!%s\n\n", colorBold, colorGreen, colorReset)
+		fmt.Printf("\n%s\n\n", ui.Success("Hive cleaned successfully!"))
 		return nil
 	},
 }
@@ -108,24 +114,22 @@ func cleanGitignore() error {
 		if err := os.WriteFile(".gitignore", []byte(content), 0644); err != nil {
 			return err
 		}
-		fmt.Printf("  %s✓ Cleaned .gitignore%s\n", colorGreen, colorReset)
+		fmt.Print(ui.ProgressLine("Cleaned .gitignore", "✓"))
 	}
 
 	return nil
 }
 
-func cleanDockerContainers() error {
+func cleanDockerContainers(runner *shell.Runner) error {
 	// Try docker-compose down if .hive/docker-compose.yml exists
 	composeFile := ".hive/docker-compose.yml"
 	if _, err := os.Stat(composeFile); err == nil {
-		fmt.Printf("  %s🐳 Stopping containers...%s", colorCyan, colorReset)
+		fmt.Printf("  %s ", ui.StyleDim.Render("🐳 Stopping containers..."))
 		downCmd := exec.Command("docker", "compose", "-f", composeFile, "down", "-v", "--remove-orphans")
-		downCmd.Stdout = nil
-		downCmd.Stderr = nil
-		if err := downCmd.Run(); err != nil {
-			fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
+		if err := runner.RunQuiet(downCmd); err != nil {
+			fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 		} else {
-			fmt.Printf(" %s✓%s\n", colorGreen, colorReset)
+			fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 		}
 	}
 
@@ -135,29 +139,25 @@ func cleanDockerContainers() error {
 	if err == nil && len(output) > 0 {
 		containerIDs := strings.TrimSpace(string(output))
 		if containerIDs != "" {
-			fmt.Printf("  %s🐳 Removing remaining containers...%s", colorCyan, colorReset)
+			fmt.Printf("  %s ", ui.StyleDim.Render("🐳 Removing remaining containers..."))
 			rmCmd := exec.Command("docker", "rm", "-f")
 			rmCmd.Args = append(rmCmd.Args, strings.Split(containerIDs, "\n")...)
-			rmCmd.Stdout = nil
-			rmCmd.Stderr = nil
-			if err := rmCmd.Run(); err != nil {
-				fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
+			if err := runner.RunQuiet(rmCmd); err != nil {
+				fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 			} else {
-				fmt.Printf(" %s✓%s\n", colorGreen, colorReset)
+				fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 			}
 		}
 	}
 
 	// Remove redis container if exists
 	redisCmd := exec.Command("docker", "rm", "-f", "hive-redis")
-	redisCmd.Stdout = nil
-	redisCmd.Stderr = nil
-	_ = redisCmd.Run() // Ignore errors, container might not exist
+	_ = runner.RunQuiet(redisCmd) // Ignore errors, container might not exist
 
 	return nil
 }
 
-func cleanDockerImages() error {
+func cleanDockerImages(runner *shell.Runner) error {
 	// List all hive-related images
 	imagesCmd := exec.Command("docker", "images", "--filter", "reference=hive-*", "-q")
 	output, err := imagesCmd.Output()
@@ -171,35 +171,29 @@ func cleanDockerImages() error {
 	}
 
 	// Remove images
-	fmt.Printf("  %s🗑️  Removing Docker images...%s", colorCyan, colorReset)
+	fmt.Printf("  %s ", ui.StyleDim.Render("🗑️  Removing Docker images..."))
 	rmiCmd := exec.Command("docker", "rmi", "-f")
 	rmiCmd.Args = append(rmiCmd.Args, strings.Split(imageIDs, "\n")...)
-	rmiCmd.Stdout = nil
-	rmiCmd.Stderr = nil
-	if err := rmiCmd.Run(); err != nil {
-		fmt.Printf(" %s⚠️%s\n", colorYellow, colorReset)
+	if err := runner.RunQuiet(rmiCmd); err != nil {
+		fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 	} else {
-		fmt.Printf(" %s✓%s\n", colorGreen, colorReset)
+		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 	}
 
 	return nil
 }
 
-func cleanWorktrees() error {
+func cleanWorktrees(runner *shell.Runner) error {
 	// Check if we're in a git repository
 	gitCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	gitCmd.Stdout = nil
-	gitCmd.Stderr = nil
-	if err := gitCmd.Run(); err != nil {
+	if err := runner.RunQuiet(gitCmd); err != nil {
 		// Not a git repo, skip worktree cleanup
 		return nil
 	}
 
 	// Prune orphaned worktrees first
 	pruneCmd := exec.Command("git", "worktree", "prune")
-	pruneCmd.Stdout = nil
-	pruneCmd.Stderr = nil
-	_ = pruneCmd.Run() // Silent prune
+	_ = runner.RunQuiet(pruneCmd) // Silent prune
 
 	// Check if worktrees directory exists
 	worktreesDir := ".hive/workspaces"
@@ -213,7 +207,7 @@ func cleanWorktrees() error {
 		return err
 	}
 
-	fmt.Printf("  %s🌳 Removing git worktrees...%s", colorCyan, colorReset)
+	fmt.Printf("  %s ", ui.StyleDim.Render("🌳 Removing git worktrees..."))
 	removed := 0
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -224,17 +218,15 @@ func cleanWorktrees() error {
 
 		// Remove worktree using git worktree remove
 		removeCmd := exec.Command("git", "worktree", "remove", worktreePath, "--force")
-		removeCmd.Stdout = nil
-		removeCmd.Stderr = nil
-		if err := removeCmd.Run(); err == nil {
+		if err := runner.RunQuiet(removeCmd); err == nil {
 			removed++
 		}
 	}
 
 	if removed > 0 {
-		fmt.Printf(" %s✓%s (%d worktree%s)\n", colorGreen, colorReset, removed, pluralize(removed))
+		fmt.Printf("%s (%d worktree%s)\n", ui.StyleGreen.Render("✓"), removed, pluralize(removed))
 	} else {
-		fmt.Printf(" %s✓%s\n", colorGreen, colorReset)
+		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 	}
 
 	return nil
