@@ -172,6 +172,79 @@ hive connect 5        # Connect to Worker 5
 
 ---
 
+### hive update
+
+Update Docker images and containers without losing data.
+
+```bash
+hive update [flags]
+```
+
+**Purpose:**
+Non-destructive upgrade path after pulling new Hive code. Unlike `hive clean && hive init`, this preserves all your data.
+
+**Examples:**
+```bash
+hive update                    # Smart rebuild (uses cache)
+hive update --rebuild          # Force rebuild from scratch
+hive update --pull             # Pull latest base images first
+hive update --rebuild --pull   # Complete refresh with latest bases
+hive update --wait             # Wait for containers to be healthy
+```
+
+**Flags:**
+- `--rebuild`: Rebuild from scratch (--no-cache)
+- `--pull`: Pull latest base images before building
+- `--wait`: Wait for containers to be healthy
+
+**What it does:**
+1. Pulls latest base images (if `--pull` flag)
+2. Rebuilds Docker images from current Dockerfile
+3. Recreates containers with `--force-recreate`
+4. Preserves ALL volumes and bind mounts
+5. Waits for container health (if `--wait` flag)
+
+**What's preserved:**
+- ✅ Agent workspaces (code changes)
+- ✅ Conversation history (history.jsonl)
+- ✅ Redis task queue state
+- ✅ Package caches (pnpm-store, node_modules)
+- ✅ Git worktrees
+- ✅ All volumes
+
+**Typical upgrade workflow:**
+```bash
+# 1. Pull latest Hive code
+cd ~/path/to/hive
+git pull
+make install
+
+# 2. Update your project's containers
+cd ~/your-project
+hive update
+
+# 3. Verify everything works
+hive status
+```
+
+**Performance:**
+- Smart rebuild: ~30s-1min (uses BuildKit cache)
+- Full rebuild: ~2-3min (with `--rebuild --pull`)
+- Compare to `hive clean && hive init`: ~3-5min + data loss
+
+**When to use:**
+- ✅ After pulling Hive updates
+- ✅ After modifying Dockerfile
+- ✅ After changing entrypoint.sh
+- ✅ When you want latest base images
+
+**When NOT to use:**
+- ❌ Fresh installation → Use `hive init`
+- ❌ Corrupted volumes → Use `hive clean && hive init`
+- ❌ Want to start fresh → Use `hive clean && hive init`
+
+---
+
 ### hive clean
 
 Remove all Hive files from the project.

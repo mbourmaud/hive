@@ -344,23 +344,48 @@ MCPs are shared from `~/.claude`, so install them on the host.
 
 ### How do I update Hive to the latest version?
 
-**If installed via Homebrew:**
+**Step 1: Update Hive CLI**
+
+If installed via Homebrew:
 ```bash
 brew upgrade hive
 ```
 
-**If installed manually:**
+If installed manually:
 ```bash
 cd ~/path/to/hive
 git pull origin main
 make install
 ```
 
-Then restart your containers:
+**Step 2: Update containers (non-destructive)**
+
 ```bash
-hive stop
-hive start 3
+cd ~/your-project
+hive update
 ```
+
+This rebuilds containers while preserving all data:
+- ✅ Workspaces and code changes
+- ✅ Conversation history
+- ✅ Redis task queue
+- ✅ Package caches
+
+**Options:**
+```bash
+hive update                    # Smart rebuild (uses cache)
+hive update --rebuild          # Force rebuild from scratch
+hive update --pull             # Pull latest base images
+hive update --rebuild --pull   # Complete refresh
+```
+
+**Old method (destructive):**
+```bash
+hive clean  # ⚠️ Destroys all data
+hive init   # Start from scratch
+```
+
+Only use `hive clean && hive init` if you want to start fresh or have corrupted volumes.
 
 ---
 
