@@ -34,8 +34,11 @@ func TestCheckEnvFile(t *testing.T) {
 		t.Error("expected check to fail when .env doesn't exist")
 	}
 
-	// Create .env and test again
-	if err := os.WriteFile(".env", []byte("TEST=value"), 0644); err != nil {
+	// Create .hive/.env and test again
+	if err := os.MkdirAll(".hive", 0755); err != nil {
+		t.Fatalf("failed to create .hive directory: %v", err)
+	}
+	if err := os.WriteFile(".hive/.env", []byte("TEST=value"), 0644); err != nil {
 		t.Fatalf("failed to create .env: %v", err)
 	}
 
@@ -64,8 +67,11 @@ func TestCheckDockerComposeFile(t *testing.T) {
 		t.Error("expected check to fail when docker-compose.yml doesn't exist")
 	}
 
-	// Create docker-compose.yml and test again
-	if err := os.WriteFile("docker-compose.yml", []byte("version: '3'"), 0644); err != nil {
+	// Create .hive/docker-compose.yml and test again
+	if err := os.MkdirAll(".hive", 0755); err != nil {
+		t.Fatalf("failed to create .hive directory: %v", err)
+	}
+	if err := os.WriteFile(".hive/docker-compose.yml", []byte("version: '3'"), 0644); err != nil {
 		t.Fatalf("failed to create docker-compose.yml: %v", err)
 	}
 
