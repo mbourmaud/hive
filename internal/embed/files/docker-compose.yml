@@ -89,6 +89,8 @@ services:
       - ./templates/CLAUDE-QUEEN.md:/home/agent/CLAUDE.md:ro
       # pnpm cache (optional, speeds up installs)
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      # node_modules cache (speeds up repeat installs)
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: queen
@@ -122,6 +124,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-1
@@ -152,6 +155,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-2
@@ -182,6 +186,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-3
@@ -212,6 +217,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-4
@@ -242,6 +248,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-5
@@ -272,6 +279,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-6
@@ -302,6 +310,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-7
@@ -332,6 +341,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-8
@@ -362,6 +372,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-9
@@ -392,6 +403,7 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
+      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-10
@@ -402,3 +414,4 @@ services:
 volumes:
   redis-data:
   pnpm-store:
+  node-modules-cache:  # Shared cache for node_modules across agents

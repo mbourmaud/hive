@@ -32,7 +32,13 @@ RUN ARCH=$(dpkg --print-architecture) && \
     && rm -rf /tmp/docker*
 
 # Node-based CLI tools
-RUN npm install -g \
+# Set pnpm environment for BuildKit cache
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+# Install with BuildKit cache mount for faster rebuilds
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    npm install -g \
     @anthropic-ai/claude-code \
     pnpm@10.17.0
 

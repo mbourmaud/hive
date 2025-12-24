@@ -1,0 +1,72 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Build output
+dist
+build
+out
+.next
+.nuxt
+.output
+
+# Testing
+coverage
+.nyc_output
+*.test.js
+*.test.ts
+__tests__
+test
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+
+# Hive specific
+.hive
+workspaces
+tasks
+*.md
+!README.md
+!CHANGELOG.md
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs
+
+# Claude
+.claude
+
+# Cache
+.cache
+.parcel-cache
+.turbo
+
+# Documentation
+docs
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Temporary files
+tmp
+temp
+*.tmp

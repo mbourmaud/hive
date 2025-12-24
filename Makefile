@@ -10,6 +10,9 @@ LDFLAGS := -ldflags "-X github.com/mbourmaud/hive/cmd.Version=$(VERSION) \
 	-X github.com/mbourmaud/hive/cmd.GitCommit=$(GIT_COMMIT) \
 	-X github.com/mbourmaud/hive/cmd.BuildDate=$(BUILD_DATE)"
 
+# Enable Docker BuildKit for faster Docker builds with cache mounts
+export DOCKER_BUILDKIT=1
+
 # Sync embedded files from root to internal/embed/files/
 embed:
 	@mkdir -p internal/embed/files

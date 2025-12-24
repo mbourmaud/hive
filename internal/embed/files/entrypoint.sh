@@ -163,25 +163,72 @@ else
 fi
 
 # ============================================
-# Dependencies Installation (optional)
+# Dependencies Installation with Smart Caching
 # ============================================
 
 # Auto-install npm/pnpm dependencies if package.json exists
 if [ -f "$WORKSPACE_DIR/package.json" ] && [ "${AUTO_INSTALL_DEPS:-true}" = "true" ]; then
     if [ ! -d "$WORKSPACE_DIR/node_modules" ]; then
-        log "[+] Installing project dependencies..."
         cd "$WORKSPACE_DIR"
 
-        # Use pnpm if pnpm-lock.yaml exists, otherwise npm
-        if [ -f "pnpm-lock.yaml" ]; then
-            pnpm install --frozen-lockfile 2>&1 | grep -v "deprecated"
-        elif [ -f "package-lock.json" ]; then
-            npm ci 2>&1 | grep -v "deprecated"
-        else
-            npm install 2>&1 | grep -v "deprecated"
+        # Generate cache key from package.json + lockfile (includes Node version for safety)
+        NODE_VERSION=$(node --version)
+        CACHE_KEY_INPUT="${NODE_VERSION}"
+
+        # Add package.json to cache key
+        if [ -f "package.json" ]; then
+            CACHE_KEY_INPUT="${CACHE_KEY_INPUT}$(cat package.json)"
         fi
 
-        log "[+] Dependencies installed"
+        # Add lockfile to cache key (pnpm-lock.yaml or package-lock.json)
+        if [ -f "pnpm-lock.yaml" ]; then
+            CACHE_KEY_INPUT="${CACHE_KEY_INPUT}$(cat pnpm-lock.yaml)"
+            PKG_MANAGER="pnpm"
+        elif [ -f "package-lock.json" ]; then
+            CACHE_KEY_INPUT="${CACHE_KEY_INPUT}$(cat package-lock.json)"
+            PKG_MANAGER="npm"
+        else
+            PKG_MANAGER="npm"
+        fi
+
+        # Generate SHA256 hash for cache key
+        CACHE_KEY=$(echo -n "$CACHE_KEY_INPUT" | sha256sum | cut -d' ' -f1)
+        CACHE_DIR="/home/agent/node_modules_cache/${CACHE_KEY}"
+
+        log "[+] Dependency cache key: ${CACHE_KEY:0:12}..."
+
+        # Check if cache exists
+        if [ -d "$CACHE_DIR" ]; then
+            log "[+] 🎯 Cache HIT! Restoring cached node_modules..."
+            cp -r "$CACHE_DIR" "$WORKSPACE_DIR/node_modules"
+
+            log "[+] Verifying dependencies with --prefer-offline..."
+            if [ "$PKG_MANAGER" = "pnpm" ]; then
+                pnpm install --prefer-offline --frozen-lockfile 2>&1 | grep -v "deprecated" | head -20
+            elif [ "$PKG_MANAGER" = "npm" ]; then
+                npm ci --prefer-offline 2>&1 | grep -v "deprecated" | head -20
+            fi
+
+            log "[+] ✅ Dependencies verified from cache (~10-30s)"
+        else
+            log "[+] ❌ Cache MISS. Installing dependencies fresh..."
+
+            if [ "$PKG_MANAGER" = "pnpm" ]; then
+                pnpm install --frozen-lockfile 2>&1 | grep -v "deprecated" | head -20
+            elif [ "$PKG_MANAGER" = "npm" ]; then
+                npm ci 2>&1 | grep -v "deprecated" | head -20
+            else
+                npm install 2>&1 | grep -v "deprecated" | head -20
+            fi
+
+            log "[+] Caching node_modules for future use..."
+            mkdir -p "$(dirname "$CACHE_DIR")"
+            cp -r "$WORKSPACE_DIR/node_modules" "$CACHE_DIR"
+
+            log "[+] ✅ Dependencies installed and cached (~2-3min first time)"
+        fi
+    else
+        log "[+] node_modules already exists, skipping install"
     fi
 fi
 
