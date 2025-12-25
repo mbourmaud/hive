@@ -140,46 +140,70 @@ img, svg {
 .particle {
     position: absolute;
     background: var(--amber-400);
-    border-radius: 50%;
-    opacity: 0.6;
-    animation: particleFloat 15s infinite ease-in-out;
+    opacity: 0.5;
+    animation: particleFloat 18s infinite ease-in-out;
     pointer-events: none;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 
 .particle-1 {
-    left: 10%; top: 20%;
-    width: 8px; height: 8px;
+    left: 8%; top: 15%;
+    width: 24px; height: 28px;
     animation-delay: 0s;
-    box-shadow: 0 0 20px var(--amber-400);
+    filter: drop-shadow(0 0 8px var(--amber-400));
 }
 .particle-2 {
-    left: 80%; top: 15%;
-    width: 6px; height: 6px;
-    animation-delay: -3s;
+    left: 85%; top: 12%;
+    width: 18px; height: 21px;
+    animation-delay: -4s;
+    opacity: 0.3;
 }
 .particle-3 {
-    left: 60%; top: 70%;
-    width: 10px; height: 10px;
-    animation-delay: -6s;
-    box-shadow: 0 0 30px var(--amber-400);
+    left: 70%; top: 65%;
+    width: 32px; height: 37px;
+    animation-delay: -8s;
+    filter: drop-shadow(0 0 12px var(--amber-400));
+    opacity: 0.4;
 }
 .particle-4 {
-    left: 25%; top: 80%;
-    width: 5px; height: 5px;
-    animation-delay: -9s;
+    left: 20%; top: 75%;
+    width: 16px; height: 18px;
+    animation-delay: -12s;
+    opacity: 0.35;
 }
 .particle-5 {
-    left: 90%; top: 50%;
-    width: 7px; height: 7px;
-    animation-delay: -12s;
-    box-shadow: 0 0 15px var(--amber-400);
+    left: 92%; top: 45%;
+    width: 20px; height: 23px;
+    animation-delay: -16s;
+    filter: drop-shadow(0 0 6px var(--amber-400));
+    opacity: 0.4;
+}
+.particle-6 {
+    left: 45%; top: 8%;
+    width: 14px; height: 16px;
+    animation-delay: -2s;
+    opacity: 0.25;
+}
+.particle-7 {
+    left: 3%; top: 55%;
+    width: 22px; height: 25px;
+    animation-delay: -10s;
+    filter: drop-shadow(0 0 8px var(--amber-400));
+    opacity: 0.35;
+}
+.particle-8 {
+    left: 55%; top: 85%;
+    width: 28px; height: 32px;
+    animation-delay: -6s;
+    opacity: 0.3;
+    filter: drop-shadow(0 0 10px var(--amber-400));
 }
 
 @keyframes particleFloat {
-    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
-    25% { transform: translate(30px, -40px) scale(1.3); opacity: 0.9; }
-    50% { transform: translate(-15px, -80px) scale(0.7); opacity: 0.3; }
-    75% { transform: translate(40px, -30px) scale(1.2); opacity: 0.8; }
+    0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+    25% { transform: translate(20px, -30px) scale(1.1) rotate(30deg); }
+    50% { transform: translate(-10px, -60px) scale(0.9) rotate(60deg); }
+    75% { transform: translate(25px, -20px) scale(1.05) rotate(30deg); }
 }
 
 /* Additional floating hexagon particles */
@@ -187,26 +211,26 @@ img, svg {
 .particles::after {
     content: '';
     position: absolute;
-    width: 40px;
-    height: 46px;
-    background: var(--amber-300);
-    opacity: 0.1;
+    background: linear-gradient(135deg, var(--amber-300) 0%, var(--amber-400) 100%);
+    opacity: 0.08;
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-    animation: hexFloat 20s infinite ease-in-out;
+    animation: hexFloat 25s infinite ease-in-out;
 }
 
 .particles::before {
-    left: 15%;
-    top: 40%;
+    left: 5%;
+    top: 30%;
+    width: 60px;
+    height: 69px;
     animation-delay: 0s;
 }
 
 .particles::after {
-    right: 20%;
-    top: 60%;
-    width: 30px;
-    height: 35px;
-    animation-delay: -10s;
+    right: 8%;
+    top: 55%;
+    width: 45px;
+    height: 52px;
+    animation-delay: -12s;
 }
 
 @keyframes hexFloat {
