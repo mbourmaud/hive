@@ -401,102 +401,69 @@
                 <p class="section-subtitle">A distributed system inspired by nature</p>
             </div>
 
-            <div class="arch-orbital" data-animate="fade-up" data-delay="100">
-                <!-- Background rings -->
-                <div class="arch-ring arch-ring-1"></div>
-                <div class="arch-ring arch-ring-2"></div>
-                <div class="arch-ring arch-ring-3"></div>
-
-                <!-- Animated particles on rings -->
-                <div class="arch-particle arch-particle-1"></div>
-                <div class="arch-particle arch-particle-2"></div>
-                <div class="arch-particle arch-particle-3"></div>
-
-                <!-- Central Queen -->
-                <div class="arch-center">
-                    <div class="arch-center-glow"></div>
-                    <div class="arch-center-icon">
+            <div class="arch-grid" data-animate="fade-up" data-delay="100">
+                <!-- Queen -->
+                <div class="arch-card arch-card-queen">
+                    <div class="arch-card-icon">
                         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
                     </div>
-                    <div class="arch-center-label">
-                        <strong>Queen</strong>
-                        <span>Orchestrator</span>
-                    </div>
+                    <h3>Queen Agent</h3>
+                    <p>Central orchestrator that coordinates all workers and manages task distribution</p>
                 </div>
 
-                <!-- Redis on inner ring -->
-                <div class="arch-orbit-node arch-orbit-redis">
-                    <div class="arch-orbit-icon arch-orbit-icon-redis">
+                <!-- Connector -->
+                <div class="arch-connector">
+                    <svg viewBox="0 0 100 60" preserveAspectRatio="none">
+                        <path d="M50 0 L50 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+                        <circle cx="50" cy="30" r="4" fill="currentColor" class="arch-dot"/>
+                    </svg>
+                </div>
+
+                <!-- Redis -->
+                <div class="arch-card arch-card-redis">
+                    <div class="arch-card-icon">
                         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                     </div>
-                    <div class="arch-orbit-label">Redis Queue</div>
+                    <h3>Redis Queue</h3>
+                    <p>High-performance message broker for real-time task distribution</p>
                 </div>
 
-                <!-- Workers on outer ring -->
-                <div class="arch-orbit-node arch-orbit-worker arch-orbit-worker-1">
-                    <div class="arch-orbit-icon arch-orbit-icon-worker">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <!-- Connector -->
+                <div class="arch-connector arch-connector-split">
+                    <svg viewBox="0 0 300 60" preserveAspectRatio="none">
+                        <path d="M150 0 L150 20 L50 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+                        <path d="M150 20 L150 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+                        <path d="M150 20 L250 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+                        <circle cx="50" cy="55" r="4" fill="currentColor" class="arch-dot arch-dot-1"/>
+                        <circle cx="150" cy="55" r="4" fill="currentColor" class="arch-dot arch-dot-2"/>
+                        <circle cx="250" cy="55" r="4" fill="currentColor" class="arch-dot arch-dot-3"/>
+                    </svg>
+                </div>
+
+                <!-- Workers -->
+                <div class="arch-workers">
+                    <div class="arch-card arch-card-worker">
+                        <div class="arch-card-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        </div>
+                        <h3>Worker 1</h3>
+                        <p>Isolated git worktree</p>
                     </div>
-                    <div class="arch-orbit-label">Worker 1</div>
-                </div>
-
-                <div class="arch-orbit-node arch-orbit-worker arch-orbit-worker-2">
-                    <div class="arch-orbit-icon arch-orbit-icon-worker">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    <div class="arch-card arch-card-worker">
+                        <div class="arch-card-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        </div>
+                        <h3>Worker 2</h3>
+                        <p>Isolated git worktree</p>
                     </div>
-                    <div class="arch-orbit-label">Worker 2</div>
-                </div>
-
-                <div class="arch-orbit-node arch-orbit-worker arch-orbit-worker-3">
-                    <div class="arch-orbit-icon arch-orbit-icon-worker">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    <div class="arch-card arch-card-worker">
+                        <div class="arch-card-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        </div>
+                        <h3>Worker N</h3>
+                        <p>Isolated git worktree</p>
                     </div>
-                    <div class="arch-orbit-label">Worker N</div>
                 </div>
-
-                <!-- Data flow SVG -->
-                <svg class="arch-flow-svg" viewBox="0 0 400 400">
-                    <defs>
-                        <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#F59E0B" stop-opacity="0"/>
-                            <stop offset="50%" stop-color="#F59E0B" stop-opacity="1"/>
-                            <stop offset="100%" stop-color="#F59E0B" stop-opacity="0"/>
-                        </linearGradient>
-                        <filter id="flowGlow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feGaussianBlur stdDeviation="4" result="blur"/>
-                            <feMerge>
-                                <feMergeNode in="blur"/>
-                                <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                        </filter>
-                    </defs>
-                    <!-- Flow lines -->
-                    <path class="flow-line" d="M200 200 L200 120" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
-                    <path class="flow-line" d="M200 200 L280 160" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
-                    <path class="flow-line" d="M200 200 L280 240" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
-                    <path class="flow-line" d="M200 200 L200 280" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
-                    <path class="flow-line" d="M200 200 L120 240" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
-                    <path class="flow-line" d="M200 200 L120 160" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
-                    <!-- Animated dots -->
-                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L200,120" begin="0s"/>
-                    </circle>
-                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L280,160" begin="0.33s"/>
-                    </circle>
-                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L280,240" begin="0.66s"/>
-                    </circle>
-                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L200,280" begin="1s"/>
-                    </circle>
-                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L120,240" begin="1.33s"/>
-                    </circle>
-                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L120,160" begin="1.66s"/>
-                    </circle>
-                </svg>
             </div>
 
             <div class="arch-features" data-animate="fade-up" data-delay="200">

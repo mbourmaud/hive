@@ -1338,282 +1338,181 @@ img, svg {
 }
 
 /* =====================================================
-   Architecture - Orbital Design
+   Architecture - Clean Design
    ===================================================== */
 .architecture {
     position: relative;
     z-index: 1;
     padding: var(--space-24) 0;
-    background: linear-gradient(180deg, white 0%, var(--gray-900) 100%);
+    background: linear-gradient(180deg, var(--gray-50) 0%, white 100%);
     overflow: hidden;
 }
 
-.arch-orbital {
-    position: relative;
-    width: 100%;
-    max-width: 500px;
-    height: 500px;
+.arch-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    max-width: 800px;
     margin: 0 auto;
 }
 
-/* Orbital rings */
-.arch-ring {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    border: 2px solid rgba(245, 158, 11, 0.15);
-}
-
-.arch-ring-1 {
-    width: 160px;
-    height: 160px;
-    border-color: rgba(245, 158, 11, 0.3);
-}
-
-.arch-ring-2 {
-    width: 280px;
-    height: 280px;
-    animation: ringPulse 4s ease-in-out infinite;
-}
-
-.arch-ring-3 {
-    width: 400px;
-    height: 400px;
-    animation: ringPulse 4s ease-in-out infinite 1s;
-}
-
-@keyframes ringPulse {
-    0%, 100% {
-        border-color: rgba(245, 158, 11, 0.15);
-        transform: translate(-50%, -50%) scale(1);
-    }
-    50% {
-        border-color: rgba(245, 158, 11, 0.3);
-        transform: translate(-50%, -50%) scale(1.02);
-    }
-}
-
-/* Orbiting particles */
-.arch-particle {
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background: var(--amber-400);
-    border-radius: 50%;
-    box-shadow: 0 0 20px var(--amber-400), 0 0 40px var(--amber-500);
-}
-
-.arch-particle-1 {
-    top: 50%;
-    left: 50%;
-    animation: orbitParticle1 8s linear infinite;
-}
-
-.arch-particle-2 {
-    top: 50%;
-    left: 50%;
-    animation: orbitParticle2 12s linear infinite;
-}
-
-.arch-particle-3 {
-    top: 50%;
-    left: 50%;
-    animation: orbitParticle3 16s linear infinite reverse;
-}
-
-@keyframes orbitParticle1 {
-    0% { transform: rotate(0deg) translateX(80px) rotate(0deg); }
-    100% { transform: rotate(360deg) translateX(80px) rotate(-360deg); }
-}
-
-@keyframes orbitParticle2 {
-    0% { transform: rotate(0deg) translateX(140px) rotate(0deg); }
-    100% { transform: rotate(360deg) translateX(140px) rotate(-360deg); }
-}
-
-@keyframes orbitParticle3 {
-    0% { transform: rotate(0deg) translateX(200px) rotate(0deg); }
-    100% { transform: rotate(360deg) translateX(200px) rotate(-360deg); }
-}
-
-/* Central Queen */
-.arch-center {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    z-index: 10;
-}
-
-.arch-center-glow {
-    position: absolute;
-    width: 120px;
-    height: 120px;
-    background: radial-gradient(circle, rgba(245, 158, 11, 0.4) 0%, transparent 70%);
-    animation: centerGlow 3s ease-in-out infinite;
-}
-
-@keyframes centerGlow {
-    0%, 100% { transform: scale(1); opacity: 0.4; }
-    50% { transform: scale(1.3); opacity: 0.7; }
-}
-
-.arch-center-icon {
-    width: 80px;
-    height: 92px;
-    background: linear-gradient(135deg, var(--amber-400) 0%, var(--amber-600) 100%);
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    box-shadow: 0 0 40px rgba(245, 158, 11, 0.5);
-    position: relative;
-    z-index: 2;
-}
-
-.arch-center-icon svg {
-    width: 32px;
-    height: 32px;
-}
-
-.arch-center-label {
+/* Architecture Cards */
+.arch-card {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
     text-align: center;
-    margin-top: 12px;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 8px 16px;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--gray-200);
+    transition: all 0.4s var(--ease-out);
+    position: relative;
 }
 
-.arch-center-label strong {
-    display: block;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--gray-900);
+.arch-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
 }
 
-.arch-center-label span {
-    font-size: 0.75rem;
-    color: var(--gray-500);
-}
-
-/* Orbit nodes */
-.arch-orbit-node {
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    transition: transform 0.3s ease;
-}
-
-.arch-orbit-node:hover {
-    transform: scale(1.1);
-    z-index: 20;
-}
-
-.arch-orbit-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
+.arch-card-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--space-4);
+    border-radius: var(--radius-lg);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    transition: transform 0.3s var(--ease-out);
 }
 
-.arch-orbit-icon svg {
-    width: 24px;
-    height: 24px;
+.arch-card:hover .arch-card-icon {
+    transform: scale(1.1);
 }
 
-.arch-orbit-label {
-    margin-top: 8px;
-    font-size: 0.75rem;
+.arch-card-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.arch-card h3 {
+    font-size: 1.125rem;
     font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: var(--space-2);
+}
+
+.arch-card p {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+    line-height: 1.5;
+}
+
+/* Queen Card */
+.arch-card-queen {
+    max-width: 320px;
+    border-color: var(--amber-200);
+    background: linear-gradient(180deg, white 0%, var(--amber-50) 100%);
+}
+
+.arch-card-queen .arch-card-icon {
+    background: linear-gradient(135deg, var(--amber-400) 0%, var(--amber-600) 100%);
     color: white;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 4px 10px;
-    border-radius: 20px;
-    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
 }
 
-/* Redis node */
-.arch-orbit-redis {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) translateY(-140px);
+.arch-card-queen:hover {
+    border-color: var(--amber-400);
+    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.15);
 }
 
-.arch-orbit-icon-redis {
+/* Redis Card */
+.arch-card-redis {
+    max-width: 280px;
+}
+
+.arch-card-redis .arch-card-icon {
     background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
     color: white;
-    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4);
+    box-shadow: 0 8px 24px rgba(220, 38, 38, 0.25);
 }
 
-.arch-orbit-node:hover .arch-orbit-icon-redis {
-    box-shadow: 0 8px 30px rgba(220, 38, 38, 0.6);
+.arch-card-redis:hover {
+    border-color: #FCA5A5;
+    box-shadow: 0 20px 40px rgba(220, 38, 38, 0.1);
 }
 
-/* Worker nodes */
-.arch-orbit-worker-1 {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) translate(-170px, 85px);
+/* Worker Cards */
+.arch-workers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+    width: 100%;
 }
 
-.arch-orbit-worker-2 {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) translate(0, 170px);
+.arch-card-worker {
+    padding: var(--space-5);
 }
 
-.arch-orbit-worker-3 {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) translate(170px, 85px);
-}
-
-.arch-orbit-icon-worker {
-    background: linear-gradient(135deg, var(--amber-100) 0%, var(--amber-200) 100%);
+.arch-card-worker .arch-card-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--amber-100);
     color: var(--amber-600);
-    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
-    border: 2px solid var(--amber-400);
+    border: 2px solid var(--amber-300);
 }
 
-.arch-orbit-node:hover .arch-orbit-icon-worker {
-    box-shadow: 0 8px 30px rgba(245, 158, 11, 0.5);
-    border-color: var(--amber-500);
+.arch-card-worker:hover {
+    border-color: var(--amber-300);
 }
 
-/* Flow SVG */
-.arch-flow-svg {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 400px;
-    height: 400px;
-    z-index: 5;
-    pointer-events: none;
+.arch-card-worker:hover .arch-card-icon {
+    background: var(--amber-200);
+    border-color: var(--amber-400);
 }
 
-.flow-line {
-    stroke-dasharray: 4 4;
-    animation: flowDash 1s linear infinite;
+.arch-card-worker h3 {
+    font-size: 1rem;
 }
 
-@keyframes flowDash {
-    to { stroke-dashoffset: -8; }
+.arch-card-worker p {
+    font-size: 0.8125rem;
 }
 
-.flow-dot {
-    opacity: 0.9;
+/* Connectors */
+.arch-connector {
+    height: 60px;
+    width: 100px;
+    color: var(--amber-400);
+    position: relative;
+}
+
+.arch-connector svg {
+    width: 100%;
+    height: 100%;
+}
+
+.arch-connector-split {
+    width: 100%;
+    max-width: 600px;
+}
+
+/* Animated dots */
+.arch-dot {
+    animation: archDotPulse 2s ease-in-out infinite;
+}
+
+.arch-dot-1 { animation-delay: 0s; }
+.arch-dot-2 { animation-delay: 0.3s; }
+.arch-dot-3 { animation-delay: 0.6s; }
+
+@keyframes archDotPulse {
+    0%, 100% {
+        r: 4;
+        opacity: 1;
+    }
+    50% {
+        r: 6;
+        opacity: 0.6;
+    }
 }
 
 /* Features badges */
@@ -1621,7 +1520,7 @@ img, svg {
     display: flex;
     justify-content: center;
     gap: var(--space-4);
-    margin-top: var(--space-8);
+    margin-top: var(--space-12);
     flex-wrap: wrap;
 }
 
@@ -1630,26 +1529,38 @@ img, svg {
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
+    background: white;
     border-radius: 100px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--gray-200);
     font-size: 0.8125rem;
     font-weight: 500;
-    color: white;
+    color: var(--gray-700);
     transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
 }
 
 .arch-feature:hover {
-    background: rgba(255, 255, 255, 0.2);
+    border-color: var(--amber-300);
     transform: translateY(-2px);
-    border-color: var(--amber-400);
+    box-shadow: var(--shadow-md);
 }
 
 .arch-feature svg {
     width: 18px;
     height: 18px;
-    color: var(--amber-400);
+    color: var(--amber-500);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .arch-workers {
+        grid-template-columns: 1fr;
+        max-width: 280px;
+    }
+
+    .arch-connector-split {
+        display: none;
+    }
 }
 
 /* =====================================================
