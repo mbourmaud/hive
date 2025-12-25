@@ -165,7 +165,7 @@ class ClaudeCLIBackend(ClaudeBackend):
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=None  # No timeout - let Claude complete the task
             )
 
             if result.returncode != 0:
@@ -185,9 +185,6 @@ class ClaudeCLIBackend(ClaudeBackend):
                 }
             }
 
-        except subprocess.TimeoutExpired:
-            logger.error("Claude CLI timeout (>5 minutes)")
-            raise
         except Exception as e:
             logger.error(f"Claude CLI execution failed: {e}")
             raise

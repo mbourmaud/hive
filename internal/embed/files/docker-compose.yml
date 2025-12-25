@@ -48,6 +48,8 @@ x-agent-common: &agent-common
     POLL_INTERVAL: ${POLL_INTERVAL:-1}
     # Node.js memory configuration (in MB)
     NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-4096}"
+    # Auto-install dependencies on startup
+    AUTO_INSTALL_DEPS: ${AUTO_INSTALL_DEPS:-true}
 
 services:
   # =============================================
@@ -77,6 +79,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/queen:/workspace
+      # node_modules overlay - isolates container from local dev (Linux vs macOS binaries)
+      - queen-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -96,10 +100,8 @@ services:
       # Tasks & instructions
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-QUEEN.md:/home/agent/CLAUDE.md:ro
-      # pnpm cache (optional, speeds up installs)
+      # pnpm cache (shared between all agents, speeds up installs)
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      # node_modules cache (speeds up repeat installs)
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: queen
@@ -116,6 +118,8 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-1:/workspace
+      # node_modules overlay - isolates container from local dev
+      - drone-1-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -133,7 +137,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-1
@@ -147,15 +150,12 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2:/workspace
-      # Git repository (for worktree support)
+      - drone-2-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       - ../.git:/workspace-git:ro
-      # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
-      # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
       - ${HOME}/.claude/projects:/home/agent/.claude/projects
-      # ISOLATED conversation history per agent
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2/history.jsonl:/home/agent/.claude/history.jsonl
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2/session-env:/home/agent/.claude/session-env
       - ${HOME}/.ssh:/home/agent/.ssh:ro
@@ -164,7 +164,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-2
@@ -178,6 +177,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3:/workspace
+      - drone-3-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -195,7 +195,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-3
@@ -209,6 +208,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4:/workspace
+      - drone-4-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -226,7 +226,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-4
@@ -240,6 +239,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5:/workspace
+      - drone-5-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -257,7 +257,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-5
@@ -271,6 +270,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6:/workspace
+      - drone-6-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -288,7 +288,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-6
@@ -302,6 +301,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7:/workspace
+      - drone-7-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -319,7 +319,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-7
@@ -333,6 +332,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8:/workspace
+      - drone-8-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -350,7 +350,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-8
@@ -364,6 +363,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9:/workspace
+      - drone-9-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -381,7 +381,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-9
@@ -395,6 +394,7 @@ services:
     working_dir: /workspace/${WORKSPACE_NAME:-my-project}
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10:/workspace
+      - drone-10-node-modules:/workspace/${WORKSPACE_NAME:-my-project}/node_modules
       # Git repository (for worktree support)
       - ../.git:/workspace-git:ro
       # Hive config
@@ -412,7 +412,6 @@ services:
       - ${HIVE_TASKS:-./tasks}:/hive-tasks
       - ./templates/CLAUDE-WORKER.md:/home/agent/CLAUDE.md:ro
       - pnpm-store:/home/agent/.local/share/pnpm/store
-      - node-modules-cache:/home/agent/node_modules_cache
     environment:
       <<: *agent-env
       AGENT_ID: drone-10
@@ -422,5 +421,15 @@ services:
 
 volumes:
   redis-data:
-  pnpm-store:
-  node-modules-cache:  # Shared cache for node_modules across agents
+  pnpm-store:                    # Shared pnpm store (fast installs)
+  queen-node-modules:            # Isolated node_modules for queen
+  drone-1-node-modules:          # Isolated node_modules for drone-1
+  drone-2-node-modules:          # Isolated node_modules for drone-2
+  drone-3-node-modules:          # Isolated node_modules for drone-3
+  drone-4-node-modules:          # Isolated node_modules for drone-4
+  drone-5-node-modules:          # Isolated node_modules for drone-5
+  drone-6-node-modules:          # Isolated node_modules for drone-6
+  drone-7-node-modules:          # Isolated node_modules for drone-7
+  drone-8-node-modules:          # Isolated node_modules for drone-8
+  drone-9-node-modules:          # Isolated node_modules for drone-9
+  drone-10-node-modules:         # Isolated node_modules for drone-10
