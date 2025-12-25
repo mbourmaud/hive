@@ -573,6 +573,9 @@ func extractHiveFiles(projectType string) error {
 	if err := embed.ExtractFile("worker-daemon.py", filepath.Join(hiveDir, "worker-daemon.py")); err != nil {
 		return fmt.Errorf("failed to extract worker-daemon.py: %w", err)
 	}
+	if err := embed.ExtractFile("backends.py", filepath.Join(hiveDir, "backends.py")); err != nil {
+		return fmt.Errorf("failed to extract backends.py: %w", err)
+	}
 	if err := embed.ExtractFile("tools.py", filepath.Join(hiveDir, "tools.py")); err != nil {
 		return fmt.Errorf("failed to extract tools.py: %w", err)
 	}
