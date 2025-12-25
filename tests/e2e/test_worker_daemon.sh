@@ -101,7 +101,7 @@ export GIT_USER_NAME="Test User"
 export WORKSPACE_NAME="test-project"
 
 if $HIVE_BIN init \
-    --non-interactive \
+    --no-interactive \
     --email "$GIT_USER_EMAIL" \
     --name "$GIT_USER_NAME" \
     --workspace "$WORKSPACE_NAME" \
