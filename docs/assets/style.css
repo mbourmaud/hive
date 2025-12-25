@@ -924,8 +924,16 @@ img, svg {
 
 .feature-card:hover {
     transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.15), 0 0 0 1px rgba(245, 158, 11, 0.1);
-    background: white;
+    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.3), 0 0 0 1px rgba(245, 158, 11, 0.2);
+    background: var(--amber-500);
+}
+
+.feature-card:hover .feature-title {
+    color: white;
+}
+
+.feature-card:hover .feature-desc {
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .feature-card:hover::before {
@@ -989,7 +997,9 @@ img, svg {
 
 .feature-card:hover .feature-icon-wrapper {
     transform: scale(1.1) rotate(-5deg);
-    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    background: white;
+    color: var(--amber-500);
 }
 
 .feature-card:hover .feature-icon-wrapper::before {
@@ -1069,7 +1079,8 @@ img, svg {
 }
 
 .feature-card:hover .feature-badge {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
     padding-left: var(--space-4);
 }
 
