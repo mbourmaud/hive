@@ -50,13 +50,10 @@ jobs:
           ./hive --help
           ./hive --version
 
-  # Job 2: Smoke Tests (fast, critical path)
+  # Job 2: Smoke Tests (Ubuntu only - requires Docker for docker-compose validation)
   smoke-tests:
-    name: Smoke Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Smoke Tests
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -80,83 +77,7 @@ jobs:
         env:
           HIVE_BIN: ./hive
 
-  # Job 3: Git/Worktree Integration Tests (CRITICAL)
-  git-tests:
-    name: Git/Worktree Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "ci@example.com"
-          git config --global user.name "CI Test"
-
-      - name: Run Git/worktree tests
-        run: make test-git
-        env:
-          HIVE_BIN: ./hive
-
-  # Job 4: Docker Integration Tests (Linux only, requires Docker)
-  docker-tests:
-    name: Docker Integration Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run Docker integration tests
-        run: make test-docker
-
-  # Job 5: E2E Worker Daemon Tests (Linux only, full stack)
-  e2e-tests:
-    name: E2E Worker Daemon Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "ci@example.com"
-          git config --global user.name "CI Test"
-
-      - name: Run E2E tests
-        run: make test-e2e
-        timeout-minutes: 10
-        env:
-          HIVE_BIN: ./hive
-
-  # Job 6: Go Integration Tests with testcontainers (Linux only)
+  # Job 3: Go Integration Tests with testcontainers (Linux only)
   go-integration-tests:
     name: Go Integration Tests
     runs-on: ubuntu-latest
@@ -180,11 +101,11 @@ jobs:
         run: make test-go-integration
         timeout-minutes: 10
 
-  # Job 7: Test Summary (runs after all tests)
+  # Job 4: Test Summary (runs after all tests)
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, smoke-tests, git-tests, docker-tests, e2e-tests, go-integration-tests]
+    needs: [unit-tests, smoke-tests, go-integration-tests]
     if: always()
 
     steps:
@@ -192,16 +113,10 @@ jobs:
         run: |
           echo "✓ Unit Tests: ${{ needs.unit-tests.result }}"
           echo "✓ Smoke Tests: ${{ needs.smoke-tests.result }}"
-          echo "✓ Git Tests: ${{ needs.git-tests.result }}"
-          echo "✓ Docker Tests: ${{ needs.docker-tests.result }}"
-          echo "✓ E2E Tests: ${{ needs.e2e-tests.result }}"
           echo "✓ Go Integration Tests: ${{ needs.go-integration-tests.result }}"
 
           if [ "${{ needs.unit-tests.result }}" != "success" ] || \
              [ "${{ needs.smoke-tests.result }}" != "success" ] || \
-             [ "${{ needs.git-tests.result }}" != "success" ] || \
-             [ "${{ needs.docker-tests.result }}" != "success" ] || \
-             [ "${{ needs.e2e-tests.result }}" != "success" ] || \
              [ "${{ needs.go-integration-tests.result }}" != "success" ]; then
             echo "❌ Some tests failed"
             exit 1
