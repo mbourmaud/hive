@@ -92,6 +92,56 @@ hive-assign          # Assign a task to a drone (quick)
 hive-failed          # List all failed tasks with details
 ```
 
+## 📡 Drone Activity Monitoring (Redis Logs)
+
+Drones log their Claude activity to Redis streams. You can monitor what they're doing in real-time:
+
+### View Activity Logs
+
+```bash
+# View all drone activity (last 100 entries)
+redis-cli -h hive-redis XREVRANGE hive:logs:all + - COUNT 20
+
+# View specific drone's activity
+redis-cli -h hive-redis XREVRANGE hive:logs:drone-1 + - COUNT 20
+
+# Follow activity in real-time (subscribe to events)
+redis-cli -h hive-redis SUBSCRIBE hive:activity:drone-1 hive:activity:drone-2
+```
+
+### Activity Event Types
+
+| Event | Icon | Description |
+|-------|------|-------------|
+| `task_start` | 🚀 | Drone started working on a task |
+| `claude_response` | 💬 | Claude's text response |
+| `tool_call` | 🔧 | Claude called a tool (read, edit, bash, etc.) |
+| `tool_result` | ✓ | Tool execution result |
+| `tool_error` | ❌ | Tool execution failed |
+| `task_complete` | ✅ | Task completed successfully |
+| `task_failed` | 💥 | Task failed |
+
+### Example: Monitor Drone Progress
+
+```bash
+# Get last 5 tool calls from drone-1
+redis-cli -h hive-redis XREVRANGE hive:logs:drone-1 + - COUNT 50 | grep -A2 "tool_call"
+
+# Check if any drone has errors
+redis-cli -h hive-redis XREVRANGE hive:logs:all + - COUNT 100 | grep -A2 "tool_error"
+```
+
+### Background Log Subscription
+
+For continuous monitoring, subscribe to drone activity channels:
+
+```bash
+# Subscribe to all drone activity (runs in background)
+redis-cli -h hive-redis PSUBSCRIBE "hive:activity:*" &
+```
+
+This lets you see what each drone is doing **as it happens** - useful for tracking progress on complex tasks.
+
 ### Quick Task Assignment
 
 The **easiest way** to create tasks:

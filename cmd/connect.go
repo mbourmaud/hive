@@ -25,7 +25,16 @@ var connectCmd = &cobra.Command{
 		// Create role-specific initial prompt
 		var initialPrompt string
 		if isQueen {
-			initialPrompt = "Read your role and instructions from /home/agent/CLAUDE.md. You are the Queen (Orchestrator). Execute your mandatory startup sequence immediately: 1. Report your identity, 2. Run hive-status, 3. Report current HIVE state to me."
+			initialPrompt = `Read your role and instructions from /home/agent/CLAUDE.md. You are the Queen (Orchestrator).
+
+Execute your mandatory startup sequence:
+1. Report your identity
+2. Run hive-status to see current HIVE state
+3. Check /hive-config/hive.yaml for monitoring configuration
+4. If monitoring.queen.enabled is true, start background monitoring immediately (subscribe to drone activity logs via Redis)
+5. Report current HIVE state and confirm monitoring is active
+
+IMPORTANT: You can monitor drone activity in real-time via Redis streams (hive:logs:drone-1, hive:logs:all). Use this to track what drones are doing.`
 		} else {
 			initialPrompt = "Read your role and instructions from /home/agent/CLAUDE.md. Execute your mandatory startup sequence immediately: 1. Report your agent ID, 2. Run my-tasks, 3. Take action based on what you find."
 		}

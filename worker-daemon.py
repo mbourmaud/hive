@@ -100,6 +100,8 @@ class HiveWorkerDaemon:
         self.queue_key = f"hive:queue:{self.agent_id}"
         self.active_key = f"hive:active:{self.agent_id}"
         self.events_channel = "hive:events"
+        self.logs_key = f"hive:logs:{self.agent_id}"
+        self.current_task_id = None
 
         logger.info(f"🐝 HIVE Worker {self.agent_id} initialized (DAEMON mode)")
         logger.info(f"📂 Workspace: {self.workspace} ({self.workspace_name})")
@@ -107,6 +109,31 @@ class HiveWorkerDaemon:
         logger.info(f"🔌 Backend: {self.backend.get_backend_name()}")
         logger.info(f"⏱️ Poll interval: {self.poll_interval}s")
         logger.info(f"🔧 Max iterations: {self.max_iterations}")
+
+    def log_activity(self, event_type: str, content: str, metadata: Optional[Dict] = None):
+        """Log activity to Redis stream for Queen visibility"""
+        try:
+            entry = {
+                'timestamp': datetime.now().isoformat(),
+                'agent': self.agent_id,
+                'task_id': self.current_task_id or 'none',
+                'event': event_type,
+                'content': content[:2000],  # Limit content size
+            }
+            if metadata:
+                entry['metadata'] = json.dumps(metadata)
+
+            # Add to agent-specific stream (capped at 1000 entries)
+            self.redis_client.xadd(self.logs_key, entry, maxlen=1000)
+
+            # Also add to global stream for Queen
+            self.redis_client.xadd('hive:logs:all', entry, maxlen=5000)
+
+            # Publish event for real-time subscribers
+            self.redis_client.publish(f"hive:activity:{self.agent_id}", json.dumps(entry))
+
+        except redis.RedisError as e:
+            logger.warning(f"Failed to log to Redis: {e}")
 
     def dequeue_task(self) -> Optional[Dict[str, Any]]:
         """Atomically dequeue a task from Redis queue to active list"""
@@ -172,6 +199,10 @@ class HiveWorkerDaemon:
         description = task.get('description', '')
         branch = task.get('branch', 'main')
         jira_ticket = task.get('jira_ticket', '')
+        self.current_task_id = task.get('id', 'unknown')
+
+        # Log task start
+        self.log_activity('task_start', f"Starting: {title}", {'branch': branch, 'jira': jira_ticket})
 
         # Build system prompt
         system_prompt = f"""You are Worker {self.agent_id} in the HIVE multi-agent system.
@@ -251,10 +282,16 @@ Complete this task now using the available tools."""
                     # Claude finished - extract final text
                     for block in response['content']:
                         if isinstance(block, dict) and block.get('type') == 'text':
-                            final_response += block.get('text', '')
+                            text = block.get('text', '')
+                            final_response += text
+                            if text.strip():
+                                self.log_activity('claude_response', text)
                         elif hasattr(block, 'text'):
                             final_response += block.text
+                            if block.text.strip():
+                                self.log_activity('claude_response', block.text)
                     logger.info(f"✓ Task completed after {iteration} iterations")
+                    self.log_activity('task_complete', f"Completed after {iteration} iterations")
                     break
 
                 elif response['stop_reason'] == "tool_use":
@@ -272,6 +309,7 @@ Complete this task now using the available tools."""
 
                             logger.info(f"🔧 Executing tool: {tool_name}")
                             logger.debug(f"Tool input: {json.dumps(tool_input, indent=2)}")
+                            self.log_activity('tool_call', f"{tool_name}", {'input': tool_input})
 
                             try:
                                 # Execute the tool
@@ -291,6 +329,7 @@ Complete this task now using the available tools."""
                                     result_str = str(result)
 
                                 logger.info(f"✓ Tool result: {result_str[:200]}...")
+                                self.log_activity('tool_result', result_str[:500], {'tool': tool_name})
 
                                 tool_results.append({
                                     "type": "tool_result",
@@ -301,6 +340,7 @@ Complete this task now using the available tools."""
                             except ToolExecutionError as e:
                                 error_msg = str(e)
                                 logger.error(f"Tool execution failed: {error_msg}")
+                                self.log_activity('tool_error', error_msg, {'tool': tool_name})
 
                                 tool_results.append({
                                     "type": "tool_result",
@@ -326,6 +366,7 @@ Complete this task now using the available tools."""
         except Exception as e:
             error_msg = f"Execution failed: {str(e)}"
             logger.error(error_msg)
+            self.log_activity('task_failed', error_msg)
             raise Exception(error_msg)
 
     async def run(self):
