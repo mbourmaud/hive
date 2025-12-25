@@ -229,6 +229,10 @@
                 </div>
             </div>
         </div>
+        <!-- Scroll Indicator -->
+        <div class="scroll-indicator" aria-hidden="true">
+            <span>Scroll</span>
+        </div>
     </section>
 
     <!-- Features Section -->
@@ -396,96 +400,105 @@
                 <h2 class="section-title"><span class="text-gradient">Architecture</span></h2>
                 <p class="section-subtitle">A distributed system inspired by nature</p>
             </div>
-            <div class="arch-diagram" data-animate="fade-up" data-delay="100">
-                <!-- SVG Connection Lines -->
-                <svg class="arch-connections" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+
+            <div class="arch-orbital" data-animate="fade-up" data-delay="100">
+                <!-- Background rings -->
+                <div class="arch-ring arch-ring-1"></div>
+                <div class="arch-ring arch-ring-2"></div>
+                <div class="arch-ring arch-ring-3"></div>
+
+                <!-- Animated particles on rings -->
+                <div class="arch-particle arch-particle-1"></div>
+                <div class="arch-particle arch-particle-2"></div>
+                <div class="arch-particle arch-particle-3"></div>
+
+                <!-- Central Queen -->
+                <div class="arch-center">
+                    <div class="arch-center-glow"></div>
+                    <div class="arch-center-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+                    </div>
+                    <div class="arch-center-label">
+                        <strong>Queen</strong>
+                        <span>Orchestrator</span>
+                    </div>
+                </div>
+
+                <!-- Redis on inner ring -->
+                <div class="arch-orbit-node arch-orbit-redis">
+                    <div class="arch-orbit-icon arch-orbit-icon-redis">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    </div>
+                    <div class="arch-orbit-label">Redis Queue</div>
+                </div>
+
+                <!-- Workers on outer ring -->
+                <div class="arch-orbit-node arch-orbit-worker arch-orbit-worker-1">
+                    <div class="arch-orbit-icon arch-orbit-icon-worker">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div class="arch-orbit-label">Worker 1</div>
+                </div>
+
+                <div class="arch-orbit-node arch-orbit-worker arch-orbit-worker-2">
+                    <div class="arch-orbit-icon arch-orbit-icon-worker">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div class="arch-orbit-label">Worker 2</div>
+                </div>
+
+                <div class="arch-orbit-node arch-orbit-worker arch-orbit-worker-3">
+                    <div class="arch-orbit-icon arch-orbit-icon-worker">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div class="arch-orbit-label">Worker N</div>
+                </div>
+
+                <!-- Data flow SVG -->
+                <svg class="arch-flow-svg" viewBox="0 0 400 400">
                     <defs>
-                        <linearGradient id="archLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.2"/>
-                            <stop offset="50%" stop-color="#F59E0B" stop-opacity="0.8"/>
-                            <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.2"/>
+                        <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#F59E0B" stop-opacity="0"/>
+                            <stop offset="50%" stop-color="#F59E0B" stop-opacity="1"/>
+                            <stop offset="100%" stop-color="#F59E0B" stop-opacity="0"/>
                         </linearGradient>
-                        <filter id="glow">
-                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <filter id="flowGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="4" result="blur"/>
                             <feMerge>
-                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="blur"/>
                                 <feMergeNode in="SourceGraphic"/>
                             </feMerge>
                         </filter>
                     </defs>
-                    <!-- Queen to Redis -->
-                    <path d="M400 80 L400 160" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
-                    <!-- Redis to Workers -->
-                    <path d="M400 220 L200 320" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
-                    <path d="M400 220 L400 320" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
-                    <path d="M400 220 L600 320" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
-                    <!-- Animated data dots -->
-                    <circle r="6" fill="#F59E0B" filter="url(#glow)">
-                        <animateMotion dur="1.5s" repeatCount="indefinite" path="M400,80 L400,160"/>
+                    <!-- Flow lines -->
+                    <path class="flow-line" d="M200 200 L200 120" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
+                    <path class="flow-line" d="M200 200 L280 160" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
+                    <path class="flow-line" d="M200 200 L280 240" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
+                    <path class="flow-line" d="M200 200 L200 280" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
+                    <path class="flow-line" d="M200 200 L120 240" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
+                    <path class="flow-line" d="M200 200 L120 160" stroke="url(#flowGrad)" stroke-width="2" fill="none"/>
+                    <!-- Animated dots -->
+                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L200,120" begin="0s"/>
                     </circle>
-                    <circle r="5" fill="#F59E0B" filter="url(#glow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M400,220 L200,320" begin="0s"/>
+                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L280,160" begin="0.33s"/>
                     </circle>
-                    <circle r="5" fill="#F59E0B" filter="url(#glow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M400,220 L400,320" begin="0.3s"/>
+                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L280,240" begin="0.66s"/>
                     </circle>
-                    <circle r="5" fill="#F59E0B" filter="url(#glow)">
-                        <animateMotion dur="2s" repeatCount="indefinite" path="M400,220 L600,320" begin="0.6s"/>
+                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L200,280" begin="1s"/>
+                    </circle>
+                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L120,240" begin="1.33s"/>
+                    </circle>
+                    <circle class="flow-dot" r="4" fill="#F59E0B" filter="url(#flowGlow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L120,160" begin="1.66s"/>
                     </circle>
                 </svg>
-
-                <!-- Queen Node -->
-                <div class="arch-node-card arch-queen" style="--node-x: 50%; --node-y: 0;">
-                    <div class="arch-node-icon arch-node-icon-queen">
-                        <div class="arch-pulse"></div>
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
-                    </div>
-                    <div class="arch-node-info">
-                        <strong>Queen Agent</strong>
-                        <span>Orchestrates the hive</span>
-                    </div>
-                </div>
-
-                <!-- Redis Node -->
-                <div class="arch-node-card arch-redis" style="--node-x: 50%; --node-y: 40%;">
-                    <div class="arch-node-icon arch-node-icon-redis">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    </div>
-                    <div class="arch-node-info">
-                        <strong>Redis Queue</strong>
-                        <span>Task distribution</span>
-                    </div>
-                </div>
-
-                <!-- Worker Nodes -->
-                <div class="arch-node-card arch-worker" style="--node-x: 25%; --node-y: 80%;">
-                    <div class="arch-node-icon arch-node-icon-worker">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    </div>
-                    <div class="arch-node-info">
-                        <strong>Worker 1</strong>
-                        <span>Git worktree</span>
-                    </div>
-                </div>
-                <div class="arch-node-card arch-worker" style="--node-x: 50%; --node-y: 80%;">
-                    <div class="arch-node-icon arch-node-icon-worker">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    </div>
-                    <div class="arch-node-info">
-                        <strong>Worker 2</strong>
-                        <span>Git worktree</span>
-                    </div>
-                </div>
-                <div class="arch-node-card arch-worker" style="--node-x: 75%; --node-y: 80%;">
-                    <div class="arch-node-icon arch-node-icon-worker">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    </div>
-                    <div class="arch-node-info">
-                        <strong>Worker N</strong>
-                        <span>Git worktree</span>
-                    </div>
-                </div>
             </div>
+
             <div class="arch-features" data-animate="fade-up" data-delay="200">
                 <div class="arch-feature">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
@@ -577,6 +590,54 @@
                     navLinks.classList.remove('active');
                     navToggle?.classList.remove('active');
                 }
+            });
+        });
+
+        // Navigation scroll effect
+        const nav = document.querySelector('.nav');
+        const scrollIndicator = document.querySelector('.scroll-indicator');
+        let lastScroll = 0;
+
+        window.addEventListener('scroll', () => {
+            const currentScroll = window.pageYOffset;
+
+            // Add scrolled class to nav
+            if (currentScroll > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+
+            // Hide scroll indicator
+            if (scrollIndicator && currentScroll > 100) {
+                scrollIndicator.style.opacity = '0';
+                scrollIndicator.style.pointerEvents = 'none';
+            } else if (scrollIndicator) {
+                scrollIndicator.style.opacity = '0.7';
+                scrollIndicator.style.pointerEvents = 'auto';
+            }
+
+            lastScroll = currentScroll;
+        });
+
+        // Parallax effect for particles
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const particles = document.querySelectorAll('.particle');
+            particles.forEach((particle, index) => {
+                const speed = 0.1 + (index * 0.05);
+                particle.style.transform = `translateY(${scrolled * speed}px)`;
+            });
+        });
+
+        // Add hover effect glow that follows cursor on feature cards
+        document.querySelectorAll('.feature-card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
             });
         });
 
