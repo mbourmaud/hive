@@ -962,7 +962,7 @@ img, svg {
     background: linear-gradient(135deg, var(--amber-500), var(--amber-600));
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     color: white;
-    box-shadow: var(--shadow-glow);
+    filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.3));
 }
 
 .arch-hex svg {
@@ -971,12 +971,21 @@ img, svg {
 }
 
 .arch-hex-worker {
-    background: var(--amber-50);
-    border: 2px solid var(--amber-400);
+    background: var(--amber-100);
+    position: relative;
+}
+
+.arch-hex-worker::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    background: var(--amber-400);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    z-index: -1;
 }
 
 .arch-hex-worker svg {
-    color: var(--amber-500);
+    color: var(--amber-600);
 }
 
 .arch-box {
