@@ -18,7 +18,7 @@ Environment Variables:
     AGENT_ID: Worker ID (e.g., "drone-1")
     REDIS_HOST: Redis host (default: "hive-redis")
     REDIS_PORT: Redis port (default: 6379)
-    POLL_INTERVAL: Seconds between queue checks (default: 120)
+    POLL_INTERVAL: Seconds between queue checks (default: 1)
     MAX_ITERATIONS: Maximum tool use iterations (default: 50)
 
     Backend Configuration (auto-detected):
@@ -67,7 +67,7 @@ class HiveWorkerDaemon:
         self.agent_id = os.getenv('AGENT_ID', 'drone-unknown')
         self.redis_host = os.getenv('REDIS_HOST', 'hive-redis')
         self.redis_port = int(os.getenv('REDIS_PORT', '6379'))
-        self.poll_interval = int(os.getenv('POLL_INTERVAL', '120'))
+        self.poll_interval = int(os.getenv('POLL_INTERVAL', '1'))
         self.max_iterations = int(os.getenv('MAX_ITERATIONS', '50'))
         self.workspace = os.getenv('WORKSPACE_DIR', '/workspace')
 

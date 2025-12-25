@@ -79,6 +79,11 @@ var startCmd = &cobra.Command{
 			}
 		}
 
+		// Generate .env.generated from hive.yaml config
+		if err := cfg.WriteEnvGenerated(hiveDir); err != nil {
+			return fmt.Errorf("failed to generate env vars: %w", err)
+		}
+
 		// Header
 		fmt.Print(ui.Header("🚀", "Starting Hive"))
 		fmt.Printf("%sQueen + %d worker%s%s\n\n", ui.StyleDim.Render(""), count, pluralize(count), "")

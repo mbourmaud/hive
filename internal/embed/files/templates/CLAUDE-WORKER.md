@@ -47,7 +47,7 @@ After your startup sequence, you MUST establish a background task polling loop:
 
 **Configuration** (from `hive.yaml`):
 - **Enabled**: `monitoring.worker.enabled` (default: `true`)
-- **Interval**: `monitoring.worker.interval_minutes` (default: `2` minutes)
+- **Interval**: `monitoring.worker.interval_seconds` (default: `1` second)
 
 **When task polling is ENABLED:**
 
@@ -68,14 +68,14 @@ After your startup sequence, you MUST establish a background task polling loop:
 
 **Example polling loop:**
 ```bash
-# Read config (returns "true"/"false" and interval in minutes)
+# Read config (returns "true"/"false" and interval in seconds)
 ENABLED=$(hive-config worker.monitoring.enabled)
-INTERVAL=$(hive-config worker.monitoring.interval)
+INTERVAL=$(hive-config worker.monitoring.interval_seconds)
 
 if [ "$ENABLED" = "true" ]; then
   # Run in background when idle
   while true; do
-    sleep $(($INTERVAL * 60))
+    sleep $INTERVAL
 
     # Check if I have new tasks assigned
     TASKS=$(my-tasks)

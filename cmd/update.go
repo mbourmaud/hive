@@ -65,6 +65,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	runner := shell.NewRunner(DebugMode)
 	composeFile := filepath.Join(hiveDir, "docker-compose.yml")
 
+	// Generate .env.generated from hive.yaml config
+	if err := cfg.WriteEnvGenerated(hiveDir); err != nil {
+		return fmt.Errorf("failed to generate env vars: %w", err)
+	}
+
 	// Step 1: Re-extract embedded files to update scripts/configs
 	fmt.Printf("%s ", ui.StyleDim.Render("📦 Updating Hive files..."))
 
@@ -119,9 +124,26 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 
-	// Step 4: Recreate containers (preserves volumes)
-	fmt.Printf("%s ", ui.StyleDim.Render("🔄 Recreating containers..."))
-	upCmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate")
+	// Step 4: Stop extra workers that shouldn't be running
+	// (e.g., if config says 2 workers but 10 are running)
+	for i := cfg.Agents.Workers.Count + 1; i <= 10; i++ {
+		containerName := fmt.Sprintf("claude-agent-%d", i)
+		stopCmd := exec.Command("docker", "stop", containerName)
+		_ = runner.RunQuiet(stopCmd) // Ignore errors if container doesn't exist
+		rmCmd := exec.Command("docker", "rm", containerName)
+		_ = runner.RunQuiet(rmCmd)
+	}
+
+	// Step 5: Recreate containers (preserves volumes)
+	// Only start the services defined in config (queen + N workers)
+	services := []string{"redis", "queen"}
+	for i := 1; i <= cfg.Agents.Workers.Count; i++ {
+		services = append(services, fmt.Sprintf("agent-%d", i))
+	}
+
+	fmt.Printf("%s ", ui.StyleDim.Render(fmt.Sprintf("🔄 Recreating containers (queen + %d workers)...", cfg.Agents.Workers.Count)))
+	upArgs := append([]string{"compose", "-f", composeFile, "up", "-d", "--force-recreate"}, services...)
+	upCmd := exec.Command("docker", upArgs...)
 	upCmd.Env = append(os.Environ(),
 		fmt.Sprintf("HIVE_DOCKERFILE=%s", dockerfile),
 	)
@@ -131,7 +153,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 
-	// Step 5: Wait for health (optional)
+	// Step 6: Wait for health (optional)
 	if updateWait {
 		fmt.Printf("%s\n", ui.StyleCyan.Render("⏳ Waiting for containers..."))
 

@@ -36,12 +36,12 @@ After your startup sequence, you MUST establish a background monitoring loop:
 
 **Configuration** (from `hive.yaml`):
 - **Enabled**: `monitoring.queen.enabled` (default: `true`)
-- **Interval**: `monitoring.queen.interval_minutes` (default: `5` minutes)
+- **Interval**: `monitoring.queen.interval_seconds` (default: `30` seconds)
 
 **When monitoring is ENABLED:**
 
 1. **Start a background clock immediately** using the Task tool with `run_in_background: true`
-2. The clock should run `hive-status` at the configured interval
+2. The clock should run `hive-status` at the configured interval (every 30 seconds by default)
 3. **Report status changes proactively** to the user:
    - New tasks appearing in queue
    - Tasks moving from active → completed/failed
@@ -50,14 +50,14 @@ After your startup sequence, you MUST establish a background monitoring loop:
 
 **Example monitoring loop:**
 ```bash
-# Read config (returns "true"/"false" and interval in minutes)
+# Read config (returns "true"/"false" and interval in seconds)
 ENABLED=$(hive-config queen.monitoring.enabled)
-INTERVAL=$(hive-config queen.monitoring.interval)
+INTERVAL=$(hive-config queen.monitoring.interval_seconds)
 
 if [ "$ENABLED" = "true" ]; then
   # Run in background
   while true; do
-    sleep $(($INTERVAL * 60))
+    sleep $INTERVAL
 
     # Check status and detect changes
     CURRENT_STATUS=$(hive-status)

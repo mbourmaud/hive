@@ -8,6 +8,12 @@ x-agent-common: &agent-common
   stdin_open: true
   tty: true
   env_file:
+    # Order matters: later files override earlier ones
+    # 1. .env.generated - auto-generated from hive.yaml (config values)
+    # 2. .env - user secrets and custom env vars (overrides generated)
+    # 3. .env.project - project-specific secrets (final overrides)
+    - path: .env.generated
+      required: false
     - .env
     - path: .env.project
       required: false
@@ -38,6 +44,8 @@ x-agent-common: &agent-common
     GITLAB_HOST: ${GITLAB_HOST:-gitlab.com}
     # Workspace config
     WORKSPACE_NAME: ${WORKSPACE_NAME:-my-project}
+    # Worker daemon poll interval (seconds)
+    POLL_INTERVAL: ${POLL_INTERVAL:-1}
     # Node.js memory configuration (in MB)
     NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-4096}"
 

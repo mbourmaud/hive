@@ -636,18 +636,30 @@ func TestWriteEnvFile(t *testing.T) {
 		t.Fatalf("Failed to read .hive/.env: %v", err)
 	}
 
-	// Check for required values
+	// Check for required values (only secrets now in .env)
 	contentStr := string(content)
 	required := []string{
-		"test@example.com",
-		"Test User",
-		"test-token-123",
-		"my-workspace",
+		"test-token-123",          // OAuth token
+		"HIVE_CLAUDE_BACKEND=cli", // Backend type
 	}
 
 	for _, req := range required {
 		if !strings.Contains(contentStr, req) {
 			t.Errorf("writeEnvFile() missing %q in output", req)
+		}
+	}
+
+	// These should NOT be in .env anymore (they're in hive.yaml)
+	notAllowed := []string{
+		"GIT_USER_EMAIL",
+		"WORKSPACE_NAME",
+		"HIVE_DOCKERFILE",
+		"QUEEN_MODEL",
+	}
+
+	for _, na := range notAllowed {
+		if strings.Contains(contentStr, na+"=") {
+			t.Errorf("writeEnvFile() should not contain %q (moved to hive.yaml)", na)
 		}
 	}
 }
@@ -701,12 +713,7 @@ func TestWriteEnvFile_HybridMode(t *testing.T) {
 	os.MkdirAll(".hive", 0755)
 
 	cfg := map[string]string{
-		"GIT_USER_EMAIL":          "test@example.com",
-		"GIT_USER_NAME":           "Test User",
 		"CLAUDE_CODE_OAUTH_TOKEN": "token",
-		"WORKSPACE_NAME":          "test",
-		"GIT_REPO_URL":            "",
-		"PROJECT_TYPE":            "go",
 		"WORKER_MODE":             "hybrid",
 	}
 
@@ -718,14 +725,14 @@ func TestWriteEnvFile_HybridMode(t *testing.T) {
 	content, _ := os.ReadFile(".hive/.env")
 	contentStr := string(content)
 
-	// Should have commented worker modes for hybrid
-	if !strings.Contains(contentStr, "# WORKER_1_MODE") {
-		t.Error("writeEnvFile() hybrid mode should have commented WORKER_1_MODE")
+	// Hybrid mode should NOT write individual WORKER_x_MODE entries
+	if strings.Contains(contentStr, "WORKER_1_MODE=") {
+		t.Error("writeEnvFile() hybrid mode should not have WORKER_1_MODE")
 	}
 }
 
-// TestWriteEnvFile_NodeVersion tests writeEnvFile with Node version
-func TestWriteEnvFile_NodeVersion(t *testing.T) {
+// TestWriteEnvFile_APIBackend tests writeEnvFile with API backend
+func TestWriteEnvFile_APIBackend(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -734,13 +741,8 @@ func TestWriteEnvFile_NodeVersion(t *testing.T) {
 	os.MkdirAll(".hive", 0755)
 
 	cfg := map[string]string{
-		"GIT_USER_EMAIL":          "test@example.com",
-		"GIT_USER_NAME":           "Test User",
-		"CLAUDE_CODE_OAUTH_TOKEN": "token",
-		"WORKSPACE_NAME":          "test",
-		"GIT_REPO_URL":            "",
-		"PROJECT_TYPE":            "node",
-		"NODE_VERSION":            "24",
+		"HIVE_CLAUDE_BACKEND": "api",
+		"ANTHROPIC_API_KEY":   "sk-ant-test-key",
 	}
 
 	err := writeEnvFile(cfg, 1)
@@ -751,13 +753,16 @@ func TestWriteEnvFile_NodeVersion(t *testing.T) {
 	content, _ := os.ReadFile(".hive/.env")
 	contentStr := string(content)
 
-	if !strings.Contains(contentStr, "NODE_VERSION=24") {
-		t.Error("writeEnvFile() missing NODE_VERSION=24")
+	if !strings.Contains(contentStr, "HIVE_CLAUDE_BACKEND=api") {
+		t.Error("writeEnvFile() missing HIVE_CLAUDE_BACKEND=api")
+	}
+	if !strings.Contains(contentStr, "ANTHROPIC_API_KEY=sk-ant-test-key") {
+		t.Error("writeEnvFile() missing ANTHROPIC_API_KEY")
 	}
 }
 
-// TestWriteEnvFile_NonNodeProject tests writeEnvFile with non-Node project
-func TestWriteEnvFile_NonNodeProject(t *testing.T) {
+// TestWriteEnvFile_BedrockBackend tests writeEnvFile with Bedrock backend
+func TestWriteEnvFile_BedrockBackend(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -766,12 +771,9 @@ func TestWriteEnvFile_NonNodeProject(t *testing.T) {
 	os.MkdirAll(".hive", 0755)
 
 	cfg := map[string]string{
-		"GIT_USER_EMAIL":          "test@example.com",
-		"GIT_USER_NAME":           "Test User",
-		"CLAUDE_CODE_OAUTH_TOKEN": "token",
-		"WORKSPACE_NAME":          "test",
-		"GIT_REPO_URL":            "",
-		"PROJECT_TYPE":            "python",
+		"HIVE_CLAUDE_BACKEND": "bedrock",
+		"AWS_PROFILE":         "my-profile",
+		"AWS_REGION":          "us-west-2",
 	}
 
 	err := writeEnvFile(cfg, 1)
@@ -782,8 +784,14 @@ func TestWriteEnvFile_NonNodeProject(t *testing.T) {
 	content, _ := os.ReadFile(".hive/.env")
 	contentStr := string(content)
 
-	if !strings.Contains(contentStr, "Dockerfile.python") {
-		t.Error("writeEnvFile() missing Dockerfile.python for Python project")
+	if !strings.Contains(contentStr, "HIVE_CLAUDE_BACKEND=bedrock") {
+		t.Error("writeEnvFile() missing HIVE_CLAUDE_BACKEND=bedrock")
+	}
+	if !strings.Contains(contentStr, "AWS_PROFILE=my-profile") {
+		t.Error("writeEnvFile() missing AWS_PROFILE")
+	}
+	if !strings.Contains(contentStr, "AWS_REGION=us-west-2") {
+		t.Error("writeEnvFile() missing AWS_REGION")
 	}
 }
 
@@ -794,7 +802,16 @@ func TestWriteHiveYAML(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
 
-	err := writeHiveYAML("my-workspace", "https://github.com/test/repo.git", 3)
+	cfgMap := map[string]string{
+		"WORKSPACE_NAME":   "my-workspace",
+		"GIT_REPO_URL":     "https://github.com/test/repo.git",
+		"GIT_USER_EMAIL":   "test@example.com",
+		"GIT_USER_NAME":    "Test User",
+		"QUEEN_MODEL":      "opus",
+		"WORKER_MODEL":     "sonnet",
+		"HIVE_DOCKERFILE":  "docker/Dockerfile.node",
+	}
+	err := writeHiveYAML(cfgMap, 3)
 	if err != nil {
 		t.Fatalf("writeHiveYAML() error = %v", err)
 	}
@@ -816,6 +833,16 @@ func TestWriteHiveYAML(t *testing.T) {
 	if !strings.Contains(contentStr, "https://github.com/test/repo.git") {
 		t.Error("writeHiveYAML() missing git URL")
 	}
+
+	// Check for git user config
+	if !strings.Contains(contentStr, "test@example.com") {
+		t.Error("writeHiveYAML() missing git email")
+	}
+
+	// Check for models
+	if !strings.Contains(contentStr, "opus") {
+		t.Error("writeHiveYAML() missing queen model")
+	}
 }
 
 // TestWriteHiveYAML_EmptyGitURL tests hive.yaml without git URL
@@ -825,7 +852,10 @@ func TestWriteHiveYAML_EmptyGitURL(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
 
-	err := writeHiveYAML("test-workspace", "", 2)
+	cfgMap := map[string]string{
+		"WORKSPACE_NAME": "test-workspace",
+	}
+	err := writeHiveYAML(cfgMap, 2)
 	if err != nil {
 		t.Fatalf("writeHiveYAML() error = %v", err)
 	}
