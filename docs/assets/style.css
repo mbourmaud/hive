@@ -372,15 +372,18 @@ img, svg {
     color: var(--gray-900);
 }
 
-.logo-svg {
-    width: 36px;
-    height: 42px;
-    color: var(--amber-500);
-    transition: transform 0.3s var(--ease-out);
+.logo-text {
+    font-size: 1.6rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--amber-500), var(--amber-600));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: opacity 0.2s ease;
 }
 
-.nav-logo:hover .logo-svg {
-    transform: scale(1.1) rotate(-5deg);
+.nav-logo:hover .logo-text {
+    opacity: 0.8;
 }
 
 .nav-links {
@@ -1952,9 +1955,9 @@ img, svg {
     color: white;
 }
 
-.footer-logo {
-    width: 32px;
-    height: 37px;
+.footer-logo-text {
+    font-size: 1.4rem;
+    font-weight: 800;
     color: var(--amber-500);
 }
 
