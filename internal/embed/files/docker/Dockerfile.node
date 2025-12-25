@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for worker daemon
-RUN pip3 install --no-cache-dir redis --break-system-packages
+RUN pip3 install --no-cache-dir redis anthropic --break-system-packages
 
 # Docker CLI (for testcontainers) - using static binary
 RUN ARCH=$(dpkg --print-architecture) && \
