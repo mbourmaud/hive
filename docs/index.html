@@ -414,8 +414,10 @@
                 <!-- Connector -->
                 <div class="arch-connector">
                     <svg viewBox="0 0 100 60" preserveAspectRatio="none">
-                        <path d="M50 0 L50 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
-                        <circle cx="50" cy="30" r="4" fill="currentColor" class="arch-dot"/>
+                        <path id="path1" d="M50 0 L50 60" stroke="currentColor" stroke-width="2" fill="none" class="arch-path"/>
+                        <circle r="3" fill="currentColor" class="arch-traveling-dot">
+                            <animateMotion dur="2s" repeatCount="indefinite" path="M50 0 L50 60"/>
+                        </circle>
                     </svg>
                 </div>
 
@@ -431,12 +433,18 @@
                 <!-- Connector -->
                 <div class="arch-connector arch-connector-split">
                     <svg viewBox="0 0 300 60" preserveAspectRatio="none">
-                        <path d="M150 0 L150 20 L50 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
-                        <path d="M150 20 L150 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
-                        <path d="M150 20 L250 60" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
-                        <circle cx="50" cy="55" r="4" fill="currentColor" class="arch-dot arch-dot-1"/>
-                        <circle cx="150" cy="55" r="4" fill="currentColor" class="arch-dot arch-dot-2"/>
-                        <circle cx="250" cy="55" r="4" fill="currentColor" class="arch-dot arch-dot-3"/>
+                        <path d="M150 0 L150 20 L50 60" stroke="currentColor" stroke-width="2" fill="none" class="arch-path"/>
+                        <path d="M150 20 L150 60" stroke="currentColor" stroke-width="2" fill="none" class="arch-path"/>
+                        <path d="M150 20 L250 60" stroke="currentColor" stroke-width="2" fill="none" class="arch-path"/>
+                        <circle r="3" fill="currentColor" class="arch-traveling-dot">
+                            <animateMotion dur="2s" repeatCount="indefinite" path="M150 0 L150 20 L50 60" begin="0s"/>
+                        </circle>
+                        <circle r="3" fill="currentColor" class="arch-traveling-dot">
+                            <animateMotion dur="2s" repeatCount="indefinite" path="M150 0 L150 20 L150 60" begin="0.3s"/>
+                        </circle>
+                        <circle r="3" fill="currentColor" class="arch-traveling-dot">
+                            <animateMotion dur="2s" repeatCount="indefinite" path="M150 0 L150 20 L250 60" begin="0.6s"/>
+                        </circle>
                     </svg>
                 </div>
 
