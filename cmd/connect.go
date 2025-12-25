@@ -31,9 +31,9 @@ var connectCmd = &cobra.Command{
 		}
 
 		// Launch Claude in the container with initial prompt
-		// The workspace name is read from WORKSPACE_NAME env var in container
+		// Workspace is at /workspace (worktree root)
 		claudeCmd := fmt.Sprintf(
-			`cd /workspace/${WORKSPACE_NAME:-my-project} && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" "%s"`,
+			`cd /workspace && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" "%s"`,
 			initialPrompt,
 		)
 

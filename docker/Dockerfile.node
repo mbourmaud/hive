@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     redis-tools \
     expect \
     procps \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for worker daemon
@@ -75,8 +76,10 @@ RUN npm install -g @playwright/mcp@latest \
     && npx -y playwright install chromium --with-deps \
     && chmod -R 755 /opt/playwright
 
-# Create non-root user
-RUN useradd -m -s /bin/bash agent
+# Create non-root user with sudo access for volume permissions
+RUN useradd -m -s /bin/bash agent \
+    && echo "agent ALL=(ALL) NOPASSWD: /bin/chown" >> /etc/sudoers.d/agent \
+    && chmod 0440 /etc/sudoers.d/agent
 
 # Switch to agent user
 USER agent

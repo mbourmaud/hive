@@ -34,6 +34,11 @@ chmod -R u+w ~/.local/share/pnpm 2>/dev/null || true
 mkdir -p ~/node_modules_cache
 chmod -R u+w ~/node_modules_cache 2>/dev/null || true
 
+# Ensure workspace node_modules volume is writable (Docker volume may be owned by root)
+if [ -d "/workspace/node_modules" ]; then
+    sudo chown -R agent:agent /workspace/node_modules 2>/dev/null || true
+fi
+
 # Create ~/.claude.json with OAuth and onboarding flags to bypass setup wizard
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     log "[+] Configuring Claude OAuth and bypassing setup wizard..."
