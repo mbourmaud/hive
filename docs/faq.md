@@ -52,6 +52,87 @@ claude setup-token
 
 This opens a browser for authentication and saves your token. Copy the token and use it in `hive init` or in your `.env` file.
 
+### How do autonomous workers connect to Claude?
+
+Autonomous workers (`WORKER_N_MODE=daemon`) support **three backends** that are automatically detected:
+
+| Backend | Best For | Requires | Cost |
+|---------|----------|----------|------|
+| **Claude CLI** | Claude Max/Pro users | OAuth token | ✅ FREE (included) |
+| **Anthropic API** | Pay-as-you-go users | API key | 💰 ~$3-15 per 1M tokens |
+| **AWS Bedrock** | Enterprise | AWS credentials | 💰 AWS pricing |
+
+#### Backend 1: Claude CLI (Recommended for Claude Max/Pro)
+
+**Perfect if you have Claude Max or Pro subscription!**
+
+```bash
+# .env
+CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token  # From: claude setup-token
+WORKER_1_MODE=daemon
+WORKER_2_MODE=daemon
+```
+
+**How it works:**
+- Worker daemon calls `claude` CLI in subprocess
+- Uses your existing OAuth token (same as interactive mode)
+- FREE - included with your Claude Max/Pro subscription
+- Each task runs in a fresh session (no memory between tasks)
+
+**Pros:** Free, works with existing auth, no extra setup
+**Cons:** No conversation memory between tasks
+
+#### Backend 2: Anthropic API
+
+**For users with API access** (separate from Claude Max/Pro):
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-api03-...  # From console.anthropic.com
+WORKER_1_MODE=daemon
+```
+
+**How it works:**
+- Direct API calls via Python SDK
+- Full control over context and parameters
+- Pay-as-you-go pricing
+
+**Pros:** Full API features, persistent context
+**Cons:** Costs money (not included in Max/Pro)
+
+#### Backend 3: AWS Bedrock
+
+**For enterprise with AWS infrastructure:**
+
+```bash
+# .env
+AWS_PROFILE=bedrock
+AWS_REGION=us-east-1
+WORKER_1_MODE=daemon
+```
+
+**Pros:** Enterprise billing, compliance
+**Cons:** Requires AWS setup
+
+#### Auto-Detection
+
+Workers automatically choose the best available backend:
+
+1. Check for `ANTHROPIC_API_KEY` → use API backend
+2. Check for `AWS_PROFILE` → use Bedrock backend
+3. Fall back to Claude CLI (uses `CLAUDE_CODE_OAUTH_TOKEN`)
+
+**Force specific backend:**
+```bash
+HIVE_CLAUDE_BACKEND=cli  # Options: api, cli, bedrock
+```
+
+#### Which backend should I use?
+
+- **Have Claude Max/Pro?** → Use CLI backend (free, already configured)
+- **Have API key?** → Use API backend (more control)
+- **Enterprise with AWS?** → Use Bedrock backend
+
 ### Can I use my existing Claude Code configuration?
 
 Yes! Hive mounts your `~/.claude` directory, so:

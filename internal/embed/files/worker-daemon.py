@@ -6,16 +6,27 @@ This daemon polls Redis for tasks and executes them autonomously using Claude
 with full tool execution (Read, Edit, Bash, Grep, Glob). It implements a complete
 agentic loop where Claude can use tools to accomplish tasks.
 
+Supports multiple Claude backends:
+- Anthropic API (requires ANTHROPIC_API_KEY)
+- Claude CLI with OAuth (requires CLAUDE_CODE_OAUTH_TOKEN, default for Claude Max/Pro)
+- AWS Bedrock (requires AWS_PROFILE or AWS credentials)
+
 Usage:
     python3 worker-daemon.py
 
 Environment Variables:
     AGENT_ID: Worker ID (e.g., "drone-1")
-    CLAUDE_CODE_OAUTH_TOKEN: Claude API authentication token
     REDIS_HOST: Redis host (default: "hive-redis")
     REDIS_PORT: Redis port (default: 6379)
     POLL_INTERVAL: Seconds between queue checks (default: 120)
     MAX_ITERATIONS: Maximum tool use iterations (default: 50)
+
+    Backend Configuration (auto-detected):
+    HIVE_CLAUDE_BACKEND: Explicit backend choice (api|cli|bedrock)
+    ANTHROPIC_API_KEY: API key for direct API access
+    CLAUDE_CODE_OAUTH_TOKEN: OAuth token for CLI backend (Claude Max/Pro)
+    AWS_PROFILE: AWS profile for Bedrock
+    AWS_REGION: AWS region for Bedrock (default: us-east-1)
 """
 
 import os
@@ -36,12 +47,7 @@ except ImportError:
     print("ERROR: redis package not installed. Run: pip install redis", file=sys.stderr)
     sys.exit(1)
 
-try:
-    from anthropic import Anthropic
-except ImportError:
-    print("ERROR: anthropic package not installed. Run: pip install anthropic", file=sys.stderr)
-    sys.exit(1)
-
+from backends import create_backend
 from tools import Tools, TOOL_DEFINITIONS, ToolExecutionError
 
 # Configure logging
@@ -69,14 +75,9 @@ class HiveWorkerDaemon:
         workspace_parts = self.workspace.rstrip('/').split('/')
         self.workspace_name = workspace_parts[-1] if workspace_parts else 'unknown'
 
-        # Claude API setup
-        api_key = os.getenv('CLAUDE_CODE_OAUTH_TOKEN') or os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            logger.error("No Claude API key found. Set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY")
-            sys.exit(1)
-
-        self.client = Anthropic(api_key=api_key)
+        # Claude backend setup (auto-detects API/CLI/Bedrock)
         self.model = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
+        self.backend = create_backend(model=self.model)
 
         # Tools instance
         self.tools = Tools(workspace=self.workspace)
@@ -103,6 +104,7 @@ class HiveWorkerDaemon:
         logger.info(f"🐝 HIVE Worker {self.agent_id} initialized (DAEMON mode)")
         logger.info(f"📂 Workspace: {self.workspace} ({self.workspace_name})")
         logger.info(f"🤖 Model: {self.model}")
+        logger.info(f"🔌 Backend: {self.backend.get_backend_name()}")
         logger.info(f"⏱️ Poll interval: {self.poll_interval}s")
         logger.info(f"🔧 Max iterations: {self.max_iterations}")
 
@@ -212,39 +214,43 @@ Complete this task now using the available tools."""
                 iteration += 1
                 logger.debug(f"Iteration {iteration}/{self.max_iterations}")
 
-                # Call Claude API with tools
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=8000,
+                # Call Claude backend with tools
+                response = self.backend.send_message(
+                    messages=messages,
                     system=system_prompt,
-                    tools=TOOL_DEFINITIONS,
-                    messages=messages
+                    max_tokens=8000,
+                    tools=TOOL_DEFINITIONS
                 )
 
-                logger.debug(f"Stop reason: {response.stop_reason}")
+                logger.debug(f"Stop reason: {response['stop_reason']}")
 
                 # Process response
-                assistant_message = {"role": "assistant", "content": response.content}
+                assistant_message = {"role": "assistant", "content": response['content']}
                 messages.append(assistant_message)
 
                 # Check stop reason
-                if response.stop_reason == "end_turn":
+                if response['stop_reason'] == "end_turn":
                     # Claude finished - extract final text
-                    for block in response.content:
-                        if hasattr(block, 'text'):
+                    for block in response['content']:
+                        if isinstance(block, dict) and block.get('type') == 'text':
+                            final_response += block.get('text', '')
+                        elif hasattr(block, 'text'):
                             final_response += block.text
                     logger.info(f"✓ Task completed after {iteration} iterations")
                     break
 
-                elif response.stop_reason == "tool_use":
+                elif response['stop_reason'] == "tool_use":
                     # Execute tools
                     tool_results = []
 
-                    for block in response.content:
-                        if block.type == "tool_use":
-                            tool_name = block.name
-                            tool_input = block.input
-                            tool_use_id = block.id
+                    for block in response['content']:
+                        # Handle both dict (from backends) and object (from SDK)
+                        block_type = block.get('type') if isinstance(block, dict) else getattr(block, 'type', None)
+
+                        if block_type == "tool_use":
+                            tool_name = block.get('name') if isinstance(block, dict) else block.name
+                            tool_input = block.get('input') if isinstance(block, dict) else block.input
+                            tool_use_id = block.get('id') if isinstance(block, dict) else block.id
 
                             logger.info(f"🔧 Executing tool: {tool_name}")
                             logger.debug(f"Tool input: {json.dumps(tool_input, indent=2)}")

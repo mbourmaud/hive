@@ -29,8 +29,9 @@ x-agent-common: &agent-common
     # Claude permissions bypass
     CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS: "1"
     CLAUDE_CODE_BYPASS_PERMISSIONS_ACCEPTED: "1"
-    # Claude auth (choose one)
+    # Claude auth
     CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     # Optional: GitHub/GitLab tokens
     GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     GITLAB_TOKEN: ${GITLAB_TOKEN:-}
