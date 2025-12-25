@@ -396,63 +396,108 @@
                 <h2 class="section-title"><span class="text-gradient">Architecture</span></h2>
                 <p class="section-subtitle">A distributed system inspired by nature</p>
             </div>
-            <div class="arch-visual" data-animate="fade-up" data-delay="100">
-                <div class="arch-tier arch-tier-top">
-                    <div class="arch-node arch-queen-node">
-                        <div class="arch-hex">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
-                        </div>
-                        <div class="arch-node-label">
-                            <strong>Queen Agent</strong>
-                            <span>Coordinates & delegates</span>
-                        </div>
+            <div class="arch-diagram" data-animate="fade-up" data-delay="100">
+                <!-- SVG Connection Lines -->
+                <svg class="arch-connections" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <linearGradient id="archLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.2"/>
+                            <stop offset="50%" stop-color="#F59E0B" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.2"/>
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <!-- Queen to Redis -->
+                    <path d="M400 80 L400 160" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
+                    <!-- Redis to Workers -->
+                    <path d="M400 220 L200 320" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
+                    <path d="M400 220 L400 320" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
+                    <path d="M400 220 L600 320" stroke="url(#archLineGrad)" stroke-width="3" fill="none" class="arch-path"/>
+                    <!-- Animated data dots -->
+                    <circle r="6" fill="#F59E0B" filter="url(#glow)">
+                        <animateMotion dur="1.5s" repeatCount="indefinite" path="M400,80 L400,160"/>
+                    </circle>
+                    <circle r="5" fill="#F59E0B" filter="url(#glow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M400,220 L200,320" begin="0s"/>
+                    </circle>
+                    <circle r="5" fill="#F59E0B" filter="url(#glow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M400,220 L400,320" begin="0.3s"/>
+                    </circle>
+                    <circle r="5" fill="#F59E0B" filter="url(#glow)">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M400,220 L600,320" begin="0.6s"/>
+                    </circle>
+                </svg>
+
+                <!-- Queen Node -->
+                <div class="arch-node-card arch-queen" style="--node-x: 50%; --node-y: 0;">
+                    <div class="arch-node-icon arch-node-icon-queen">
+                        <div class="arch-pulse"></div>
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+                    </div>
+                    <div class="arch-node-info">
+                        <strong>Queen Agent</strong>
+                        <span>Orchestrates the hive</span>
                     </div>
                 </div>
-                <div class="arch-flow">
-                    <div class="arch-line"></div>
-                    <div class="arch-node arch-redis-node">
-                        <div class="arch-box">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        </div>
-                        <div class="arch-node-label">
-                            <strong>Redis</strong>
-                            <span>Task queue</span>
-                        </div>
+
+                <!-- Redis Node -->
+                <div class="arch-node-card arch-redis" style="--node-x: 50%; --node-y: 40%;">
+                    <div class="arch-node-icon arch-node-icon-redis">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                     </div>
-                    <div class="arch-line"></div>
-                </div>
-                <div class="arch-tier arch-tier-bottom">
-                    <div class="arch-node arch-worker-node">
-                        <div class="arch-hex arch-hex-worker">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                        </div>
-                        <div class="arch-node-label">
-                            <strong>Worker 1</strong>
-                            <span>Git worktree</span>
-                        </div>
-                    </div>
-                    <div class="arch-node arch-worker-node">
-                        <div class="arch-hex arch-hex-worker">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                        </div>
-                        <div class="arch-node-label">
-                            <strong>Worker 2</strong>
-                            <span>Git worktree</span>
-                        </div>
-                    </div>
-                    <div class="arch-node arch-worker-node">
-                        <div class="arch-hex arch-hex-worker">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                        </div>
-                        <div class="arch-node-label">
-                            <strong>Worker N</strong>
-                            <span>Git worktree</span>
-                        </div>
+                    <div class="arch-node-info">
+                        <strong>Redis Queue</strong>
+                        <span>Task distribution</span>
                     </div>
                 </div>
-                <div class="arch-tags">
-                    <span class="arch-tag"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clip-rule="evenodd"/><path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z"/></svg> Isolated Worktrees</span>
-                    <span class="arch-tag"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.321A1 1 0 0113.42 17H6.58a1 1 0 01-.316-1.949l.806-.32L7.22 14H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd"/></svg> Docker Containers</span>
+
+                <!-- Worker Nodes -->
+                <div class="arch-node-card arch-worker" style="--node-x: 25%; --node-y: 80%;">
+                    <div class="arch-node-icon arch-node-icon-worker">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div class="arch-node-info">
+                        <strong>Worker 1</strong>
+                        <span>Git worktree</span>
+                    </div>
+                </div>
+                <div class="arch-node-card arch-worker" style="--node-x: 50%; --node-y: 80%;">
+                    <div class="arch-node-icon arch-node-icon-worker">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div class="arch-node-info">
+                        <strong>Worker 2</strong>
+                        <span>Git worktree</span>
+                    </div>
+                </div>
+                <div class="arch-node-card arch-worker" style="--node-x: 75%; --node-y: 80%;">
+                    <div class="arch-node-icon arch-node-icon-worker">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div class="arch-node-info">
+                        <strong>Worker N</strong>
+                        <span>Git worktree</span>
+                    </div>
+                </div>
+            </div>
+            <div class="arch-features" data-animate="fade-up" data-delay="200">
+                <div class="arch-feature">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                    <span>Isolated Worktrees</span>
+                </div>
+                <div class="arch-feature">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+                    <span>Docker Containers</span>
+                </div>
+                <div class="arch-feature">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+                    <span>Real-time Sync</span>
                 </div>
             </div>
         </div>
