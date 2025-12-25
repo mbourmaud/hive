@@ -201,7 +201,7 @@ if [ $? -eq 0 ]; then
 fi
 
 log_test "Checking hive.yaml structure"
-if grep -q "workspace_name:" hive.yaml && grep -q "agents:" hive.yaml; then
+if grep -q "workspace:" hive.yaml && grep -q "agents:" hive.yaml; then
     pass
 else
     fail "hive.yaml missing required fields"

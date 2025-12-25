@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var forceClean bool
+
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Remove all hive files from the project",
@@ -247,4 +249,5 @@ func pluralize(count int) string {
 
 func init() {
 	rootCmd.AddCommand(cleanCmd)
+	cleanCmd.Flags().BoolVar(&forceClean, "force", false, "Force clean without confirmation")
 }
