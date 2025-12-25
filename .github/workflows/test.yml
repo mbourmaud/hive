@@ -7,8 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
+  # Job 1: Go Unit Tests (fast, runs on all OS)
+  unit-tests:
+    name: Go Unit Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -27,12 +28,139 @@ jobs:
         run: go mod download
 
       - name: Build binary
-        run: go build -o hive .
+        run: make build
 
-      - name: Run tests
-        run: go test -v ./cmd/... ./internal/...
+      - name: Run Go unit tests
+        run: make test
 
       - name: Test CLI commands
         run: |
           ./hive --help
-          ./hive --version || true
+          ./hive --version
+
+  # Job 2: Smoke Tests (fast, critical path)
+  smoke-tests:
+    name: Smoke Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI Test"
+
+      - name: Run smoke tests
+        run: make test-smoke
+
+  # Job 3: Git/Worktree Integration Tests (CRITICAL)
+  git-tests:
+    name: Git/Worktree Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI Test"
+
+      - name: Run Git/worktree tests
+        run: make test-git
+
+  # Job 4: Docker Integration Tests (Linux only, requires Docker)
+  docker-tests:
+    name: Docker Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run Docker integration tests
+        run: make test-docker
+
+  # Job 5: E2E Worker Daemon Tests (Linux only, full stack)
+  e2e-tests:
+    name: E2E Worker Daemon Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI Test"
+
+      - name: Run E2E tests
+        run: make test-e2e
+        timeout-minutes: 10
+
+  # Job 6: Test Summary (runs after all tests)
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, smoke-tests, git-tests, docker-tests, e2e-tests]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "✓ Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "✓ Smoke Tests: ${{ needs.smoke-tests.result }}"
+          echo "✓ Git Tests: ${{ needs.git-tests.result }}"
+          echo "✓ Docker Tests: ${{ needs.docker-tests.result }}"
+          echo "✓ E2E Tests: ${{ needs.e2e-tests.result }}"
+
+          if [ "${{ needs.unit-tests.result }}" != "success" ] || \
+             [ "${{ needs.smoke-tests.result }}" != "success" ] || \
+             [ "${{ needs.git-tests.result }}" != "success" ] || \
+             [ "${{ needs.docker-tests.result }}" != "success" ] || \
+             [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "❌ Some tests failed"
+            exit 1
+          fi
+
+          echo "✅ All tests passed!"
