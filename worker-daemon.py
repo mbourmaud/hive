@@ -135,6 +135,44 @@ class HiveWorkerDaemon:
         except redis.RedisError as e:
             logger.warning(f"Failed to log to Redis: {e}")
 
+    def on_claude_event(self, event: Dict[str, Any]):
+        """
+        Callback for Claude CLI stream-json events.
+        Logs tool calls, results, and thinking to Redis in real-time.
+        """
+        event_type = event.get('type')
+
+        if event_type == 'assistant':
+            # Claude's thinking/response message
+            message = event.get('message', {})
+            content = message.get('content', [])
+            for block in content:
+                if block.get('type') == 'tool_use':
+                    tool_name = block.get('name', 'unknown')
+                    tool_input = block.get('input', {})
+                    logger.info(f"🔧 [stream] Tool call: {tool_name}")
+                    self.log_activity('tool_call', tool_name, {'input': tool_input})
+                elif block.get('type') == 'text':
+                    text = block.get('text', '').strip()
+                    if text and len(text) > 20:  # Only log substantial text
+                        logger.debug(f"💭 [stream] Thinking: {text[:100]}...")
+                        self.log_activity('thinking', text[:500])
+
+        elif event_type == 'content_block_start':
+            # Tool use starting
+            block = event.get('content_block', {})
+            if block.get('type') == 'tool_use':
+                tool_name = block.get('name', 'unknown')
+                logger.info(f"🔧 [stream] Starting tool: {tool_name}")
+                self.log_activity('tool_start', tool_name)
+
+        elif event_type == 'result':
+            # Final result
+            result = event.get('result', '')
+            if result:
+                logger.debug(f"✓ [stream] Result received")
+                # Don't log full result, it's already in task completion
+
     def dequeue_task(self) -> Optional[Dict[str, Any]]:
         """Atomically dequeue a task from Redis queue to active list"""
         try:
@@ -263,12 +301,13 @@ Complete this task now using the available tools."""
                 iteration += 1
                 logger.debug(f"Iteration {iteration}/{self.max_iterations}")
 
-                # Call Claude backend with tools
+                # Call Claude backend with tools and event callback for streaming logs
                 response = self.backend.send_message(
                     messages=messages,
                     system=system_prompt,
                     max_tokens=8000,
-                    tools=TOOL_DEFINITIONS
+                    tools=TOOL_DEFINITIONS,
+                    on_event=self.on_claude_event
                 )
 
                 logger.debug(f"Stop reason: {response['stop_reason']}")

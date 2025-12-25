@@ -14,9 +14,12 @@ import json
 import logging
 import subprocess
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 
 logger = logging.getLogger(__name__)
+
+# Type alias for event callback
+EventCallback = Callable[[Dict[str, Any]], None]
 
 
 class ClaudeBackend(ABC):
@@ -31,7 +34,8 @@ class ClaudeBackend(ABC):
         messages: List[Dict[str, Any]],
         system: str,
         max_tokens: int = 4096,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        on_event: Optional[EventCallback] = None
     ) -> Dict[str, Any]:
         """
         Send a message to Claude and get response.
@@ -41,6 +45,7 @@ class ClaudeBackend(ABC):
             system: System prompt
             max_tokens: Maximum tokens in response
             tools: Optional list of tool definitions
+            on_event: Optional callback for streaming events (CLI backend only)
 
         Returns:
             Response dict with 'content', 'stop_reason', etc.
@@ -71,7 +76,8 @@ class AnthropicAPIBackend(ClaudeBackend):
         messages: List[Dict[str, Any]],
         system: str,
         max_tokens: int = 4096,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        on_event: Optional[EventCallback] = None
     ) -> Dict[str, Any]:
         """Send message via Anthropic SDK"""
         kwargs = {
@@ -127,10 +133,11 @@ class ClaudeCLIBackend(ClaudeBackend):
         messages: List[Dict[str, Any]],
         system: str,
         max_tokens: int = 4096,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        on_event: Optional[EventCallback] = None
     ) -> Dict[str, Any]:
         """
-        Send message via Claude CLI subprocess.
+        Send message via Claude CLI subprocess with streaming JSON output.
 
         Note: This creates a new session for each call, so no conversation memory
         between tasks. Good for isolated task execution.
@@ -150,34 +157,72 @@ class ClaudeCLIBackend(ClaudeBackend):
 
         full_prompt = "".join(prompt_parts)
 
-        # Call claude CLI
+        # Call claude CLI with stream-json for real-time events
         try:
-            # Use 'claude -p' for non-interactive mode
             cmd = [
                 "claude",
                 "-p",  # Print mode (non-interactive)
+                "--verbose",  # Required for stream-json with -p
+                "--output-format", "stream-json",  # Stream JSON events
                 "--model", self._map_model_name(self.model),
                 "--dangerously-skip-permissions",  # Skip permission prompts in daemon
                 full_prompt
             ]
 
-            result = subprocess.run(
+            # Use Popen for streaming output
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
-                text=True,
-                timeout=None  # No timeout - let Claude complete the task
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
 
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout
-                logger.error(f"Claude CLI error: {error_msg}")
-                raise RuntimeError(f"Claude CLI failed: {error_msg}")
+            final_text = ""
+            events_collected = []
 
-            # Parse response
-            response_text = result.stdout.strip()
+            # Read and process each line of JSON output
+            for line in process.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    event = json.loads(line)
+                    events_collected.append(event)
+
+                    # Fire callback if provided
+                    if on_event:
+                        on_event(event)
+
+                    # Collect final response text
+                    event_type = event.get("type")
+                    if event_type == "assistant":
+                        # Final assistant message
+                        message = event.get("message", {})
+                        content = message.get("content", [])
+                        for block in content:
+                            if block.get("type") == "text":
+                                final_text = block.get("text", "")
+                    elif event_type == "result":
+                        # Result event contains the final text
+                        result_text = event.get("result", "")
+                        if result_text:
+                            final_text = result_text
+
+                except json.JSONDecodeError:
+                    # Not JSON, might be plain text fallback
+                    final_text += line + "\n"
+
+            # Wait for process to complete
+            process.wait()
+
+            if process.returncode != 0:
+                stderr = process.stderr.read() if process.stderr else ""
+                logger.error(f"Claude CLI error (code {process.returncode}): {stderr}")
+                raise RuntimeError(f"Claude CLI failed: {stderr}")
 
             return {
-                "content": [{"type": "text", "text": response_text}],
+                "content": [{"type": "text", "text": final_text.strip()}],
                 "stop_reason": "end_turn",
                 "usage": {
                     "input_tokens": 0,  # CLI doesn't provide token counts
@@ -234,7 +279,8 @@ class BedrockBackend(ClaudeBackend):
         messages: List[Dict[str, Any]],
         system: str,
         max_tokens: int = 4096,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
+        on_event: Optional[EventCallback] = None
     ) -> Dict[str, Any]:
         """Send message via AWS Bedrock"""
 

@@ -1,0 +1,79 @@
+#!/bin/bash
+# Log a message to Redis for Queen visibility (for Workers)
+#
+# Usage: hive-log "message" [level]
+#
+# Levels: info (default), warning, error, debug
+#
+# Examples:
+#   hive-log "Starting code analysis"
+#   hive-log "Cannot find config file" warning
+#   hive-log "BLOCKED: Tests failing, need help" error
+
+set -e
+
+MESSAGE="$1"
+LEVEL="${2:-info}"
+
+if [ -z "$MESSAGE" ]; then
+    echo "Usage: hive-log \"message\" [level]"
+    echo ""
+    echo "Levels: info, warning, error, debug"
+    echo ""
+    echo "Examples:"
+    echo "  hive-log \"Starting code analysis\""
+    echo "  hive-log \"Cannot find config file\" warning"
+    echo "  hive-log \"BLOCKED: Tests failing\" error"
+    exit 1
+fi
+
+AGENT="${AGENT_ID:-unknown}"
+REDIS_HOST="${REDIS_HOST:-hive-redis}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+TIMESTAMP=$(date -Iseconds 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
+
+# Get current task ID if available
+ACTIVE=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" LINDEX "hive:active:$AGENT" 0 2>/dev/null || echo "")
+if [ -n "$ACTIVE" ] && [ "$ACTIVE" != "(nil)" ]; then
+    TASK_ID=$(echo "$ACTIVE" | jq -r '.id // "none"' 2>/dev/null || echo "none")
+else
+    TASK_ID="none"
+fi
+
+# Log to agent-specific stream
+redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" XADD "hive:logs:$AGENT" MAXLEN "~" 1000 "*" \
+    timestamp "$TIMESTAMP" \
+    agent "$AGENT" \
+    task_id "$TASK_ID" \
+    event "drone_log" \
+    level "$LEVEL" \
+    content "$MESSAGE" > /dev/null
+
+# Log to global stream
+redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" XADD "hive:logs:all" MAXLEN "~" 5000 "*" \
+    timestamp "$TIMESTAMP" \
+    agent "$AGENT" \
+    task_id "$TASK_ID" \
+    event "drone_log" \
+    level "$LEVEL" \
+    content "$MESSAGE" > /dev/null
+
+# Publish for real-time subscribers
+redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" PUBLISH "hive:activity:$AGENT" \
+    "{\"timestamp\":\"$TIMESTAMP\",\"agent\":\"$AGENT\",\"task_id\":\"$TASK_ID\",\"event\":\"drone_log\",\"level\":\"$LEVEL\",\"content\":\"$MESSAGE\"}" > /dev/null
+
+# Visual feedback based on level
+case "$LEVEL" in
+    error)
+        echo "🔴 [$AGENT] $MESSAGE"
+        ;;
+    warning)
+        echo "🟡 [$AGENT] $MESSAGE"
+        ;;
+    debug)
+        echo "🔵 [$AGENT] $MESSAGE"
+        ;;
+    *)
+        echo "📝 [$AGENT] $MESSAGE"
+        ;;
+esac

@@ -236,4 +236,68 @@ my-tasks              # Check your queue and active task
 take-task             # Get next task from queue
 task-done             # Mark task as completed (CI must be GREEN!)
 task-failed "message" # Mark task as failed
+hive-log "message"    # Log activity for Queen visibility
+```
+
+## Logging and Communication
+
+The Queen monitors your activity through Redis logs. Tool calls are logged automatically, but you should also manually log important status updates.
+
+### Using hive-log
+
+```bash
+# Log progress
+hive-log "Starting code analysis"
+hive-log "Found 5 files to modify"
+
+# Log warnings
+hive-log "Config file missing, using defaults" warning
+
+# Log errors/blockers
+hive-log "BLOCKED: Tests failing, need clarification" error
+hive-log "Cannot access API endpoint" error
+
+# Debug info
+hive-log "Processing batch 3/10" debug
+```
+
+### When to Log
+
+**DO log:**
+- When starting a significant step
+- When blocked or encountering unexpected issues
+- Progress milestones (e.g., "3/5 tests fixed")
+- Important decisions you're making
+- When waiting for CI
+
+**DON'T log:**
+- Every single command you run (automatic logging handles this)
+- Trivial operations
+- Sensitive data (passwords, tokens)
+
+### Log Levels
+
+| Level | Icon | Use When |
+|-------|------|----------|
+| `info` (default) | Blue | Normal progress updates |
+| `warning` | Yellow | Something unexpected but handled |
+| `error` | Red | Blocked, need help, or failures |
+| `debug` | Gray | Detailed info for troubleshooting |
+
+### Example Workflow with Logging
+
+```bash
+hive-log "Starting task: Implement user authentication"
+
+# Work on code...
+hive-log "Created auth service, now adding tests"
+
+# If blocked
+hive-log "BLOCKED: Database schema unclear, waiting for clarification" error
+
+# Progress update
+hive-log "4/5 tests passing, fixing last one"
+
+# Before completing
+hive-log "CI green, creating PR"
 ```
