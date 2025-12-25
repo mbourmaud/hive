@@ -67,6 +67,21 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Step 1: Re-extract embedded files to update scripts/configs
 	fmt.Printf("%s ", ui.StyleDim.Render("📦 Updating Hive files..."))
+
+	// Remove old files that might have permission issues
+	filesToRemove := []string{
+		filepath.Join(hiveDir, "docker"),
+		filepath.Join(hiveDir, "entrypoint.sh"),
+		filepath.Join(hiveDir, "start-worker.sh"),
+		filepath.Join(hiveDir, "worker-daemon.py"),
+		filepath.Join(hiveDir, "tools.py"),
+		filepath.Join(hiveDir, "scripts"),
+		filepath.Join(hiveDir, "templates"),
+	}
+	for _, f := range filesToRemove {
+		os.RemoveAll(f) // Ignore errors, file might not exist
+	}
+
 	if err := extractHiveFiles(""); err != nil {
 		return fmt.Errorf("failed to extract hive files: %w", err)
 	}
