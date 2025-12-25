@@ -103,7 +103,7 @@ class HiveWorkerDaemon:
         logger.info(f"🐝 HIVE Worker {self.agent_id} initialized (DAEMON mode)")
         logger.info(f"📂 Workspace: {self.workspace} ({self.workspace_name})")
         logger.info(f"🤖 Model: {self.model}")
-        logger.info(f"⏱️  Poll interval: {self.poll_interval}s")
+        logger.info(f"⏱️ Poll interval: {self.poll_interval}s")
         logger.info(f"🔧 Max iterations: {self.max_iterations}")
 
     def dequeue_task(self) -> Optional[Dict[str, Any]]:
