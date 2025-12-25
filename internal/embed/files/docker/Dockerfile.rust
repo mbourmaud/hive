@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     redis-tools \
     expect \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Claude Code)

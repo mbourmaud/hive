@@ -152,12 +152,13 @@ class ClaudeCLIBackend(ClaudeBackend):
 
         # Call claude CLI
         try:
-            # Use 'claude chat' for interactive-like experience
-            # We pass the full conversation as a single prompt
+            # Use 'claude -p' for non-interactive mode
             cmd = [
-                "claude", "chat",
+                "claude",
+                "-p",  # Print mode (non-interactive)
                 "--model", self._map_model_name(self.model),
-                "--prompt", full_prompt
+                "--dangerously-skip-permissions",  # Skip permission prompts in daemon
+                full_prompt
             ]
 
             result = subprocess.run(

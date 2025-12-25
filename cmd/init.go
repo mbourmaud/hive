@@ -21,6 +21,8 @@ var (
 	flagEmail          string
 	flagName           string
 	flagToken          string
+	flagApiKey         string
+	flagAuthBackend    string
 	flagWorkspace      string
 	flagWorkers        int
 	flagGitURL         string
@@ -48,7 +50,9 @@ func init() {
 	initCmd.Flags().BoolVar(&flagNonInteractive, "no-interactive", false, "Skip interactive prompts, use flags only")
 	initCmd.Flags().StringVar(&flagEmail, "email", "", "Git user email")
 	initCmd.Flags().StringVar(&flagName, "name", "", "Git user name")
-	initCmd.Flags().StringVar(&flagToken, "token", "", "Claude OAuth token")
+	initCmd.Flags().StringVar(&flagToken, "token", "", "Claude OAuth token (for cli backend)")
+	initCmd.Flags().StringVar(&flagApiKey, "api-key", "", "Anthropic API key (for api backend)")
+	initCmd.Flags().StringVar(&flagAuthBackend, "auth", "cli", "Auth backend: cli (OAuth), api (API key), bedrock (AWS)")
 	initCmd.Flags().StringVar(&flagWorkspace, "workspace", "my-project", "Workspace name")
 	initCmd.Flags().IntVar(&flagWorkers, "workers", 2, "Number of workers to start")
 	initCmd.Flags().StringVar(&flagGitURL, "git-url", "", "Git repository URL to clone (optional)")
@@ -82,6 +86,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if flagToken == "" {
 			flagToken = claudeToken
 		}
+		if flagApiKey == "" {
+			flagApiKey = os.Getenv("ANTHROPIC_API_KEY")
+		}
 		if flagWorkspace == "my-project" && workspaceName != "" {
 			flagWorkspace = workspaceName
 		}
@@ -94,12 +101,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		cfg = map[string]string{
-			"GIT_USER_EMAIL":          flagEmail,
-			"GIT_USER_NAME":           flagName,
-			"CLAUDE_CODE_OAUTH_TOKEN": flagToken,
-			"WORKSPACE_NAME":          flagWorkspace,
-			"GIT_REPO_URL":            flagGitURL,
-			"PROJECT_TYPE":            projectType,
+			"GIT_USER_EMAIL":       flagEmail,
+			"GIT_USER_NAME":        flagName,
+			"WORKSPACE_NAME":       flagWorkspace,
+			"GIT_REPO_URL":         flagGitURL,
+			"PROJECT_TYPE":         projectType,
+			"HIVE_CLAUDE_BACKEND":  flagAuthBackend,
+		}
+
+		// Add auth credentials based on backend
+		switch flagAuthBackend {
+		case "cli":
+			cfg["CLAUDE_CODE_OAUTH_TOKEN"] = flagToken
+		case "api":
+			cfg["ANTHROPIC_API_KEY"] = flagApiKey
+		case "bedrock":
+			cfg["AWS_PROFILE"] = os.Getenv("AWS_PROFILE")
+			cfg["AWS_REGION"] = os.Getenv("AWS_REGION")
 		}
 	} else {
 		// Interactive mode with auto-detection
@@ -310,22 +328,87 @@ func interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeT
 		}
 	}
 
-	// Handle Claude token
+	// Detect available auth methods
+	apiKey := detectAnthropicApiKey()
+
+	// Ask for auth mode
+	fmt.Println("🔑 Claude Authentication")
+	fmt.Println("   1. OAuth (Claude Max/Pro - FREE)")
+	fmt.Println("   2. API Key (Pay-as-you-go)")
+	fmt.Println("   3. AWS Bedrock (Enterprise)")
+
+	// Set default based on what's detected
+	defaultChoice := "1"
 	if claudeToken != "" {
-		fmt.Println("🔑 Claude token detected from ~/.claude")
-		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = claudeToken
-	} else {
-		fmt.Println("🔑 Claude Authentication")
-		fmt.Println("   Get your token: claude /auth")
-		tokenInput, err := ui.PromptSecret("   OAuth Token")
+		fmt.Printf("   %s\n", ui.StyleDim.Render("OAuth token detected"))
+	}
+	if apiKey != "" {
+		fmt.Printf("   %s\n", ui.StyleDim.Render("API key detected"))
+		if claudeToken == "" {
+			defaultChoice = "2"
+		}
+	}
+
+	authChoice, err := ui.PromptDefault("Choose auth method", defaultChoice)
+	if err != nil {
+		return nil, err
+	}
+
+	switch authChoice {
+	case "1": // OAuth
+		cfg["HIVE_CLAUDE_BACKEND"] = "cli"
+		if claudeToken != "" {
+			cfg["CLAUDE_CODE_OAUTH_TOKEN"] = claudeToken
+		} else {
+			fmt.Println("   Get your token: claude /auth")
+			tokenInput, err := ui.PromptSecret("   OAuth Token")
+			if err != nil {
+				return nil, err
+			}
+			cfg["CLAUDE_CODE_OAUTH_TOKEN"] = tokenInput
+		}
+
+	case "2": // API Key
+		cfg["HIVE_CLAUDE_BACKEND"] = "api"
+		if apiKey != "" {
+			cfg["ANTHROPIC_API_KEY"] = apiKey
+		} else {
+			fmt.Println("   Get your key: https://console.anthropic.com/settings/keys")
+			keyInput, err := ui.PromptSecret("   API Key")
+			if err != nil {
+				return nil, err
+			}
+			cfg["ANTHROPIC_API_KEY"] = keyInput
+		}
+
+	case "3": // Bedrock
+		cfg["HIVE_CLAUDE_BACKEND"] = "bedrock"
+		profile, err := ui.PromptDefault("   AWS Profile", "default")
 		if err != nil {
 			return nil, err
 		}
-		cfg["CLAUDE_CODE_OAUTH_TOKEN"] = tokenInput
+		cfg["AWS_PROFILE"] = profile
+		region, err := ui.PromptDefault("   AWS Region", "us-east-1")
+		if err != nil {
+			return nil, err
+		}
+		cfg["AWS_REGION"] = region
+
+	default:
+		// Default to OAuth
+		cfg["HIVE_CLAUDE_BACKEND"] = "cli"
+		if claudeToken != "" {
+			cfg["CLAUDE_CODE_OAUTH_TOKEN"] = claudeToken
+		}
 	}
 	fmt.Println()
 
 	return cfg, nil
+}
+
+// detectAnthropicApiKey attempts to find Anthropic API key from environment
+func detectAnthropicApiKey() string {
+	return os.Getenv("ANTHROPIC_API_KEY")
 }
 
 func validateFlags() error {
@@ -335,12 +418,26 @@ func validateFlags() error {
 	if flagName == "" {
 		return fmt.Errorf("--name is required in non-interactive mode")
 	}
-	if flagToken == "" {
-		return fmt.Errorf("--token is required in non-interactive mode")
-	}
 	if err := validateEmail(flagEmail); err != nil {
 		return err
 	}
+
+	// Validate auth based on backend
+	switch flagAuthBackend {
+	case "cli":
+		if flagToken == "" {
+			return fmt.Errorf("--token is required for cli backend (or set CLAUDE_CODE_OAUTH_TOKEN)")
+		}
+	case "api":
+		if flagApiKey == "" {
+			return fmt.Errorf("--api-key is required for api backend (or set ANTHROPIC_API_KEY)")
+		}
+	case "bedrock":
+		// Bedrock uses AWS credentials from environment
+	default:
+		return fmt.Errorf("--auth must be one of: cli, api, bedrock")
+	}
+
 	return nil
 }
 
@@ -372,55 +469,94 @@ func validateEmail(email string) error {
 }
 
 func writeEnvFile(cfg map[string]string, workers int) error {
-	// Read .env.example from embedded files
-	template, err := embed.GetFile(".env.example")
-	if err != nil {
-		// Fallback: generate minimal .env if template not found
-		return writeMinimalEnvFile(cfg)
-	}
+	// Generate clean .env based on auth mode chosen
+	var content strings.Builder
 
-	content := string(template)
+	content.WriteString("# ===========================================\n")
+	content.WriteString("# Hive Configuration (generated by hive init)\n")
+	content.WriteString("# ===========================================\n\n")
 
-	// Replace placeholders
-	content = strings.ReplaceAll(content, "your.email@example.com", cfg["GIT_USER_EMAIL"])
-	content = strings.ReplaceAll(content, "Your Name", cfg["GIT_USER_NAME"])
-	content = strings.ReplaceAll(content, "your_oauth_token_here", cfg["CLAUDE_CODE_OAUTH_TOKEN"])
-	content = strings.ReplaceAll(content, "my-project", cfg["WORKSPACE_NAME"])
+	// Git config
+	content.WriteString("# Git User\n")
+	content.WriteString(fmt.Sprintf("GIT_USER_EMAIL=%s\n", cfg["GIT_USER_EMAIL"]))
+	content.WriteString(fmt.Sprintf("GIT_USER_NAME=%s\n", cfg["GIT_USER_NAME"]))
+	content.WriteString("\n")
 
-	// Add git URL if provided
+	// Workspace
+	content.WriteString("# Workspace\n")
+	content.WriteString(fmt.Sprintf("WORKSPACE_NAME=%s\n", cfg["WORKSPACE_NAME"]))
 	if cfg["GIT_REPO_URL"] != "" {
-		content = strings.ReplaceAll(content, "# GIT_REPO_URL=https://github.com/user/repo.git",
-			"GIT_REPO_URL="+cfg["GIT_REPO_URL"])
+		content.WriteString(fmt.Sprintf("GIT_REPO_URL=%s\n", cfg["GIT_REPO_URL"]))
 	}
+	content.WriteString("\n")
 
-	// Set Dockerfile based on project type
+	// Claude Authentication - only write what's needed based on backend
+	content.WriteString("# ===========================================\n")
+	content.WriteString("# Claude Authentication\n")
+	content.WriteString("# ===========================================\n")
+
+	backend := cfg["HIVE_CLAUDE_BACKEND"]
+	if backend == "" {
+		backend = "cli" // Default to CLI/OAuth
+	}
+	content.WriteString(fmt.Sprintf("HIVE_CLAUDE_BACKEND=%s\n", backend))
+
+	switch backend {
+	case "cli":
+		if token := cfg["CLAUDE_CODE_OAUTH_TOKEN"]; token != "" {
+			content.WriteString(fmt.Sprintf("CLAUDE_CODE_OAUTH_TOKEN=%s\n", token))
+		}
+	case "api":
+		if key := cfg["ANTHROPIC_API_KEY"]; key != "" {
+			content.WriteString(fmt.Sprintf("ANTHROPIC_API_KEY=%s\n", key))
+		}
+	case "bedrock":
+		if profile := cfg["AWS_PROFILE"]; profile != "" {
+			content.WriteString(fmt.Sprintf("AWS_PROFILE=%s\n", profile))
+		}
+		if region := cfg["AWS_REGION"]; region != "" {
+			content.WriteString(fmt.Sprintf("AWS_REGION=%s\n", region))
+		}
+	}
+	content.WriteString("\n")
+
+	// Models
+	content.WriteString("# Claude Models\n")
+	content.WriteString("QUEEN_MODEL=opus\n")
+	content.WriteString("WORKER_MODEL=sonnet\n")
+	content.WriteString("\n")
+
+	// Dockerfile
+	dockerfile := "docker/Dockerfile.node"
 	if cfg["PROJECT_TYPE"] != "" && cfg["PROJECT_TYPE"] != "node" {
-		content = strings.ReplaceAll(content, "HIVE_DOCKERFILE=docker/Dockerfile.node",
-			"HIVE_DOCKERFILE=docker/Dockerfile."+cfg["PROJECT_TYPE"])
+		dockerfile = "docker/Dockerfile." + cfg["PROJECT_TYPE"]
 	}
+	content.WriteString("# Docker Image\n")
+	content.WriteString(fmt.Sprintf("HIVE_DOCKERFILE=%s\n", dockerfile))
+	content.WriteString("\n")
 
-	// Set Node version if detected
+	// Node version if detected
 	if cfg["NODE_VERSION"] != "" {
-		content += "\n# Node.js version (auto-detected from package.json)\n"
-		content += "NODE_VERSION=" + cfg["NODE_VERSION"] + "\n"
+		content.WriteString("# Node.js version (auto-detected)\n")
+		content.WriteString(fmt.Sprintf("NODE_VERSION=%s\n", cfg["NODE_VERSION"]))
+		content.WriteString("\n")
 	}
 
-	// Set worker modes based on user choice
+	// Worker modes
 	if workerMode := cfg["WORKER_MODE"]; workerMode != "" && workerMode != "hybrid" {
-		content += "\n# Worker modes (configured during init)\n"
+		content.WriteString("# Worker modes\n")
 		for i := 1; i <= workers; i++ {
-			content += fmt.Sprintf("WORKER_%d_MODE=%s\n", i, workerMode)
+			content.WriteString(fmt.Sprintf("WORKER_%d_MODE=%s\n", i, workerMode))
 		}
-	} else if workerMode == "hybrid" {
-		content += "\n# Worker modes (configure per-worker)\n"
-		content += "# Uncomment and set each worker mode:\n"
-		for i := 1; i <= workers; i++ {
-			content += fmt.Sprintf("# WORKER_%d_MODE=interactive\n", i)
-		}
+		content.WriteString("\n")
 	}
+
+	// Misc
+	content.WriteString("# Misc\n")
+	content.WriteString("AUTO_INSTALL_DEPS=true\n")
 
 	// Write to .hive/.env
-	return os.WriteFile(".hive/.env", []byte(content), 0600)
+	return os.WriteFile(".hive/.env", []byte(content.String()), 0600)
 }
 
 // writeMinimalEnvFile generates a minimal .env file without template

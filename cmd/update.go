@@ -74,6 +74,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		filepath.Join(hiveDir, "entrypoint.sh"),
 		filepath.Join(hiveDir, "start-worker.sh"),
 		filepath.Join(hiveDir, "worker-daemon.py"),
+		filepath.Join(hiveDir, "backends.py"),
 		filepath.Join(hiveDir, "tools.py"),
 		filepath.Join(hiveDir, "scripts"),
 		filepath.Join(hiveDir, "templates"),

@@ -7,6 +7,8 @@
 [![Tests](https://github.com/mbourmaud/hive/actions/workflows/test.yml/badge.svg)](https://github.com/mbourmaud/hive/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/mbourmaud/hive/branch/main/graph/badge.svg)](https://codecov.io/gh/mbourmaud/hive)
 
+🌐 **[Visit the website](https://mbourmaud.github.io/hive/)** for more information
+
 ---
 
 ## 🎯 What is Hive?

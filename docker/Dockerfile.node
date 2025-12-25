@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     redis-tools \
     expect \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for worker daemon
