@@ -65,14 +65,91 @@
         <div class="particle particle-8"></div>
     </div>
 
+    <!-- Animated bees -->
+    <div class="bees" aria-hidden="true">
+        <svg class="bee bee-1" viewBox="0 0 40 30" fill="none">
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="#F59E0B"/>
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="url(#beeStripes)" />
+            <ellipse cx="28" cy="15" rx="5" ry="4" fill="#1F2937"/>
+            <ellipse cx="10" cy="10" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-left"/>
+            <ellipse cx="10" cy="20" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-right"/>
+            <circle cx="31" cy="14" r="1" fill="white"/>
+            <defs>
+                <pattern id="beeStripes" patternUnits="userSpaceOnUse" width="6" height="16">
+                    <rect width="6" height="16" fill="#F59E0B"/>
+                    <rect y="0" width="6" height="4" fill="#1F2937"/>
+                    <rect y="8" width="6" height="4" fill="#1F2937"/>
+                </pattern>
+            </defs>
+        </svg>
+        <svg class="bee bee-2" viewBox="0 0 40 30" fill="none">
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="#F59E0B"/>
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="url(#beeStripes2)" />
+            <ellipse cx="28" cy="15" rx="5" ry="4" fill="#1F2937"/>
+            <ellipse cx="10" cy="10" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-left"/>
+            <ellipse cx="10" cy="20" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-right"/>
+            <circle cx="31" cy="14" r="1" fill="white"/>
+            <defs>
+                <pattern id="beeStripes2" patternUnits="userSpaceOnUse" width="6" height="16">
+                    <rect width="6" height="16" fill="#F59E0B"/>
+                    <rect y="0" width="6" height="4" fill="#1F2937"/>
+                    <rect y="8" width="6" height="4" fill="#1F2937"/>
+                </pattern>
+            </defs>
+        </svg>
+        <svg class="bee bee-3" viewBox="0 0 40 30" fill="none">
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="#F59E0B"/>
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="url(#beeStripes3)" />
+            <ellipse cx="28" cy="15" rx="5" ry="4" fill="#1F2937"/>
+            <ellipse cx="10" cy="10" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-left"/>
+            <ellipse cx="10" cy="20" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-right"/>
+            <circle cx="31" cy="14" r="1" fill="white"/>
+            <defs>
+                <pattern id="beeStripes3" patternUnits="userSpaceOnUse" width="6" height="16">
+                    <rect width="6" height="16" fill="#F59E0B"/>
+                    <rect y="0" width="6" height="4" fill="#1F2937"/>
+                    <rect y="8" width="6" height="4" fill="#1F2937"/>
+                </pattern>
+            </defs>
+        </svg>
+        <!-- Queen Bee - same as workers but with crown on head -->
+        <svg class="bee bee-queen" viewBox="0 0 40 30" fill="none">
+            <!-- Same body as workers -->
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="#F59E0B"/>
+            <ellipse cx="20" cy="15" rx="10" ry="8" fill="url(#queenStripes)" />
+            <ellipse cx="28" cy="15" rx="5" ry="4" fill="#1F2937"/>
+            <ellipse cx="10" cy="10" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-left"/>
+            <ellipse cx="10" cy="20" rx="6" ry="4" fill="white" opacity="0.7" class="bee-wing bee-wing-right"/>
+            <circle cx="31" cy="14" r="1" fill="white"/>
+            <!-- Crown on the head -->
+            <polygon points="24,12 26,6 28,9 30,6 32,12" fill="#FCD34D" stroke="#D97706" stroke-width="0.3"/>
+            <circle cx="26" cy="7.5" r="1" fill="#EF4444"/>
+            <circle cx="28" cy="8.5" r="1" fill="#3B82F6"/>
+            <circle cx="30" cy="7.5" r="1" fill="#10B981"/>
+            <defs>
+                <pattern id="queenStripes" patternUnits="userSpaceOnUse" width="6" height="16">
+                    <rect width="6" height="16" fill="#F59E0B"/>
+                    <rect y="0" width="6" height="4" fill="#1F2937"/>
+                    <rect y="8" width="6" height="4" fill="#1F2937"/>
+                </pattern>
+            </defs>
+        </svg>
+    </div>
+
     <!-- Navigation -->
     <nav class="nav">
         <div class="nav-container">
             <a href="#" class="nav-logo">
                 <svg class="logo-svg" viewBox="0 0 40 46" fill="none">
-                    <path d="M20 0L40 11.5V34.5L20 46L0 34.5V11.5L20 0Z" fill="currentColor"/>
+                    <defs>
+                        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FCD34D"/>
+                            <stop offset="100%" style="stop-color:#F59E0B"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M20 0L40 11.5V34.5L20 46L0 34.5V11.5L20 0Z" fill="url(#logoGradient)"/>
                     <path d="M20 8L32 15V29L20 36L8 29V15L20 8Z" fill="#FFFBEB"/>
-                    <circle cx="20" cy="22" r="5" fill="currentColor"/>
+                    <path d="M20 14L26 17.5V24.5L20 28L14 24.5V17.5L20 14Z" fill="url(#logoGradient)"/>
                 </svg>
                 <span class="logo-text">Hive</span>
             </a>
@@ -515,9 +592,15 @@
             <div class="footer-inner">
                 <div class="footer-brand">
                     <svg class="footer-logo" viewBox="0 0 40 46" fill="none">
-                        <path d="M20 0L40 11.5V34.5L20 46L0 34.5V11.5L20 0Z" fill="currentColor"/>
+                        <defs>
+                            <linearGradient id="footerLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#FCD34D"/>
+                                <stop offset="100%" style="stop-color:#F59E0B"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M20 0L40 11.5V34.5L20 46L0 34.5V11.5L20 0Z" fill="url(#footerLogoGradient)"/>
                         <path d="M20 8L32 15V29L20 36L8 29V15L20 8Z" fill="#1F2937"/>
-                        <circle cx="20" cy="22" r="5" fill="currentColor"/>
+                        <path d="M20 14L26 17.5V24.5L20 28L14 24.5V17.5L20 14Z" fill="url(#footerLogoGradient)"/>
                     </svg>
                     <span>Hive</span>
                 </div>
