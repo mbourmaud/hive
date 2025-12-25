@@ -9,6 +9,10 @@ set -e
 # Test configuration
 TEST_DIR=$(mktemp -d)
 HIVE_BIN="${HIVE_BIN:-hive}"
+# Convert to absolute path if relative
+if [[ "$HIVE_BIN" == ./* ]]; then
+    HIVE_BIN="$(pwd)/${HIVE_BIN#./}"
+fi
 
 # Colors
 GREEN='\033[0;32m'
