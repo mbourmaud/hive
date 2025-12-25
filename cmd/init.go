@@ -24,6 +24,7 @@ var (
 	flagWorkspace      string
 	flagWorkers        int
 	flagGitURL         string
+	flagSkipStart      bool
 )
 
 var initCmd = &cobra.Command{
@@ -51,6 +52,7 @@ func init() {
 	initCmd.Flags().StringVar(&flagWorkspace, "workspace", "my-project", "Workspace name")
 	initCmd.Flags().IntVar(&flagWorkers, "workers", 2, "Number of workers to start")
 	initCmd.Flags().StringVar(&flagGitURL, "git-url", "", "Git repository URL to clone (optional)")
+	initCmd.Flags().BoolVar(&flagSkipStart, "skip-start", false, "Skip starting Hive after initialization (for testing)")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -176,6 +178,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := createWorktrees(workers); err != nil {
 		fmt.Printf("%s\n", ui.StyleCyan.Render(fmt.Sprintf("🌳 Worktrees... ⚠️  %v", err)))
 		fmt.Printf("%s\n", ui.StyleDim.Render("   Agents will use empty workspaces"))
+	}
+
+	// Skip starting if --skip-start flag is set
+	if flagSkipStart {
+		fmt.Printf("\n%s\n", ui.StyleDim.Render("Skipping hive start (--skip-start flag)"))
+		fmt.Printf("%s\n", ui.StyleDim.Render("Run manually:"))
+		fmt.Printf("  %s\n\n", ui.StyleCyan.Render(fmt.Sprintf("hive start %d", workers)))
+		return nil
 	}
 
 	fmt.Print(ui.Header("🚀", "Starting Hive"))

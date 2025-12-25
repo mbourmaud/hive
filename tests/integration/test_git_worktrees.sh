@@ -127,6 +127,7 @@ export WORKSPACE_NAME="test-project"
 
 if $HIVE_BIN init \
     --no-interactive \
+    --skip-start \
     --email "$GIT_USER_EMAIL" \
     --name "$GIT_USER_NAME" \
     --workspace "$WORKSPACE_NAME" \
