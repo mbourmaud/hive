@@ -68,16 +68,21 @@ test-git: build
 	@echo "Running Git and worktree tests..."
 	@bash tests/integration/test_git_worktrees.sh
 
-# Run E2E worker daemon tests
+# Run E2E worker daemon tests (bash script)
 test-e2e: build
 	@echo "Running E2E worker daemon tests..."
 	@bash tests/e2e/test_worker_daemon.sh
 
-# Run all integration tests
+# Run Go integration tests (requires Docker)
+test-go-integration:
+	@echo "Running Go integration tests with testcontainers..."
+	go test -v -tags=integration ./tests/integration/...
+
+# Run all integration tests (bash scripts)
 test-integration: test-docker test-git
 
 # Run all tests (Go unit + integration + E2E)
-test-all: test test-smoke test-integration test-e2e
+test-all: test test-smoke test-integration test-e2e test-go-integration
 	@echo "✓ All tests passed!"
 
 # Run linter

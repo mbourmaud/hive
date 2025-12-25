@@ -150,11 +150,35 @@ jobs:
         run: make test-e2e
         timeout-minutes: 10
 
-  # Job 6: Test Summary (runs after all tests)
+  # Job 6: Go Integration Tests with testcontainers (Linux only)
+  go-integration-tests:
+    name: Go Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run Go integration tests
+        run: make test-go-integration
+        timeout-minutes: 10
+
+  # Job 7: Test Summary (runs after all tests)
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, smoke-tests, git-tests, docker-tests, e2e-tests]
+    needs: [unit-tests, smoke-tests, git-tests, docker-tests, e2e-tests, go-integration-tests]
     if: always()
 
     steps:
@@ -165,12 +189,14 @@ jobs:
           echo "✓ Git Tests: ${{ needs.git-tests.result }}"
           echo "✓ Docker Tests: ${{ needs.docker-tests.result }}"
           echo "✓ E2E Tests: ${{ needs.e2e-tests.result }}"
+          echo "✓ Go Integration Tests: ${{ needs.go-integration-tests.result }}"
 
           if [ "${{ needs.unit-tests.result }}" != "success" ] || \
              [ "${{ needs.smoke-tests.result }}" != "success" ] || \
              [ "${{ needs.git-tests.result }}" != "success" ] || \
              [ "${{ needs.docker-tests.result }}" != "success" ] || \
-             [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+             [ "${{ needs.e2e-tests.result }}" != "success" ] || \
+             [ "${{ needs.go-integration-tests.result }}" != "success" ]; then
             echo "❌ Some tests failed"
             exit 1
           fi

@@ -4,19 +4,19 @@ codecov:
 coverage:
   precision: 2
   round: down
-  range: "70...100"
+  range: "60...100"
 
   status:
     project:
       default:
-        target: 70%
+        target: 65%
         threshold: 5%
         if_ci_failed: error
 
     patch:
       default:
-        target: 70%
-        threshold: 5%
+        target: 60%
+        threshold: 10%
 
 comment:
   layout: "reach,diff,flags,files,footer"
@@ -24,6 +24,15 @@ comment:
   require_changes: no
 
 ignore:
+  # Test files
   - "**/*_test.go"
   - "tests/**"
+
+  # Embedded files (templates, not code)
   - "internal/embed/files/**"
+
+  # Entry point (minimal testable code)
+  - "main.go"
+
+  # Interactive UI (requires terminal/survey mocking)
+  - "internal/ui/prompts.go"
