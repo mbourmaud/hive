@@ -186,18 +186,36 @@ fi
 # Test 6: Configuration Files
 # ============================================
 
-log_test "Checking .env contains required variables"
-REQUIRED_VARS=("WORKSPACE_NAME" "GIT_USER_EMAIL" "CLAUDE_CODE_OAUTH_TOKEN")
+log_test "Checking .env contains required secrets"
+# .env now only contains secrets, not configuration
+# Configuration is in hive.yaml and generated to .env.generated
+REQUIRED_VARS=("HIVE_CLAUDE_BACKEND" "CLAUDE_CODE_OAUTH_TOKEN")
 for var in "${REQUIRED_VARS[@]}"; do
     if grep -q "^${var}=" .hive/.env; then
         :  # Variable found
     else
-        fail ".env missing variable: $var"
+        fail ".env missing secret: $var"
         break
     fi
 done
 if [ $? -eq 0 ]; then
     pass
+fi
+
+log_test "Checking .env.generated contains config from hive.yaml"
+if [ -f ".hive/.env.generated" ]; then
+    ENV_GEN_VARS=("WORKSPACE_NAME" "GIT_USER_EMAIL")
+    for var in "${ENV_GEN_VARS[@]}"; do
+        if grep -q "^${var}=" .hive/.env.generated; then
+            :  # Variable found
+        else
+            fail ".env.generated missing variable: $var"
+            break
+        fi
+    done
+    pass
+else
+    fail ".env.generated not created"
 fi
 
 log_test "Checking hive.yaml structure"
