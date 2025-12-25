@@ -6,329 +6,464 @@
     <title>Hive - Orchestrate Your AI Agents</title>
     <meta name="description" content="Hive is a powerful CLI tool for orchestrating multiple Claude AI agents in isolated Docker containers with Redis-based task coordination.">
 
+    <!-- Open Graph -->
+    <meta property="og:title" content="Hive - AI Agent Orchestration">
+    <meta property="og:description" content="Deploy multiple Claude AI agents in isolated Docker containers. Scale your AI workforce effortlessly.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mbourmaud.github.io/hive/">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5' fill='%23F59E0B'/%3E%3Cpolygon points='50,20 80,37.5 80,62.5 50,80 20,62.5 20,37.5' fill='%23FFFBEB'/%3E%3Ccircle cx='50' cy='50' r='12' fill='%23F59E0B'/%3E%3C/svg%3E">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
     <!-- Animated Background -->
-    <div class="honeycomb-bg" aria-hidden="true">
-        <div class="hex hex-1"></div>
-        <div class="hex hex-2"></div>
-        <div class="hex hex-3"></div>
-        <div class="hex hex-4"></div>
-        <div class="hex hex-5"></div>
-        <div class="hex hex-6"></div>
+    <div class="bg-pattern" aria-hidden="true">
+        <svg class="bg-honeycomb" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+                <pattern id="honeycomb" x="0" y="0" width="56" height="100" patternUnits="userSpaceOnUse" patternTransform="scale(0.5)">
+                    <path d="M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100" fill="none" stroke="currentColor" stroke-width="1"/>
+                    <path d="M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34" fill="none" stroke="currentColor" stroke-width="1"/>
+                </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#honeycomb)"/>
+        </svg>
+    </div>
+
+    <!-- Floating particles -->
+    <div class="particles" aria-hidden="true">
+        <div class="particle particle-1"></div>
+        <div class="particle particle-2"></div>
+        <div class="particle particle-3"></div>
+        <div class="particle particle-4"></div>
+        <div class="particle particle-5"></div>
     </div>
 
     <!-- Navigation -->
     <nav class="nav">
         <div class="nav-container">
             <a href="#" class="nav-logo">
-                <span class="logo-icon">⬡</span>
+                <svg class="logo-svg" viewBox="0 0 40 46" fill="none">
+                    <path d="M20 0L40 11.5V34.5L20 46L0 34.5V11.5L20 0Z" fill="currentColor"/>
+                    <path d="M20 8L32 15V29L20 36L8 29V15L20 8Z" fill="#FFFBEB"/>
+                    <circle cx="20" cy="22" r="5" fill="currentColor"/>
+                </svg>
                 <span class="logo-text">Hive</span>
             </a>
             <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#quickstart">Quick Start</a>
-                <a href="#architecture">Architecture</a>
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#quickstart" class="nav-link">Quick Start</a>
+                <a href="#architecture" class="nav-link">Architecture</a>
                 <a href="https://github.com/mbourmaud/hive" class="nav-cta" target="_blank" rel="noopener">
-                    <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                    GitHub
+                    <svg class="icon-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    <span>GitHub</span>
                 </a>
             </div>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </nav>
 
     <!-- Hero Section -->
     <section class="hero">
         <div class="hero-content">
-            <div class="hero-badge">
-                <span class="badge-dot"></span>
-                Open Source AI Orchestration
+            <div class="hero-badge" data-animate="fade-up">
+                <span class="badge-pulse"></span>
+                <span class="badge-text">Open Source AI Orchestration</span>
             </div>
-            <h1 class="hero-title">
+            <h1 class="hero-title" data-animate="fade-up" data-delay="100">
                 <span class="title-line">Orchestrate Your</span>
-                <span class="title-highlight">AI Agents</span>
+                <span class="title-gradient">AI Agents</span>
                 <span class="title-line">Like a Hive</span>
             </h1>
-            <p class="hero-description">
+            <p class="hero-subtitle" data-animate="fade-up" data-delay="200">
                 Deploy multiple Claude AI agents in isolated Docker containers.
                 Coordinate tasks through Redis queues. Scale your AI workforce effortlessly.
             </p>
-            <div class="hero-actions">
+            <div class="hero-buttons" data-animate="fade-up" data-delay="300">
                 <a href="#quickstart" class="btn btn-primary">
                     <span>Get Started</span>
-                    <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
                 </a>
-                <a href="https://github.com/mbourmaud/hive" class="btn btn-secondary" target="_blank" rel="noopener">
-                    View on GitHub
+                <a href="https://github.com/mbourmaud/hive" class="btn btn-ghost" target="_blank" rel="noopener">
+                    <svg class="btn-icon-left" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    <span>View on GitHub</span>
                 </a>
             </div>
-            <div class="hero-stats">
-                <div class="stat">
-                    <span class="stat-icon">⬡</span>
-                    <span class="stat-label">Multi-Agent</span>
+            <div class="hero-metrics" data-animate="fade-up" data-delay="400">
+                <div class="metric">
+                    <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span>Multi-Agent</span>
                 </div>
-                <div class="stat">
-                    <span class="stat-icon">⚡</span>
-                    <span class="stat-label">Redis Queues</span>
+                <div class="metric">
+                    <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    <span>Redis Queues</span>
                 </div>
-                <div class="stat">
-                    <span class="stat-icon">🐳</span>
-                    <span class="stat-label">Dockerized</span>
+                <div class="metric">
+                    <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="M8 12h.01M12 12h.01M16 12h.01"/>
+                    </svg>
+                    <span>Dockerized</span>
                 </div>
             </div>
         </div>
-        <div class="hero-visual">
-            <div class="hive-diagram">
-                <div class="queen-cell">
-                    <div class="cell-content">
-                        <span class="cell-icon">👑</span>
-                        <span class="cell-label">Queen</span>
+        <div class="hero-visual" data-animate="fade-in" data-delay="200">
+            <div class="hive-visual">
+                <!-- Central Queen -->
+                <div class="hive-queen">
+                    <svg viewBox="0 0 120 138" class="hex-shape">
+                        <defs>
+                            <linearGradient id="queenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#F59E0B"/>
+                                <stop offset="100%" stop-color="#D97706"/>
+                            </linearGradient>
+                        </defs>
+                        <polygon points="60,0 120,34.5 120,103.5 60,138 0,103.5 0,34.5" fill="url(#queenGrad)"/>
+                    </svg>
+                    <div class="hex-content">
+                        <svg class="crown-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/>
+                        </svg>
+                        <span>Queen</span>
                     </div>
-                    <div class="cell-pulse"></div>
+                    <div class="hex-glow"></div>
                 </div>
-                <div class="worker-ring">
-                    <div class="worker-cell worker-1">
-                        <span class="worker-icon">🐝</span>
-                    </div>
-                    <div class="worker-cell worker-2">
-                        <span class="worker-icon">🐝</span>
-                    </div>
-                    <div class="worker-cell worker-3">
-                        <span class="worker-icon">🐝</span>
-                    </div>
-                    <div class="worker-cell worker-4">
-                        <span class="worker-icon">🐝</span>
-                    </div>
-                    <div class="worker-cell worker-5">
-                        <span class="worker-icon">🐝</span>
-                    </div>
-                    <div class="worker-cell worker-6">
-                        <span class="worker-icon">🐝</span>
+
+                <!-- Connection Lines -->
+                <svg class="connection-svg" viewBox="0 0 400 400">
+                    <defs>
+                        <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#F59E0B" stop-opacity="0"/>
+                            <stop offset="50%" stop-color="#F59E0B"/>
+                            <stop offset="100%" stop-color="#F59E0B" stop-opacity="0"/>
+                        </linearGradient>
+                    </defs>
+                    <line x1="200" y1="200" x2="200" y2="60" class="conn-line" stroke="url(#lineGrad)"/>
+                    <line x1="200" y1="200" x2="320" y2="130" class="conn-line" stroke="url(#lineGrad)"/>
+                    <line x1="200" y1="200" x2="320" y2="270" class="conn-line" stroke="url(#lineGrad)"/>
+                    <line x1="200" y1="200" x2="200" y2="340" class="conn-line" stroke="url(#lineGrad)"/>
+                    <line x1="200" y1="200" x2="80" y2="270" class="conn-line" stroke="url(#lineGrad)"/>
+                    <line x1="200" y1="200" x2="80" y2="130" class="conn-line" stroke="url(#lineGrad)"/>
+                    <!-- Animated dots -->
+                    <circle r="4" fill="#F59E0B" class="conn-dot conn-dot-1"><animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L200,60"/></circle>
+                    <circle r="4" fill="#F59E0B" class="conn-dot conn-dot-2"><animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L320,130" begin="0.3s"/></circle>
+                    <circle r="4" fill="#F59E0B" class="conn-dot conn-dot-3"><animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L320,270" begin="0.6s"/></circle>
+                    <circle r="4" fill="#F59E0B" class="conn-dot conn-dot-4"><animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L200,340" begin="0.9s"/></circle>
+                    <circle r="4" fill="#F59E0B" class="conn-dot conn-dot-5"><animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L80,270" begin="1.2s"/></circle>
+                    <circle r="4" fill="#F59E0B" class="conn-dot conn-dot-6"><animateMotion dur="2s" repeatCount="indefinite" path="M200,200 L80,130" begin="1.5s"/></circle>
+                </svg>
+
+                <!-- Worker Hexagons -->
+                <div class="hive-worker worker-1">
+                    <svg viewBox="0 0 80 92" class="hex-shape-sm">
+                        <polygon points="40,0 80,23 80,69 40,92 0,69 0,23" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                    </svg>
+                    <div class="hex-content-sm">
+                        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                     </div>
                 </div>
-                <div class="connection-lines"></div>
+                <div class="hive-worker worker-2">
+                    <svg viewBox="0 0 80 92" class="hex-shape-sm">
+                        <polygon points="40,0 80,23 80,69 40,92 0,69 0,23" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                    </svg>
+                    <div class="hex-content-sm">
+                        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                </div>
+                <div class="hive-worker worker-3">
+                    <svg viewBox="0 0 80 92" class="hex-shape-sm">
+                        <polygon points="40,0 80,23 80,69 40,92 0,69 0,23" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                    </svg>
+                    <div class="hex-content-sm">
+                        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                </div>
+                <div class="hive-worker worker-4">
+                    <svg viewBox="0 0 80 92" class="hex-shape-sm">
+                        <polygon points="40,0 80,23 80,69 40,92 0,69 0,23" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                    </svg>
+                    <div class="hex-content-sm">
+                        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                </div>
+                <div class="hive-worker worker-5">
+                    <svg viewBox="0 0 80 92" class="hex-shape-sm">
+                        <polygon points="40,0 80,23 80,69 40,92 0,69 0,23" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                    </svg>
+                    <div class="hex-content-sm">
+                        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                </div>
+                <div class="hive-worker worker-6">
+                    <svg viewBox="0 0 80 92" class="hex-shape-sm">
+                        <polygon points="40,0 80,23 80,69 40,92 0,69 0,23" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+                    </svg>
+                    <div class="hex-content-sm">
+                        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
     <!-- Features Section -->
     <section id="features" class="features">
-        <div class="section-header">
-            <span class="section-tag">Capabilities</span>
-            <h2 class="section-title">Built for Scale</h2>
-            <p class="section-description">Everything you need to orchestrate a swarm of AI agents</p>
+        <div class="container">
+            <div class="section-header" data-animate="fade-up">
+                <span class="section-eyebrow">Capabilities</span>
+                <h2 class="section-title">Built for <span class="text-gradient">Scale</span></h2>
+                <p class="section-subtitle">Everything you need to orchestrate a swarm of AI agents</p>
+            </div>
+            <div class="features-grid">
+                <article class="feature-card" data-animate="fade-up" data-delay="0">
+                    <div class="feature-icon-wrapper">
+                        <svg class="feature-icon" viewBox="0 0 48 48" fill="none">
+                            <path d="M24 4L42 14V34L24 44L6 34V14L24 4Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+                            <circle cx="24" cy="24" r="6" fill="currentColor"/>
+                            <circle cx="24" cy="10" r="3" fill="currentColor" opacity="0.4"/>
+                            <circle cx="36" cy="18" r="3" fill="currentColor" opacity="0.4"/>
+                            <circle cx="36" cy="30" r="3" fill="currentColor" opacity="0.4"/>
+                            <circle cx="24" cy="38" r="3" fill="currentColor" opacity="0.4"/>
+                            <circle cx="12" cy="30" r="3" fill="currentColor" opacity="0.4"/>
+                            <circle cx="12" cy="18" r="3" fill="currentColor" opacity="0.4"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Multi-Agent Orchestration</h3>
+                    <p class="feature-desc">
+                        Deploy a Queen agent for coordination and multiple Worker agents for parallel task execution.
+                        Scale from 1 to N agents based on your workload.
+                    </p>
+                    <span class="feature-badge">Queen + Workers</span>
+                </article>
+
+                <article class="feature-card" data-animate="fade-up" data-delay="100">
+                    <div class="feature-icon-wrapper">
+                        <svg class="feature-icon" viewBox="0 0 48 48" fill="none">
+                            <rect x="6" y="14" width="36" height="28" rx="2" stroke="currentColor" stroke-width="2.5"/>
+                            <path d="M6 14L24 6L42 14" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+                            <path d="M16 24V34" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <path d="M24 22V36" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <path d="M32 26V32" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Git Worktree Isolation</h3>
+                    <p class="feature-desc">
+                        Each agent works in its own git worktree. No more branch conflicts.
+                        Parallel development on the same codebase, completely isolated.
+                    </p>
+                    <span class="feature-badge">Zero Conflicts</span>
+                </article>
+
+                <article class="feature-card" data-animate="fade-up" data-delay="200">
+                    <div class="feature-icon-wrapper">
+                        <svg class="feature-icon" viewBox="0 0 48 48" fill="none">
+                            <rect x="4" y="18" width="40" height="20" rx="3" stroke="currentColor" stroke-width="2.5"/>
+                            <circle cx="14" cy="28" r="5" fill="currentColor"/>
+                            <path d="M24 25H40" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M24 31H34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M14 10V18" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"/>
+                            <path d="M34 10V18" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"/>
+                            <circle cx="14" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="34" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Redis Task Queue</h3>
+                    <p class="feature-desc">
+                        Distributed task coordination through Redis.
+                        Assign tasks, track progress, and collect results across your agent swarm.
+                    </p>
+                    <span class="feature-badge">Real-time Sync</span>
+                </article>
+
+                <article class="feature-card" data-animate="fade-up" data-delay="300">
+                    <div class="feature-icon-wrapper">
+                        <svg class="feature-icon" viewBox="0 0 48 48" fill="none">
+                            <rect x="6" y="6" width="36" height="36" rx="4" stroke="currentColor" stroke-width="2.5"/>
+                            <path d="M14 24C14 18.5 18.5 14 24 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M34 24C34 29.5 29.5 34 24 34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                            <circle cx="14" cy="24" r="3" fill="currentColor"/>
+                            <circle cx="34" cy="24" r="3" fill="currentColor"/>
+                            <circle cx="24" cy="14" r="3" fill="currentColor"/>
+                            <circle cx="24" cy="34" r="3" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Docker Containerization</h3>
+                    <p class="feature-desc">
+                        Every agent runs in its own container with full environment isolation.
+                        Consistent, reproducible, and secure execution environment.
+                    </p>
+                    <span class="feature-badge">Isolated Environments</span>
+                </article>
+            </div>
         </div>
-        <div class="features-grid">
-            <div class="feature-card feature-1">
-                <div class="feature-icon">
-                    <svg viewBox="0 0 48 48" fill="none">
-                        <path d="M24 4L42 14V34L24 44L6 34V14L24 4Z" stroke="currentColor" stroke-width="2"/>
-                        <circle cx="24" cy="24" r="6" fill="currentColor"/>
-                        <circle cx="24" cy="10" r="3" fill="currentColor" opacity="0.5"/>
-                        <circle cx="36" cy="18" r="3" fill="currentColor" opacity="0.5"/>
-                        <circle cx="36" cy="30" r="3" fill="currentColor" opacity="0.5"/>
-                        <circle cx="24" cy="38" r="3" fill="currentColor" opacity="0.5"/>
-                        <circle cx="12" cy="30" r="3" fill="currentColor" opacity="0.5"/>
-                        <circle cx="12" cy="18" r="3" fill="currentColor" opacity="0.5"/>
-                    </svg>
-                </div>
-                <h3 class="feature-title">Multi-Agent Orchestration</h3>
-                <p class="feature-description">
-                    Deploy a Queen agent for coordination and multiple Worker agents for parallel task execution.
-                    Scale from 1 to N agents based on your workload.
-                </p>
-                <div class="feature-tag">Queen + Workers</div>
+    </section>
+
+    <!-- How it Works -->
+    <section class="how-it-works">
+        <div class="container">
+            <div class="section-header" data-animate="fade-up">
+                <span class="section-eyebrow">Workflow</span>
+                <h2 class="section-title">How it <span class="text-gradient">Works</span></h2>
+                <p class="section-subtitle">Get your hive running in three simple steps</p>
             </div>
-            <div class="feature-card feature-2">
-                <div class="feature-icon">
-                    <svg viewBox="0 0 48 48" fill="none">
-                        <path d="M8 12H40V36H8V12Z" stroke="currentColor" stroke-width="2"/>
-                        <path d="M8 12L24 4L40 12" stroke="currentColor" stroke-width="2"/>
-                        <path d="M16 20V28" stroke="currentColor" stroke-width="2"/>
-                        <path d="M24 18V30" stroke="currentColor" stroke-width="2"/>
-                        <path d="M32 22V26" stroke="currentColor" stroke-width="2"/>
-                    </svg>
+            <div class="steps">
+                <div class="step" data-animate="fade-up" data-delay="0">
+                    <div class="step-number">01</div>
+                    <div class="step-content">
+                        <h3>Install Hive CLI</h3>
+                        <p>One-line installation via curl. Works on macOS and Linux.</p>
+                        <code>curl -fsSL https://...install.sh | bash</code>
+                    </div>
                 </div>
-                <h3 class="feature-title">Git Worktree Isolation</h3>
-                <p class="feature-description">
-                    Each agent works in its own git worktree. No more branch conflicts.
-                    Parallel development on the same codebase, completely isolated.
-                </p>
-                <div class="feature-tag">Zero Conflicts</div>
-            </div>
-            <div class="feature-card feature-3">
-                <div class="feature-icon">
-                    <svg viewBox="0 0 48 48" fill="none">
-                        <rect x="6" y="20" width="36" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
-                        <circle cx="14" cy="28" r="4" fill="currentColor"/>
-                        <path d="M22 26H38" stroke="currentColor" stroke-width="2"/>
-                        <path d="M22 30H32" stroke="currentColor" stroke-width="2"/>
-                        <path d="M14 12V20" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/>
-                        <path d="M34 12V20" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/>
-                    </svg>
+                <div class="step" data-animate="fade-up" data-delay="100">
+                    <div class="step-number">02</div>
+                    <div class="step-content">
+                        <h3>Initialize Your Project</h3>
+                        <p>Run <code>hive init</code> to set up Docker compose, git worktrees, and configuration.</p>
+                    </div>
                 </div>
-                <h3 class="feature-title">Redis Task Queue</h3>
-                <p class="feature-description">
-                    Distributed task coordination through Redis.
-                    Assign tasks, track progress, and collect results across your agent swarm.
-                </p>
-                <div class="feature-tag">Real-time Sync</div>
-            </div>
-            <div class="feature-card feature-4">
-                <div class="feature-icon">
-                    <svg viewBox="0 0 48 48" fill="none">
-                        <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="2"/>
-                        <path d="M16 24C16 20 20 16 24 16" stroke="currentColor" stroke-width="2"/>
-                        <path d="M32 24C32 28 28 32 24 32" stroke="currentColor" stroke-width="2"/>
-                        <circle cx="16" cy="24" r="2" fill="currentColor"/>
-                        <circle cx="32" cy="24" r="2" fill="currentColor"/>
-                        <circle cx="24" cy="16" r="2" fill="currentColor"/>
-                        <circle cx="24" cy="32" r="2" fill="currentColor"/>
-                    </svg>
+                <div class="step" data-animate="fade-up" data-delay="200">
+                    <div class="step-number">03</div>
+                    <div class="step-content">
+                        <h3>Start Your Swarm</h3>
+                        <p>Launch your Queen and Workers with <code>hive start N</code>. Connect and orchestrate!</p>
+                    </div>
                 </div>
-                <h3 class="feature-title">Docker Containerization</h3>
-                <p class="feature-description">
-                    Every agent runs in its own container with full environment isolation.
-                    Consistent, reproducible, and secure execution environment.
-                </p>
-                <div class="feature-tag">Isolated Environments</div>
             </div>
         </div>
     </section>
 
     <!-- Quick Start Section -->
     <section id="quickstart" class="quickstart">
-        <div class="section-header">
-            <span class="section-tag">Installation</span>
-            <h2 class="section-title">Quick Start</h2>
-            <p class="section-description">Get your hive running in under a minute</p>
-        </div>
-        <div class="terminal-container">
-            <div class="terminal">
-                <div class="terminal-header">
-                    <div class="terminal-dots">
-                        <span class="dot dot-red"></span>
-                        <span class="dot dot-yellow"></span>
-                        <span class="dot dot-green"></span>
-                    </div>
-                    <span class="terminal-title">Terminal</span>
-                </div>
-                <div class="terminal-body">
-                    <div class="terminal-line">
-                        <span class="terminal-prompt">$</span>
-                        <span class="terminal-command">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</span>
-                        <span class="terminal-comment"># Install Hive CLI</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="terminal-prompt">$</span>
-                        <span class="terminal-command">cd your-project</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="terminal-prompt">$</span>
-                        <span class="terminal-command">hive init</span>
-                        <span class="terminal-comment"># Initialize your hive</span>
-                    </div>
-                    <div class="terminal-line terminal-output">
-                        <span class="output-success">✓</span> Created .hive/ directory
-                    </div>
-                    <div class="terminal-line terminal-output">
-                        <span class="output-success">✓</span> Generated docker-compose.yml
-                    </div>
-                    <div class="terminal-line terminal-output">
-                        <span class="output-success">✓</span> Created git worktrees for agents
-                    </div>
-                    <div class="terminal-line">
-                        <span class="terminal-prompt">$</span>
-                        <span class="terminal-command">hive start 3</span>
-                        <span class="terminal-comment"># Start 1 queen + 3 workers</span>
-                    </div>
-                    <div class="terminal-line terminal-output output-highlight">
-                        <span class="output-icon">🐝</span> Hive is running! Connect with: <span class="output-cmd">hive connect queen</span>
-                    </div>
-                </div>
+        <div class="container">
+            <div class="section-header" data-animate="fade-up">
+                <span class="section-eyebrow">Installation</span>
+                <h2 class="section-title">Quick <span class="text-gradient">Start</span></h2>
+                <p class="section-subtitle">Get your hive running in under a minute</p>
             </div>
-            <div class="quickstart-note">
-                <span class="note-icon">💡</span>
-                <span class="note-text">Requires Docker and a Claude API token. See <a href="https://github.com/mbourmaud/hive#prerequisites">prerequisites</a> for details.</span>
+            <div class="terminal-wrapper" data-animate="fade-up" data-delay="100">
+                <div class="terminal">
+                    <div class="terminal-header">
+                        <div class="terminal-buttons">
+                            <span class="terminal-btn close"></span>
+                            <span class="terminal-btn minimize"></span>
+                            <span class="terminal-btn maximize"></span>
+                        </div>
+                        <span class="terminal-title">zsh — hive</span>
+                    </div>
+                    <div class="terminal-body">
+                        <div class="term-line">
+                            <span class="term-prompt">~</span>
+                            <span class="term-cmd">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</span>
+                        </div>
+                        <div class="term-line term-output">
+                            <span class="term-success">✓</span> Hive installed successfully!
+                        </div>
+                        <div class="term-line">
+                            <span class="term-prompt">~</span>
+                            <span class="term-cmd">cd my-project && hive init</span>
+                        </div>
+                        <div class="term-line term-output"><span class="term-success">✓</span> Created .hive/ directory</div>
+                        <div class="term-line term-output"><span class="term-success">✓</span> Generated docker-compose.yml</div>
+                        <div class="term-line term-output"><span class="term-success">✓</span> Created git worktrees for agents</div>
+                        <div class="term-line">
+                            <span class="term-prompt">~/my-project</span>
+                            <span class="term-cmd">hive start 3</span>
+                        </div>
+                        <div class="term-line term-output term-highlight">
+                            <span class="term-bee">🐝</span> Hive is running! Connect: <span class="term-accent">hive connect queen</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="terminal-note">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                    <span>Requires Docker and a Claude API token. See <a href="https://github.com/mbourmaud/hive#prerequisites">prerequisites</a>.</span>
+                </div>
             </div>
         </div>
     </section>
 
     <!-- Architecture Section -->
     <section id="architecture" class="architecture">
-        <div class="section-header">
-            <span class="section-tag">How It Works</span>
-            <h2 class="section-title">Architecture</h2>
-            <p class="section-description">A distributed system inspired by nature</p>
-        </div>
-        <div class="arch-diagram">
-            <div class="arch-layer arch-top">
-                <div class="arch-node arch-queen">
-                    <div class="node-hex">
-                        <span class="node-emoji">👑</span>
-                    </div>
-                    <div class="node-info">
-                        <h4>Queen Agent</h4>
-                        <p>Coordinates tasks and manages the swarm</p>
-                    </div>
-                </div>
+        <div class="container">
+            <div class="section-header" data-animate="fade-up">
+                <span class="section-eyebrow">System Design</span>
+                <h2 class="section-title"><span class="text-gradient">Architecture</span></h2>
+                <p class="section-subtitle">A distributed system inspired by nature</p>
             </div>
-            <div class="arch-connector">
-                <div class="connector-line"></div>
-                <div class="arch-node arch-redis">
-                    <div class="node-box">
-                        <span class="node-icon">⚡</span>
-                    </div>
-                    <div class="node-info">
-                        <h4>Redis</h4>
-                        <p>Task queue & state</p>
-                    </div>
-                </div>
-                <div class="connector-line"></div>
-            </div>
-            <div class="arch-layer arch-bottom">
-                <div class="arch-node arch-worker">
-                    <div class="node-hex">
-                        <span class="node-emoji">🐝</span>
-                    </div>
-                    <div class="node-info">
-                        <h4>Worker 1</h4>
-                        <p>Isolated container</p>
+            <div class="arch-visual" data-animate="fade-up" data-delay="100">
+                <div class="arch-tier arch-tier-top">
+                    <div class="arch-node arch-queen-node">
+                        <div class="arch-hex">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+                        </div>
+                        <div class="arch-node-label">
+                            <strong>Queen Agent</strong>
+                            <span>Coordinates & delegates</span>
+                        </div>
                     </div>
                 </div>
-                <div class="arch-node arch-worker">
-                    <div class="node-hex">
-                        <span class="node-emoji">🐝</span>
+                <div class="arch-flow">
+                    <div class="arch-line"></div>
+                    <div class="arch-node arch-redis-node">
+                        <div class="arch-box">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        </div>
+                        <div class="arch-node-label">
+                            <strong>Redis</strong>
+                            <span>Task queue</span>
+                        </div>
                     </div>
-                    <div class="node-info">
-                        <h4>Worker 2</h4>
-                        <p>Isolated container</p>
+                    <div class="arch-line"></div>
+                </div>
+                <div class="arch-tier arch-tier-bottom">
+                    <div class="arch-node arch-worker-node">
+                        <div class="arch-hex arch-hex-worker">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        </div>
+                        <div class="arch-node-label">
+                            <strong>Worker 1</strong>
+                            <span>Git worktree</span>
+                        </div>
+                    </div>
+                    <div class="arch-node arch-worker-node">
+                        <div class="arch-hex arch-hex-worker">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        </div>
+                        <div class="arch-node-label">
+                            <strong>Worker 2</strong>
+                            <span>Git worktree</span>
+                        </div>
+                    </div>
+                    <div class="arch-node arch-worker-node">
+                        <div class="arch-hex arch-hex-worker">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        </div>
+                        <div class="arch-node-label">
+                            <strong>Worker N</strong>
+                            <span>Git worktree</span>
+                        </div>
                     </div>
                 </div>
-                <div class="arch-node arch-worker">
-                    <div class="node-hex">
-                        <span class="node-emoji">🐝</span>
-                    </div>
-                    <div class="node-info">
-                        <h4>Worker N</h4>
-                        <p>Isolated container</p>
-                    </div>
-                </div>
-            </div>
-            <div class="arch-labels">
-                <div class="arch-label label-git">
-                    <span class="label-icon">📁</span>
-                    <span>Git Worktrees</span>
-                </div>
-                <div class="arch-label label-docker">
-                    <span class="label-icon">🐳</span>
-                    <span>Docker Containers</span>
+                <div class="arch-tags">
+                    <span class="arch-tag"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clip-rule="evenodd"/><path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z"/></svg> Isolated Worktrees</span>
+                    <span class="arch-tag"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.321A1 1 0 0113.42 17H6.58a1 1 0 01-.316-1.949l.806-.32L7.22 14H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd"/></svg> Docker Containers</span>
                 </div>
             </div>
         </div>
@@ -336,39 +471,82 @@
 
     <!-- CTA Section -->
     <section class="cta">
-        <div class="cta-content">
-            <h2 class="cta-title">Ready to build your hive?</h2>
-            <p class="cta-description">Join the swarm and orchestrate your AI agents today.</p>
-            <div class="cta-actions">
-                <a href="https://github.com/mbourmaud/hive" class="btn btn-primary btn-large" target="_blank" rel="noopener">
-                    <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                    Star on GitHub
+        <div class="container">
+            <div class="cta-content" data-animate="fade-up">
+                <h2 class="cta-title">Ready to build your hive?</h2>
+                <p class="cta-subtitle">Join the swarm and orchestrate your AI agents today.</p>
+                <a href="https://github.com/mbourmaud/hive" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    <span>Star on GitHub</span>
                 </a>
             </div>
         </div>
-        <div class="cta-honeycomb" aria-hidden="true">
-            <div class="cta-hex"></div>
-            <div class="cta-hex"></div>
-            <div class="cta-hex"></div>
-        </div>
+        <div class="cta-bg" aria-hidden="true"></div>
     </section>
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <span class="footer-logo">⬡</span>
-                <span class="footer-name">Hive</span>
-            </div>
-            <div class="footer-links">
-                <a href="https://github.com/mbourmaud/hive" target="_blank" rel="noopener">GitHub</a>
-                <a href="https://github.com/mbourmaud/hive/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
-                <a href="https://github.com/mbourmaud/hive/issues" target="_blank" rel="noopener">Issues</a>
-            </div>
-            <div class="footer-credit">
-                Built with 🐝 by <a href="https://github.com/mbourmaud" target="_blank" rel="noopener">mbourmaud</a>
+        <div class="container">
+            <div class="footer-inner">
+                <div class="footer-brand">
+                    <svg class="footer-logo" viewBox="0 0 40 46" fill="none">
+                        <path d="M20 0L40 11.5V34.5L20 46L0 34.5V11.5L20 0Z" fill="currentColor"/>
+                        <path d="M20 8L32 15V29L20 36L8 29V15L20 8Z" fill="#1F2937"/>
+                        <circle cx="20" cy="22" r="5" fill="currentColor"/>
+                    </svg>
+                    <span>Hive</span>
+                </div>
+                <nav class="footer-nav">
+                    <a href="https://github.com/mbourmaud/hive" target="_blank" rel="noopener">GitHub</a>
+                    <a href="https://github.com/mbourmaud/hive/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+                    <a href="https://github.com/mbourmaud/hive/issues" target="_blank" rel="noopener">Issues</a>
+                </nav>
+                <p class="footer-credit">
+                    Built with care by <a href="https://github.com/mbourmaud" target="_blank" rel="noopener">@mbourmaud</a>
+                </p>
             </div>
         </div>
     </footer>
+
+    <script>
+        // Intersection Observer for scroll animations
+        const animateOnScroll = () => {
+            const elements = document.querySelectorAll('[data-animate]');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const delay = entry.target.dataset.delay || 0;
+                        setTimeout(() => {
+                            entry.target.classList.add('animated');
+                        }, delay);
+                    }
+                });
+            }, { threshold: 0.1 });
+            elements.forEach(el => observer.observe(el));
+        };
+
+        // Mobile nav toggle
+        const navToggle = document.querySelector('.nav-toggle');
+        const navLinks = document.querySelector('.nav-links');
+        navToggle?.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            navToggle.classList.toggle('active');
+        });
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    navLinks.classList.remove('active');
+                    navToggle?.classList.remove('active');
+                }
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', animateOnScroll);
+    </script>
 </body>
 </html>
