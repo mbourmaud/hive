@@ -94,6 +94,7 @@ RUN mkdir -p ~/.config ~/.aws ~/.ssh ~/.claude/debug ~/.claude/todos ~/.claude/s
 COPY --chown=agent:agent entrypoint.sh /home/agent/entrypoint.sh
 COPY --chown=agent:agent start-worker.sh /home/agent/start-worker.sh
 COPY --chown=agent:agent worker-daemon.py /home/agent/worker-daemon.py
+COPY --chown=agent:agent backends.py /home/agent/backends.py
 COPY --chown=agent:agent tools.py /home/agent/tools.py
 COPY --chown=agent:agent templates/.claude.json.template /home/agent/.claude.json.template
 RUN chmod +x /home/agent/entrypoint.sh /home/agent/start-worker.sh /home/agent/worker-daemon.py
