@@ -1637,11 +1637,11 @@ img, svg {
 }
 
 .arch-card-worker .arch-card-icon {
-    width: 48px;
-    height: 48px;
-    background: var(--amber-100);
-    color: var(--amber-600);
-    border: 2px solid var(--amber-300);
+    width: 52px;
+    height: 52px;
+    background: var(--amber-500);
+    color: white;
+    border: none;
 }
 
 .arch-card-worker:hover {
@@ -1649,8 +1649,7 @@ img, svg {
 }
 
 .arch-card-worker:hover .arch-card-icon {
-    background: var(--amber-200);
-    border-color: var(--amber-400);
+    background: var(--amber-600);
 }
 
 .arch-card-worker h3 {
@@ -1682,6 +1681,7 @@ img, svg {
 .arch-connector-split {
     width: 100%;
     max-width: 600px;
+    height: 60px;
 }
 
 /* Animated dots - pulse and glow */
