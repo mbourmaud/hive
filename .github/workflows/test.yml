@@ -77,6 +77,8 @@ jobs:
 
       - name: Run smoke tests
         run: make test-smoke
+        env:
+          HIVE_BIN: ./hive
 
   # Job 3: Git/Worktree Integration Tests (CRITICAL)
   git-tests:
@@ -105,6 +107,8 @@ jobs:
 
       - name: Run Git/worktree tests
         run: make test-git
+        env:
+          HIVE_BIN: ./hive
 
   # Job 4: Docker Integration Tests (Linux only, requires Docker)
   docker-tests:
@@ -149,6 +153,8 @@ jobs:
       - name: Run E2E tests
         run: make test-e2e
         timeout-minutes: 10
+        env:
+          HIVE_BIN: ./hive
 
   # Job 6: Go Integration Tests with testcontainers (Linux only)
   go-integration-tests:
