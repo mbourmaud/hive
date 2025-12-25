@@ -181,7 +181,8 @@ fi
 
 # Auto-install npm/pnpm dependencies if package.json exists
 if [ -f "$WORKSPACE_DIR/package.json" ] && [ "${AUTO_INSTALL_DEPS:-true}" = "true" ]; then
-    if [ ! -d "$WORKSPACE_DIR/node_modules" ]; then
+    # Check if node_modules is empty or missing (Docker volume creates empty dir)
+    if [ ! -d "$WORKSPACE_DIR/node_modules" ] || [ -z "$(ls -A "$WORKSPACE_DIR/node_modules" 2>/dev/null)" ]; then
         cd "$WORKSPACE_DIR"
 
         # Generate cache key from package.json + lockfile (includes Node version for safety)
