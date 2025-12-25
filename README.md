@@ -4,6 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/github/v/release/mbourmaud/hive)](https://github.com/mbourmaud/hive/releases)
+[![Tests](https://github.com/mbourmaud/hive/actions/workflows/test.yml/badge.svg)](https://github.com/mbourmaud/hive/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/mbourmaud/hive/branch/main/graph/badge.svg)](https://codecov.io/gh/mbourmaud/hive)
 
 ---
 

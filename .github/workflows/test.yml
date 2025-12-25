@@ -30,8 +30,20 @@ jobs:
       - name: Build binary
         run: make build
 
-      - name: Run Go unit tests
-        run: make test
+      - name: Run Go unit tests with coverage
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Display coverage summary
+        run: go tool cover -func=coverage.out
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-${{ matrix.os }}
+          fail_ci_if_error: false
+        continue-on-error: true
 
       - name: Test CLI commands
         run: |
