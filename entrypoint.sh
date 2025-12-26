@@ -64,16 +64,93 @@ if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     log "[+] Created ~/.claude.json with OAuth token and onboarding bypass"
 fi
 
-# Create minimal settings.json for permissions only
-cat > ~/.claude/settings.json << 'EOF'
+# Create settings.json with permissions and MCPs from hive.yaml
+HIVE_CONFIG="/hive-config/hive.yaml"
+
+if [ -f "$HIVE_CONFIG" ] && command -v python3 &> /dev/null; then
+    log "[+] Generating settings.json with MCPs from hive.yaml..."
+
+    python3 << 'PYTHON_SCRIPT'
+import yaml
+import json
+import os
+
+settings = {
+    "permissions": {
+        "defaultMode": "bypassPermissions"
+    },
+    "mcpServers": {}
+}
+
+try:
+    with open("/hive-config/hive.yaml", "r") as f:
+        config = yaml.safe_load(f)
+
+    mcps = config.get("mcps", {})
+    for name, mcp_config in mcps.items():
+        package = mcp_config.get("package", "")
+        command = mcp_config.get("command", "")
+        args = mcp_config.get("args", [])
+        env_vars = mcp_config.get("env", [])
+
+        # Build MCP server config
+        server = {}
+
+        if package:
+            # NPM package - use npx
+            server["command"] = "npx"
+            server["args"] = ["-y", package] + args
+        elif command:
+            # Custom command
+            server["command"] = command
+            server["args"] = args
+        else:
+            continue
+
+        # Add environment variables from container env
+        if env_vars:
+            server["env"] = {}
+            for var in env_vars:
+                value = os.environ.get(var, "")
+                if value:
+                    server["env"][var] = value
+
+        settings["mcpServers"][name] = server
+        print(f"  - {name}: {package or command}")
+
+except Exception as e:
+    print(f"Warning: Could not parse hive.yaml MCPs: {e}")
+
+# Write settings.json
+with open(os.path.expanduser("~/.claude/settings.json"), "w") as f:
+    json.dump(settings, f, indent=2)
+PYTHON_SCRIPT
+
+    if [ $? -eq 0 ]; then
+        log "[+] MCPs configured in settings.json"
+    else
+        log "[!] Failed to parse MCPs, using minimal settings.json"
+        cat > ~/.claude/settings.json << 'EOF'
 {
   "permissions": {
     "defaultMode": "bypassPermissions"
   }
 }
 EOF
+    fi
+else
+    # Fallback: minimal settings without MCPs
+    cat > ~/.claude/settings.json << 'EOF'
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}
+EOF
+    log "[+] Created minimal settings.json (no hive.yaml or python3)"
+fi
+
 chmod 600 ~/.claude/settings.json
-log "[+] Created minimal settings.json for permissions"
 
 # Ensure isolated conversation files exist
 if [ ! -f ~/.claude/history.jsonl ]; then

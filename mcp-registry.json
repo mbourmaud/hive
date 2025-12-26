@@ -1,0 +1,139 @@
+{
+  "version": "1.0.0",
+  "updated": "2025-12-26",
+  "mcps": {
+    "playwright": {
+      "name": "Playwright",
+      "package": "@playwright/mcp",
+      "description": "Browser automation for testing and scraping",
+      "category": "browser",
+      "env": []
+    },
+    "jira": {
+      "name": "Jira",
+      "package": "@anthropic/mcp-jira",
+      "description": "Atlassian Jira issue tracking",
+      "category": "project-mgmt",
+      "env": ["JIRA_HOST", "JIRA_EMAIL", "JIRA_TOKEN"]
+    },
+    "linear": {
+      "name": "Linear",
+      "package": "@anthropic/mcp-linear",
+      "description": "Linear issue tracking",
+      "category": "project-mgmt",
+      "env": ["LINEAR_API_KEY"]
+    },
+    "asana": {
+      "name": "Asana",
+      "package": "@anthropic/mcp-asana",
+      "description": "Asana project management",
+      "category": "project-mgmt",
+      "env": ["ASANA_ACCESS_TOKEN"]
+    },
+    "github": {
+      "name": "GitHub",
+      "package": "@modelcontextprotocol/server-github",
+      "description": "GitHub repositories and issues",
+      "category": "code",
+      "env": ["GITHUB_TOKEN"]
+    },
+    "gitlab": {
+      "name": "GitLab",
+      "package": "@anthropic/mcp-gitlab",
+      "description": "GitLab repositories and issues",
+      "category": "code",
+      "env": ["GITLAB_TOKEN"],
+      "env_optional": ["GITLAB_HOST"]
+    },
+    "notion": {
+      "name": "Notion",
+      "package": "@modelcontextprotocol/server-notion",
+      "description": "Notion pages and databases",
+      "category": "docs",
+      "env": ["NOTION_TOKEN"]
+    },
+    "confluence": {
+      "name": "Confluence",
+      "package": "@anthropic/mcp-confluence",
+      "description": "Atlassian Confluence wiki",
+      "category": "docs",
+      "env": ["CONFLUENCE_HOST", "CONFLUENCE_EMAIL", "CONFLUENCE_TOKEN"]
+    },
+    "slack": {
+      "name": "Slack",
+      "package": "@modelcontextprotocol/server-slack",
+      "description": "Slack messaging",
+      "category": "communication",
+      "env": ["SLACK_BOT_TOKEN"]
+    },
+    "aws": {
+      "name": "AWS",
+      "package": "@anthropic/mcp-aws",
+      "description": "Amazon Web Services",
+      "category": "cloud",
+      "env": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+      "env_optional": ["AWS_REGION"]
+    },
+    "postgres": {
+      "name": "PostgreSQL",
+      "package": "@modelcontextprotocol/server-postgres",
+      "description": "PostgreSQL database",
+      "category": "database",
+      "env": ["POSTGRES_URL"]
+    },
+    "memory": {
+      "name": "Memory",
+      "package": "@anthropic/mcp-memory",
+      "description": "Persistent memory for Claude",
+      "category": "ai",
+      "env": []
+    },
+    "filesystem": {
+      "name": "Filesystem",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "description": "Local filesystem access",
+      "category": "files",
+      "env": []
+    },
+    "gdrive": {
+      "name": "Google Drive",
+      "package": "@anthropic/mcp-gdrive",
+      "description": "Google Drive files",
+      "category": "files",
+      "env": ["GDRIVE_CREDENTIALS"]
+    },
+    "sentry": {
+      "name": "Sentry",
+      "package": "@anthropic/mcp-sentry",
+      "description": "Sentry error tracking",
+      "category": "monitoring",
+      "env": ["SENTRY_AUTH_TOKEN", "SENTRY_ORG"]
+    },
+    "sequential-thinking": {
+      "name": "Sequential Thinking",
+      "package": "@anthropic/mcp-sequential-thinking",
+      "description": "Step-by-step reasoning tool",
+      "category": "ai",
+      "env": []
+    },
+    "context7": {
+      "name": "Context7",
+      "package": "@anthropic/mcp-context7",
+      "description": "Library documentation fetcher",
+      "category": "ai",
+      "env": []
+    }
+  },
+  "categories": {
+    "browser": "Browser Automation",
+    "project-mgmt": "Project Management",
+    "code": "Code & Version Control",
+    "docs": "Documentation",
+    "communication": "Communication",
+    "cloud": "Cloud & Infrastructure",
+    "database": "Databases",
+    "ai": "AI & Tools",
+    "files": "Files & Storage",
+    "monitoring": "Monitoring"
+  }
+}
