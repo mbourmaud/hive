@@ -53,7 +53,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
     wget "https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_${ARCH}.deb" \
         -O /tmp/gh.deb \
     && dpkg -i /tmp/gh.deb \
-    && rm /tmp/gh.deb
+    && rm /tmp/gh.deb \
+    && mkdir -p /opt/homebrew/bin \
+    && ln -sf /usr/bin/gh /opt/homebrew/bin/gh
 
 # GitLab CLI (glab) - optional
 RUN ARCH=$(dpkg --print-architecture) && \
