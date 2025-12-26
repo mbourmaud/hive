@@ -64,7 +64,8 @@ class HiveWorkerDaemon:
 
     def __init__(self):
         # Get configuration from environment
-        self.agent_id = os.getenv('AGENT_ID', 'drone-unknown')
+        # AGENT_NAME is set by docker-compose, AGENT_ID is legacy fallback
+        self.agent_id = os.getenv('AGENT_NAME', os.getenv('AGENT_ID', 'drone-unknown'))
         self.redis_host = os.getenv('REDIS_HOST', 'hive-redis')
         self.redis_port = int(os.getenv('REDIS_PORT', '6379'))
         self.poll_interval = int(os.getenv('POLL_INTERVAL', '1'))

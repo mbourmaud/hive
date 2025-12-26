@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mbourmaud/hive/internal/compose"
 	"github.com/mbourmaud/hive/internal/config"
 	"github.com/mbourmaud/hive/internal/embed"
 	"github.com/mbourmaud/hive/internal/ui"
@@ -25,6 +26,7 @@ var (
 	flagAuthBackend    string
 	flagWorkspace      string
 	flagWorkers        int
+	flagWorkerMode     string
 	flagGitURL         string
 	flagSkipStart      bool
 )
@@ -55,6 +57,7 @@ func init() {
 	initCmd.Flags().StringVar(&flagAuthBackend, "auth", "cli", "Auth backend: cli (OAuth), api (API key), bedrock (AWS)")
 	initCmd.Flags().StringVar(&flagWorkspace, "workspace", "my-project", "Workspace name")
 	initCmd.Flags().IntVar(&flagWorkers, "workers", 2, "Number of workers to start")
+	initCmd.Flags().StringVar(&flagWorkerMode, "mode", "interactive", "Worker mode: interactive, daemon (autonomous)")
 	initCmd.Flags().StringVar(&flagGitURL, "git-url", "", "Git repository URL to clone (optional)")
 	initCmd.Flags().BoolVar(&flagSkipStart, "skip-start", false, "Skip starting Hive after initialization (for testing)")
 }
@@ -107,6 +110,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			"GIT_REPO_URL":         flagGitURL,
 			"PROJECT_TYPE":         projectType,
 			"HIVE_CLAUDE_BACKEND":  flagAuthBackend,
+			"WORKER_MODE":          flagWorkerMode,
 		}
 
 		// Add auth credentials based on backend
@@ -172,6 +176,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Generate docker-compose.yml with the correct worker count
+	if err := generateDockerCompose(workers); err != nil {
+		return fmt.Errorf("failed to generate docker-compose.yml: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Generated docker-compose.yml", "✓"))
+
 	// Write .env file
 	if err := writeEnvFile(cfg, workers); err != nil {
 		return fmt.Errorf("failed to write .hive/.env: %w", err)
@@ -183,6 +193,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to write hive.yaml: %w", err)
 	}
 	fmt.Print(ui.ProgressLine("Created hive.yaml", "✓"))
+
+	// Copy hive.yaml to .hive/ for container access
+	if err := syncHiveYAML(); err != nil {
+		return fmt.Errorf("failed to sync hive.yaml: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Synced hive.yaml to .hive/", "✓"))
+
+	// Copy host MCPs to .hive/ for container access
+	if err := syncHostMCPs(); err != nil {
+		return fmt.Errorf("failed to sync host MCPs: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Synced host MCPs to .hive/", "✓"))
+
+	// Copy CLAUDE.md to .hive/ for container access
+	if err := syncProjectCLAUDEmd(); err != nil {
+		return fmt.Errorf("failed to sync CLAUDE.md: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Synced CLAUDE.md to .hive/", "✓"))
 
 	// Generate .env.generated from hive.yaml for docker-compose
 	hiveCfg := config.LoadOrDefault()
@@ -203,11 +231,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := createWorktrees(workers); err != nil {
 		fmt.Printf("%s\n", ui.StyleCyan.Render(fmt.Sprintf("🌳 Worktrees... ⚠️  %v", err)))
 		fmt.Printf("%s\n", ui.StyleDim.Render("   Agents will use empty workspaces"))
-	}
-
-	// Sync MCPs from hive.yaml (prompts for missing secrets)
-	if err := SyncMCPsFromConfig(hiveCfg); err != nil {
-		fmt.Printf("%s\n", ui.Warning("MCP sync failed: "+err.Error()))
 	}
 
 	// Skip starting if --skip-start flag is set
@@ -645,9 +668,86 @@ func writeHiveYAML(cfgMap map[string]string, workers int) error {
 	if workerModel := cfgMap["WORKER_MODEL"]; workerModel != "" {
 		cfg.Agents.Workers.Model = workerModel
 	}
+	if workerMode := cfgMap["WORKER_MODE"]; workerMode != "" {
+		cfg.Agents.Workers.Mode = workerMode
+	}
 	cfg.Agents.Workers.Count = workers
 
 	return cfg.Save("hive.yaml")
+}
+
+// syncHiveYAML copies hive.yaml to .hive/hive.yaml for container access
+// This is called during init, start, and update to keep the copy in sync
+func syncHiveYAML() error {
+	src := "hive.yaml"
+	dst := filepath.Join(".hive", "hive.yaml")
+
+	// Read source file
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", src, err)
+	}
+
+	// Write to destination
+	if err := os.WriteFile(dst, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", dst, err)
+	}
+
+	return nil
+}
+
+// syncHostMCPs copies ~/.claude/settings.json to .hive/host-mcps.json
+// This allows containers to access host MCPs without individual file mounts
+func syncHostMCPs() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	src := filepath.Join(home, ".claude", "settings.json")
+	dst := filepath.Join(".hive", "host-mcps.json")
+
+	// Read source file (may not exist, that's OK)
+	data, err := os.ReadFile(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No host settings, create empty JSON
+			data = []byte("{}")
+		} else {
+			return fmt.Errorf("failed to read %s: %w", src, err)
+		}
+	}
+
+	// Write to destination
+	if err := os.WriteFile(dst, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", dst, err)
+	}
+
+	return nil
+}
+
+// syncProjectCLAUDEmd copies CLAUDE.md to .hive/CLAUDE.md
+// This allows containers to access project guidelines
+func syncProjectCLAUDEmd() error {
+	src := "CLAUDE.md"
+	dst := filepath.Join(".hive", "CLAUDE.md")
+
+	// Read source file (may not exist, that's OK)
+	data, err := os.ReadFile(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No CLAUDE.md in project, skip
+			return nil
+		}
+		return fmt.Errorf("failed to read %s: %w", src, err)
+	}
+
+	// Write to destination
+	if err := os.WriteFile(dst, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", dst, err)
+	}
+
+	return nil
 }
 
 func printSuccessMessage(workers int) {
@@ -733,6 +833,7 @@ func detectClaudeToken() string {
 }
 
 // extractHiveFiles copies all necessary hive files to .hive/ directory
+// Note: docker-compose.yml is generated dynamically by generateDockerCompose()
 func extractHiveFiles(projectType string) error {
 	hiveDir := ".hive"
 
@@ -741,10 +842,8 @@ func extractHiveFiles(projectType string) error {
 		return fmt.Errorf("failed to create .hive directory: %w", err)
 	}
 
-	// Extract docker-compose.yml
-	if err := embed.ExtractFile("docker-compose.yml", filepath.Join(hiveDir, "docker-compose.yml")); err != nil {
-		return fmt.Errorf("failed to extract docker-compose.yml: %w", err)
-	}
+	// docker-compose.yml is generated dynamically after worker count is known
+	// See generateDockerCompose()
 
 	// Extract entrypoint.sh
 	if err := embed.ExtractFile("entrypoint.sh", filepath.Join(hiveDir, "entrypoint.sh")); err != nil {
@@ -982,4 +1081,18 @@ func updateGitignore() error {
 	content += strings.Join(entries, "\n") + "\n"
 
 	return os.WriteFile(gitignorePath, []byte(content), 0644)
+}
+
+// generateDockerCompose creates docker-compose.yml with the specified number of workers
+func generateDockerCompose(workers int) error {
+	return generateDockerComposeWithConfig(workers, 6379)
+}
+
+// generateDockerComposeWithConfig creates docker-compose.yml with full config options
+func generateDockerComposeWithConfig(workers int, redisPort int) error {
+	content := compose.GenerateWithOptions(compose.Options{
+		WorkerCount: workers,
+		RedisPort:   redisPort,
+	})
+	return os.WriteFile(".hive/docker-compose.yml", []byte(content), 0644)
 }

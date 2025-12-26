@@ -68,12 +68,12 @@ func TestMapAgentID(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"queen", "claude-queen"},
-		{"q", "claude-queen"},
-		{"0", "claude-queen"},
-		{"1", "claude-agent-1"},
-		{"2", "claude-agent-2"},
-		{"10", "claude-agent-10"},
+		{"queen", "hive-queen"},
+		{"q", "hive-queen"},
+		{"0", "hive-queen"},
+		{"1", "hive-drone-1"},
+		{"2", "hive-drone-2"},
+		{"10", "hive-drone-10"},
 	}
 
 	for _, tt := range tests {

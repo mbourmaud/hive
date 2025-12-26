@@ -22,10 +22,10 @@ func TestGetFile(t *testing.T) {
 			contains: "GIT_USER_EMAIL",
 		},
 		{
-			name:     "read docker-compose.yml",
-			path:     "docker-compose.yml",
+			name:     "read entrypoint.sh",
+			path:     "entrypoint.sh",
 			wantErr:  false,
-			contains: "services:",
+			contains: "#!/bin/bash",
 		},
 		{
 			name:     "read backends.py",
@@ -88,8 +88,8 @@ func TestExtractFile(t *testing.T) {
 		},
 		{
 			name:       "extract to nested path",
-			srcPath:    "docker-compose.yml",
-			targetPath: "test-output/nested/dir/docker-compose.yml",
+			srcPath:    "entrypoint.sh",
+			targetPath: "test-output/nested/dir/entrypoint.sh",
 			wantErr:    false,
 			verify: func(t *testing.T, targetPath string) {
 				if _, err := os.Stat(targetPath); os.IsNotExist(err) {
@@ -228,9 +228,9 @@ func TestExtractAll(t *testing.T) {
 	}
 
 	// Verify key files exist
+	// Note: docker-compose.yml is generated dynamically, not embedded
 	expectedFiles := []string{
 		".env.example",
-		"docker-compose.yml",
 		"backends.py",
 		"entrypoint.sh",
 		"worker-daemon.py",

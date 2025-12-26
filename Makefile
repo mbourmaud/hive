@@ -14,9 +14,9 @@ LDFLAGS := -ldflags "-X github.com/mbourmaud/hive/cmd.Version=$(VERSION) \
 export DOCKER_BUILDKIT=1
 
 # Sync embedded files from root to internal/embed/files/
+# Note: docker-compose.yml is generated dynamically by hive init, not embedded
 embed:
 	@mkdir -p internal/embed/files
-	@cp -f docker-compose.yml internal/embed/files/
 	@cp -f entrypoint.sh internal/embed/files/
 	@cp -f start-worker.sh internal/embed/files/ 2>/dev/null || cp internal/embed/files/start-worker.sh start-worker.sh
 	@cp -f worker-daemon.py internal/embed/files/ 2>/dev/null || cp internal/embed/files/worker-daemon.py worker-daemon.py

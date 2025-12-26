@@ -70,6 +70,21 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to generate env vars: %w", err)
 	}
 
+	// Sync hive.yaml to .hive/ for container access
+	if err := syncHiveYAML(); err != nil {
+		fmt.Printf("%s\n", ui.Warning("hive.yaml sync: "+err.Error()))
+	}
+
+	// Sync host MCPs to .hive/ for container access
+	if err := syncHostMCPs(); err != nil {
+		fmt.Printf("%s\n", ui.Warning("host MCPs sync: "+err.Error()))
+	}
+
+	// Sync CLAUDE.md to .hive/ for container access
+	if err := syncProjectCLAUDEmd(); err != nil {
+		fmt.Printf("%s\n", ui.Warning("CLAUDE.md sync: "+err.Error()))
+	}
+
 	// Step 1: Re-extract embedded files to update scripts/configs
 	fmt.Printf("%s ", ui.StyleDim.Render("📦 Updating Hive files..."))
 
@@ -127,7 +142,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	// Step 4: Stop extra workers that shouldn't be running
 	// (e.g., if config says 2 workers but 10 are running)
 	for i := cfg.Agents.Workers.Count + 1; i <= 10; i++ {
-		containerName := fmt.Sprintf("claude-agent-%d", i)
+		containerName := fmt.Sprintf("hive-drone-%d", i)
 		stopCmd := exec.Command("docker", "stop", containerName)
 		_ = runner.RunQuiet(stopCmd) // Ignore errors if container doesn't exist
 		rmCmd := exec.Command("docker", "rm", containerName)
@@ -138,7 +153,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	// Only start the services defined in config (queen + N workers)
 	services := []string{"redis", "queen"}
 	for i := 1; i <= cfg.Agents.Workers.Count; i++ {
-		services = append(services, fmt.Sprintf("agent-%d", i))
+		services = append(services, fmt.Sprintf("drone-%d", i))
 	}
 
 	fmt.Printf("%s ", ui.StyleDim.Render(fmt.Sprintf("🔄 Recreating containers (queen + %d workers)...", cfg.Agents.Workers.Count)))
@@ -160,7 +175,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		// Build services list based on config
 		services := []string{"redis", "queen"}
 		for i := 1; i <= cfg.Agents.Workers.Count; i++ {
-			services = append(services, fmt.Sprintf("agent-%d", i))
+			services = append(services, fmt.Sprintf("drone-%d", i))
 		}
 
 		if err := waitForContainersReady(runner, services, 60*time.Second); err != nil {

@@ -14,6 +14,21 @@ log() {
 log "Initializing Claude Agent ${AGENT_ID:-unknown}..."
 
 # ============================================
+# Add Hive scripts to PATH
+# ============================================
+
+# Make hive scripts executable and add to PATH
+if [ -d "/hive-config/scripts/bin" ]; then
+    chmod +x /hive-config/scripts/bin/* 2>/dev/null || true
+    export PATH="/hive-config/scripts/bin:$PATH"
+    log "[+] Added hive scripts to PATH"
+fi
+
+if [ -d "/hive-config/scripts/redis" ]; then
+    chmod +x /hive-config/scripts/redis/* 2>/dev/null || true
+fi
+
+# ============================================
 # Claude Configuration Setup
 # ============================================
 
@@ -64,86 +79,94 @@ if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     log "[+] Created ~/.claude.json with OAuth token and onboarding bypass"
 fi
 
-# Create settings.json with permissions and MCPs from hive.yaml
-HIVE_CONFIG="/hive-config/hive.yaml"
+# Configure MCPs in ~/.claude.json (where Claude Code reads them)
+# Claude reads MCPs from projects["/workspace"].mcpServers, not from settings.json
 
-if [ -f "$HIVE_CONFIG" ] && command -v python3 &> /dev/null; then
-    log "[+] Generating settings.json with MCPs from hive.yaml..."
+if command -v python3 &> /dev/null; then
+    log "[+] Configuring MCPs in ~/.claude.json..."
 
     python3 << 'PYTHON_SCRIPT'
-import yaml
 import json
 import os
 
+# Collect MCPs from host + Hive built-in
+mcps = {}
+
+# 1. Load MCPs from host settings (copied to .hive/host-mcps.json during init)
+host_mcps_path = "/hive-config/host-mcps.json"
+if os.path.exists(host_mcps_path):
+    try:
+        with open(host_mcps_path, "r") as f:
+            host_settings = json.load(f)
+
+        host_mcps = host_settings.get("mcpServers", {})
+        for name, config in host_mcps.items():
+            mcps[name] = config
+            print(f"  - {name}: (from host)")
+    except Exception as e:
+        print(f"Warning: Could not parse host MCPs: {e}")
+
+# 2. Always add the Hive MCP for elegant task management
+mcps["hive"] = {
+    "command": "node",
+    "args": ["/hive-config/scripts/mcp/hive-mcp.js"]
+}
+print("  - hive: (built-in)")
+
+# 3. Read existing ~/.claude.json (has OAuth token from earlier in entrypoint)
+claude_json_path = os.path.expanduser("~/.claude.json")
+claude_json = {}
+if os.path.exists(claude_json_path):
+    try:
+        with open(claude_json_path, "r") as f:
+            claude_json = json.load(f)
+    except:
+        pass
+
+# 4. Add MCPs under projects["/workspace"].mcpServers
+#    This is where Claude Code reads MCPs from for /mcp command
+if "projects" not in claude_json:
+    claude_json["projects"] = {}
+
+claude_json["projects"]["/workspace"] = {
+    "mcpServers": mcps,
+    "allowedTools": []  # Allow all tools
+}
+
+# 5. Write back to ~/.claude.json
+with open(claude_json_path, "w") as f:
+    json.dump(claude_json, f, indent=2)
+
+print(f"Total MCPs: {len(mcps)} (configured in ~/.claude.json)")
+
+# 6. Also create ~/.claude/settings.json for permissions
 settings = {
     "permissions": {
         "defaultMode": "bypassPermissions"
-    },
-    "mcpServers": {}
+    }
 }
-
-try:
-    with open("/hive-config/hive.yaml", "r") as f:
-        config = yaml.safe_load(f)
-
-    mcps = config.get("mcps", {})
-    for name, mcp_config in mcps.items():
-        package = mcp_config.get("package", "")
-        command = mcp_config.get("command", "")
-        args = mcp_config.get("args", [])
-        env_vars = mcp_config.get("env", [])
-
-        # Build MCP server config
-        server = {}
-
-        if package:
-            # NPM package - use npx
-            server["command"] = "npx"
-            server["args"] = ["-y", package] + args
-        elif command:
-            # Custom command
-            server["command"] = command
-            server["args"] = args
-        else:
-            continue
-
-        # Add environment variables from container env
-        if env_vars:
-            server["env"] = {}
-            for var in env_vars:
-                value = os.environ.get(var, "")
-                if value:
-                    server["env"][var] = value
-
-        settings["mcpServers"][name] = server
-        print(f"  - {name}: {package or command}")
-
-except Exception as e:
-    print(f"Warning: Could not parse hive.yaml MCPs: {e}")
-
-# Write settings.json
+os.makedirs(os.path.expanduser("~/.claude"), exist_ok=True)
 with open(os.path.expanduser("~/.claude/settings.json"), "w") as f:
     json.dump(settings, f, indent=2)
 PYTHON_SCRIPT
 
     if [ $? -eq 0 ]; then
-        log "[+] MCPs configured in settings.json"
+        log "[+] MCPs configured in ~/.claude.json"
     else
-        log "[!] Failed to parse MCPs, using minimal settings.json"
-        cat > ~/.claude/settings.json << 'EOF'
-{
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  }
-}
-EOF
+        log "[!] Failed to configure MCPs"
     fi
 else
-    # Fallback: minimal settings without MCPs
+    # Fallback: minimal settings
     cat > ~/.claude/settings.json << 'EOF'
 {
   "permissions": {
     "defaultMode": "bypassPermissions"
+  },
+  "mcpServers": {
+    "hive": {
+      "command": "node",
+      "args": ["/hive-config/scripts/mcp/hive-mcp.js"]
+    }
   }
 }
 EOF
@@ -151,6 +174,40 @@ EOF
 fi
 
 chmod 600 ~/.claude/settings.json
+
+# Symlink project CLAUDE.md to home directory for Claude to find
+# CLAUDE.md is synced to .hive/ during init, so we read from /hive-config/
+if [ -f "/hive-config/CLAUDE.md" ]; then
+    ln -sf /hive-config/CLAUDE.md ~/CLAUDE.md
+    log "[+] Linked project CLAUDE.md to ~/CLAUDE.md"
+fi
+
+# Symlink role-specific instructions based on AGENT_ROLE
+# Each agent gets their role's template + both templates for reference
+if [ "$AGENT_ROLE" = "queen" ] || [ "$AGENT_ROLE" = "orchestrator" ]; then
+    if [ -f "/hive-config/templates/CLAUDE-QUEEN.md" ]; then
+        ln -sf /hive-config/templates/CLAUDE-QUEEN.md ~/CLAUDE-ROLE.md
+        log "[+] Linked Queen instructions to ~/CLAUDE-ROLE.md"
+    fi
+else
+    if [ -f "/hive-config/templates/CLAUDE-WORKER.md" ]; then
+        ln -sf /hive-config/templates/CLAUDE-WORKER.md ~/CLAUDE-ROLE.md
+        log "[+] Linked Worker instructions to ~/CLAUDE-ROLE.md"
+    fi
+fi
+
+# Make both role templates available for reference (agents can read each other's instructions)
+if [ -f "/hive-config/templates/CLAUDE-QUEEN.md" ]; then
+    ln -sf /hive-config/templates/CLAUDE-QUEEN.md ~/CLAUDE-QUEEN.md
+fi
+if [ -f "/hive-config/templates/CLAUDE-WORKER.md" ]; then
+    ln -sf /hive-config/templates/CLAUDE-WORKER.md ~/CLAUDE-WORKER.md
+fi
+
+# Create hive-config symlink in workspace for relative path access
+# Allows agents to read hive-config/hive.yaml from /workspace
+ln -sf /hive-config /workspace/hive-config
+log "[+] Linked /hive-config to /workspace/hive-config"
 
 # Ensure isolated conversation files exist
 if [ ! -f ~/.claude/history.jsonl ]; then
@@ -161,6 +218,32 @@ fi
 if [ ! -d ~/.claude/session-env ]; then
     mkdir -p ~/.claude/session-env
     log "[+] Created isolated session-env directory"
+fi
+
+# ============================================
+# SSH Configuration (fix macOS-specific options for Linux)
+# ============================================
+
+# ~/.ssh is mounted read-only from host, so we need to create a local copy
+if [ -d ~/.ssh ] && [ -f ~/.ssh/config ]; then
+    # Check if config has macOS-specific options that break on Linux
+    if grep -q "UseKeychain" ~/.ssh/config 2>/dev/null; then
+        log "[+] Fixing SSH config (removing macOS-specific options)..."
+
+        # Create local SSH directory and copy files
+        mkdir -p ~/.ssh-local
+        cp ~/.ssh/* ~/.ssh-local/ 2>/dev/null || true
+
+        # Fix the config file
+        sed -e 's/UseKeychain.*//g' -e 's/AddKeysToAgent.*//g' ~/.ssh-local/config > ~/.ssh-local/config.tmp
+        mv ~/.ssh-local/config.tmp ~/.ssh-local/config
+        chmod 600 ~/.ssh-local/config
+        chmod 600 ~/.ssh-local/id_* 2>/dev/null || true
+
+        # Set GIT_SSH_COMMAND to use our fixed config
+        export GIT_SSH_COMMAND="ssh -F ~/.ssh-local/config"
+        log "[+] SSH config fixed, using ~/.ssh-local/config"
+    fi
 fi
 
 # ============================================
@@ -254,6 +337,149 @@ else
             git add README.md
             git commit -m "Initial commit" || true
         fi
+    fi
+fi
+
+# ============================================
+# CLI Tools Installation (from hive.yaml)
+# ============================================
+
+TOOLS_CACHE="/home/agent/.tools-cache"
+TOOLS_INSTALLED="$TOOLS_CACHE/installed.txt"
+mkdir -p "$TOOLS_CACHE"
+mkdir -p ~/.local/bin
+export PATH="$HOME/.local/bin:$PATH"
+
+install_tool() {
+    local tool=$1
+    local ARCH=$(dpkg --print-architecture)
+
+    # Skip if already installed and cached
+    if grep -q "^$tool$" "$TOOLS_INSTALLED" 2>/dev/null; then
+        log "[+] Tool '$tool' already installed (cached)"
+        return 0
+    fi
+
+    case "$tool" in
+        glab)
+            log "[+] Installing GitLab CLI..."
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://gitlab.com/gitlab-org/cli/-/releases/v1.50.0/downloads/glab_1.50.0_linux_arm64.tar.gz"
+            else
+                URL="https://gitlab.com/gitlab-org/cli/-/releases/v1.50.0/downloads/glab_1.50.0_linux_amd64.tar.gz"
+            fi
+            wget -q "$URL" -O /tmp/glab.tar.gz
+            tar -xzf /tmp/glab.tar.gz -C /tmp
+            sudo install -o root -g root -m 0755 /tmp/bin/glab /usr/local/bin/glab
+            rm -rf /tmp/glab* /tmp/bin
+            ;;
+        psql)
+            log "[+] Installing PostgreSQL client..."
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+            ;;
+        mongosh)
+            log "[+] Installing MongoDB shell..."
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://downloads.mongodb.com/compass/mongodb-mongosh_2.1.1_arm64.deb"
+            else
+                URL="https://downloads.mongodb.com/compass/mongodb-mongosh_2.1.1_amd64.deb"
+            fi
+            wget -q "$URL" -O /tmp/mongosh.deb
+            sudo dpkg -i /tmp/mongosh.deb
+            rm /tmp/mongosh.deb
+            ;;
+        mysql)
+            log "[+] Installing MySQL client..."
+            sudo apt-get update -qq && sudo apt-get install -y -qq default-mysql-client
+            ;;
+        kubectl)
+            log "[+] Installing kubectl..."
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://dl.k8s.io/release/v1.29.0/bin/linux/arm64/kubectl"
+            else
+                URL="https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+            fi
+            curl -sLo /tmp/kubectl "$URL"
+            sudo install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+            rm /tmp/kubectl
+            ;;
+        helm)
+            log "[+] Installing Helm..."
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://get.helm.sh/helm-v3.14.0-linux-arm64.tar.gz"
+                DIR="linux-arm64"
+            else
+                URL="https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz"
+                DIR="linux-amd64"
+            fi
+            wget -q "$URL" -O /tmp/helm.tar.gz
+            tar -xzf /tmp/helm.tar.gz -C /tmp
+            sudo install -o root -g root -m 0755 /tmp/$DIR/helm /usr/local/bin/helm
+            rm -rf /tmp/helm* /tmp/linux-*
+            ;;
+        terraform)
+            log "[+] Installing Terraform..."
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://releases.hashicorp.com/terraform/1.7.0/terraform_1.7.0_linux_arm64.zip"
+            else
+                URL="https://releases.hashicorp.com/terraform/1.7.0/terraform_1.7.0_linux_amd64.zip"
+            fi
+            wget -q "$URL" -O /tmp/terraform.zip
+            unzip -q /tmp/terraform.zip -d /tmp
+            sudo install -o root -g root -m 0755 /tmp/terraform /usr/local/bin/terraform
+            rm -rf /tmp/terraform*
+            ;;
+        aws)
+            log "[+] Installing AWS CLI..."
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip"
+            else
+                URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+            fi
+            curl -s "$URL" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            sudo /tmp/aws/install --update 2>/dev/null || sudo /tmp/aws/install
+            rm -rf /tmp/aws*
+            ;;
+        heroku)
+            log "[+] Installing Heroku CLI..."
+            npm install -g heroku
+            ;;
+        vercel)
+            log "[+] Installing Vercel CLI..."
+            npm install -g vercel
+            ;;
+        netlify)
+            log "[+] Installing Netlify CLI..."
+            npm install -g netlify-cli
+            ;;
+        flyctl|fly)
+            log "[+] Installing Fly.io CLI..."
+            curl -sL https://fly.io/install.sh | sh
+            sudo ln -sf ~/.fly/bin/flyctl /usr/local/bin/fly
+            sudo ln -sf ~/.fly/bin/flyctl /usr/local/bin/flyctl
+            ;;
+        *)
+            log "[!] Unknown tool: $tool (skipping)"
+            return 1
+            ;;
+    esac
+
+    # Mark as installed
+    echo "$tool" >> "$TOOLS_INSTALLED"
+    log "[+] Tool '$tool' installed successfully"
+}
+
+# Parse tools from hive.yaml
+if [ -f "/hive-config/hive.yaml" ] && command -v yq &> /dev/null; then
+    TOOLS=$(yq -r '.tools[]? // empty' /hive-config/hive.yaml 2>/dev/null)
+
+    if [ -n "$TOOLS" ]; then
+        log "[+] Installing CLI tools from hive.yaml..."
+        for tool in $TOOLS; do
+            install_tool "$tool"
+        done
+        log "[+] CLI tools installation complete"
     fi
 fi
 

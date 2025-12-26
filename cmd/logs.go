@@ -101,7 +101,7 @@ func showActivityLogs(args []string) error {
 
 	if logsFollow {
 		// Follow mode: stream new entries
-		fmt.Println("Following activity... (Ctrl+C to stop)\n")
+		fmt.Println("Following activity... (Ctrl+C to stop)")
 		lastID := "$" // Start from new entries
 
 		for {

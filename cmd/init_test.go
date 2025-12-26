@@ -925,8 +925,8 @@ func TestExtractHiveFiles(t *testing.T) {
 	}
 
 	// Verify essential files exist
+	// Note: docker-compose.yml is generated dynamically by generateDockerCompose()
 	requiredFiles := []string{
-		".hive/docker-compose.yml",
 		".hive/entrypoint.sh",
 		".hive/start-worker.sh",
 		".hive/worker-daemon.py",

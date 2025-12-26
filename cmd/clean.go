@@ -136,7 +136,7 @@ func cleanDockerContainers(runner *shell.Runner) error {
 	}
 
 	// Force remove any remaining hive containers
-	psCmd := exec.Command("docker", "ps", "-aq", "--filter", "name=claude-")
+	psCmd := exec.Command("docker", "ps", "-aq", "--filter", "name=hive-")
 	output, err := psCmd.Output()
 	if err == nil && len(output) > 0 {
 		containerIDs := strings.TrimSpace(string(output))

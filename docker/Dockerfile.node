@@ -78,9 +78,12 @@ RUN npm install -g @playwright/mcp@latest \
     && npx -y playwright install chromium --with-deps \
     && chmod -R 755 /opt/playwright
 
-# Create non-root user with sudo access for volume permissions
-RUN useradd -m -s /bin/bash agent \
-    && echo "agent ALL=(ALL) NOPASSWD: /bin/chown" >> /etc/sudoers.d/agent \
+# Create non-root user with sudo access for volume permissions and tool installation
+# Add docker group for Docker-in-Docker (socket mounted from host)
+RUN groupadd -g 999 docker || true \
+    && useradd -m -s /bin/bash agent \
+    && usermod -aG docker agent \
+    && echo "agent ALL=(ALL) NOPASSWD: /bin/chown, /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/install, /bin/rm, /bin/mkdir, /bin/ln" >> /etc/sudoers.d/agent \
     && chmod 0440 /etc/sudoers.d/agent
 
 # Switch to agent user
@@ -111,7 +114,8 @@ RUN chmod +x /scripts/redis/*.sh
 
 # Copy HIVE CLI commands (available in PATH)
 COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
-RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-failed /usr/local/bin/hive-status \
+RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-config /usr/local/bin/hive-failed \
+    /usr/local/bin/hive-log /usr/local/bin/hive-status /usr/local/bin/hive-submit \
     /usr/local/bin/my-tasks /usr/local/bin/take-task /usr/local/bin/task-done /usr/local/bin/task-failed
 
 ENTRYPOINT ["/home/agent/entrypoint.sh"]

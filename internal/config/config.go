@@ -16,6 +16,7 @@ type Config struct {
 	Agents     AgentsConfig         `yaml:"agents"`
 	Monitoring MonitoringConfig     `yaml:"monitoring"`
 	MCPs       map[string]MCPConfig `yaml:"mcps,omitempty"`
+	Tools      []string             `yaml:"tools,omitempty"` // CLI tools to install in containers
 }
 
 // MCPConfig represents a Model Context Protocol server configuration
@@ -59,6 +60,7 @@ type AgentConfig struct {
 // WorkersConfig contains worker settings
 type WorkersConfig struct {
 	Count               int               `yaml:"count"`
+	Mode                string            `yaml:"mode,omitempty"` // "interactive" (default) or "daemon"
 	Model               string            `yaml:"model,omitempty"`
 	Dockerfile          string            `yaml:"dockerfile,omitempty"`
 	PollIntervalSeconds int               `yaml:"poll_interval_seconds,omitempty"`
@@ -189,6 +191,11 @@ func (c *Config) GenerateEnvVars() map[string]string {
 		env["WORKER_MODEL"] = c.Agents.Workers.Model
 	}
 
+	// Worker mode (interactive or daemon)
+	if c.Agents.Workers.Mode != "" {
+		env["WORKER_MODE"] = c.Agents.Workers.Mode
+	}
+
 	// Dockerfile
 	if c.Agents.Queen.Dockerfile != "" {
 		env["HIVE_DOCKERFILE"] = c.Agents.Queen.Dockerfile
@@ -199,6 +206,29 @@ func (c *Config) GenerateEnvVars() map[string]string {
 	// Poll interval
 	if c.Agents.Workers.PollIntervalSeconds > 0 {
 		env["POLL_INTERVAL"] = fmt.Sprintf("%d", c.Agents.Workers.PollIntervalSeconds)
+	}
+
+	// Redis port
+	if c.Redis.Port > 0 {
+		env["REDIS_EXTERNAL_PORT"] = fmt.Sprintf("%d", c.Redis.Port)
+	}
+
+	// Monitoring config
+	if c.Monitoring.Queen.Enabled {
+		env["QUEEN_MONITORING_ENABLED"] = "true"
+	} else {
+		env["QUEEN_MONITORING_ENABLED"] = "false"
+	}
+	if c.Monitoring.Queen.IntervalSeconds > 0 {
+		env["QUEEN_MONITORING_INTERVAL"] = fmt.Sprintf("%d", c.Monitoring.Queen.IntervalSeconds)
+	}
+	if c.Monitoring.Worker.Enabled {
+		env["WORKER_MONITORING_ENABLED"] = "true"
+	} else {
+		env["WORKER_MONITORING_ENABLED"] = "false"
+	}
+	if c.Monitoring.Worker.IntervalSeconds > 0 {
+		env["WORKER_MONITORING_INTERVAL"] = fmt.Sprintf("%d", c.Monitoring.Worker.IntervalSeconds)
 	}
 
 	return env
@@ -216,8 +246,11 @@ func (c *Config) WriteEnvGenerated(hiveDir string) error {
 	keys := []string{
 		"WORKSPACE_NAME", "GIT_REPO_URL",
 		"GIT_USER_EMAIL", "GIT_USER_NAME",
-		"QUEEN_MODEL", "WORKER_MODEL",
+		"QUEEN_MODEL", "WORKER_MODEL", "WORKER_MODE",
 		"HIVE_DOCKERFILE", "POLL_INTERVAL",
+		"REDIS_EXTERNAL_PORT",
+		"QUEEN_MONITORING_ENABLED", "QUEEN_MONITORING_INTERVAL",
+		"WORKER_MONITORING_ENABLED", "WORKER_MONITORING_INTERVAL",
 	}
 	for _, key := range keys {
 		if val, ok := env[key]; ok {

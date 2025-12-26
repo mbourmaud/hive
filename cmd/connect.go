@@ -68,9 +68,9 @@ IMPORTANT: You can monitor drone activity in real-time via Redis streams (hive:l
 func mapAgentID(id string) string {
 	switch id {
 	case "queen", "q", "0":
-		return "claude-queen"
+		return "hive-queen"
 	default:
-		return fmt.Sprintf("claude-agent-%s", id)
+		return fmt.Sprintf("hive-drone-%s", id)
 	}
 }
 

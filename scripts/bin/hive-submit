@@ -1,0 +1,92 @@
+#!/bin/bash
+# Submit a task to be auto-assigned to an available drone
+# Usage: hive-submit "<task description>" [priority]
+
+set -e
+
+if [ $# -lt 1 ]; then
+    cat << 'EOF'
+Usage: hive-submit "<task description>" [priority]
+
+Examples:
+  hive-submit "Fix the login button styling"
+  hive-submit "Add unit tests for user service" high
+
+Priority: low, normal (default), high
+EOF
+    exit 1
+fi
+
+TASK="$1"
+PRIORITY="${2:-normal}"
+
+# Find available drone (check who has fewest active tasks)
+REDIS_HOST="${REDIS_HOST:-redis}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+
+# Get list of drones from environment or default
+MAX_DRONES="${MAX_DRONES:-2}"
+
+BEST_DRONE=""
+BEST_COUNT=999
+
+for i in $(seq 1 $MAX_DRONES); do
+    DRONE="drone-$i"
+    # Count queued + active tasks for this drone
+    QUEUED=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" LLEN "hive:queue:$DRONE" 2>/dev/null || echo "0")
+    ACTIVE=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" LLEN "hive:active:$DRONE" 2>/dev/null || echo "0")
+    TOTAL=$((QUEUED + ACTIVE))
+
+    if [ "$TOTAL" -lt "$BEST_COUNT" ]; then
+        BEST_COUNT=$TOTAL
+        BEST_DRONE=$DRONE
+    fi
+done
+
+if [ -z "$BEST_DRONE" ]; then
+    echo "❌ No drones available"
+    exit 1
+fi
+
+# Convert priority to number
+case "$PRIORITY" in
+    high) PRIO_NUM=0 ;;
+    low) PRIO_NUM=2 ;;
+    *) PRIO_NUM=1 ;;
+esac
+
+TASK_ID="task-${BEST_DRONE}-$(date +%s)"
+
+# Create task JSON
+TASK_JSON=$(jq -n \
+    --arg id "$TASK_ID" \
+    --arg drone "$BEST_DRONE" \
+    --arg status "pending" \
+    --argjson priority "$PRIO_NUM" \
+    --arg created_at "$(date -Iseconds)" \
+    --arg title "$TASK" \
+    --arg description "$TASK" \
+    '{
+        id: $id,
+        drone: $drone,
+        status: $status,
+        priority: $priority,
+        created_at: $created_at,
+        title: $title,
+        description: $description
+    }'
+)
+
+echo "📋 Auto-assigning task to $BEST_DRONE (load: $BEST_COUNT tasks)"
+echo "   Task: $TASK"
+echo "   Priority: $PRIORITY"
+echo ""
+
+# Find the enqueue script
+ENQUEUE_SCRIPT="/scripts/redis/task-enqueue.sh"
+if [ ! -f "$ENQUEUE_SCRIPT" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    ENQUEUE_SCRIPT="${SCRIPT_DIR}/../redis/task-enqueue.sh"
+fi
+
+"$ENQUEUE_SCRIPT" "$BEST_DRONE" "$TASK_JSON"

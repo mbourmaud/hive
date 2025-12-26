@@ -5,14 +5,15 @@
 # Launches worker in interactive or daemon mode
 # ===========================================
 
-# Get worker ID from AGENT_ID (e.g., "drone-1" -> "1")
-WORKER_NUM="${AGENT_ID#drone-}"
+# Get worker ID from AGENT_NAME (e.g., "drone-1" -> "1")
+WORKER_NUM="${AGENT_NAME#drone-}"
 
-# Get worker mode from environment (WORKER_N_MODE)
+# Get worker mode from environment
+# Priority: WORKER_N_MODE > WORKER_MODE > default (interactive)
 WORKER_MODE_VAR="WORKER_${WORKER_NUM}_MODE"
-WORKER_MODE="${!WORKER_MODE_VAR:-interactive}"
+WORKER_MODE="${!WORKER_MODE_VAR:-${WORKER_MODE:-interactive}}"
 
-echo "🐝 Worker ${AGENT_ID} starting in ${WORKER_MODE} mode..."
+echo "🐝 Worker ${AGENT_NAME} starting in ${WORKER_MODE} mode..."
 
 if [ "$WORKER_MODE" = "daemon" ]; then
     # Autonomous mode: run worker-daemon in loop

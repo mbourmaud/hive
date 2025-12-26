@@ -84,6 +84,30 @@ var startCmd = &cobra.Command{
 			return fmt.Errorf("failed to generate env vars: %w", err)
 		}
 
+		// Regenerate docker-compose.yml if missing or outdated
+		redisPort := cfg.Redis.Port
+		if redisPort == 0 {
+			redisPort = 6379
+		}
+		if err := generateDockerComposeWithConfig(count, redisPort); err != nil {
+			return fmt.Errorf("failed to generate docker-compose.yml: %w", err)
+		}
+
+		// Sync hive.yaml to .hive/ for container access
+		if err := syncHiveYAML(); err != nil {
+			fmt.Printf("%s\n", ui.Warning("hive.yaml sync: "+err.Error()))
+		}
+
+		// Sync host MCPs to .hive/ for container access
+		if err := syncHostMCPs(); err != nil {
+			fmt.Printf("%s\n", ui.Warning("host MCPs sync: "+err.Error()))
+		}
+
+		// Sync CLAUDE.md to .hive/ for container access
+		if err := syncProjectCLAUDEmd(); err != nil {
+			fmt.Printf("%s\n", ui.Warning("CLAUDE.md sync: "+err.Error()))
+		}
+
 		// Header
 		fmt.Print(ui.Header("🚀", "Starting Hive"))
 		fmt.Printf("%sQueen + %d worker%s%s\n\n", ui.StyleDim.Render(""), count, pluralize(count), "")
@@ -91,7 +115,7 @@ var startCmd = &cobra.Command{
 		// Build services list (Redis must start first)
 		services := []string{"redis", "queen"}
 		for i := 1; i <= count; i++ {
-			services = append(services, fmt.Sprintf("agent-%d", i))
+			services = append(services, fmt.Sprintf("drone-%d", i))
 		}
 
 		// Create shell runner
@@ -139,11 +163,11 @@ func waitForContainersReady(runner *shell.Runner, services []string, timeout tim
 		var containerName string
 		switch service {
 		case "queen":
-			containerName = "claude-queen"
+			containerName = "hive-queen"
 		case "redis":
 			containerName = "hive-redis"
 		default:
-			containerName = "claude-" + service
+			containerName = "hive-" + service
 		}
 
 		fmt.Printf("  %s", ui.StyleDim.Render(containerName+"..."))
