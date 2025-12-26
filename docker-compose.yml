@@ -40,6 +40,7 @@ x-agent-common: &agent-common
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     # Optional: GitHub/GitLab tokens
     GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    GH_TOKEN: ${GITHUB_TOKEN:-}
     GITLAB_TOKEN: ${GITLAB_TOKEN:-}
     GITLAB_HOST: ${GITLAB_HOST:-gitlab.com}
     # Workspace config
