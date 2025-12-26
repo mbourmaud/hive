@@ -82,7 +82,7 @@ services:
       # node_modules overlay - isolates container from local dev (Linux vs macOS binaries)
       - queen-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -122,7 +122,7 @@ services:
       # node_modules overlay - isolates container from local dev
       - drone-1-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -153,7 +153,7 @@ services:
     volumes:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-2:/workspace
       - drone-2-node-modules:/workspace/node_modules
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       - ../hive.yaml:/hive-config/hive.yaml:ro
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
@@ -182,7 +182,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-3:/workspace
       - drone-3-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -214,7 +214,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-4:/workspace
       - drone-4-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -246,7 +246,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-5:/workspace
       - drone-5-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -278,7 +278,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-6:/workspace
       - drone-6-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -310,7 +310,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-7:/workspace
       - drone-7-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -342,7 +342,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-8:/workspace
       - drone-8-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -374,7 +374,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-9:/workspace
       - drone-9-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
@@ -406,7 +406,7 @@ services:
       - ${HIVE_WORKSPACES:-./workspaces}/drone-10:/workspace
       - drone-10-node-modules:/workspace/node_modules
       # Git repository (for worktree support)
-      - ../.git:/workspace-git
+      - ../.git:/workspace-git:ro
       # Hive config
       - ../hive.yaml:/hive-config/hive.yaml:ro
       # SHARED Claude config (MCPs, plugins, projects) - NOT settings.json or skills
