@@ -31,11 +31,15 @@ ignore:
   - "**/*_test.go"
   - "tests/**"
 
+  # Test infrastructure (not production code)
+  - "internal/testutil/**"
+  - "internal/integration/**"
+
+  # Test mocks
+  - "internal/shell/mock_executor.go"
+
   # Embedded files (templates, not code)
   - "internal/embed/files/**"
 
   # Entry point (minimal testable code)
   - "main.go"
-
-  # Interactive UI (requires terminal/survey mocking)
-  - "internal/ui/prompts.go"
