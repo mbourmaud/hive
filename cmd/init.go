@@ -259,52 +259,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func interactiveWizard() (map[string]string, error) {
-	config := make(map[string]string)
-
-	// Git Configuration
-	fmt.Println("📧 Git Configuration")
-	email, err := ui.PromptRequired("  Email", validateEmail)
-	if err != nil {
-		return nil, err
-	}
-	config["GIT_USER_EMAIL"] = email
-
-	name, err := ui.PromptRequired("  Name")
-	if err != nil {
-		return nil, err
-	}
-	config["GIT_USER_NAME"] = name
-	fmt.Println()
-
-	// Claude Authentication
-	fmt.Println("🔑 Claude Authentication")
-	fmt.Println("  Get your token: claude setup-token")
-	token, err := ui.PromptSecret("  OAuth Token")
-	if err != nil {
-		return nil, err
-	}
-	config["CLAUDE_CODE_OAUTH_TOKEN"] = token
-	fmt.Println()
-
-	// Project Setup
-	fmt.Println("📂 Project Setup")
-	workspace, err := ui.PromptDefault("  Workspace name", "my-project")
-	if err != nil {
-		return nil, err
-	}
-	config["WORKSPACE_NAME"] = workspace
-
-	gitURL, err := ui.PromptOptional("  Git repo URL (optional)")
-	if err != nil {
-		return nil, err
-	}
-	config["GIT_REPO_URL"] = gitURL
-	fmt.Println()
-
-	return config, nil
-}
-
 // interactiveWizardWithDetection shows detected values and only asks for missing info
 func interactiveWizardWithDetection(email, name, repoURL, workspaceName, claudeToken, projectType string) (map[string]string, error) {
 	cfg := make(map[string]string)

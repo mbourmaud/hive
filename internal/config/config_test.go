@@ -371,3 +371,190 @@ func TestConfigWithEnv(t *testing.T) {
 		t.Errorf("expected workers env WORKER_VAR='value2', got '%s'", loaded.Agents.Workers.Env["WORKER_VAR"])
 	}
 }
+
+func TestGenerateEnvVars(t *testing.T) {
+	cfg := &Config{
+		Workspace: WorkspaceConfig{
+			Name:   "test-workspace",
+			GitURL: "https://github.com/test/repo.git",
+		},
+		Git: GitConfig{
+			UserEmail: "test@example.com",
+			UserName:  "Test User",
+		},
+		Redis: RedisConfig{
+			Port: 6380,
+		},
+		Agents: AgentsConfig{
+			Queen: AgentConfig{
+				Model:      "opus",
+				Dockerfile: "docker/Dockerfile.go",
+			},
+			Workers: WorkersConfig{
+				Count:               3,
+				Model:               "sonnet",
+				Mode:                "daemon",
+				PollIntervalSeconds: 5,
+			},
+		},
+		Monitoring: MonitoringConfig{
+			Queen: QueenMonitoringConfig{
+				Enabled:         true,
+				IntervalSeconds: 30,
+			},
+			Worker: WorkerMonitoringConfig{
+				Enabled:         false,
+				IntervalSeconds: 10,
+			},
+		},
+	}
+
+	env := cfg.GenerateEnvVars()
+
+	// Test workspace vars
+	if env["WORKSPACE_NAME"] != "test-workspace" {
+		t.Errorf("expected WORKSPACE_NAME='test-workspace', got '%s'", env["WORKSPACE_NAME"])
+	}
+	if env["GIT_REPO_URL"] != "https://github.com/test/repo.git" {
+		t.Errorf("expected GIT_REPO_URL, got '%s'", env["GIT_REPO_URL"])
+	}
+
+	// Test git vars
+	if env["GIT_USER_EMAIL"] != "test@example.com" {
+		t.Errorf("expected GIT_USER_EMAIL='test@example.com', got '%s'", env["GIT_USER_EMAIL"])
+	}
+	if env["GIT_USER_NAME"] != "Test User" {
+		t.Errorf("expected GIT_USER_NAME='Test User', got '%s'", env["GIT_USER_NAME"])
+	}
+
+	// Test model vars
+	if env["QUEEN_MODEL"] != "opus" {
+		t.Errorf("expected QUEEN_MODEL='opus', got '%s'", env["QUEEN_MODEL"])
+	}
+	if env["WORKER_MODEL"] != "sonnet" {
+		t.Errorf("expected WORKER_MODEL='sonnet', got '%s'", env["WORKER_MODEL"])
+	}
+
+	// Test worker mode
+	if env["WORKER_MODE"] != "daemon" {
+		t.Errorf("expected WORKER_MODE='daemon', got '%s'", env["WORKER_MODE"])
+	}
+
+	// Test poll interval
+	if env["POLL_INTERVAL"] != "5" {
+		t.Errorf("expected POLL_INTERVAL='5', got '%s'", env["POLL_INTERVAL"])
+	}
+
+	// Test redis port
+	if env["REDIS_EXTERNAL_PORT"] != "6380" {
+		t.Errorf("expected REDIS_EXTERNAL_PORT='6380', got '%s'", env["REDIS_EXTERNAL_PORT"])
+	}
+
+	// Test monitoring vars
+	if env["QUEEN_MONITORING_ENABLED"] != "true" {
+		t.Errorf("expected QUEEN_MONITORING_ENABLED='true', got '%s'", env["QUEEN_MONITORING_ENABLED"])
+	}
+	if env["WORKER_MONITORING_ENABLED"] != "false" {
+		t.Errorf("expected WORKER_MONITORING_ENABLED='false', got '%s'", env["WORKER_MONITORING_ENABLED"])
+	}
+}
+
+func TestGenerateEnvVars_MinimalConfig(t *testing.T) {
+	cfg := Default()
+	env := cfg.GenerateEnvVars()
+
+	// Ensure essential defaults are present
+	if env["WORKSPACE_NAME"] != "my-project" {
+		t.Errorf("expected default WORKSPACE_NAME='my-project', got '%s'", env["WORKSPACE_NAME"])
+	}
+
+	// Check that empty values don't generate env vars
+	if _, exists := env["GIT_USER_EMAIL"]; exists && cfg.Git.UserEmail == "" {
+		t.Error("should not generate GIT_USER_EMAIL when empty")
+	}
+}
+
+func TestWriteEnvGenerated(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		Workspace: WorkspaceConfig{
+			Name:   "write-test",
+			GitURL: "https://github.com/test/repo.git",
+		},
+		Git: GitConfig{
+			UserEmail: "write@example.com",
+			UserName:  "Write Test",
+		},
+		Redis: RedisConfig{
+			Port: 6381,
+		},
+		Agents: AgentsConfig{
+			Queen: AgentConfig{
+				Model:      "opus",
+				Dockerfile: "docker/Dockerfile.node",
+			},
+			Workers: WorkersConfig{
+				Count: 2,
+				Model: "sonnet",
+				Mode:  "interactive",
+			},
+		},
+	}
+
+	if err := cfg.WriteEnvGenerated(tmpDir); err != nil {
+		t.Fatalf("WriteEnvGenerated failed: %v", err)
+	}
+
+	// Read the generated file
+	content, err := os.ReadFile(filepath.Join(tmpDir, ".env.generated"))
+	if err != nil {
+		t.Fatalf("failed to read generated env file: %v", err)
+	}
+
+	// Check that content includes expected values
+	contentStr := string(content)
+	expectedVars := []string{
+		"WORKSPACE_NAME=write-test",
+		"GIT_USER_EMAIL=write@example.com",
+		"GIT_USER_NAME=Write Test",
+		"QUEEN_MODEL=opus",
+		"WORKER_MODEL=sonnet",
+		"WORKER_MODE=interactive",
+		"REDIS_EXTERNAL_PORT=6381",
+	}
+
+	for _, expected := range expectedVars {
+		if !contains(contentStr, expected) {
+			t.Errorf("expected env file to contain '%s'", expected)
+		}
+	}
+
+	// Check header comments
+	if !contains(contentStr, "Auto-generated from hive.yaml") {
+		t.Error("expected header comment in generated file")
+	}
+}
+
+func TestWriteEnvGenerated_InvalidPath(t *testing.T) {
+	cfg := Default()
+	err := cfg.WriteEnvGenerated("/nonexistent/path/that/does/not/exist")
+	if err == nil {
+		t.Error("expected error when writing to invalid path")
+	}
+}
+
+// contains checks if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

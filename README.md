@@ -448,6 +448,21 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
+## 🔧 Quick Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `hive init` fails | Ensure Docker is running: `docker info` |
+| "Claude CLI not available" | Re-authenticate: `claude /auth` |
+| Git push fails in container | Add SSH key or use HTTPS with token |
+| Container OOM (out of memory) | Increase memory in `.env`: `NODE_MAX_OLD_SPACE_SIZE=8192` |
+| "Redis connection refused" | Wait for Redis to start: `hive start --wait` |
+| Worktree conflicts | Clean and reinit: `hive clean && hive init` |
+
+For more, see [Troubleshooting Guide](docs/troubleshooting.md).
+
+---
+
 ## 🆘 Support
 
 - 🐛 [Report a bug](https://github.com/mbourmaud/hive/issues)

@@ -53,12 +53,6 @@ var (
 			Padding(1, 2).
 			Bold(true).
 			MaxWidth(80)
-
-	WarningBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorYellow).
-			Padding(0, 1).
-			MaxWidth(80)
 )
 
 // Table styles
@@ -68,11 +62,5 @@ var (
 				PaddingRight(2)
 
 	TableCellStyle = lipgloss.NewStyle().
-			PaddingRight(2)
-
-	TableSuccessStyle = StyleGreen.Copy().
-				PaddingRight(2)
-
-	TableErrorStyle = StyleRed.Copy().
 			PaddingRight(2)
 )

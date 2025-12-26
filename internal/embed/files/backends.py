@@ -13,6 +13,7 @@ import sys
 import json
 import logging
 import subprocess
+import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Callable
 
@@ -179,6 +180,19 @@ class ClaudeCLIBackend(ClaudeBackend):
 
             final_text = ""
             events_collected = []
+            stderr_output = []
+
+            # Read stderr in a separate thread to prevent deadlock
+            # (subprocess can block if stderr buffer fills up)
+            def read_stderr():
+                try:
+                    for line in process.stderr:
+                        stderr_output.append(line)
+                except:
+                    pass
+
+            stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+            stderr_thread.start()
 
             # Read and process each line of JSON output
             for line in process.stdout:
@@ -215,9 +229,10 @@ class ClaudeCLIBackend(ClaudeBackend):
 
             # Wait for process to complete
             process.wait()
+            stderr_thread.join(timeout=5)  # Wait for stderr thread to finish
 
             if process.returncode != 0:
-                stderr = process.stderr.read() if process.stderr else ""
+                stderr = "".join(stderr_output)
                 logger.error(f"Claude CLI error (code {process.returncode}): {stderr}")
                 raise RuntimeError(f"Claude CLI failed: {stderr}")
 

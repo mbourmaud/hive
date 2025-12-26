@@ -394,7 +394,7 @@ Complete this task now using the available tools."""
 
                 else:
                     # Unexpected stop reason
-                    logger.warning(f"Unexpected stop reason: {response.stop_reason}")
+                    logger.warning(f"Unexpected stop reason: {response['stop_reason']}")
                     break
 
             # Check if we hit max iterations

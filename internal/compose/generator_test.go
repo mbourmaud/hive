@@ -66,8 +66,9 @@ func TestGenerate(t *testing.T) {
 			if !strings.Contains(output, "tools-cache:") {
 				t.Error("Expected tools-cache volume to be defined")
 			}
-			if !strings.Contains(output, "pnpm-store:") {
-				t.Error("Expected pnpm-store volume to be defined")
+			// pnpm-store is now agent-specific (e.g., pnpm-store-queen, pnpm-store-drone-1)
+			if !strings.Contains(output, "pnpm-store-queen:") {
+				t.Error("Expected pnpm-store-queen volume to be defined")
 			}
 
 			// Check network is defined
