@@ -3,6 +3,7 @@ package tasks
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -145,13 +146,10 @@ func (m *Manager) AssignTask(taskID, workerID string) error {
 	task.AssignedAt = &now
 	worker.CurrentTask = taskID
 
-	// Remove from queue
-	for i, id := range m.queue {
-		if id == taskID {
-			m.queue = append(m.queue[:i], m.queue[i+1:]...)
-			break
-		}
-	}
+	// Remove from queue using slices.DeleteFunc (Go 1.21+)
+	m.queue = slices.DeleteFunc(m.queue, func(id string) bool {
+		return id == taskID
+	})
 
 	return nil
 }

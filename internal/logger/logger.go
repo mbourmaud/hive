@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"sync"
 	"time"
@@ -102,9 +103,10 @@ func (l *Logger) WithField(key string, value interface{}) *Logger {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	newFields := make(map[string]interface{})
-	for k, v := range l.fields {
-		newFields[k] = v
+	// Use maps.Clone for efficient shallow copy (Go 1.21+)
+	newFields := maps.Clone(l.fields)
+	if newFields == nil {
+		newFields = make(map[string]interface{}, 1)
 	}
 	newFields[key] = value
 
@@ -122,13 +124,10 @@ func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	newFields := make(map[string]interface{})
-	for k, v := range l.fields {
-		newFields[k] = v
-	}
-	for k, v := range fields {
-		newFields[k] = v
-	}
+	// Pre-size new map for efficiency
+	newFields := make(map[string]interface{}, len(l.fields)+len(fields))
+	maps.Copy(newFields, l.fields)
+	maps.Copy(newFields, fields)
 
 	return &Logger{
 		output:   l.output,
