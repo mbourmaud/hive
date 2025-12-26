@@ -17,6 +17,9 @@ coverage:
       default:
         target: 60%
         threshold: 10%
+        # Make patch coverage informational - don't block PRs
+        # Useful for refactoring commits that remove code
+        informational: true
 
 comment:
   layout: "reach,diff,flags,files,footer"
