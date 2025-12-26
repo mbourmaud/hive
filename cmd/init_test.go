@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1269,5 +1271,74 @@ func TestGenerateDockerComposeWithConfig_DifferentCounts(t *testing.T) {
 				t.Errorf("generateDockerComposeWithConfig(%d) missing %q", tt.workers, tt.expectedDrone)
 			}
 		})
+	}
+}
+
+// TestPrintSuccessMessage tests the success message output
+func TestPrintSuccessMessage(t *testing.T) {
+	tests := []struct {
+		workers  int
+		expected []string
+	}{
+		{
+			workers:  1,
+			expected: []string{"Setup complete", "1 worker", "hive connect queen", "hive connect 1", "hive status"},
+		},
+		{
+			workers:  3,
+			expected: []string{"Setup complete", "3 workers", "hive connect queen"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(rune(tt.workers+'0')), func(t *testing.T) {
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			printSuccessMessage(tt.workers)
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
+			output := buf.String()
+
+			for _, exp := range tt.expected {
+				if !strings.Contains(output, exp) {
+					t.Errorf("printSuccessMessage(%d) output missing %q\nGot: %s", tt.workers, exp, output)
+				}
+			}
+		})
+	}
+}
+
+// TestGenerateDockerCompose tests the wrapper function
+func TestGenerateDockerCompose(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	os.MkdirAll(".hive", 0755)
+
+	err := generateDockerCompose(2)
+	if err != nil {
+		t.Fatalf("generateDockerCompose() error = %v", err)
+	}
+
+	content, err := os.ReadFile(".hive/docker-compose.yml")
+	if err != nil {
+		t.Fatalf("Failed to read docker-compose.yml: %v", err)
+	}
+
+	// Verify content
+	if !strings.Contains(string(content), "queen") {
+		t.Error("generateDockerCompose() missing queen service")
+	}
+	if !strings.Contains(string(content), "drone-1") {
+		t.Error("generateDockerCompose() missing drone-1 service")
 	}
 }

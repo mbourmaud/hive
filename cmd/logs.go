@@ -71,31 +71,33 @@ Examples:
 	},
 }
 
+// redisClient allows dependency injection for testing
+var redisClient redis.Cmdable
+
 func showActivityLogs(args []string) error {
 	ctx := context.Background()
 
-	// Connect to Redis
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6380",
-	})
-	defer rdb.Close()
+	// Connect to Redis (use injected client for testing)
+	var rdb redis.Cmdable
+	if redisClient != nil {
+		rdb = redisClient
+	} else {
+		client := redis.NewClient(&redis.Options{
+			Addr: "localhost:6380",
+		})
+		defer client.Close()
+		rdb = client
 
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("failed to connect to Redis: %w\nMake sure hive is running", err)
+		if err := client.Ping(ctx).Err(); err != nil {
+			return fmt.Errorf("failed to connect to Redis: %w\nMake sure hive is running", err)
+		}
 	}
 
 	// Determine stream key
-	var streamKey string
+	streamKey := getActivityStreamKey(args)
 	if len(args) > 0 {
-		agentID := args[0]
-		if agentID == "queen" || agentID == "q" || agentID == "0" {
-			streamKey = "hive:logs:queen"
-		} else {
-			streamKey = fmt.Sprintf("hive:logs:drone-%s", agentID)
-		}
 		fmt.Printf("📋 Activity logs for %s\n\n", streamKey)
 	} else {
-		streamKey = "hive:logs:all"
 		fmt.Printf("📋 All activity logs\n\n")
 	}
 
@@ -185,6 +187,18 @@ func printActivityEntry(msg redis.XMessage) {
 	}
 
 	fmt.Printf("[%s] %s %s %s: %s\n", timestamp, icon, agent, event, contentStr)
+}
+
+// getActivityStreamKey returns the Redis stream key for the given args
+func getActivityStreamKey(args []string) string {
+	if len(args) > 0 {
+		agentID := args[0]
+		if agentID == "queen" || agentID == "q" || agentID == "0" {
+			return "hive:logs:queen"
+		}
+		return fmt.Sprintf("hive:logs:drone-%s", agentID)
+	}
+	return "hive:logs:all"
 }
 
 func init() {

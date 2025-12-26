@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -161,8 +162,8 @@ func TestPrintActivityEntry(t *testing.T) {
 	}
 }
 
-// TestShowActivityLogs_StreamKeySelection tests stream key selection logic
-func TestShowActivityLogs_StreamKeySelection(t *testing.T) {
+// TestGetActivityStreamKey tests stream key selection logic
+func TestGetActivityStreamKey(t *testing.T) {
 	tests := []struct {
 		args     []string
 		expected string
@@ -173,6 +174,7 @@ func TestShowActivityLogs_StreamKeySelection(t *testing.T) {
 		{[]string{"0"}, "hive:logs:queen"},
 		{[]string{"1"}, "hive:logs:drone-1"},
 		{[]string{"2"}, "hive:logs:drone-2"},
+		{[]string{"10"}, "hive:logs:drone-10"},
 	}
 
 	for _, tt := range tests {
@@ -181,22 +183,212 @@ func TestShowActivityLogs_StreamKeySelection(t *testing.T) {
 			name = tt.args[0]
 		}
 		t.Run(name, func(t *testing.T) {
-			streamKey := getStreamKey(tt.args)
+			streamKey := getActivityStreamKey(tt.args)
 			if streamKey != tt.expected {
-				t.Errorf("getStreamKey(%v) = %q, want %q", tt.args, streamKey, tt.expected)
+				t.Errorf("getActivityStreamKey(%v) = %q, want %q", tt.args, streamKey, tt.expected)
 			}
 		})
 	}
 }
 
-// getStreamKey extracts stream key logic for testing
-func getStreamKey(args []string) string {
-	if len(args) > 0 {
-		agentID := args[0]
-		if agentID == "queen" || agentID == "q" || agentID == "0" {
-			return "hive:logs:queen"
-		}
-		return fmt.Sprintf("hive:logs:drone-%s", agentID)
+// TestShowActivityLogs_WithMock tests showActivityLogs with mocked Redis
+func TestShowActivityLogs_WithMock(t *testing.T) {
+	// Create mock
+	db, mock := redismock.NewClientMock()
+
+	// Set up the mock client
+	redisClient = db
+	defer func() { redisClient = nil }()
+
+	// Mock XRevRange response
+	mock.ExpectXRevRange("hive:logs:all", "+", "-").SetVal([]redis.XMessage{
+		{
+			ID: "1234567890123-0",
+			Values: map[string]interface{}{
+				"timestamp": "2024-01-15T10:30:00Z",
+				"agent":     "drone-1",
+				"event":     "task_start",
+				"content":   "Starting task",
+			},
+		},
+		{
+			ID: "1234567890122-0",
+			Values: map[string]interface{}{
+				"timestamp": "2024-01-15T10:29:00Z",
+				"agent":     "queen",
+				"event":     "claude_response",
+				"content":   "Analyzing...",
+			},
+		},
+	})
+
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Reset logsFollow and logsTail for this test
+	logsFollow = false
+	logsTail = 100
+
+	err := showActivityLogs([]string{})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if err != nil {
+		t.Fatalf("showActivityLogs() error = %v", err)
 	}
-	return "hive:logs:all"
+
+	// Verify output contains expected content
+	if !strings.Contains(output, "All activity logs") {
+		t.Error("showActivityLogs() missing header")
+	}
+	if !strings.Contains(output, "drone-1") {
+		t.Error("showActivityLogs() missing drone-1 entry")
+	}
+
+	// Verify mock expectations
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("mock expectations not met: %v", err)
+	}
+}
+
+// TestShowActivityLogs_EmptyStream tests empty stream handling
+func TestShowActivityLogs_EmptyStream(t *testing.T) {
+	db, mock := redismock.NewClientMock()
+	redisClient = db
+	defer func() { redisClient = nil }()
+
+	// Mock empty response
+	mock.ExpectXRevRange("hive:logs:all", "+", "-").SetVal([]redis.XMessage{})
+
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	logsFollow = false
+	logsTail = 100
+
+	err := showActivityLogs([]string{})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if err != nil {
+		t.Fatalf("showActivityLogs() error = %v", err)
+	}
+
+	if !strings.Contains(output, "No activity logs found") {
+		t.Error("showActivityLogs() should show 'No activity logs found' for empty stream")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("mock expectations not met: %v", err)
+	}
+}
+
+// TestShowActivityLogs_SpecificAgent tests agent-specific logs
+func TestShowActivityLogs_SpecificAgent(t *testing.T) {
+	db, mock := redismock.NewClientMock()
+	redisClient = db
+	defer func() { redisClient = nil }()
+
+	// Mock XRevRange for specific agent
+	mock.ExpectXRevRange("hive:logs:drone-1", "+", "-").SetVal([]redis.XMessage{
+		{
+			ID: "1234567890123-0",
+			Values: map[string]interface{}{
+				"timestamp": "2024-01-15T10:30:00Z",
+				"agent":     "drone-1",
+				"event":     "task_start",
+				"content":   "Working on task",
+			},
+		},
+	})
+
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	logsFollow = false
+	logsTail = 100
+
+	err := showActivityLogs([]string{"1"})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if err != nil {
+		t.Fatalf("showActivityLogs() error = %v", err)
+	}
+
+	if !strings.Contains(output, "hive:logs:drone-1") {
+		t.Error("showActivityLogs() should show specific agent stream key")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("mock expectations not met: %v", err)
+	}
+}
+
+// TestShowActivityLogs_TailLimit tests the tail limit functionality
+func TestShowActivityLogs_TailLimit(t *testing.T) {
+	db, mock := redismock.NewClientMock()
+	redisClient = db
+	defer func() { redisClient = nil }()
+
+	// Create 10 messages
+	messages := make([]redis.XMessage, 10)
+	for i := 0; i < 10; i++ {
+		messages[i] = redis.XMessage{
+			ID: "123456789012" + string(rune('0'+i)) + "-0",
+			Values: map[string]interface{}{
+				"timestamp": "2024-01-15T10:30:00Z",
+				"agent":     "drone-1",
+				"event":     "task_start",
+				"content":   "Message",
+			},
+		}
+	}
+
+	mock.ExpectXRevRange("hive:logs:all", "+", "-").SetVal(messages)
+
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	logsFollow = false
+	logsTail = 5 // Only show 5 entries
+
+	err := showActivityLogs([]string{})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+
+	if err != nil {
+		t.Fatalf("showActivityLogs() error = %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("mock expectations not met: %v", err)
+	}
 }
