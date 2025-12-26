@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -77,12 +78,24 @@ Run this after cloning a project with MCPs defined.`,
 	RunE: runMCPSync,
 }
 
+var mcpPushCmd = &cobra.Command{
+	Use:   "push",
+	Short: "Push MCPs to running containers",
+	Long: `Update MCP configuration in running containers.
+
+Reads MCPs from hive.yaml, loads secrets from .env.project,
+and updates settings.json in all running Hive containers.
+No restart required.`,
+	RunE: runMCPPush,
+}
+
 func init() {
 	rootCmd.AddCommand(mcpCmd)
 	mcpCmd.AddCommand(mcpAddCmd)
 	mcpCmd.AddCommand(mcpListCmd)
 	mcpCmd.AddCommand(mcpRemoveCmd)
 	mcpCmd.AddCommand(mcpSyncCmd)
+	mcpCmd.AddCommand(mcpPushCmd)
 
 	mcpAddCmd.Flags().BoolVarP(&mcpGlobal, "global", "g", false, "Add to user scope (all projects)")
 }
@@ -513,4 +526,140 @@ func SyncMCPsFromConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func runMCPPush(cmd *cobra.Command, args []string) error {
+	cfg := config.LoadOrDefault()
+
+	if len(cfg.MCPs) == 0 {
+		fmt.Println("No MCPs defined in hive.yaml")
+		return nil
+	}
+
+	// Load secrets from .env.project and .env
+	secrets := loadSecretsFromEnvFiles()
+
+	// Build settings.json content
+	settings := map[string]interface{}{
+		"permissions": map[string]string{
+			"defaultMode": "bypassPermissions",
+		},
+		"mcpServers": map[string]interface{}{},
+	}
+
+	mcpServers := settings["mcpServers"].(map[string]interface{})
+
+	for name, mcpCfg := range cfg.MCPs {
+		server := map[string]interface{}{}
+
+		pkg := mcpCfg.Package
+		if pkg != "" {
+			server["command"] = "npx"
+			server["args"] = append([]string{"-y", pkg}, mcpCfg.Args...)
+		} else if mcpCfg.Command != "" {
+			server["command"] = mcpCfg.Command
+			server["args"] = mcpCfg.Args
+		} else {
+			continue
+		}
+
+		// Add env vars
+		if len(mcpCfg.Env) > 0 {
+			envMap := map[string]string{}
+			for _, envVar := range mcpCfg.Env {
+				if val, ok := secrets[envVar]; ok {
+					envMap[envVar] = val
+				}
+			}
+			if len(envMap) > 0 {
+				server["env"] = envMap
+			}
+		}
+
+		mcpServers[name] = server
+	}
+
+	// Convert to JSON
+	settingsJSON, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to generate settings.json: %w", err)
+	}
+
+	fmt.Println("🔌 Pushing MCPs to running containers...")
+	fmt.Println()
+
+	// Find running containers
+	containers := []string{"claude-queen", "claude-agent-1", "claude-agent-2", "claude-agent-3",
+		"claude-agent-4", "claude-agent-5", "claude-agent-6", "claude-agent-7",
+		"claude-agent-8", "claude-agent-9", "claude-agent-10"}
+
+	pushedCount := 0
+	for _, container := range containers {
+		// Check if container is running
+		checkCmd := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", container)
+		output, err := checkCmd.Output()
+		if err != nil || strings.TrimSpace(string(output)) != "true" {
+			continue
+		}
+
+		// Push settings.json to container
+		pushCmd := exec.Command("docker", "exec", container, "bash", "-c",
+			fmt.Sprintf("cat > /home/agent/.claude/settings.json << 'EOF'\n%s\nEOF", string(settingsJSON)))
+
+		if err := pushCmd.Run(); err != nil {
+			fmt.Printf("   ⚠️  %s: %v\n", container, err)
+		} else {
+			fmt.Printf("   ✓ %s\n", container)
+			pushedCount++
+		}
+	}
+
+	if pushedCount == 0 {
+		fmt.Println("   No running containers found")
+		fmt.Println()
+		fmt.Println("💡 Start Hive first: hive start")
+	} else {
+		fmt.Println()
+		fmt.Printf("✅ MCPs pushed to %d container(s)\n", pushedCount)
+		fmt.Println("💡 MCPs will be active on next Claude invocation")
+	}
+
+	return nil
+}
+
+func loadSecretsFromEnvFiles() map[string]string {
+	secrets := make(map[string]string)
+
+	// Load from .env
+	if data, err := os.ReadFile(".env"); err == nil {
+		parseEnvFile(string(data), secrets)
+	}
+
+	// Load from .env.project (overrides .env)
+	if data, err := os.ReadFile(".env.project"); err == nil {
+		parseEnvFile(string(data), secrets)
+	}
+
+	// Load from .hive/.env if exists
+	if data, err := os.ReadFile(".hive/.env"); err == nil {
+		parseEnvFile(string(data), secrets)
+	}
+
+	return secrets
+}
+
+func parseEnvFile(content string, secrets map[string]string) {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if idx := strings.Index(line, "="); idx > 0 {
+			key := strings.TrimSpace(line[:idx])
+			value := strings.TrimSpace(line[idx+1:])
+			// Remove quotes if present
+			value = strings.Trim(value, "\"'")
+			secrets[key] = value
+		}
+	}
 }
