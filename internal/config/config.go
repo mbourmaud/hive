@@ -10,11 +10,20 @@ import (
 
 // Config represents the Hive configuration
 type Config struct {
-	Workspace  WorkspaceConfig  `yaml:"workspace"`
-	Git        GitConfig        `yaml:"git"`
-	Redis      RedisConfig      `yaml:"redis"`
-	Agents     AgentsConfig     `yaml:"agents"`
-	Monitoring MonitoringConfig `yaml:"monitoring"`
+	Workspace  WorkspaceConfig      `yaml:"workspace"`
+	Git        GitConfig            `yaml:"git"`
+	Redis      RedisConfig          `yaml:"redis"`
+	Agents     AgentsConfig         `yaml:"agents"`
+	Monitoring MonitoringConfig     `yaml:"monitoring"`
+	MCPs       map[string]MCPConfig `yaml:"mcps,omitempty"`
+}
+
+// MCPConfig represents a Model Context Protocol server configuration
+type MCPConfig struct {
+	Package string   `yaml:"package,omitempty"` // NPM package name (e.g., "@playwright/mcp")
+	Command string   `yaml:"command,omitempty"` // Custom command (if not using package)
+	Args    []string `yaml:"args,omitempty"`    // Additional arguments
+	Env     []string `yaml:"env,omitempty"`     // Required environment variables (stored in .env.project)
 }
 
 // WorkspaceConfig contains workspace settings

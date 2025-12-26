@@ -205,6 +205,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%s\n", ui.StyleDim.Render("   Agents will use empty workspaces"))
 	}
 
+	// Sync MCPs from hive.yaml (prompts for missing secrets)
+	if err := SyncMCPsFromConfig(hiveCfg); err != nil {
+		fmt.Printf("%s\n", ui.Warning("MCP sync failed: "+err.Error()))
+	}
+
 	// Skip starting if --skip-start flag is set
 	if flagSkipStart {
 		fmt.Printf("\n%s\n", ui.StyleDim.Render("Skipping hive start (--skip-start flag)"))
