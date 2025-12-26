@@ -500,3 +500,173 @@ func TestCompletedTasksHistory(t *testing.T) {
 		t.Errorf("Expected most recent task 'task-3', got '%s'", prevTask.ID)
 	}
 }
+
+// =============================================================================
+// Activity Logs Tests (simulating hive logs --activity)
+// =============================================================================
+
+// TestActivityLogStream tests Redis stream operations for activity logs
+func TestActivityLogStream(t *testing.T) {
+	suite := setupRedis(t)
+	defer suite.teardown(t)
+
+	streamKey := "hive:logs:all"
+
+	// Add log entries using XADD (like the logging hook does)
+	entries := []struct {
+		agent   string
+		event   string
+		content string
+	}{
+		{"drone-1", "task_start", "Starting fix-auth task"},
+		{"drone-1", "tool_call", "Reading src/auth.go"},
+		{"drone-1", "tool_result", "File read successfully"},
+		{"drone-1", "claude_response", "I found the issue..."},
+		{"drone-1", "task_complete", "Task completed"},
+	}
+
+	for _, entry := range entries {
+		err := suite.client.XAdd(suite.ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			Values: map[string]interface{}{
+				"timestamp": time.Now().Format(time.RFC3339),
+				"agent":     entry.agent,
+				"event":     entry.event,
+				"content":   entry.content,
+			},
+		}).Err()
+		if err != nil {
+			t.Fatalf("Failed to add log entry: %v", err)
+		}
+	}
+
+	// Read entries using XREVRANGE (like hive logs --activity does)
+	results, err := suite.client.XRevRange(suite.ctx, streamKey, "+", "-").Result()
+	if err != nil {
+		t.Fatalf("Failed to read stream: %v", err)
+	}
+
+	if len(results) != len(entries) {
+		t.Errorf("Expected %d log entries, got %d", len(entries), len(results))
+	}
+
+	// Verify latest entry (XREVRANGE returns newest first)
+	latest := results[0]
+	if latest.Values["event"] != "task_complete" {
+		t.Errorf("Expected latest event 'task_complete', got '%v'", latest.Values["event"])
+	}
+}
+
+// TestActivityLogStreamPerAgent tests per-agent log streams
+func TestActivityLogStreamPerAgent(t *testing.T) {
+	suite := setupRedis(t)
+	defer suite.teardown(t)
+
+	// Log to different agent streams
+	agents := []string{"queen", "drone-1", "drone-2"}
+
+	for _, agent := range agents {
+		streamKey := fmt.Sprintf("hive:logs:%s", agent)
+		err := suite.client.XAdd(suite.ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			Values: map[string]interface{}{
+				"timestamp": time.Now().Format(time.RFC3339),
+				"agent":     agent,
+				"event":     "task_start",
+				"content":   fmt.Sprintf("%s starting work", agent),
+			},
+		}).Err()
+		if err != nil {
+			t.Fatalf("Failed to add log entry for %s: %v", agent, err)
+		}
+	}
+
+	// Verify each agent has its own stream
+	for _, agent := range agents {
+		streamKey := fmt.Sprintf("hive:logs:%s", agent)
+		length, err := suite.client.XLen(suite.ctx, streamKey).Result()
+		if err != nil {
+			t.Fatalf("Failed to get stream length for %s: %v", agent, err)
+		}
+		if length != 1 {
+			t.Errorf("Agent %s expected 1 log entry, got %d", agent, length)
+		}
+	}
+}
+
+// TestActivityLogStreamFollow tests XREAD for follow mode
+func TestActivityLogStreamFollow(t *testing.T) {
+	suite := setupRedis(t)
+	defer suite.teardown(t)
+
+	streamKey := "hive:logs:all"
+
+	// Start a goroutine to add entries after a delay
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		suite.client.XAdd(suite.ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			Values: map[string]interface{}{
+				"timestamp": time.Now().Format(time.RFC3339),
+				"agent":     "drone-1",
+				"event":     "tool_call",
+				"content":   "Reading file",
+			},
+		})
+	}()
+
+	// XREAD with block (like follow mode)
+	streams, err := suite.client.XRead(suite.ctx, &redis.XReadArgs{
+		Streams: []string{streamKey, "$"},
+		Block:   500 * time.Millisecond,
+		Count:   1,
+	}).Result()
+
+	if err == redis.Nil {
+		// Timeout without data is acceptable
+		return
+	}
+	if err != nil {
+		t.Fatalf("Failed to read stream: %v", err)
+	}
+
+	if len(streams) > 0 && len(streams[0].Messages) > 0 {
+		msg := streams[0].Messages[0]
+		if msg.Values["event"] != "tool_call" {
+			t.Errorf("Expected event 'tool_call', got '%v'", msg.Values["event"])
+		}
+	}
+}
+
+// TestActivityLogStreamTrimming tests stream trimming for log rotation
+func TestActivityLogStreamTrimming(t *testing.T) {
+	suite := setupRedis(t)
+	defer suite.teardown(t)
+
+	streamKey := "hive:logs:test"
+
+	// Add many log entries
+	for i := 0; i < 100; i++ {
+		suite.client.XAdd(suite.ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			Values: map[string]interface{}{
+				"timestamp": time.Now().Format(time.RFC3339),
+				"agent":     "test",
+				"event":     "test_event",
+				"content":   fmt.Sprintf("Log entry %d", i),
+			},
+		})
+	}
+
+	// Trim to last 50 entries
+	err := suite.client.XTrimMaxLen(suite.ctx, streamKey, 50).Err()
+	if err != nil {
+		t.Fatalf("Failed to trim stream: %v", err)
+	}
+
+	// Verify trimmed length
+	length, _ := suite.client.XLen(suite.ctx, streamKey).Result()
+	if length != 50 {
+		t.Errorf("Expected 50 entries after trim, got %d", length)
+	}
+}

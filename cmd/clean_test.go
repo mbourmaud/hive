@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -325,5 +326,122 @@ func TestCleanWorktrees_NotGitRepo(t *testing.T) {
 	err := cleanWorktrees(runner)
 	if err != nil {
 		t.Errorf("cleanWorktrees() outside git repo should not error: %v", err)
+	}
+}
+
+// TestCleanDockerContainers_NoComposeFile tests cleanup when no docker-compose.yml exists
+func TestCleanDockerContainers_NoComposeFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	mock := shell.NewMockExecutor()
+	// No containers found
+	mock.SetOutput("docker ps", "")
+
+	err := cleanDockerContainers(mock)
+	if err != nil {
+		t.Errorf("cleanDockerContainers() error = %v", err)
+	}
+
+	// Should have called docker ps to list containers
+	if !mock.HasCommand("docker ps") {
+		t.Error("cleanDockerContainers() should call docker ps")
+	}
+
+	// Should not have called docker compose down (no compose file)
+	if mock.HasCommand("docker compose") {
+		t.Error("cleanDockerContainers() should not call docker compose without file")
+	}
+}
+
+// TestCleanDockerContainers_WithComposeFile tests cleanup with docker-compose.yml
+func TestCleanDockerContainers_WithComposeFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Create .hive/docker-compose.yml
+	os.MkdirAll(".hive", 0755)
+	os.WriteFile(".hive/docker-compose.yml", []byte("version: '3'"), 0644)
+
+	mock := shell.NewMockExecutor()
+	mock.SetOutput("docker ps", "")
+
+	err := cleanDockerContainers(mock)
+	if err != nil {
+		t.Errorf("cleanDockerContainers() error = %v", err)
+	}
+
+	// Should have called docker compose down
+	if !mock.HasCommand("docker compose") {
+		t.Error("cleanDockerContainers() should call docker compose down")
+	}
+}
+
+// TestCleanDockerContainers_WithContainers tests cleanup when containers exist
+func TestCleanDockerContainers_WithContainers(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	mock := shell.NewMockExecutor()
+	// Return container IDs
+	mock.SetOutput("docker ps", "abc123\ndef456")
+
+	err := cleanDockerContainers(mock)
+	if err != nil {
+		t.Errorf("cleanDockerContainers() error = %v", err)
+	}
+
+	// Should have called docker rm to remove containers
+	if !mock.HasCommand("docker rm") {
+		t.Error("cleanDockerContainers() should call docker rm when containers exist")
+	}
+}
+
+// TestCleanDockerImages_NoImages tests cleanup when no images exist
+func TestCleanDockerImages_NoImages(t *testing.T) {
+	mock := shell.NewMockExecutor()
+	mock.SetOutput("docker images", "")
+
+	err := cleanDockerImages(mock)
+	if err != nil {
+		t.Errorf("cleanDockerImages() error = %v", err)
+	}
+
+	// Should not have called docker rmi
+	if mock.HasCommand("docker rmi") {
+		t.Error("cleanDockerImages() should not call docker rmi when no images")
+	}
+}
+
+// TestCleanDockerImages_WithImages tests cleanup when images exist
+func TestCleanDockerImages_WithImages(t *testing.T) {
+	mock := shell.NewMockExecutor()
+	mock.SetOutput("docker images", "sha256:abc123\nsha256:def456")
+
+	err := cleanDockerImages(mock)
+	if err != nil {
+		t.Errorf("cleanDockerImages() error = %v", err)
+	}
+
+	// Should have called docker rmi
+	if !mock.HasCommand("docker rmi") {
+		t.Error("cleanDockerImages() should call docker rmi when images exist")
+	}
+}
+
+// TestCleanDockerImages_DockerError tests cleanup when docker command fails
+func TestCleanDockerImages_DockerError(t *testing.T) {
+	mock := shell.NewMockExecutor()
+	mock.SetError("docker images", fmt.Errorf("docker not running"))
+
+	err := cleanDockerImages(mock)
+	if err == nil {
+		t.Error("cleanDockerImages() should return error when docker fails")
 	}
 }

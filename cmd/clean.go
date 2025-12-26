@@ -14,6 +14,9 @@ import (
 
 var forceClean bool
 
+// commandExecutor is the interface for executing shell commands (allows mocking in tests)
+var commandExecutor shell.CommandExecutor
+
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Remove all hive files from the project",
@@ -22,16 +25,19 @@ var cleanCmd = &cobra.Command{
 		// Header
 		fmt.Print(ui.Header("🧹", "Cleaning hive..."))
 
-		// Create shell runner
+		// Create shell runner and executor
 		runner := shell.NewRunner(DebugMode)
+		if commandExecutor == nil {
+			commandExecutor = shell.NewRealExecutor(DebugMode)
+		}
 
 		// Step 1: Stop and remove Docker containers
-		if err := cleanDockerContainers(runner); err != nil {
+		if err := cleanDockerContainers(commandExecutor); err != nil {
 			fmt.Printf("  %s\n", ui.Warning("Docker containers: "+err.Error()))
 		}
 
 		// Step 2: Remove Docker images
-		if err := cleanDockerImages(runner); err != nil {
+		if err := cleanDockerImages(commandExecutor); err != nil {
 			fmt.Printf("  %s\n", ui.Warning("Docker images: "+err.Error()))
 		}
 
@@ -122,13 +128,12 @@ func cleanGitignore() error {
 	return nil
 }
 
-func cleanDockerContainers(runner *shell.Runner) error {
+func cleanDockerContainers(executor shell.CommandExecutor) error {
 	// Try docker-compose down if .hive/docker-compose.yml exists
 	composeFile := ".hive/docker-compose.yml"
 	if _, err := os.Stat(composeFile); err == nil {
 		fmt.Printf("  %s ", ui.StyleDim.Render("🐳 Stopping containers..."))
-		downCmd := exec.Command("docker", "compose", "-f", composeFile, "down", "-v", "--remove-orphans")
-		if err := runner.RunQuiet(downCmd); err != nil {
+		if err := executor.RunQuietCommand("docker", "compose", "-f", composeFile, "down", "-v", "--remove-orphans"); err != nil {
 			fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 		} else {
 			fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
@@ -136,15 +141,13 @@ func cleanDockerContainers(runner *shell.Runner) error {
 	}
 
 	// Force remove any remaining hive containers
-	psCmd := exec.Command("docker", "ps", "-aq", "--filter", "name=hive-")
-	output, err := psCmd.Output()
+	output, _, err := executor.RunCommand("docker", "ps", "-aq", "--filter", "name=hive-")
 	if err == nil && len(output) > 0 {
-		containerIDs := strings.TrimSpace(string(output))
+		containerIDs := strings.TrimSpace(output)
 		if containerIDs != "" {
 			fmt.Printf("  %s ", ui.StyleDim.Render("🐳 Removing remaining containers..."))
-			rmCmd := exec.Command("docker", "rm", "-f")
-			rmCmd.Args = append(rmCmd.Args, strings.Split(containerIDs, "\n")...)
-			if err := runner.RunQuiet(rmCmd); err != nil {
+			args := append([]string{"rm", "-f"}, strings.Split(containerIDs, "\n")...)
+			if err := executor.RunQuietCommand("docker", args...); err != nil {
 				fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 			} else {
 				fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
@@ -153,30 +156,27 @@ func cleanDockerContainers(runner *shell.Runner) error {
 	}
 
 	// Remove redis container if exists
-	redisCmd := exec.Command("docker", "rm", "-f", "hive-redis")
-	_ = runner.RunQuiet(redisCmd) // Ignore errors, container might not exist
+	_ = executor.RunQuietCommand("docker", "rm", "-f", "hive-redis") // Ignore errors, container might not exist
 
 	return nil
 }
 
-func cleanDockerImages(runner *shell.Runner) error {
+func cleanDockerImages(executor shell.CommandExecutor) error {
 	// List all hive-related images
-	imagesCmd := exec.Command("docker", "images", "--filter", "reference=hive-*", "-q")
-	output, err := imagesCmd.Output()
+	output, _, err := executor.RunCommand("docker", "images", "--filter", "reference=hive-*", "-q")
 	if err != nil {
 		return err
 	}
 
-	imageIDs := strings.TrimSpace(string(output))
+	imageIDs := strings.TrimSpace(output)
 	if imageIDs == "" {
 		return nil
 	}
 
 	// Remove images
 	fmt.Printf("  %s ", ui.StyleDim.Render("🗑️ Removing Docker images..."))
-	rmiCmd := exec.Command("docker", "rmi", "-f")
-	rmiCmd.Args = append(rmiCmd.Args, strings.Split(imageIDs, "\n")...)
-	if err := runner.RunQuiet(rmiCmd); err != nil {
+	args := append([]string{"rmi", "-f"}, strings.Split(imageIDs, "\n")...)
+	if err := executor.RunQuietCommand("docker", args...); err != nil {
 		fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️"))
 	} else {
 		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
