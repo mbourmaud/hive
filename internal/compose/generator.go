@@ -34,16 +34,19 @@ func GenerateWithOptions(opts Options) string {
 services:
 `)
 
-	// Redis service
+	// Redis service with authentication
 	sb.WriteString(fmt.Sprintf(`  redis:
     image: redis:7-alpine
     container_name: hive-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     ports:
       - "%d:6379"
+    env_file:
+      - .env
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -68,6 +71,7 @@ services:
       - CLAUDE_MODEL=${QUEEN_MODEL:-opus}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - ./workspaces/queen:/workspace
       - ../.git:/workspace-git
@@ -137,6 +141,7 @@ func generateWorkerService(index int) string {
       - WORKER_MODE=${WORKER_MODE:-interactive}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - ./workspaces/drone-%d:/workspace
       - ../.git:/workspace-git

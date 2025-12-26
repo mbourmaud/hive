@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 )
@@ -75,15 +78,34 @@ Examples:
 var redisClient redis.Cmdable
 
 func showActivityLogs(args []string) error {
-	ctx := context.Background()
+	// Create context with cancellation for Ctrl+C support
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle signals for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		cancel()
+	}()
 
 	// Connect to Redis (use injected client for testing)
 	var rdb redis.Cmdable
 	if redisClient != nil {
 		rdb = redisClient
 	} else {
+		// Load Redis password from .hive/.env
+		redisPassword := os.Getenv("REDIS_PASSWORD")
+		if redisPassword == "" {
+			// Try loading from .hive/.env file
+			_ = godotenv.Load(".hive/.env")
+			redisPassword = os.Getenv("REDIS_PASSWORD")
+		}
+
 		client := redis.NewClient(&redis.Options{
-			Addr: "localhost:6380",
+			Addr:     "localhost:6380",
+			Password: redisPassword,
 		})
 		defer client.Close()
 		rdb = client
@@ -107,6 +129,14 @@ func showActivityLogs(args []string) error {
 		lastID := "$" // Start from new entries
 
 		for {
+			// Check for context cancellation
+			select {
+			case <-ctx.Done():
+				fmt.Println("\nStopped following logs.")
+				return nil
+			default:
+			}
+
 			streams, err := rdb.XRead(ctx, &redis.XReadArgs{
 				Streams: []string{streamKey, lastID},
 				Block:   5 * time.Second,
@@ -117,6 +147,11 @@ func showActivityLogs(args []string) error {
 				continue
 			}
 			if err != nil {
+				// Context cancelled - not an error
+				if ctx.Err() != nil {
+					fmt.Println("\nStopped following logs.")
+					return nil
+				}
 				return fmt.Errorf("failed to read stream: %w", err)
 			}
 

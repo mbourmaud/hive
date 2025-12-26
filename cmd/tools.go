@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/mbourmaud/hive/internal/config"
 	"github.com/spf13/cobra"
@@ -30,7 +31,18 @@ type ToolsRegistry struct {
 	Categories map[string]string   `json:"categories"`
 }
 
-var toolsRegistry *ToolsRegistry
+var (
+	toolsRegistry     *ToolsRegistry
+	toolsRegistryOnce sync.Once
+	toolsRegistryErr  error
+)
+
+// resetToolsRegistry resets the registry for testing purposes only
+func resetToolsRegistry() {
+	toolsRegistry = nil
+	toolsRegistryOnce = sync.Once{}
+	toolsRegistryErr = nil
+}
 
 var toolsCmd = &cobra.Command{
 	Use:   "tools",
@@ -101,54 +113,53 @@ func init() {
 }
 
 func loadToolsRegistry() error {
-	if toolsRegistry != nil {
-		return nil
-	}
-
-	// Try to load from project root first
-	registryPath := "tools-registry.json"
-	if _, err := os.Stat(registryPath); os.IsNotExist(err) {
-		// Try executable directory
-		execPath, err := os.Executable()
-		if err == nil {
-			registryPath = filepath.Join(filepath.Dir(execPath), "tools-registry.json")
+	toolsRegistryOnce.Do(func() {
+		// Try to load from project root first
+		registryPath := "tools-registry.json"
+		if _, err := os.Stat(registryPath); os.IsNotExist(err) {
+			// Try executable directory
+			execPath, err := os.Executable()
+			if err == nil {
+				registryPath = filepath.Join(filepath.Dir(execPath), "tools-registry.json")
+			}
 		}
-	}
 
-	data, err := os.ReadFile(registryPath)
-	if err != nil {
-		// Return embedded minimal registry
-		toolsRegistry = &ToolsRegistry{
-			Version: "1.0.0",
-			Tools: map[string]ToolInfo{
-				"glab":      {Name: "GitLab CLI", Description: "Command-line interface for GitLab", Category: "vcs"},
-				"psql":      {Name: "PostgreSQL Client", Description: "Command-line interface for PostgreSQL", Category: "database"},
-				"mongosh":   {Name: "MongoDB Shell", Description: "Modern MongoDB shell", Category: "database"},
-				"mysql":     {Name: "MySQL Client", Description: "Command-line interface for MySQL", Category: "database"},
-				"kubectl":   {Name: "Kubernetes CLI", Description: "Command-line tool for Kubernetes", Category: "cloud"},
-				"helm":      {Name: "Helm", Description: "Kubernetes package manager", Category: "cloud"},
-				"terraform": {Name: "Terraform", Description: "Infrastructure as Code tool", Category: "cloud"},
-				"aws":       {Name: "AWS CLI", Description: "Amazon Web Services command-line interface", Category: "cloud"},
-				"heroku":    {Name: "Heroku CLI", Description: "Command-line interface for Heroku", Category: "cloud"},
-				"vercel":    {Name: "Vercel CLI", Description: "Command-line interface for Vercel", Category: "cloud"},
-				"netlify":   {Name: "Netlify CLI", Description: "Command-line interface for Netlify", Category: "cloud"},
-				"flyctl":    {Name: "Fly.io CLI", Description: "Command-line interface for Fly.io", Category: "cloud"},
-			},
-			Categories: map[string]string{
-				"vcs":      "Version Control",
-				"database": "Databases",
-				"cloud":    "Cloud & Infrastructure",
-			},
+		data, err := os.ReadFile(registryPath)
+		if err != nil {
+			// Return embedded minimal registry
+			toolsRegistry = &ToolsRegistry{
+				Version: "1.0.0",
+				Tools: map[string]ToolInfo{
+					"glab":      {Name: "GitLab CLI", Description: "Command-line interface for GitLab", Category: "vcs"},
+					"psql":      {Name: "PostgreSQL Client", Description: "Command-line interface for PostgreSQL", Category: "database"},
+					"mongosh":   {Name: "MongoDB Shell", Description: "Modern MongoDB shell", Category: "database"},
+					"mysql":     {Name: "MySQL Client", Description: "Command-line interface for MySQL", Category: "database"},
+					"kubectl":   {Name: "Kubernetes CLI", Description: "Command-line tool for Kubernetes", Category: "cloud"},
+					"helm":      {Name: "Helm", Description: "Kubernetes package manager", Category: "cloud"},
+					"terraform": {Name: "Terraform", Description: "Infrastructure as Code tool", Category: "cloud"},
+					"aws":       {Name: "AWS CLI", Description: "Amazon Web Services command-line interface", Category: "cloud"},
+					"heroku":    {Name: "Heroku CLI", Description: "Command-line interface for Heroku", Category: "cloud"},
+					"vercel":    {Name: "Vercel CLI", Description: "Command-line interface for Vercel", Category: "cloud"},
+					"netlify":   {Name: "Netlify CLI", Description: "Command-line interface for Netlify", Category: "cloud"},
+					"flyctl":    {Name: "Fly.io CLI", Description: "Command-line interface for Fly.io", Category: "cloud"},
+				},
+				Categories: map[string]string{
+					"vcs":      "Version Control",
+					"database": "Databases",
+					"cloud":    "Cloud & Infrastructure",
+				},
+			}
+			return
 		}
-		return nil
-	}
 
-	toolsRegistry = &ToolsRegistry{}
-	if err := json.Unmarshal(data, toolsRegistry); err != nil {
-		return fmt.Errorf("failed to parse tools registry: %w", err)
-	}
+		toolsRegistry = &ToolsRegistry{}
+		if err := json.Unmarshal(data, toolsRegistry); err != nil {
+			toolsRegistryErr = fmt.Errorf("failed to parse tools registry: %w", err)
+			return
+		}
+	})
 
-	return nil
+	return toolsRegistryErr
 }
 
 func runToolsAdd(cmd *cobra.Command, args []string) error {

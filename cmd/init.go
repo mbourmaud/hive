@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -496,6 +498,16 @@ func validateEmail(email string) error {
 	return nil
 }
 
+// generateSecurePassword generates a cryptographically secure password
+func generateSecurePassword(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate secure password: %w", err)
+	}
+	// Use URL-safe base64 and trim to exact length
+	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
+}
+
 func writeEnvFile(cfg map[string]string, workers int) error {
 	// .env now contains ONLY secrets - configuration is in hive.yaml
 	var content strings.Builder
@@ -534,6 +546,15 @@ func writeEnvFile(cfg map[string]string, workers int) error {
 	}
 	content.WriteString("\n")
 
+	// Redis authentication
+	redisPassword, err := generateSecurePassword(32)
+	if err != nil {
+		return fmt.Errorf("failed to generate Redis password: %w", err)
+	}
+	content.WriteString("# Redis Authentication\n")
+	content.WriteString(fmt.Sprintf("REDIS_PASSWORD=%s\n", redisPassword))
+	content.WriteString("\n")
+
 	// Optional VCS tokens (user may add these)
 	content.WriteString("# VCS Tokens (optional)\n")
 	content.WriteString("# GITHUB_TOKEN=\n")
@@ -560,6 +581,12 @@ func writeMinimalEnvFile(cfg map[string]string) error {
 		dockerfile = "docker/Dockerfile." + cfg["PROJECT_TYPE"]
 	}
 
+	// Generate Redis password
+	redisPassword, err := generateSecurePassword(32)
+	if err != nil {
+		return fmt.Errorf("failed to generate Redis password: %w", err)
+	}
+
 	content := fmt.Sprintf(`# Hive Configuration
 GIT_USER_EMAIL=%s
 GIT_USER_NAME=%s
@@ -570,6 +597,9 @@ HIVE_DOCKERFILE=%s
 QUEEN_MODEL=opus
 WORKER_MODEL=sonnet
 AUTO_INSTALL_DEPS=true
+
+# Redis Authentication
+REDIS_PASSWORD=%s
 `,
 		cfg["GIT_USER_EMAIL"],
 		cfg["GIT_USER_NAME"],
@@ -577,6 +607,7 @@ AUTO_INSTALL_DEPS=true
 		cfg["WORKSPACE_NAME"],
 		cfg["GIT_REPO_URL"],
 		dockerfile,
+		redisPassword,
 	)
 
 	// Write to .hive/.env

@@ -11,7 +11,7 @@ import (
 // TestLoadToolsRegistry tests loading the tools registry
 func TestLoadToolsRegistry(t *testing.T) {
 	// Reset registry before test
-	toolsRegistry = nil
+	resetToolsRegistry()
 
 	err := loadToolsRegistry()
 	if err != nil {
@@ -34,14 +34,14 @@ func TestLoadToolsRegistry(t *testing.T) {
 // TestLoadToolsRegistry_Cached tests that registry is cached
 func TestLoadToolsRegistry_Cached(t *testing.T) {
 	// Reset and load
-	toolsRegistry = nil
+	resetToolsRegistry()
 	loadToolsRegistry()
 
 	// Modify to verify caching
 	originalVersion := toolsRegistry.Version
 	toolsRegistry.Version = "modified"
 
-	// Load again - should not overwrite
+	// Load again - should not overwrite (sync.Once ensures single execution)
 	loadToolsRegistry()
 
 	if toolsRegistry.Version != "modified" {
@@ -60,7 +60,7 @@ func TestLoadToolsRegistry_FromFile(t *testing.T) {
 	defer os.Chdir(oldWd)
 
 	// Reset registry
-	toolsRegistry = nil
+	resetToolsRegistry()
 
 	// Create a custom registry file
 	registryJSON := `{
@@ -92,7 +92,7 @@ func TestLoadToolsRegistry_FromFile(t *testing.T) {
 	}
 
 	// Reset for other tests
-	toolsRegistry = nil
+	resetToolsRegistry()
 }
 
 // TestAddToolToConfig tests adding a tool to hive.yaml
@@ -334,7 +334,7 @@ func TestRunToolsAdd(t *testing.T) {
 	defer os.Chdir(oldWd)
 
 	// Reset registry
-	toolsRegistry = nil
+	resetToolsRegistry()
 
 	// Run add command for a known tool
 	err := runToolsAdd(nil, []string{"kubectl"})
@@ -367,7 +367,7 @@ func TestRunToolsAdd_UnknownTool(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
 
-	toolsRegistry = nil
+	resetToolsRegistry()
 
 	// Add unknown tool (should still work with warning)
 	err := runToolsAdd(nil, []string{"unknown-tool"})
@@ -441,7 +441,7 @@ func TestRunToolsList(t *testing.T) {
 	defer os.Chdir(oldWd)
 
 	// Reset registry to use embedded
-	toolsRegistry = nil
+	resetToolsRegistry()
 
 	// Create config with some tools
 	cfg := config.Default()
@@ -462,7 +462,7 @@ func TestRunToolsList_EmptyConfig(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
 
-	toolsRegistry = nil
+	resetToolsRegistry()
 
 	// No config file exists
 	err := runToolsList(nil, nil)

@@ -4,9 +4,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+// validAgentIDPattern matches valid agent IDs (queen, q, 0, or numbers 1-99)
+var validAgentIDPattern = regexp.MustCompile(`^(queen|q|0|[1-9][0-9]?)$`)
 
 var connectCmd = &cobra.Command{
 	Use:   "connect <id>",
@@ -15,6 +20,11 @@ var connectCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
+
+		// Validate agent ID to prevent injection
+		if !validAgentIDPattern.MatchString(id) {
+			return fmt.Errorf("invalid agent ID: %q (must be 'queen', 'q', '0', or a number 1-99)", id)
+		}
 
 		// Map shortcuts
 		containerName := mapAgentID(id)
@@ -41,9 +51,11 @@ IMPORTANT: You can monitor drone activity in real-time via Redis streams (hive:l
 
 		// Launch Claude in the container with initial prompt
 		// Workspace is at /workspace (worktree root)
+		// Shell-escape the prompt to prevent injection
+		escapedPrompt := shellEscape(initialPrompt)
 		claudeCmd := fmt.Sprintf(
-			`cd /workspace && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" "%s"`,
-			initialPrompt,
+			`cd /workspace && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" %s`,
+			escapedPrompt,
 		)
 
 		command := []string{"exec", "-it", containerName, "bash", "-l", "-c", claudeCmd}
@@ -72,6 +84,14 @@ func mapAgentID(id string) string {
 	default:
 		return fmt.Sprintf("hive-drone-%s", id)
 	}
+}
+
+// shellEscape escapes a string for safe use in a shell command
+// Uses single quotes and escapes any embedded single quotes
+func shellEscape(s string) string {
+	// Replace single quotes with '\'' (end quote, escaped quote, start quote)
+	escaped := strings.ReplaceAll(s, "'", "'\\''")
+	return "'" + escaped + "'"
 }
 
 func init() {
