@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/mbourmaud/hive/internal/config"
@@ -237,5 +238,235 @@ func TestRemoveToolFromConfig_NoConfig(t *testing.T) {
 	err := removeToolFromConfig("kubectl")
 	if err == nil {
 		t.Error("removeToolFromConfig() should error when no config exists")
+	}
+}
+
+// TestRunToolsReinstall tests the tools reinstall command
+func TestRunToolsReinstall(t *testing.T) {
+	// Mock docker command runner
+	originalRunner := dockerCommandRunner
+	defer func() { dockerCommandRunner = originalRunner }()
+
+	// Track calls
+	calls := []string{}
+	dockerCommandRunner = func(args ...string) (string, error) {
+		call := strings.Join(args, " ")
+		calls = append(calls, call)
+
+		// Simulate container not running
+		if len(args) >= 4 && args[0] == "inspect" {
+			return "false", nil
+		}
+		return "", nil
+	}
+
+	// Run the command
+	err := runToolsReinstall(nil, nil)
+	if err != nil {
+		t.Fatalf("runToolsReinstall() error = %v", err)
+	}
+
+	// Verify docker inspect was called for containers
+	hasInspect := false
+	for _, call := range calls {
+		if strings.Contains(call, "inspect") {
+			hasInspect = true
+			break
+		}
+	}
+	if !hasInspect {
+		t.Error("runToolsReinstall() should call docker inspect")
+	}
+}
+
+// TestRunToolsReinstall_WithRunningContainers tests with running containers
+func TestRunToolsReinstall_WithRunningContainers(t *testing.T) {
+	originalRunner := dockerCommandRunner
+	defer func() { dockerCommandRunner = originalRunner }()
+
+	execCalls := []string{}
+	dockerCommandRunner = func(args ...string) (string, error) {
+		call := strings.Join(args, " ")
+
+		if len(args) >= 4 && args[0] == "inspect" {
+			// Only hive-queen is running
+			if args[3] == "hive-queen" {
+				return "true", nil
+			}
+			return "false", nil
+		}
+
+		if args[0] == "exec" {
+			execCalls = append(execCalls, call)
+			return "", nil
+		}
+
+		return "", nil
+	}
+
+	err := runToolsReinstall(nil, nil)
+	if err != nil {
+		t.Fatalf("runToolsReinstall() error = %v", err)
+	}
+
+	// Should have called exec on hive-queen
+	if len(execCalls) == 0 {
+		t.Error("runToolsReinstall() should call docker exec on running containers")
+	}
+
+	foundQueen := false
+	for _, call := range execCalls {
+		if strings.Contains(call, "hive-queen") {
+			foundQueen = true
+			break
+		}
+	}
+	if !foundQueen {
+		t.Error("runToolsReinstall() should clear cache for hive-queen")
+	}
+}
+
+// TestRunToolsAdd tests the tools add command
+func TestRunToolsAdd(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Reset registry
+	toolsRegistry = nil
+
+	// Run add command for a known tool
+	err := runToolsAdd(nil, []string{"kubectl"})
+	if err != nil {
+		t.Fatalf("runToolsAdd() error = %v", err)
+	}
+
+	// Verify tool was added to config
+	cfg, err := config.Load("hive.yaml")
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	found := false
+	for _, tool := range cfg.Tools {
+		if tool == "kubectl" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("runToolsAdd() did not add tool to config")
+	}
+}
+
+// TestRunToolsAdd_UnknownTool tests adding an unknown tool
+func TestRunToolsAdd_UnknownTool(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	toolsRegistry = nil
+
+	// Add unknown tool (should still work with warning)
+	err := runToolsAdd(nil, []string{"unknown-tool"})
+	if err != nil {
+		t.Fatalf("runToolsAdd() should not error for unknown tools: %v", err)
+	}
+
+	cfg, _ := config.Load("hive.yaml")
+	found := false
+	for _, tool := range cfg.Tools {
+		if tool == "unknown-tool" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("runToolsAdd() should add unknown tool anyway")
+	}
+}
+
+// TestRunToolsRemove tests the tools remove command
+func TestRunToolsRemove(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Create config with a tool
+	cfg := config.Default()
+	cfg.Tools = []string{"kubectl", "helm"}
+	cfg.Save("hive.yaml")
+
+	// Remove one tool
+	err := runToolsRemove(nil, []string{"helm"})
+	if err != nil {
+		t.Fatalf("runToolsRemove() error = %v", err)
+	}
+
+	// Verify tool was removed
+	cfg, _ = config.Load("hive.yaml")
+	for _, tool := range cfg.Tools {
+		if tool == "helm" {
+			t.Error("runToolsRemove() did not remove tool")
+		}
+	}
+}
+
+// TestRunToolsRemove_NotConfigured tests removing a non-configured tool
+func TestRunToolsRemove_NotConfigured(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	cfg := config.Default()
+	cfg.Tools = []string{"kubectl"}
+	cfg.Save("hive.yaml")
+
+	// Try to remove non-existent tool
+	err := runToolsRemove(nil, []string{"not-configured"})
+	if err == nil {
+		t.Error("runToolsRemove() should error when tool not configured")
+	}
+}
+
+// TestRunToolsList tests the tools list command
+func TestRunToolsList(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Reset registry to use embedded
+	toolsRegistry = nil
+
+	// Create config with some tools
+	cfg := config.Default()
+	cfg.Tools = []string{"kubectl", "psql"}
+	cfg.Save("hive.yaml")
+
+	// Run list command (should not error)
+	err := runToolsList(nil, nil)
+	if err != nil {
+		t.Fatalf("runToolsList() error = %v", err)
+	}
+}
+
+// TestRunToolsList_EmptyConfig tests list with no configured tools
+func TestRunToolsList_EmptyConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	toolsRegistry = nil
+
+	// No config file exists
+	err := runToolsList(nil, nil)
+	if err != nil {
+		t.Fatalf("runToolsList() error = %v", err)
 	}
 }

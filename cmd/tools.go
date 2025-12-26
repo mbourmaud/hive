@@ -356,8 +356,15 @@ func removeToolFromConfig(name string) error {
 	return cfg.Save(configPath)
 }
 
-func runDockerCommand(args ...string) (string, error) {
+// dockerCommandRunner allows dependency injection for testing
+var dockerCommandRunner = defaultDockerCommand
+
+func defaultDockerCommand(args ...string) (string, error) {
 	cmd := exec.Command("docker", args...)
 	output, err := cmd.Output()
 	return string(output), err
+}
+
+func runDockerCommand(args ...string) (string, error) {
+	return dockerCommandRunner(args...)
 }

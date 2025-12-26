@@ -392,3 +392,136 @@ func TestShowActivityLogs_TailLimit(t *testing.T) {
 		t.Errorf("mock expectations not met: %v", err)
 	}
 }
+
+// TestShowActivityLogs_RedisError tests error handling when Redis fails
+func TestShowActivityLogs_RedisError(t *testing.T) {
+	db, mock := redismock.NewClientMock()
+	redisClient = db
+	defer func() { redisClient = nil }()
+
+	// Mock XRevRange to return an error
+	mock.ExpectXRevRange("hive:logs:all", "+", "-").SetErr(redis.ErrClosed)
+
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	logsFollow = false
+	logsTail = 100
+
+	err := showActivityLogs([]string{})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+
+	if err == nil {
+		t.Error("showActivityLogs() should return error when Redis fails")
+	}
+
+	if !strings.Contains(err.Error(), "failed to read stream") {
+		t.Errorf("showActivityLogs() error = %q, want to contain 'failed to read stream'", err.Error())
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("mock expectations not met: %v", err)
+	}
+}
+
+// TestShowActivityLogs_QueenShortcut tests queen shortcuts (q and 0)
+func TestShowActivityLogs_QueenShortcut(t *testing.T) {
+	shortcuts := []string{"queen", "q", "0"}
+
+	for _, shortcut := range shortcuts {
+		t.Run(shortcut, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			redisClient = db
+			defer func() { redisClient = nil }()
+
+			// All shortcuts should query hive:logs:queen
+			mock.ExpectXRevRange("hive:logs:queen", "+", "-").SetVal([]redis.XMessage{})
+
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			logsFollow = false
+			logsTail = 100
+
+			err := showActivityLogs([]string{shortcut})
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
+
+			if err != nil {
+				t.Fatalf("showActivityLogs(%q) error = %v", shortcut, err)
+			}
+
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("mock expectations not met for %q: %v", shortcut, err)
+			}
+		})
+	}
+}
+
+// TestPrintActivityEntry_MissingFields tests printActivityEntry with missing fields
+func TestPrintActivityEntry_MissingFields(t *testing.T) {
+	tests := []struct {
+		name   string
+		values map[string]interface{}
+	}{
+		{
+			name:   "empty values",
+			values: map[string]interface{}{},
+		},
+		{
+			name: "missing timestamp",
+			values: map[string]interface{}{
+				"agent":   "drone-1",
+				"event":   "task_start",
+				"content": "Test",
+			},
+		},
+		{
+			name: "missing content",
+			values: map[string]interface{}{
+				"timestamp": "2024-01-15T10:30:00Z",
+				"agent":     "drone-1",
+				"event":     "task_start",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Capture stdout
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			// Should not panic with missing fields
+			msg := redis.XMessage{
+				ID:     "1234567890123-0",
+				Values: tt.values,
+			}
+			printActivityEntry(msg)
+
+			w.Close()
+			os.Stdout = old
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
+			// Just verify it didn't panic and produced some output
+			if buf.Len() == 0 {
+				t.Error("printActivityEntry() should produce output")
+			}
+		})
+	}
+}

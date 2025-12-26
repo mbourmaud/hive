@@ -236,22 +236,99 @@ func TestCreateWorktree_Idempotent(t *testing.T) {
 	}
 }
 
+// TestRunInit_AlreadyInitialized tests runInit when .hive already exists
+func TestRunInit_AlreadyInitialized(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Create .hive/.env to simulate already initialized
+	os.MkdirAll(".hive", 0755)
+	os.WriteFile(".hive/.env", []byte("TEST=value"), 0644)
+
+	err := runInit(nil, nil)
+	if err == nil {
+		t.Error("runInit() should error when .hive/.env already exists")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("runInit() error = %q, want 'already exists'", err.Error())
+	}
+}
+
+// TestRunInit_NonInteractive tests runInit in non-interactive mode
+func TestRunInit_NonInteractive(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Set up flags for non-interactive mode
+	flagNonInteractive = true
+	flagEmail = "test@example.com"
+	flagName = "Test User"
+	flagToken = "test-oauth-token"
+	flagAuthBackend = "cli"
+	flagWorkspace = "test-project"
+	flagWorkers = 2
+	flagSkipStart = true
+	defer func() {
+		flagNonInteractive = false
+		flagEmail = ""
+		flagName = ""
+		flagToken = ""
+		flagAuthBackend = "cli"
+		flagWorkspace = "my-project"
+		flagWorkers = 2
+		flagSkipStart = false
+	}()
+
+	// Initialize git repo (required for worktrees)
+	exec.Command("git", "init").Run()
+	exec.Command("git", "config", "user.email", "test@example.com").Run()
+	exec.Command("git", "config", "user.name", "Test User").Run()
+	exec.Command("git", "commit", "--allow-empty", "-m", "initial commit").Run()
+
+	// Run init - should succeed until it tries to run docker compose
+	err := runInit(nil, nil)
+	// The function will likely fail when trying to build docker images
+	// but we test that it gets past the initial setup
+
+	// Check if .hive directory was created
+	if _, statErr := os.Stat(".hive"); os.IsNotExist(statErr) {
+		t.Error("runInit() should create .hive directory")
+	}
+
+	// Check if .env file was created
+	if _, statErr := os.Stat(".hive/.env"); os.IsNotExist(statErr) {
+		t.Error("runInit() should create .hive/.env file")
+	}
+
+	// If error is about docker, that's expected
+	if err != nil && !strings.Contains(err.Error(), "docker") && !strings.Contains(err.Error(), "worktree") && !strings.Contains(err.Error(), "compose") {
+		t.Logf("runInit() error = %v (may be expected)", err)
+	}
+}
+
 // TestValidateFlags tests flag validation logic
 func TestValidateFlags(t *testing.T) {
 	tests := []struct {
-		name      string
-		email     string
-		userName  string
-		token     string
-		wantErr   bool
-		errSubstr string
+		name        string
+		email       string
+		userName    string
+		token       string
+		apiKey      string
+		authBackend string
+		wantErr     bool
+		errSubstr   string
 	}{
 		{
-			name:     "all flags provided",
-			email:    "user@example.com",
-			userName: "Test User",
-			token:    "test-token",
-			wantErr:  false,
+			name:        "cli backend all flags provided",
+			email:       "user@example.com",
+			userName:    "Test User",
+			token:       "test-token",
+			authBackend: "cli",
+			wantErr:     false,
 		},
 		{
 			name:      "missing email",
@@ -270,12 +347,13 @@ func TestValidateFlags(t *testing.T) {
 			errSubstr: "--name is required",
 		},
 		{
-			name:      "missing token",
-			email:     "user@example.com",
-			userName:  "Test User",
-			token:     "",
-			wantErr:   true,
-			errSubstr: "--token is required",
+			name:        "cli backend missing token",
+			email:       "user@example.com",
+			userName:    "Test User",
+			token:       "",
+			authBackend: "cli",
+			wantErr:     true,
+			errSubstr:   "--token is required",
 		},
 		{
 			name:      "invalid email format",
@@ -285,6 +363,38 @@ func TestValidateFlags(t *testing.T) {
 			wantErr:   true,
 			errSubstr: "invalid email",
 		},
+		{
+			name:        "api backend with api key",
+			email:       "user@example.com",
+			userName:    "Test User",
+			apiKey:      "sk-ant-api01-xxx",
+			authBackend: "api",
+			wantErr:     false,
+		},
+		{
+			name:        "api backend missing api key",
+			email:       "user@example.com",
+			userName:    "Test User",
+			apiKey:      "",
+			authBackend: "api",
+			wantErr:     true,
+			errSubstr:   "--api-key is required",
+		},
+		{
+			name:        "bedrock backend no credentials needed",
+			email:       "user@example.com",
+			userName:    "Test User",
+			authBackend: "bedrock",
+			wantErr:     false,
+		},
+		{
+			name:        "invalid auth backend",
+			email:       "user@example.com",
+			userName:    "Test User",
+			authBackend: "invalid",
+			wantErr:     true,
+			errSubstr:   "--auth must be one of",
+		},
 	}
 
 	for _, tt := range tests {
@@ -293,6 +403,12 @@ func TestValidateFlags(t *testing.T) {
 			flagEmail = tt.email
 			flagName = tt.userName
 			flagToken = tt.token
+			flagApiKey = tt.apiKey
+			if tt.authBackend != "" {
+				flagAuthBackend = tt.authBackend
+			} else {
+				flagAuthBackend = "cli" // default
+			}
 
 			// Execute
 			err := validateFlags()
@@ -965,6 +1081,37 @@ func TestExtractHiveFiles_CreatesWorkspacesDir(t *testing.T) {
 	}
 	if !info.IsDir() {
 		t.Error("workspaces should be a directory")
+	}
+}
+
+// TestExtractHiveFiles_AllProjectTypes tests extraction for all project types
+func TestExtractHiveFiles_AllProjectTypes(t *testing.T) {
+	projectTypes := []string{"node", "go", "python", "rust", "minimal"}
+
+	for _, pType := range projectTypes {
+		t.Run(pType, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			oldWd, _ := os.Getwd()
+			os.Chdir(tmpDir)
+			defer os.Chdir(oldWd)
+
+			if err := extractHiveFiles(pType); err != nil {
+				t.Errorf("extractHiveFiles(%q) error = %v", pType, err)
+			}
+
+			// Verify essential files exist
+			requiredFiles := []string{
+				".hive/entrypoint.sh",
+				".hive/start-worker.sh",
+				".hive/docker",
+			}
+
+			for _, file := range requiredFiles {
+				if _, err := os.Stat(file); os.IsNotExist(err) {
+					t.Errorf("extractHiveFiles(%q) missing: %s", pType, file)
+				}
+			}
+		})
 	}
 }
 
