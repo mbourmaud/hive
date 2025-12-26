@@ -1011,3 +1011,263 @@ func TestCreateWorktrees(t *testing.T) {
 		}
 	}
 }
+
+// TestSyncHiveYAML tests the syncHiveYAML function
+func TestSyncHiveYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Create hive.yaml
+	testContent := "workspace:\n  name: test-project\n"
+	if err := os.WriteFile("hive.yaml", []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to create hive.yaml: %v", err)
+	}
+
+	// Create .hive directory
+	if err := os.MkdirAll(".hive", 0755); err != nil {
+		t.Fatalf("failed to create .hive: %v", err)
+	}
+
+	// Run sync
+	err := syncHiveYAML()
+	if err != nil {
+		t.Fatalf("syncHiveYAML() error = %v", err)
+	}
+
+	// Verify copy
+	content, err := os.ReadFile(".hive/hive.yaml")
+	if err != nil {
+		t.Fatalf("failed to read .hive/hive.yaml: %v", err)
+	}
+
+	if string(content) != testContent {
+		t.Errorf("syncHiveYAML() content mismatch, got %q, want %q", string(content), testContent)
+	}
+}
+
+// TestSyncHiveYAML_NoSource tests syncHiveYAML when source doesn't exist
+func TestSyncHiveYAML_NoSource(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	os.MkdirAll(".hive", 0755)
+
+	// Should error when hive.yaml doesn't exist
+	err := syncHiveYAML()
+	if err == nil {
+		t.Error("syncHiveYAML() should error when source doesn't exist")
+	}
+}
+
+// TestSyncHostMCPs tests the syncHostMCPs function
+func TestSyncHostMCPs(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Mock HOME to temp dir
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Create fake ~/.claude/settings.json
+	claudeDir := filepath.Join(tmpDir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("failed to create .claude dir: %v", err)
+	}
+	testSettings := `{"mcpServers":{"test":{"command":"node"}}}`
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(testSettings), 0644); err != nil {
+		t.Fatalf("failed to create settings.json: %v", err)
+	}
+
+	// Create .hive directory
+	if err := os.MkdirAll(".hive", 0755); err != nil {
+		t.Fatalf("failed to create .hive: %v", err)
+	}
+
+	// Run sync
+	err := syncHostMCPs()
+	if err != nil {
+		t.Fatalf("syncHostMCPs() error = %v", err)
+	}
+
+	// Verify copy
+	content, err := os.ReadFile(".hive/host-mcps.json")
+	if err != nil {
+		t.Fatalf("failed to read .hive/host-mcps.json: %v", err)
+	}
+
+	if string(content) != testSettings {
+		t.Errorf("syncHostMCPs() content mismatch, got %q, want %q", string(content), testSettings)
+	}
+}
+
+// TestSyncHostMCPs_NoSource tests syncHostMCPs when source doesn't exist
+func TestSyncHostMCPs_NoSource(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Mock HOME to temp dir (no .claude/settings.json)
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	os.MkdirAll(".hive", 0755)
+
+	// Should create empty JSON when source doesn't exist
+	err := syncHostMCPs()
+	if err != nil {
+		t.Fatalf("syncHostMCPs() error = %v", err)
+	}
+
+	content, err := os.ReadFile(".hive/host-mcps.json")
+	if err != nil {
+		t.Fatalf("failed to read .hive/host-mcps.json: %v", err)
+	}
+
+	if string(content) != "{}" {
+		t.Errorf("syncHostMCPs() should create empty JSON, got %q", string(content))
+	}
+}
+
+// TestSyncProjectCLAUDEmd tests the syncProjectCLAUDEmd function
+func TestSyncProjectCLAUDEmd(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	os.MkdirAll(".hive", 0755)
+
+	// Case 1: No CLAUDE.md - should not error
+	err := syncProjectCLAUDEmd()
+	if err != nil {
+		t.Errorf("syncProjectCLAUDEmd() should not error when CLAUDE.md doesn't exist: %v", err)
+	}
+
+	// Verify no file was created
+	if _, err := os.Stat(".hive/CLAUDE.md"); !os.IsNotExist(err) {
+		t.Error("syncProjectCLAUDEmd() should not create file when source doesn't exist")
+	}
+
+	// Case 2: With CLAUDE.md
+	testContent := "# Project Guidelines\n\nFollow these rules."
+	if err := os.WriteFile("CLAUDE.md", []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to create CLAUDE.md: %v", err)
+	}
+
+	err = syncProjectCLAUDEmd()
+	if err != nil {
+		t.Fatalf("syncProjectCLAUDEmd() error = %v", err)
+	}
+
+	content, err := os.ReadFile(".hive/CLAUDE.md")
+	if err != nil {
+		t.Fatalf("failed to read .hive/CLAUDE.md: %v", err)
+	}
+
+	if string(content) != testContent {
+		t.Errorf("syncProjectCLAUDEmd() content mismatch, got %q, want %q", string(content), testContent)
+	}
+}
+
+// TestDetectAnthropicApiKey tests the detectAnthropicApiKey function
+func TestDetectAnthropicApiKey(t *testing.T) {
+	// Save original value
+	original := os.Getenv("ANTHROPIC_API_KEY")
+	defer os.Setenv("ANTHROPIC_API_KEY", original)
+
+	// Test: Without env var
+	os.Unsetenv("ANTHROPIC_API_KEY")
+	key := detectAnthropicApiKey()
+	if key != "" {
+		t.Errorf("detectAnthropicApiKey() = %q, want empty string", key)
+	}
+
+	// Test: With env var
+	os.Setenv("ANTHROPIC_API_KEY", "sk-ant-api01-xxx")
+	key = detectAnthropicApiKey()
+	if key != "sk-ant-api01-xxx" {
+		t.Errorf("detectAnthropicApiKey() = %q, want %q", key, "sk-ant-api01-xxx")
+	}
+}
+
+// TestGenerateDockerComposeWithConfig tests the generateDockerComposeWithConfig function
+func TestGenerateDockerComposeWithConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Create .hive directory
+	os.MkdirAll(".hive", 0755)
+
+	// Generate docker-compose
+	err := generateDockerComposeWithConfig(2, 6380)
+	if err != nil {
+		t.Fatalf("generateDockerComposeWithConfig() error = %v", err)
+	}
+
+	// Verify file was created
+	content, err := os.ReadFile(".hive/docker-compose.yml")
+	if err != nil {
+		t.Fatalf("failed to read docker-compose.yml: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check expected content
+	checks := []string{
+		"queen:",
+		"drone-1:",
+		"drone-2:",
+		"redis:",
+		"6380:6379", // Redis port mapping
+	}
+
+	for _, check := range checks {
+		if !strings.Contains(contentStr, check) {
+			t.Errorf("generateDockerComposeWithConfig() missing %q", check)
+		}
+	}
+}
+
+// TestGenerateDockerComposeWithConfig_DifferentCounts tests with different worker counts
+func TestGenerateDockerComposeWithConfig_DifferentCounts(t *testing.T) {
+	tests := []struct {
+		workers       int
+		expectedDrone string
+	}{
+		{1, "drone-1:"},
+		{3, "drone-3:"},
+		{5, "drone-5:"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(rune(tt.workers+'0')), func(t *testing.T) {
+			tmpDir := t.TempDir()
+			oldWd, _ := os.Getwd()
+			os.Chdir(tmpDir)
+			defer os.Chdir(oldWd)
+
+			os.MkdirAll(".hive", 0755)
+
+			err := generateDockerComposeWithConfig(tt.workers, 6379)
+			if err != nil {
+				t.Fatalf("generateDockerComposeWithConfig() error = %v", err)
+			}
+
+			content, _ := os.ReadFile(".hive/docker-compose.yml")
+			if !strings.Contains(string(content), tt.expectedDrone) {
+				t.Errorf("generateDockerComposeWithConfig(%d) missing %q", tt.workers, tt.expectedDrone)
+			}
+		})
+	}
+}
