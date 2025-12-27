@@ -74,6 +74,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - ./workspaces/queen:/workspace
+      - node-modules-queen:/workspace/node_modules
       - ../.git:/workspace-git
       - ../.claude:/workspace/.claude
       - .:/hive-config:ro
@@ -101,7 +102,7 @@ services:
 		sb.WriteString(generateWorkerService(i))
 	}
 
-	// Volumes section - each agent gets its own pnpm-store to avoid race conditions
+	// Volumes section - each agent gets its own pnpm-store and node_modules
 	sb.WriteString(`networks:
   hive-network:
     driver: bridge
@@ -109,11 +110,13 @@ services:
 volumes:
   redis-data:
   pnpm-store-queen:
+  node-modules-queen:
 `)
 
-	// Add pnpm-store volume for each drone
+	// Add pnpm-store and node-modules volume for each drone
 	for i := 1; i <= opts.WorkerCount; i++ {
 		sb.WriteString(fmt.Sprintf("  pnpm-store-drone-%d:\n", i))
+		sb.WriteString(fmt.Sprintf("  node-modules-drone-%d:\n", i))
 	}
 
 	sb.WriteString(`  node-modules-cache:
@@ -144,6 +147,7 @@ func generateWorkerService(index int) string {
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - ./workspaces/drone-%d:/workspace
+      - node-modules-drone-%d:/workspace/node_modules
       - ../.git:/workspace-git
       - ../.claude:/workspace/.claude
       - .:/hive-config:ro
@@ -164,5 +168,5 @@ func generateWorkerService(index int) string {
     networks:
       - hive-network
 
-`, index, index, index, index, index, index)
+`, index, index, index, index, index, index, index)
 }
