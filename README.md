@@ -348,6 +348,9 @@ task-done       # When CI is green ✅
 | `hive connect <id>` | Connect to agent (queen, 1-10) |
 | `hive update` | Update containers with latest code (preserves data) |
 | `hive clean` | Remove all Hive files and containers |
+| `hive ps [agent]` | Show processes and listening ports in containers |
+| `hive expose <agent>` | Expose development ports for browser/simulator access |
+| `hive logs [agent]` | Stream logs from agent containers |
 
 ### Queen Commands (inside Queen container)
 
