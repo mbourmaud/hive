@@ -12,10 +12,22 @@ if [ -z "$DRONE_ID" ] || [ -z "$TASK_JSON" ]; then
     exit 1
 fi
 
+REDIS_HOST=${REDIS_HOST:-hive-redis}
+REDIS_PORT=${REDIS_PORT:-6379}
+REDIS_AUTH=""
+if [ -n "$REDIS_PASSWORD" ]; then
+    REDIS_AUTH="-a $REDIS_PASSWORD"
+fi
+
+# Helper function for redis-cli with auth
+rcli() {
+    redis-cli -h $REDIS_HOST -p $REDIS_PORT $REDIS_AUTH "$@" 2>/dev/null
+}
+
 # Push task to drone's queue
-redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} LPUSH "hive:queue:$DRONE_ID" "$TASK_JSON"
+rcli LPUSH "hive:queue:$DRONE_ID" "$TASK_JSON"
 
 # Publish notification
-redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} PUBLISH "hive:events" "task_queued:$DRONE_ID"
+rcli PUBLISH "hive:events" "task_queued:$DRONE_ID"
 
 echo "✅ Task queued for $DRONE_ID"

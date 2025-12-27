@@ -11,8 +11,20 @@ if [ -z "$DRONE_ID" ]; then
     exit 1
 fi
 
+REDIS_HOST=${REDIS_HOST:-hive-redis}
+REDIS_PORT=${REDIS_PORT:-6379}
+REDIS_AUTH=""
+if [ -n "$REDIS_PASSWORD" ]; then
+    REDIS_AUTH="-a $REDIS_PASSWORD"
+fi
+
+# Helper function for redis-cli with auth
+rcli() {
+    redis-cli -h $REDIS_HOST -p $REDIS_PORT $REDIS_AUTH "$@" 2>/dev/null
+}
+
 # Get task from active
-TASK=$(redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} RPOP "hive:active:$DRONE_ID")
+TASK=$(rcli RPOP "hive:active:$DRONE_ID")
 
 if [ -z "$TASK" ] || [ "$TASK" = "(nil)" ]; then
     echo "No active task for $DRONE_ID"
@@ -25,12 +37,12 @@ COMPLETED_TASK=$(echo "$TASK" | jq ". + {status: \"completed\", completed_at: \"
 
 # Add to completed sorted set (score = timestamp)
 TIMESTAMP=$(date +%s)
-redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} ZADD "hive:completed" "$TIMESTAMP" "$COMPLETED_TASK"
+rcli ZADD "hive:completed" "$TIMESTAMP" "$COMPLETED_TASK"
 
 # Store task details in hash
-redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} HSET "hive:task:$TASK_ID" "data" "$COMPLETED_TASK"
+rcli HSET "hive:task:$TASK_ID" "data" "$COMPLETED_TASK"
 
 # Publish notification
-redis-cli -h ${REDIS_HOST:-hive-redis} -p ${REDIS_PORT:-6379} PUBLISH "hive:events" "task_completed:$DRONE_ID:$TASK_ID"
+rcli PUBLISH "hive:events" "task_completed:$DRONE_ID:$TASK_ID"
 
 echo "✅ Task $TASK_ID completed"
