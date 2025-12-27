@@ -112,6 +112,11 @@ RUN chmod +x /home/agent/entrypoint.sh /home/agent/start-worker.sh /home/agent/w
 COPY --chown=agent:agent scripts/redis/*.sh /scripts/redis/
 RUN chmod +x /scripts/redis/*.sh
 
+# Copy HIVE MCP with native Redis support
+COPY --chown=agent:agent scripts/mcp/package.json /scripts/mcp/package.json
+RUN cd /scripts/mcp && npm install --production --omit=dev
+COPY --chown=agent:agent scripts/mcp/ /scripts/mcp/
+
 # Copy HIVE CLI commands (available in PATH)
 COPY --chown=agent:agent scripts/bin/* /usr/local/bin/
 RUN chmod +x /usr/local/bin/hive-assign /usr/local/bin/hive-config /usr/local/bin/hive-failed \

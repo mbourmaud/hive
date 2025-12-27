@@ -36,7 +36,7 @@ Report which skills you have access to.
 
 ### Step 5: Test HIVE MCP & Get Status
 ```
-Use MCP tool: hive.get_hive_status
+Use MCP tool: hive_status
 ```
 This confirms HIVE MCP is working and shows overall status.
 
@@ -74,11 +74,15 @@ You have access to the **HIVE MCP** for elegant task management:
 
 | MCP Tool | Description |
 |----------|-------------|
-| `hive.get_hive_status` | Get overall HIVE status |
-| `hive.assign_task` | Assign a task to a drone |
-| `hive.get_failed_tasks` | List all failed tasks |
-| `hive.get_drone_activity` | Get logs from a specific drone |
-| `hive.broadcast_message` | Send message to all drones |
+| `hive_status` | Get overall HIVE status |
+| `hive_assign` | Assign a task to a drone |
+| `hive_submit` | Auto-assign to least loaded drone |
+| `hive_get_failed_tasks` | List all failed tasks |
+| `hive_get_drone_activity` | Get logs from a specific drone |
+| `hive_broadcast` | Send message to all drones |
+| `hive_get_config` | Read hive.yaml configuration |
+| `hive_start_monitoring` | Start background monitoring |
+| `hive_get_monitoring_events` | Get pending monitoring events |
 
 **Use MCP tools when possible** - they're cleaner than bash commands.
 
@@ -118,7 +122,7 @@ redis-cli -h redis -a "$REDIS_PASSWORD" XREVRANGE hive:logs:drone-1 + - COUNT 20
 
 ### Via MCP (Recommended)
 ```
-hive.assign_task(
+hive_assign(
   drone="drone-1",
   title="Fix login bug",
   description="Update validation in auth service",
@@ -236,7 +240,7 @@ redis-cli -h redis -a "$REDIS_PASSWORD" LLEN "hive:queue:drone-1"
 
 ### Via MCP
 ```
-hive.get_drone_activity(drone="drone-1", limit=50)
+hive_get_drone_activity(drone="drone-1", limit=50)
 ```
 
 **NEVER say "I don't know what the drone is doing"** - always check Redis and report.
@@ -280,18 +284,18 @@ This allows the user to test the app locally while the drone continues working.
 
 2. **Assign tasks:**
 ```
-hive.assign_task(drone="drone-1", title="Add user auth tables", description="Create migration for users/sessions", ticket_id="AUTH-1")
-hive.assign_task(drone="drone-2", title="Implement auth service", description="JWT auth with login/logout", ticket_id="AUTH-1")
+hive_assign(drone="drone-1", title="Add user auth tables", description="Create migration for users/sessions", ticket_id="AUTH-1")
+hive_assign(drone="drone-2", title="Implement auth service", description="JWT auth with login/logout", ticket_id="AUTH-1")
 ```
 
 3. **Monitor** progress:
 ```
-hive.get_hive_status()
+hive_status()
 ```
 
 4. **Handle failures:**
 ```
-hive.get_failed_tasks()
+hive_get_failed_tasks()
 # Reassign or investigate
 ```
 
@@ -301,8 +305,8 @@ hive.get_failed_tasks()
 
 ## Important Rules
 
-1. **Run health check on startup** (Redis + MCP + hive-status)
-2. Use `hive.assign_task` or `hive-assign` for task creation
+1. **Run health check on startup** (Redis + MCP + hive_status)
+2. Use `hive_assign` or `hive-assign` for task creation
 3. Monitor for stuck/failed tasks regularly
 4. Keep the user informed of progress
 5. Each drone works on ONE task at a time (additional tasks go to their queue)

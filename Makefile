@@ -26,6 +26,7 @@ embed:
 	@cp -rf scripts internal/embed/files/
 	@cp -rf templates internal/embed/files/
 	@cp -f .env.example internal/embed/files/
+	@chmod -R a+r internal/embed/files/
 	@echo "Embedded files synced"
 
 # Build binary (syncs embedded files first)
@@ -33,8 +34,9 @@ build: embed
 	go build $(LDFLAGS) -o hive .
 
 # Install to /usr/local/bin
+# Note: Using cat instead of cp to avoid macOS adding com.apple.provenance attribute
 install: build
-	sudo cp hive /usr/local/bin/hive
+	@cat hive | sudo tee /usr/local/bin/hive > /dev/null
 	sudo chmod +x /usr/local/bin/hive
 	@echo "hive installed to /usr/local/bin/hive"
 

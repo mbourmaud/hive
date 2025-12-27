@@ -1,101 +1,38 @@
 #!/usr/bin/env node
 /**
- * Hive MCP Server
- * Exposes Hive commands as MCP tools for elegant Claude integration
+ * HIVE MCP Server v2.0
  *
- * Tools:
- *   - hive_status: Get task queue and drone status
- *   - hive_submit: Submit a task to available drone
- *   - hive_log: View drone activity logs
+ * Native Redis connection using ioredis (no shell commands, no timeouts)
+ * Role-aware tools: Queen gets orchestration tools, Workers get execution tools
+ * Background monitoring with pub/sub
+ * Config access from hive.yaml
+ *
+ * Queen Tools:
+ *   - hive_status: Get complete HIVE status
+ *   - hive_assign: Assign task to specific drone
+ *   - hive_submit: Auto-assign to least loaded drone
+ *   - hive_get_drone_activity: Get drone logs
+ *   - hive_get_failed_tasks: List failed tasks
+ *   - hive_broadcast: Message all drones
+ *
+ * Worker Tools:
+ *   - hive_my_tasks: Get active/queued tasks
+ *   - hive_take_task: Take next task from queue
+ *   - hive_complete_task: Mark task done
+ *   - hive_fail_task: Mark task failed
+ *   - hive_log_activity: Log activity for Queen
+ *
+ * Shared Tools:
+ *   - hive_get_config: Read hive.yaml config
+ *   - hive_start_monitoring: Start background monitoring
+ *   - hive_stop_monitoring: Stop monitoring
+ *   - hive_get_monitoring_events: Get pending events
  */
 
-const { execSync } = require('child_process');
 const readline = require('readline');
-
-// Tool definitions
-const TOOLS = [
-  {
-    name: 'hive_status',
-    description: 'Get the current status of the Hive task queue and drone workers. Shows queued, in-progress, and completed tasks.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
-  },
-  {
-    name: 'hive_submit',
-    description: 'Submit a new task to be picked up by an available drone worker. The task will be queued and assigned to the next free drone.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        task: {
-          type: 'string',
-          description: 'The task description to submit. Be specific: include file paths, function names, and acceptance criteria.'
-        },
-        priority: {
-          type: 'string',
-          enum: ['low', 'normal', 'high'],
-          description: 'Task priority (default: normal)'
-        }
-      },
-      required: ['task']
-    }
-  },
-  {
-    name: 'hive_log',
-    description: 'View activity logs from drone workers. Shows recent actions and outputs from drones.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        drone: {
-          type: 'string',
-          description: 'Drone ID to view logs for (e.g., "drone-1"). If omitted, shows logs from all drones.'
-        },
-        lines: {
-          type: 'number',
-          description: 'Number of log lines to show (default: 50)'
-        }
-      },
-      required: []
-    }
-  }
-];
-
-// Execute a command and return output
-function runCommand(cmd) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', timeout: 30000 }).trim();
-  } catch (error) {
-    return `Error: ${error.message}`;
-  }
-}
-
-// Handle tool calls
-function handleToolCall(name, args) {
-  switch (name) {
-    case 'hive_status':
-      return runCommand('hive-status');
-
-    case 'hive_submit':
-      const task = args.task;
-      const priority = args.priority || 'normal';
-      // Escape quotes in task
-      const escapedTask = task.replace(/"/g, '\\"');
-      return runCommand(`hive-submit "${escapedTask}"`);
-
-    case 'hive_log':
-      const drone = args.drone || '';
-      const lines = args.lines || 50;
-      if (drone) {
-        return runCommand(`hive-log ${drone} ${lines}`);
-      }
-      return runCommand(`hive-log ${lines}`);
-
-    default:
-      return `Unknown tool: ${name}`;
-  }
-}
+const tools = require('./lib/tools');
+const config = require('./lib/config');
+const { closeAll } = require('./lib/redis-client');
 
 // JSON-RPC response helpers
 function jsonRpcResponse(id, result) {
@@ -106,12 +43,39 @@ function jsonRpcError(id, code, message) {
   return JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } });
 }
 
+// Handle tool calls
+async function handleToolCall(name, args) {
+  const result = await tools.executeTool(name, args || {});
+
+  // Format as text for MCP response
+  if (typeof result === 'object') {
+    return JSON.stringify(result, null, 2);
+  }
+  return String(result);
+}
+
 // Main MCP server loop
 async function main() {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: false
+  });
+
+  // Get role info for server info
+  const agentName = config.getAgentName();
+  const isQueenAgent = config.isQueen();
+  const role = isQueenAgent ? 'queen' : 'worker';
+
+  // Handle graceful shutdown
+  process.on('SIGINT', async () => {
+    await closeAll();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    await closeAll();
+    process.exit(0);
   });
 
   for await (const line of rl) {
@@ -125,20 +89,32 @@ async function main() {
           response = jsonRpcResponse(id, {
             protocolVersion: '2024-11-05',
             capabilities: { tools: {} },
-            serverInfo: { name: 'hive-mcp', version: '1.0.0' }
+            serverInfo: {
+              name: 'hive-mcp',
+              version: '2.0.0',
+              description: `HIVE MCP Server (${role}: ${agentName})`
+            }
           });
           break;
 
         case 'tools/list':
-          response = jsonRpcResponse(id, { tools: TOOLS });
+          const toolDefinitions = tools.getToolDefinitions();
+          response = jsonRpcResponse(id, { tools: toolDefinitions });
           break;
 
         case 'tools/call':
           const { name, arguments: args } = params;
-          const result = handleToolCall(name, args || {});
-          response = jsonRpcResponse(id, {
-            content: [{ type: 'text', text: result }]
-          });
+          try {
+            const result = await handleToolCall(name, args);
+            response = jsonRpcResponse(id, {
+              content: [{ type: 'text', text: result }]
+            });
+          } catch (error) {
+            response = jsonRpcResponse(id, {
+              content: [{ type: 'text', text: `Error: ${error.message}` }],
+              isError: true
+            });
+          }
           break;
 
         case 'notifications/initialized':
@@ -160,6 +136,13 @@ async function main() {
       }));
     }
   }
+
+  // Cleanup on stream end
+  await closeAll();
 }
 
-main().catch(console.error);
+main().catch(async (error) => {
+  console.error('Fatal error:', error);
+  await closeAll();
+  process.exit(1);
+});

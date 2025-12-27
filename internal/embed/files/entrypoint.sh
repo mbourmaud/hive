@@ -29,6 +29,24 @@ if [ -d "/hive-config/scripts/redis" ]; then
 fi
 
 # ============================================
+# Fix Git Worktree Path
+# ============================================
+# Worktrees created on host have paths like /Users/.../project/.git/worktrees/drone-1
+# Inside container, the .git is mounted at /workspace-git, so we need to fix the path
+
+if [ -f /workspace/.git ] && [ -d /workspace-git ]; then
+    GITDIR_LINE=$(cat /workspace/.git)
+    if echo "$GITDIR_LINE" | grep -q "gitdir:"; then
+        # Extract the worktree name (last component of path)
+        WORKTREE_NAME=$(echo "$GITDIR_LINE" | sed 's/.*worktrees\///' | tr -d '[:space:]')
+        if [ -n "$WORKTREE_NAME" ] && [ -d "/workspace-git/worktrees/$WORKTREE_NAME" ]; then
+            echo "gitdir: /workspace-git/worktrees/$WORKTREE_NAME" > /workspace/.git
+            log "[+] Fixed git worktree path for $WORKTREE_NAME"
+        fi
+    fi
+fi
+
+# ============================================
 # Claude Configuration Setup
 # ============================================
 
@@ -107,9 +125,10 @@ if os.path.exists(host_mcps_path):
         print(f"Warning: Could not parse host MCPs: {e}")
 
 # 2. Always add the Hive MCP for elegant task management
+# Uses /scripts/mcp/ (installed during Docker build with npm dependencies)
 mcps["hive"] = {
     "command": "node",
-    "args": ["/hive-config/scripts/mcp/hive-mcp.js"]
+    "args": ["/scripts/mcp/hive-mcp.js"]
 }
 print("  - hive: (built-in)")
 
@@ -165,7 +184,7 @@ else
   "mcpServers": {
     "hive": {
       "command": "node",
-      "args": ["/hive-config/scripts/mcp/hive-mcp.js"]
+      "args": ["/scripts/mcp/hive-mcp.js"]
     }
   }
 }
@@ -340,6 +359,10 @@ if [ -d "/workspace/.git" ] || [ -f "/workspace/.git" ]; then
         export GIT_DIR="/workspace-git/worktrees/$WORKTREE_NAME"
         export GIT_WORK_TREE="/workspace"
         log "[+] Set GIT_DIR=$GIT_DIR for container git access"
+
+        # Also add to .bashrc so docker exec sessions get it too
+        echo "export GIT_DIR=$GIT_DIR" >> ~/.bashrc
+        echo "export GIT_WORK_TREE=$GIT_WORK_TREE" >> ~/.bashrc
     fi
 else
     # Fallback: Initialize workspace if it doesn't exist
