@@ -5,8 +5,24 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 )
+
+// detectGitHubToken tries to get GitHub token from gh CLI
+func detectGitHubToken() string {
+	cmd := exec.Command("gh", "auth", "token")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	token := strings.TrimSpace(string(output))
+	// Verify it looks like a valid token
+	if strings.HasPrefix(token, "gho_") || strings.HasPrefix(token, "ghp_") {
+		return token
+	}
+	return ""
+}
 
 // generateSecurePassword generates a cryptographically secure password
 func generateSecurePassword(length int) (string, error) {
@@ -66,9 +82,13 @@ func writeEnvFile(cfg map[string]string, workers int) error {
 	content.WriteString(fmt.Sprintf("REDIS_PASSWORD=%s\n", redisPassword))
 	content.WriteString("\n")
 
-	// Optional VCS tokens (user may add these)
+	// VCS Tokens - auto-detect GitHub token from gh CLI
 	content.WriteString("# VCS Tokens (optional)\n")
-	content.WriteString("# GITHUB_TOKEN=\n")
+	if ghToken := detectGitHubToken(); ghToken != "" {
+		content.WriteString(fmt.Sprintf("GITHUB_TOKEN=%s\n", ghToken))
+	} else {
+		content.WriteString("# GITHUB_TOKEN=\n")
+	}
 	content.WriteString("# GITLAB_TOKEN=\n")
 	content.WriteString("\n")
 
