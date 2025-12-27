@@ -174,15 +174,21 @@ ENABLED=$(hive-config monitoring.queen.enabled)
 INTERVAL=$(hive-config monitoring.queen.interval_seconds)
 ```
 
-### IF ENABLED: Start Background Monitor
-Use Claude's Task tool with `run_in_background: true` to poll Redis every X seconds:
+### IF ENABLED: Start Background Monitor NOW
 
+**You must ACTUALLY start the background task, not just say you will!**
+
+Run this exact command to start background monitoring:
+```bash
+( while true; do sleep 30; hive-log "👑 Queen monitoring check" debug; hive-status; done ) &
 ```
-Every $INTERVAL seconds, check:
-1. hive-status (new tasks? completed? failed?)
-2. Drone activity logs (any 🚀 servers? errors? blockers?)
-3. Report significant changes to the user
-```
+
+This will:
+1. Run `hive-status` every 30 seconds
+2. Log the check for visibility
+3. You'll see status changes and can report to the user
+
+**DO NOT just say "I will monitor" - RUN THE COMMAND ABOVE NOW.**
 
 **If monitoring is enabled, you must NOT be blind to what drones are doing.**
 

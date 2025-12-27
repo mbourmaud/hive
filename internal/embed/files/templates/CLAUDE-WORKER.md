@@ -245,23 +245,35 @@ ENABLED=$(hive-config monitoring.worker.enabled)
 INTERVAL=$(hive-config monitoring.worker.interval_seconds)
 ```
 
-### IF ENABLED: Poll When IDLE
-Use Claude's Task tool with `run_in_background: true`:
+### IF ENABLED AND IDLE: Start Background Polling NOW
 
+**You must ACTUALLY start the background task, not just say you will!**
+
+Run this exact command to start background polling:
+```bash
+( while true; do sleep 1; if my-tasks 2>/dev/null | grep -q "Queued:"; then hive-log "📬 New task detected!" info; break; fi; done ) &
 ```
-Every $INTERVAL seconds:
-1. Run my-tasks
-2. If new task in queue → take-task and start working
-3. If still idle → continue polling
-```
+
+This will:
+1. Check `my-tasks` every 1 second
+2. When a task appears, log it and exit the loop
+3. You'll see the log and can then run `take-task`
+
+**DO NOT just say "I will poll" - RUN THE COMMAND ABOVE NOW.**
 
 ### When WORKING (active task)
 - Focus on your task
 - No polling needed
-- After task-done, check my-tasks immediately
-- If queue empty, start polling again
 
-**If polling is enabled, don't stay idle.** The Queen may assign you work at any time.
+### After Completing a Task (task-done)
+1. Check `my-tasks` immediately
+2. If queued task exists → `take-task` and continue working
+3. If NO queued tasks → **RESTART THE POLLING LOOP:**
+```bash
+( while true; do sleep 1; if my-tasks 2>/dev/null | grep -q "Queued:"; then hive-log "📬 New task detected!" info; break; fi; done ) &
+```
+
+**Every time you finish a task and have nothing in queue, restart polling!**
 
 ---
 
