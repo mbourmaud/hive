@@ -23,6 +23,15 @@ PRIORITY="${2:-normal}"
 # Find available drone (check who has fewest active tasks)
 REDIS_HOST="${REDIS_HOST:-redis}"
 REDIS_PORT="${REDIS_PORT:-6379}"
+REDIS_AUTH=""
+if [ -n "$REDIS_PASSWORD" ]; then
+    REDIS_AUTH="-a $REDIS_PASSWORD"
+fi
+
+# Helper function for redis-cli with auth
+rcli() {
+    redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" $REDIS_AUTH "$@" 2>/dev/null
+}
 
 # Get list of drones from environment or default
 MAX_DRONES="${MAX_DRONES:-2}"
@@ -33,8 +42,8 @@ BEST_COUNT=999
 for i in $(seq 1 $MAX_DRONES); do
     DRONE="drone-$i"
     # Count queued + active tasks for this drone
-    QUEUED=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" LLEN "hive:queue:$DRONE" 2>/dev/null || echo "0")
-    ACTIVE=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" LLEN "hive:active:$DRONE" 2>/dev/null || echo "0")
+    QUEUED=$(rcli LLEN "hive:queue:$DRONE" || echo "0")
+    ACTIVE=$(rcli LLEN "hive:active:$DRONE" || echo "0")
     TOTAL=$((QUEUED + ACTIVE))
 
     if [ "$TOTAL" -lt "$BEST_COUNT" ]; then
