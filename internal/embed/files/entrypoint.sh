@@ -247,6 +247,26 @@ if [ -d ~/.ssh ] && [ -f ~/.ssh/config ]; then
 fi
 
 # ============================================
+# Redis Helper Function
+# ============================================
+
+# Create rcli helper for easy Redis access with proper auth
+if command -v redis-cli &> /dev/null; then
+    cat > ~/.local/bin/rcli << 'RCLI_EOF'
+#!/bin/bash
+REDIS_HOST="${REDIS_HOST:-redis}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+REDIS_AUTH=""
+if [ -n "$REDIS_PASSWORD" ]; then
+    REDIS_AUTH="-a $REDIS_PASSWORD --no-auth-warning"
+fi
+exec redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" $REDIS_AUTH "$@"
+RCLI_EOF
+    chmod +x ~/.local/bin/rcli
+    log "[+] Created 'rcli' helper for Redis access"
+fi
+
+# ============================================
 # Git Configuration
 # ============================================
 
@@ -309,15 +329,17 @@ if [ -d "/workspace/.git" ] || [ -f "/workspace/.git" ]; then
     log "[+] Workspace already initialized as git worktree"
     WORKSPACE_DIR="/workspace"
 
-    # Fix worktree .git file to point to mounted git directory
+    # Use GIT_DIR environment variable to point git to container's mounted directory
+    # This avoids modifying the .git file which would break local (host) usage
     if [ -f "/workspace/.git" ] && [ -d "/workspace-git" ]; then
-        # Read the gitdir path from .git file
+        # Extract worktree name from the .git file (e.g., /path/.git/worktrees/queen -> queen)
         GITDIR_PATH=$(cat /workspace/.git | sed 's/gitdir: //')
-        # Extract worktree name from path (e.g., /path/.git/worktrees/queen -> queen)
         WORKTREE_NAME=$(basename "$GITDIR_PATH")
-        # Update .git file to point to container's mounted git directory
-        echo "gitdir: /workspace-git/worktrees/$WORKTREE_NAME" > /workspace/.git
-        log "[+] Fixed git worktree path to use mounted repository"
+
+        # Set GIT_DIR to container path (keeps .git file unchanged for host)
+        export GIT_DIR="/workspace-git/worktrees/$WORKTREE_NAME"
+        export GIT_WORK_TREE="/workspace"
+        log "[+] Set GIT_DIR=$GIT_DIR for container git access"
     fi
 else
     # Fallback: Initialize workspace if it doesn't exist
