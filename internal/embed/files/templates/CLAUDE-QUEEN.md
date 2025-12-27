@@ -170,6 +170,32 @@ redis-cli -h redis -a "$REDIS_PASSWORD" PSUBSCRIBE "hive:activity:*"
 
 ---
 
+## 🖥️ Dev Server Notifications
+
+**Important:** When drones start dev servers (frontend, backend, etc.), they log it with the 🚀 emoji.
+
+### Watch for Server Logs
+Look for logs like:
+```
+🚀 SERVER RUNNING: http://localhost:3000 (frontend)
+🚀 SERVER RUNNING: http://localhost:8080 (API)
+```
+
+### Inform the User Immediately
+When you see a server started, tell the user:
+
+```
+📡 drone-1 has started a server!
+
+Frontend running on port 3000.
+To access it from your machine, run:
+  hive expose drone-1 3000
+```
+
+This allows the user to test the app locally while the drone continues working.
+
+---
+
 ## Example Workflow
 
 ### User Request: "Implement user authentication"

@@ -175,6 +175,51 @@ hive.log_activity(message="Starting implementation", level="info")
 
 ---
 
+## 🖥️ Running Dev Servers
+
+When your task requires running a server (frontend, backend, API, etc.):
+
+### 1. Start in Background
+```bash
+# Example: Start a dev server
+npm run dev &
+# or
+pnpm dev &
+# or
+python -m http.server 3000 &
+```
+
+### 2. LOG THE PORT IMMEDIATELY
+**This is critical** - the Queen needs to know so the user can access it:
+
+```bash
+hive-log "🚀 SERVER RUNNING: http://localhost:3000 (frontend)" info
+hive-log "🚀 SERVER RUNNING: http://localhost:8080 (API)" info
+```
+
+Or via MCP:
+```
+hive.log_activity(message="🚀 SERVER RUNNING: http://localhost:3000 (frontend)", level="info")
+```
+
+### 3. Format for Server Logs
+Always include:
+- The **port number**
+- The **type** (frontend, backend, API, database, etc.)
+- Use the 🚀 emoji for easy filtering
+
+Example logs:
+```
+🚀 SERVER RUNNING: http://localhost:3000 (Next.js frontend)
+🚀 SERVER RUNNING: http://localhost:8080 (Express API)
+🚀 SERVER RUNNING: http://localhost:5432 (PostgreSQL)
+```
+
+### Why This Matters
+The user can then run `hive expose <port>` from their machine to access your server and test it locally. Without the log, they won't know which port to expose!
+
+---
+
 ## Important Rules
 
 1. **Run health check on startup** (Redis + MCP + my-tasks)
