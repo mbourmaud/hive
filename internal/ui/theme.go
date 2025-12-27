@@ -12,6 +12,6 @@ var (
 	ColorRed    = lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF0000"}
 
 	// Neutral colors
-	ColorGray = lipgloss.AdaptiveColor{Light: "#888888", Dark: "#666666"}
-	ColorDim  = lipgloss.AdaptiveColor{Light: "#888888", Dark: "#555555"}
+	ColorGray = lipgloss.AdaptiveColor{Light: "#888888", Dark: "#AAAAAA"}
+	ColorDim  = lipgloss.AdaptiveColor{Light: "#666666", Dark: "#CCCCCC"}
 )
