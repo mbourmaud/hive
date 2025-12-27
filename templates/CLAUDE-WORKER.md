@@ -220,10 +220,83 @@ The user can then run `hive expose <port>` from their machine to access your ser
 
 ---
 
+## 🔄 Background Task Polling (IF ENABLED)
+
+### Your Config in `hive.yaml`
+```yaml
+monitoring:
+  worker:
+    enabled: true         # ← Check this first!
+    interval_seconds: 1   # ← Poll every 1 second when idle
+```
+
+### Read Your Config
+```bash
+# Check if monitoring is enabled
+cat /hive-config/hive.yaml | yq '.monitoring.worker.enabled'
+
+# Get polling interval
+cat /hive-config/hive.yaml | yq '.monitoring.worker.interval_seconds'
+```
+
+Or use the helper:
+```bash
+ENABLED=$(hive-config monitoring.worker.enabled)
+INTERVAL=$(hive-config monitoring.worker.interval_seconds)
+```
+
+### IF ENABLED: Poll When IDLE
+Use Claude's Task tool with `run_in_background: true`:
+
+```
+Every $INTERVAL seconds:
+1. Run my-tasks
+2. If new task in queue → take-task and start working
+3. If still idle → continue polling
+```
+
+### When WORKING (active task)
+- Focus on your task
+- No polling needed
+- After task-done, check my-tasks immediately
+- If queue empty, start polling again
+
+**If polling is enabled, don't stay idle.** The Queen may assign you work at any time.
+
+---
+
+## 📝 Activity Logging (EXHAUSTIVE)
+
+The Queen monitors your activity via Redis. **LOG EVERYTHING IMPORTANT:**
+
+### What to Log
+| Event | Example Log |
+|-------|-------------|
+| Starting task | `hive-log "📋 Starting: Add login form"` |
+| Reading files | `hive-log "📖 Reading: src/api/auth.ts"` |
+| Editing files | `hive-log "✏️ Editing: src/components/Login.tsx"` |
+| Running commands | `hive-log "🔨 Running: npm test"` |
+| Starting server | `hive-log "🚀 SERVER RUNNING: http://localhost:3000 (frontend)"` |
+| CI status | `hive-log "⏳ CI running..."` or `hive-log "✅ CI passed"` |
+| Blocked | `hive-log "🚫 BLOCKED: Need API credentials" error` |
+| Completed | `hive-log "✅ Task completed, PR created"` |
+
+### Log Format
+```bash
+hive-log "EMOJI Action: details" [level]
+```
+
+Levels: `info` (default), `warning`, `error`, `debug`
+
+**The Queen should NEVER be blind to what you're doing.** Log your progress continuously.
+
+---
+
 ## Important Rules
 
 1. **Run health check on startup** (Redis + MCP + my-tasks)
-2. **CI GREEN = DONE** - Never mark complete with red/running CI
-3. Only work on ONE task at a time
-4. Log your progress for Queen visibility
-5. If blocked for >30 minutes, mark as failed
+2. **Start background polling when idle**
+3. **Log everything** - the Queen watches your logs
+4. **CI GREEN = DONE** - Never mark complete with red/running CI
+5. Only work on ONE task at a time
+6. If blocked for >30 minutes, mark as failed

@@ -149,24 +149,91 @@ Wait for completion before assigning next:
 
 ---
 
-## Monitoring Drones
+## 🔄 Background Monitoring (IF ENABLED)
+
+### Your Config in `hive.yaml`
+```yaml
+monitoring:
+  queen:
+    enabled: true          # ← Check this first!
+    interval_seconds: 30   # ← Poll every 30 seconds
+```
+
+### Read Your Config
+```bash
+# Check if monitoring is enabled
+cat /hive-config/hive.yaml | yq '.monitoring.queen.enabled'
+
+# Get polling interval
+cat /hive-config/hive.yaml | yq '.monitoring.queen.interval_seconds'
+```
+
+Or use the helper:
+```bash
+ENABLED=$(hive-config monitoring.queen.enabled)
+INTERVAL=$(hive-config monitoring.queen.interval_seconds)
+```
+
+### IF ENABLED: Start Background Monitor
+Use Claude's Task tool with `run_in_background: true` to poll Redis every X seconds:
+
+```
+Every $INTERVAL seconds, check:
+1. hive-status (new tasks? completed? failed?)
+2. Drone activity logs (any 🚀 servers? errors? blockers?)
+3. Report significant changes to the user
+```
+
+**If monitoring is enabled, you must NOT be blind to what drones are doing.**
+
+---
+
+## 📊 Monitoring Drones (EXHAUSTIVE)
+
+When the user asks what a drone is doing, provide a **FULL EXHAUSTIVE REPORT** in table format.
+
+### Get Full Drone Activity
+```bash
+# Get last 50 log entries for a drone
+redis-cli -h redis -a "$REDIS_PASSWORD" XREVRANGE hive:logs:drone-1 + - COUNT 50
+```
+
+### Report Format (TABLE)
+When reporting drone activity, use this format:
+
+```
+📊 Drone Activity Report: drone-1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Time     | Type        | Details                                    |
+|----------|-------------|--------------------------------------------|
+| 18:45:32 | 🚀 server   | Started frontend on port 3000              |
+| 18:44:15 | 🔧 tool     | Edit: src/components/Login.tsx             |
+| 18:43:02 | 🔧 tool     | Read: src/api/auth.ts                      |
+| 18:42:30 | 💬 response | "I'll implement the login form..."         |
+| 18:42:01 | 📋 task     | Started: "Add login form"                  |
+
+Current Status: WORKING
+Active Task: "Add login form" (PROJ-123)
+Files Modified: 3
+Server Running: http://localhost:3000 (frontend)
+```
+
+### Quick Status Check
+```bash
+# Current task
+redis-cli -h redis -a "$REDIS_PASSWORD" LINDEX "hive:active:drone-1" 0 | jq '.'
+
+# Queue length
+redis-cli -h redis -a "$REDIS_PASSWORD" LLEN "hive:queue:drone-1"
+```
 
 ### Via MCP
 ```
-hive.get_drone_activity(drone="drone-1", limit=20)
+hive.get_drone_activity(drone="drone-1", limit=50)
 ```
 
-### Via Redis
-```bash
-# View drone logs
-redis-cli -h redis -a "$REDIS_PASSWORD" XREVRANGE hive:logs:drone-1 + - COUNT 20
-
-# Check active task
-redis-cli -h redis -a "$REDIS_PASSWORD" LINDEX "hive:active:drone-1" 0
-
-# Subscribe to real-time activity
-redis-cli -h redis -a "$REDIS_PASSWORD" PSUBSCRIBE "hive:activity:*"
-```
+**NEVER say "I don't know what the drone is doing"** - always check Redis and report.
 
 ---
 
