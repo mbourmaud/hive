@@ -37,14 +37,14 @@ This command will:
   3. Build and install the CLI
   4. Start Hive with specified workers
 
-For automation (Claude, CI/CD), use --no-interactive with flags.`,
+For automation (Claude, CI/CD), use -y or --yes to accept defaults.`,
 	RunE: runInit,
 }
 
 func init() {
 	rootCmd.AddCommand(initCmd)
 
-	initCmd.Flags().BoolVar(&flagNonInteractive, "no-interactive", false, "Skip interactive prompts, use flags only")
+	initCmd.Flags().BoolVarP(&flagNonInteractive, "yes", "y", false, "Accept defaults, skip interactive prompts")
 	initCmd.Flags().StringVar(&flagEmail, "email", "", "Git user email")
 	initCmd.Flags().StringVar(&flagName, "name", "", "Git user name")
 	initCmd.Flags().StringVar(&flagToken, "token", "", "Claude OAuth token (for cli backend)")
