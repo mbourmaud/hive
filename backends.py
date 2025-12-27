@@ -404,9 +404,9 @@ def create_backend(model: str = "claude-sonnet-4-20250514") -> ClaudeBackend:
         logger.info(f"✓ Detected Bedrock config → using Bedrock backend (region: {region})")
         return BedrockBackend(model=model, region=region, profile=profile)
 
-    # 3. Fall back to Claude CLI
+    # 3. Fall back to Claude CLI (requires token or cached auth)
     oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
-    if oauth_token or True:  # CLI might have cached auth
+    if oauth_token:
         logger.info("✓ Using Claude CLI backend (OAuth token)")
         return ClaudeCLIBackend(model=model)
 
