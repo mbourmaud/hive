@@ -378,10 +378,6 @@ func TestGenerateEnvVars(t *testing.T) {
 			Name:   "test-workspace",
 			GitURL: "https://github.com/test/repo.git",
 		},
-		Git: GitConfig{
-			UserEmail: "test@example.com",
-			UserName:  "Test User",
-		},
 		Redis: RedisConfig{
 			Port: 6380,
 		},
@@ -417,14 +413,6 @@ func TestGenerateEnvVars(t *testing.T) {
 	}
 	if env["GIT_REPO_URL"] != "https://github.com/test/repo.git" {
 		t.Errorf("expected GIT_REPO_URL, got '%s'", env["GIT_REPO_URL"])
-	}
-
-	// Test git vars
-	if env["GIT_USER_EMAIL"] != "test@example.com" {
-		t.Errorf("expected GIT_USER_EMAIL='test@example.com', got '%s'", env["GIT_USER_EMAIL"])
-	}
-	if env["GIT_USER_NAME"] != "Test User" {
-		t.Errorf("expected GIT_USER_NAME='Test User', got '%s'", env["GIT_USER_NAME"])
 	}
 
 	// Test model vars
@@ -468,9 +456,9 @@ func TestGenerateEnvVars_MinimalConfig(t *testing.T) {
 		t.Errorf("expected default WORKSPACE_NAME='my-project', got '%s'", env["WORKSPACE_NAME"])
 	}
 
-	// Check that empty values don't generate env vars
-	if _, exists := env["GIT_USER_EMAIL"]; exists && cfg.Git.UserEmail == "" {
-		t.Error("should not generate GIT_USER_EMAIL when empty")
+	// Check that optional values don't generate env vars when not set
+	if _, exists := env["GIT_REPO_URL"]; exists && cfg.Workspace.GitURL == "" {
+		t.Error("should not generate GIT_REPO_URL when empty")
 	}
 }
 
@@ -481,10 +469,6 @@ func TestWriteEnvGenerated(t *testing.T) {
 		Workspace: WorkspaceConfig{
 			Name:   "write-test",
 			GitURL: "https://github.com/test/repo.git",
-		},
-		Git: GitConfig{
-			UserEmail: "write@example.com",
-			UserName:  "Write Test",
 		},
 		Redis: RedisConfig{
 			Port: 6381,
@@ -516,8 +500,7 @@ func TestWriteEnvGenerated(t *testing.T) {
 	contentStr := string(content)
 	expectedVars := []string{
 		"WORKSPACE_NAME=write-test",
-		"GIT_USER_EMAIL=write@example.com",
-		"GIT_USER_NAME=Write Test",
+		"GIT_REPO_URL=https://github.com/test/repo.git",
 		"QUEEN_MODEL=opus",
 		"WORKER_MODEL=sonnet",
 		"WORKER_MODE=interactive",
@@ -557,4 +540,63 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestSanitizeProjectName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"my-project", "my-project"},
+		{"MyProject", "myproject"},
+		{"my project", "my-project"},
+		{"My Cool Project", "my-cool-project"},
+		{"project_name", "project-name"},
+		{"project.name", "project-name"},
+		{"Project123", "project123"},
+		{"--project--", "project"},
+		{"   spaces   ", "spaces"},
+		{"UPPERCASE", "uppercase"},
+		{"a-very-long-project-name-that-exceeds-twenty-chars", "a-very-long-project"},
+		{"", "hive"},
+		{"   ", "hive"},
+		{"---", "hive"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := SanitizeProjectName(tt.input)
+			if result != tt.expected {
+				t.Errorf("SanitizeProjectName(%q) = %q, expected %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetContainerPrefix(t *testing.T) {
+	tests := []struct {
+		name            string
+		containerPrefix string
+		workspaceName   string
+		expected        string
+	}{
+		{"explicit prefix", "custom-prefix", "workspace", "custom-prefix"},
+		{"from workspace name", "", "My Project", "my-project"},
+		{"fallback to hive", "", "", "hive"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Workspace: WorkspaceConfig{
+					Name:            tt.workspaceName,
+					ContainerPrefix: tt.containerPrefix,
+				},
+			}
+			result := cfg.GetContainerPrefix()
+			if result != tt.expected {
+				t.Errorf("GetContainerPrefix() = %q, expected %q", result, tt.expected)
+			}
+		})
+	}
 }

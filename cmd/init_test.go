@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -515,8 +516,8 @@ func TestUpdateGitignore(t *testing.T) {
 	}{
 		{"create new", "", true, true},
 		{"add to existing", "node_modules/\n*.log\n", true, true},
-		{"already has entry", "node_modules/\n.hive/\n", true, false},
-		{"already has comment", "# Hive (multi-agent Claude)\n.hive/\n", true, false},
+		{"already has entry", "node_modules/\n.hive/\nhive.yaml\n", true, false},
+		{"already has comment", "# Hive (multi-agent Claude)\n.hive/\nhive.yaml\n", true, false},
 	}
 
 	for _, tt := range tests {
@@ -921,13 +922,11 @@ func TestWriteHiveYAML(t *testing.T) {
 	defer os.Chdir(oldWd)
 
 	cfgMap := map[string]string{
-		"WORKSPACE_NAME":   "my-workspace",
-		"GIT_REPO_URL":     "https://github.com/test/repo.git",
-		"GIT_USER_EMAIL":   "test@example.com",
-		"GIT_USER_NAME":    "Test User",
-		"QUEEN_MODEL":      "opus",
-		"WORKER_MODEL":     "sonnet",
-		"HIVE_DOCKERFILE":  "docker/Dockerfile.node",
+		"WORKSPACE_NAME":  "my-workspace",
+		"GIT_REPO_URL":    "https://github.com/test/repo.git",
+		"QUEEN_MODEL":     "opus",
+		"WORKER_MODEL":    "sonnet",
+		"HIVE_DOCKERFILE": "docker/Dockerfile.node",
 	}
 	err := writeHiveYAML(cfgMap, 3)
 	if err != nil {
@@ -950,11 +949,6 @@ func TestWriteHiveYAML(t *testing.T) {
 	// Check for git URL
 	if !strings.Contains(contentStr, "https://github.com/test/repo.git") {
 		t.Error("writeHiveYAML() missing git URL")
-	}
-
-	// Check for git user config
-	if !strings.Contains(contentStr, "test@example.com") {
-		t.Error("writeHiveYAML() missing git email")
 	}
 
 	// Check for models
@@ -1224,14 +1218,14 @@ func TestSyncHostMCPs(t *testing.T) {
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
 
-	// Create fake ~/.claude/settings.json
-	claudeDir := filepath.Join(tmpDir, ".claude")
-	if err := os.MkdirAll(claudeDir, 0755); err != nil {
-		t.Fatalf("failed to create .claude dir: %v", err)
-	}
-	testSettings := `{"mcpServers":{"test":{"command":"node"}}}`
-	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(testSettings), 0644); err != nil {
-		t.Fatalf("failed to create settings.json: %v", err)
+	// Get current working directory for project path
+	cwd, _ := os.Getwd()
+
+	// Create fake ~/.claude.json with project-specific MCPs
+	// Note: syncHostMCPs now reads from ~/.claude.json and extracts projects[cwd].mcpServers
+	testClaudeJSON := fmt.Sprintf(`{"projects":{"%s":{"mcpServers":{"test":{"command":"node"}}}}}`, cwd)
+	if err := os.WriteFile(filepath.Join(tmpDir, ".claude.json"), []byte(testClaudeJSON), 0644); err != nil {
+		t.Fatalf("failed to create .claude.json: %v", err)
 	}
 
 	// Create .hive directory
@@ -1245,14 +1239,22 @@ func TestSyncHostMCPs(t *testing.T) {
 		t.Fatalf("syncHostMCPs() error = %v", err)
 	}
 
-	// Verify copy
+	// Verify copy - now outputs wrapped in mcpServers
 	content, err := os.ReadFile(".hive/host-mcps.json")
 	if err != nil {
 		t.Fatalf("failed to read .hive/host-mcps.json: %v", err)
 	}
 
-	if string(content) != testSettings {
-		t.Errorf("syncHostMCPs() content mismatch, got %q, want %q", string(content), testSettings)
+	// The output is now formatted JSON with mcpServers wrapper
+	expectedContent := `{
+  "mcpServers": {
+    "test": {
+      "command": "node"
+    }
+  }
+}`
+	if string(content) != expectedContent {
+		t.Errorf("syncHostMCPs() content mismatch, got %q, want %q", string(content), expectedContent)
 	}
 }
 

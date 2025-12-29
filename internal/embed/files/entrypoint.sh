@@ -107,7 +107,7 @@ if command -v python3 &> /dev/null; then
 import json
 import os
 
-# Collect MCPs from host + Hive built-in
+# Collect MCPs from host + hive.yaml + Hive built-in
 mcps = {}
 
 # 1. Load MCPs from host settings (copied to .hive/host-mcps.json during init)
@@ -124,7 +124,22 @@ if os.path.exists(host_mcps_path):
     except Exception as e:
         print(f"Warning: Could not parse host MCPs: {e}")
 
-# 2. Always add the Hive MCP for elegant task management
+# 2. Load MCPs from hive.yaml (project-specific MCPs)
+import subprocess
+try:
+    result = subprocess.run(
+        ["yq", "-o=json", ".mcps // {}", "/hive-config/hive.yaml"],
+        capture_output=True, text=True, check=True
+    )
+    if result.stdout.strip() and result.stdout.strip() != "null":
+        yaml_mcps = json.loads(result.stdout)
+        for name, config in yaml_mcps.items():
+            mcps[name] = config
+            print(f"  - {name}: (from hive.yaml)")
+except Exception as e:
+    pass  # yq not available or no mcps in hive.yaml
+
+# 3. Always add the Hive MCP for elegant task management
 # Uses /scripts/mcp/ (installed during Docker build with npm dependencies)
 mcps["hive"] = {
     "command": "node",
@@ -526,6 +541,64 @@ if [ -f "/hive-config/hive.yaml" ] && command -v yq &> /dev/null; then
         done
         log "[+] CLI tools installation complete"
     fi
+fi
+
+# ============================================
+# Custom Init Hook (from hive.yaml)
+# ============================================
+
+# Execute custom init hook if defined in hive.yaml
+if [ -f "/hive-config/hive.yaml" ] && command -v yq &> /dev/null; then
+    INIT_HOOK=$(yq -r '.hooks.init // empty' /hive-config/hive.yaml 2>/dev/null)
+
+    if [ -n "$INIT_HOOK" ]; then
+        log "[+] Executing custom init hook from hive.yaml..."
+
+        # Write hook to temp file and execute
+        HOOK_FILE="/tmp/init-hook.sh"
+        echo "#!/bin/bash" > "$HOOK_FILE"
+        echo "set -e" >> "$HOOK_FILE"
+        echo "$INIT_HOOK" >> "$HOOK_FILE"
+        chmod +x "$HOOK_FILE"
+
+        # Execute hook with logging
+        if bash "$HOOK_FILE" 2>&1 | while read line; do log "[hook] $line"; done; then
+            log "[+] Custom init hook completed successfully"
+        else
+            log "[!] Custom init hook failed (continuing anyway)"
+        fi
+
+        rm -f "$HOOK_FILE"
+    fi
+fi
+
+# ============================================
+# Playwright Configuration
+# ============================================
+
+# Configure Playwright based on mode (headless or connect)
+if [ -n "$PLAYWRIGHT_MODE" ]; then
+    log "[+] Configuring Playwright mode: $PLAYWRIGHT_MODE"
+
+    if [ "$PLAYWRIGHT_MODE" = "connect" ]; then
+        # Connect mode: use external browser via WebSocket
+        if [ -n "$PLAYWRIGHT_BROWSER_ENDPOINT" ]; then
+            export PLAYWRIGHT_WS_ENDPOINT="$PLAYWRIGHT_BROWSER_ENDPOINT"
+            log "[+] Playwright WebSocket endpoint: $PLAYWRIGHT_BROWSER_ENDPOINT"
+        else
+            export PLAYWRIGHT_WS_ENDPOINT="ws://host.docker.internal:9222"
+            log "[+] Playwright WebSocket endpoint: ws://host.docker.internal:9222 (default)"
+        fi
+    else
+        # Headless mode (default): use built-in browsers
+        export PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+        export DISPLAY=
+        log "[+] Playwright configured for headless mode"
+    fi
+else
+    # Default: headless mode
+    export PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    export DISPLAY=
 fi
 
 # ============================================

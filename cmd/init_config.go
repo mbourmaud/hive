@@ -29,14 +29,6 @@ func writeHiveYAML(cfgMap map[string]string, workers int) error {
 		cfg.Workspace.GitURL = gitURL
 	}
 
-	// Update git config
-	if email := cfgMap["GIT_USER_EMAIL"]; email != "" {
-		cfg.Git.UserEmail = email
-	}
-	if name := cfgMap["GIT_USER_NAME"]; name != "" {
-		cfg.Git.UserName = name
-	}
-
 	// Update models
 	if queenModel := cfgMap["QUEEN_MODEL"]; queenModel != "" {
 		cfg.Agents.Queen.Model = queenModel

@@ -84,12 +84,13 @@ var startCmd = &cobra.Command{
 			return fmt.Errorf("failed to generate env vars: %w", err)
 		}
 
-		// Regenerate docker-compose.yml if missing or outdated
-		redisPort := cfg.Redis.Port
-		if redisPort == 0 {
-			redisPort = 6379
+		// Update worker count in config if overridden via CLI
+		if count != cfg.Agents.Workers.Count {
+			cfg.Agents.Workers.Count = count
 		}
-		if err := generateDockerComposeWithConfig(count, redisPort); err != nil {
+
+		// Regenerate docker-compose.yml with full config (prefix, ports, etc.)
+		if err := generateDockerComposeFromConfig(cfg); err != nil {
 			return fmt.Errorf("failed to generate docker-compose.yml: %w", err)
 		}
 
@@ -158,16 +159,17 @@ var startCmd = &cobra.Command{
 // waitForContainersReady waits for all containers to be running
 func waitForContainersReady(runner *shell.Runner, services []string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	prefix := getContainerPrefix()
 
 	for _, service := range services {
 		var containerName string
 		switch service {
 		case "queen":
-			containerName = "hive-queen"
+			containerName = prefix + "-queen"
 		case "redis":
-			containerName = "hive-redis"
+			containerName = prefix + "-redis"
 		default:
-			containerName = "hive-" + service
+			containerName = prefix + "-" + service
 		}
 
 		fmt.Printf("  %s", ui.StyleDim.Render(containerName+"..."))

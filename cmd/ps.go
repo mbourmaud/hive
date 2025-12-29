@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mbourmaud/hive/internal/config"
 	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -36,8 +37,12 @@ func init() {
 }
 
 func runPs(cmd *cobra.Command, args []string) error {
-	// Get running hive containers
-	listCmd := exec.Command("docker", "ps", "--filter", "name=hive-", "--format", "{{.Names}}")
+	// Get container prefix from config
+	cfg := config.LoadOrDefault()
+	prefix := cfg.GetContainerPrefix()
+
+	// Get running containers for this project
+	listCmd := exec.Command("docker", "ps", "--filter", "name="+prefix+"-", "--format", "{{.Names}}")
 	output, err := listCmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -52,7 +57,7 @@ func runPs(cmd *cobra.Command, args []string) error {
 	// Filter by agent if specified
 	if len(args) > 0 {
 		agent := args[0]
-		containerName := "hive-" + agent
+		containerName := prefix + "-" + agent
 		found := false
 		for _, c := range containers {
 			if c == containerName {
@@ -69,11 +74,11 @@ func runPs(cmd *cobra.Command, args []string) error {
 	fmt.Print(ui.Header("📊", "Agent Processes"))
 
 	for _, container := range containers {
-		if container == "" || container == "hive-redis" {
+		if container == "" || container == prefix+"-redis" {
 			continue
 		}
 
-		agentName := strings.TrimPrefix(container, "hive-")
+		agentName := strings.TrimPrefix(container, prefix+"-")
 		fmt.Printf("\n%s\n", ui.StyleBold.Render("▸ "+agentName))
 
 		// Get listening ports

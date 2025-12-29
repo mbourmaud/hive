@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mbourmaud/hive/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -39,14 +40,47 @@ var connectCmd = &cobra.Command{
 
 Execute your mandatory startup sequence:
 1. Report your identity
-2. Run hive-status to see current HIVE state
-3. Check /hive-config/hive.yaml for monitoring configuration
-4. If monitoring.queen.enabled is true, start background monitoring immediately (subscribe to drone activity logs via Redis)
-5. Report current HIVE state and confirm monitoring is active
+2. Check /hive-config/hive.yaml for required tools and MCPs:
+   a. Read the 'tools:' list and verify EACH tool is installed:
+      - Run: <tool> --version (e.g., glab --version, psql --version, jq --version)
+      - If a tool is MISSING, report it clearly and explain how to fix:
+        * For CLI tools: Add to hive.yaml hooks.init section, e.g.:
+          hooks:
+            init: |
+              apt-get update && apt-get install -y <package>
+        * For global npm packages: npm install -g <package>
+   b. Read the 'mcps:' section and verify MCPs are configured:
+      - Run: claude mcp list
+      - For each MCP in hive.yaml, check if it appears in the list
+      - If an MCP is MISSING, report it and explain the fix:
+        * Check if required env vars are set (e.g., GITLAB_TOKEN, JIRA_TOKEN)
+        * For env vars: Add them to .hive/.env or hive.yaml mcps.<name>.env
+        * Example fix for GitLab MCP:
+          mcps:
+            gitlab:
+              package: "@anthropic-ai/mcp-gitlab"
+              env: [GITLAB_TOKEN]
+   c. Report a SUMMARY with status of each tool/MCP:
+      ✅ glab: installed (v1.2.3)
+      ✅ playwright: configured
+      ❌ psql: MISSING - add to hooks.init: apt-get install -y postgresql-client
+      ❌ jira: MISSING ENV - set JIRA_TOKEN in .hive/.env
+3. Run hive-status to see current HIVE state
+4. Check monitoring configuration and start background monitoring if enabled
+5. Report current HIVE state and await instructions
 
 IMPORTANT: You can monitor drone activity in real-time via Redis streams (hive:logs:drone-1, hive:logs:all). Use this to track what drones are doing.`
 		} else {
-			initialPrompt = "Read your role and instructions from /home/agent/CLAUDE.md. Execute your mandatory startup sequence immediately: 1. Report your agent ID, 2. Run my-tasks, 3. Take action based on what you find."
+			initialPrompt = `Read your role and instructions from /home/agent/CLAUDE.md. Execute your mandatory startup sequence immediately:
+1. Report your agent ID
+2. Verify tools and MCPs from /hive-config/hive.yaml:
+   a. Read the 'tools:' list and verify each tool: <tool> --version
+   b. Read the 'mcps:' section and run: claude mcp list
+   c. Report any MISSING tools/MCPs with a clear summary:
+      ✅ tool: installed
+      ❌ tool: MISSING - explain how to fix (add to hooks.init or set env var)
+3. Run my-tasks
+4. Take action based on what you find`
 		}
 
 		// Launch Claude in the container with initial prompt
@@ -77,13 +111,27 @@ IMPORTANT: You can monitor drone activity in real-time via Redis streams (hive:l
 	},
 }
 
+// mapAgentID converts a user-friendly agent ID to container name
+// Uses the container prefix from the current project's config
 func mapAgentID(id string) string {
+	prefix := getContainerPrefix()
+	return mapAgentIDWithPrefix(id, prefix)
+}
+
+// mapAgentIDWithPrefix converts a user-friendly agent ID to container name with explicit prefix
+func mapAgentIDWithPrefix(id string, prefix string) string {
 	switch id {
 	case "queen", "q", "0":
-		return "hive-queen"
+		return fmt.Sprintf("%s-queen", prefix)
 	default:
-		return fmt.Sprintf("hive-drone-%s", id)
+		return fmt.Sprintf("%s-drone-%s", prefix, id)
 	}
+}
+
+// getContainerPrefix returns the container prefix for the current project
+func getContainerPrefix() string {
+	cfg := config.LoadOrDefault()
+	return cfg.GetContainerPrefix()
 }
 
 // shellEscape escapes a string for safe use in a shell command

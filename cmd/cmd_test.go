@@ -63,24 +63,29 @@ func TestRootCmdUsage(t *testing.T) {
 	}
 }
 
-func TestMapAgentID(t *testing.T) {
+func TestMapAgentIDWithPrefix(t *testing.T) {
 	tests := []struct {
 		input    string
+		prefix   string
 		expected string
 	}{
-		{"queen", "hive-queen"},
-		{"q", "hive-queen"},
-		{"0", "hive-queen"},
-		{"1", "hive-drone-1"},
-		{"2", "hive-drone-2"},
-		{"10", "hive-drone-10"},
+		{"queen", "hive", "hive-queen"},
+		{"q", "hive", "hive-queen"},
+		{"0", "hive", "hive-queen"},
+		{"1", "hive", "hive-drone-1"},
+		{"2", "hive", "hive-drone-2"},
+		{"10", "hive", "hive-drone-10"},
+		{"queen", "my-project", "my-project-queen"},
+		{"1", "my-project", "my-project-drone-1"},
+		{"queen", "custom", "custom-queen"},
+		{"5", "custom", "custom-drone-5"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := mapAgentID(tt.input)
+		t.Run(tt.prefix+"-"+tt.input, func(t *testing.T) {
+			result := mapAgentIDWithPrefix(tt.input, tt.prefix)
 			if result != tt.expected {
-				t.Errorf("mapAgentID(%s) = %s, expected %s", tt.input, result, tt.expected)
+				t.Errorf("mapAgentIDWithPrefix(%s, %s) = %s, expected %s", tt.input, tt.prefix, result, tt.expected)
 			}
 		})
 	}

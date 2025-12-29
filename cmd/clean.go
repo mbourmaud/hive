@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/mbourmaud/hive/internal/config"
 	"github.com/mbourmaud/hive/internal/shell"
 	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
@@ -129,6 +130,10 @@ func cleanGitignore() error {
 }
 
 func cleanDockerContainers(executor shell.CommandExecutor) error {
+	// Get container prefix for this project
+	cfg := config.LoadOrDefault()
+	prefix := cfg.GetContainerPrefix()
+
 	// Try docker-compose down if .hive/docker-compose.yml exists
 	composeFile := ".hive/docker-compose.yml"
 	if _, err := os.Stat(composeFile); err == nil {
@@ -140,8 +145,8 @@ func cleanDockerContainers(executor shell.CommandExecutor) error {
 		}
 	}
 
-	// Force remove any remaining hive containers
-	output, _, err := executor.RunCommand("docker", "ps", "-aq", "--filter", "name=hive-")
+	// Force remove any remaining containers for this project
+	output, _, err := executor.RunCommand("docker", "ps", "-aq", "--filter", "name="+prefix+"-")
 	if err == nil && len(output) > 0 {
 		containerIDs := strings.TrimSpace(output)
 		if containerIDs != "" {
@@ -156,14 +161,18 @@ func cleanDockerContainers(executor shell.CommandExecutor) error {
 	}
 
 	// Remove redis container if exists
-	_ = executor.RunQuietCommand("docker", "rm", "-f", "hive-redis") // Ignore errors, container might not exist
+	_ = executor.RunQuietCommand("docker", "rm", "-f", prefix+"-redis") // Ignore errors, container might not exist
 
 	return nil
 }
 
 func cleanDockerImages(executor shell.CommandExecutor) error {
-	// List all hive-related images
-	output, _, err := executor.RunCommand("docker", "images", "--filter", "reference=hive-*", "-q")
+	// Get container prefix for this project
+	cfg := config.LoadOrDefault()
+	prefix := cfg.GetContainerPrefix()
+
+	// List project-related images (e.g., hive-queen, hive-drone-1, etc.)
+	output, _, err := executor.RunCommand("docker", "images", "--filter", "reference="+prefix+"-*", "-q")
 	if err != nil {
 		return err
 	}

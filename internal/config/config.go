@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,12 +13,24 @@ import (
 // Config represents the Hive configuration
 type Config struct {
 	Workspace  WorkspaceConfig      `yaml:"workspace"`
-	Git        GitConfig            `yaml:"git"`
 	Redis      RedisConfig          `yaml:"redis"`
 	Agents     AgentsConfig         `yaml:"agents"`
 	Monitoring MonitoringConfig     `yaml:"monitoring"`
 	MCPs       map[string]MCPConfig `yaml:"mcps,omitempty"`
 	Tools      []string             `yaml:"tools,omitempty"` // CLI tools to install in containers
+	Hooks      HooksConfig          `yaml:"hooks,omitempty"`
+	Playwright PlaywrightConfig     `yaml:"playwright,omitempty"`
+}
+
+// HooksConfig contains custom hook scripts
+type HooksConfig struct {
+	Init string `yaml:"init,omitempty"` // Script executed at container startup
+}
+
+// PlaywrightConfig contains Playwright browser settings
+type PlaywrightConfig struct {
+	Mode            string `yaml:"mode,omitempty"`             // "headless" (default) or "connect"
+	BrowserEndpoint string `yaml:"browser_endpoint,omitempty"` // WebSocket endpoint for connect mode
 }
 
 // MCPConfig represents a Model Context Protocol server configuration
@@ -29,14 +43,9 @@ type MCPConfig struct {
 
 // WorkspaceConfig contains workspace settings
 type WorkspaceConfig struct {
-	Name   string `yaml:"name"`
-	GitURL string `yaml:"git_url,omitempty"`
-}
-
-// GitConfig contains git user settings
-type GitConfig struct {
-	UserEmail string `yaml:"user_email"`
-	UserName  string `yaml:"user_name"`
+	Name            string `yaml:"name"`
+	GitURL          string `yaml:"git_url,omitempty"`
+	ContainerPrefix string `yaml:"container_prefix,omitempty"` // Prefix for container names (default: sanitized project dir name)
 }
 
 // RedisConfig contains Redis settings
@@ -55,6 +64,7 @@ type AgentConfig struct {
 	Model      string            `yaml:"model,omitempty"`
 	Dockerfile string            `yaml:"dockerfile,omitempty"`
 	Env        map[string]string `yaml:"env,omitempty"`
+	Ports      []string          `yaml:"ports,omitempty"` // Port mappings "container:host" (e.g., "3000:13000")
 }
 
 // WorkersConfig contains worker settings
@@ -65,6 +75,7 @@ type WorkersConfig struct {
 	Dockerfile          string            `yaml:"dockerfile,omitempty"`
 	PollIntervalSeconds int               `yaml:"poll_interval_seconds,omitempty"`
 	Env                 map[string]string `yaml:"env,omitempty"`
+	Ports               []string          `yaml:"ports,omitempty"` // Port mappings for workers (auto-incremented per drone)
 }
 
 // MonitoringConfig contains background clock/polling settings
@@ -90,10 +101,6 @@ func Default() *Config {
 	return &Config{
 		Workspace: WorkspaceConfig{
 			Name: "my-project",
-		},
-		Git: GitConfig{
-			UserEmail: "",
-			UserName:  "",
 		},
 		Redis: RedisConfig{
 			Port: 6380,
@@ -175,14 +182,6 @@ func (c *Config) GenerateEnvVars() map[string]string {
 		env["GIT_REPO_URL"] = c.Workspace.GitURL
 	}
 
-	// Git
-	if c.Git.UserEmail != "" {
-		env["GIT_USER_EMAIL"] = c.Git.UserEmail
-	}
-	if c.Git.UserName != "" {
-		env["GIT_USER_NAME"] = c.Git.UserName
-	}
-
 	// Models
 	if c.Agents.Queen.Model != "" {
 		env["QUEEN_MODEL"] = c.Agents.Queen.Model
@@ -245,7 +244,6 @@ func (c *Config) WriteEnvGenerated(hiveDir string) error {
 	// Write in a predictable order
 	keys := []string{
 		"WORKSPACE_NAME", "GIT_REPO_URL",
-		"GIT_USER_EMAIL", "GIT_USER_NAME",
 		"QUEEN_MODEL", "WORKER_MODEL", "WORKER_MODE",
 		"HIVE_DOCKERFILE", "POLL_INTERVAL",
 		"REDIS_EXTERNAL_PORT",
@@ -277,4 +275,56 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// SanitizeProjectName converts a directory name to a valid container prefix
+// - Converts to lowercase
+// - Replaces spaces and special characters with hyphens
+// - Removes leading/trailing hyphens
+// - Limits length to 20 characters
+func SanitizeProjectName(name string) string {
+	// Convert to lowercase
+	name = strings.ToLower(name)
+
+	// Replace any non-alphanumeric characters with hyphens
+	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	name = reg.ReplaceAllString(name, "-")
+
+	// Remove leading/trailing hyphens
+	name = strings.Trim(name, "-")
+
+	// Limit length
+	if len(name) > 20 {
+		name = name[:20]
+		// Remove trailing hyphen if we cut in the middle
+		name = strings.TrimRight(name, "-")
+	}
+
+	// Fallback if empty
+	if name == "" {
+		name = "hive"
+	}
+
+	return name
+}
+
+// GetContainerPrefix returns the effective container prefix for this config
+// Priority: 1. Explicit container_prefix in config, 2. Sanitized workspace name, 3. "hive"
+func (c *Config) GetContainerPrefix() string {
+	if c.Workspace.ContainerPrefix != "" {
+		return c.Workspace.ContainerPrefix
+	}
+	if c.Workspace.Name != "" {
+		return SanitizeProjectName(c.Workspace.Name)
+	}
+	return "hive"
+}
+
+// GetContainerPrefixFromDir returns a container prefix based on the current directory
+func GetContainerPrefixFromDir() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "hive"
+	}
+	return SanitizeProjectName(filepath.Base(cwd))
 }
