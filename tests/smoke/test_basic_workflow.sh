@@ -204,7 +204,8 @@ fi
 
 log_test "Checking .env.generated contains config from hive.yaml"
 if [ -f ".hive/.env.generated" ]; then
-    ENV_GEN_VARS=("WORKSPACE_NAME" "GIT_USER_EMAIL")
+    # Note: GIT_USER_EMAIL/NAME removed in v1.5.0 (auto-detected from mounted .gitconfig)
+    ENV_GEN_VARS=("WORKSPACE_NAME")
     for var in "${ENV_GEN_VARS[@]}"; do
         if grep -q "^${var}=" .hive/.env.generated; then
             :  # Variable found
