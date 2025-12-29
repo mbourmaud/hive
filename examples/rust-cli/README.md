@@ -30,7 +30,7 @@ GIT_REPO_URL=https://github.com/user/my-cli.git
 2. **Start Hive with 3 workers:**
 
 ```bash
-hive init --workspace my-cli --workers 3 --no-interactive
+hive init --workspace my-cli --workers 3 -y
 ```
 
 ## Example Workflow: Build a File Search CLI

@@ -34,7 +34,7 @@ GIT_REPO_URL=https://github.com/user/my-api.git
 2. **Start Hive with 3 workers:**
 
 ```bash
-hive init --workspace my-api --workers 3 --no-interactive
+hive init --workspace my-api --workers 3 -y
 ```
 
 ## Example Workflow: Build Product Catalog API

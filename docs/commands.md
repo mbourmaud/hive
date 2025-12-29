@@ -28,7 +28,7 @@ hive init \
   --token "$CLAUDE_CODE_OAUTH_TOKEN" \
   --workspace "my-project" \
   --workers 3 \
-  --no-interactive
+  -y
 ```
 
 **Flags:**
@@ -37,7 +37,7 @@ hive init \
 - `--token string`: Claude Code OAuth token
 - `--workspace string`: Workspace name
 - `--workers int`: Number of workers (default: 2)
-- `--no-interactive`: Skip prompts (use flags)
+- `-y`: Skip prompts (use flags)
 
 **What it does:**
 1. Creates `.env` with your configuration

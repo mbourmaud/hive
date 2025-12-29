@@ -89,7 +89,11 @@ When you run `hive start`:
 workspace:
   name: my-project        # Required: workspace directory name
   git_url: ""             # Optional: auto-clone on first start
+  container_prefix: ""    # Optional: prefix for container names (v1.5.0)
+                          # Default: sanitized directory name (e.g., "my-project")
 ```
+
+**Multi-project support (v1.5.0):** The container prefix allows running multiple Hive instances on different projects simultaneously. By default, Hive uses the project directory name (lowercase, sanitized) as the prefix.
 
 #### redis
 
@@ -105,6 +109,9 @@ agents:
   queen:
     model: sonnet         # Claude model: sonnet | opus | haiku
     dockerfile: docker/Dockerfile.node
+    ports:                # Optional: port mappings (v1.5.0)
+      - "3000:13000"      # container:host
+      - "8080:18080"
     env:                  # Optional: custom environment variables
       VAR_NAME: value
 ```
@@ -117,8 +124,64 @@ agents:
     count: 2              # Number of workers (1-10)
     model: sonnet         # Claude model
     dockerfile: docker/Dockerfile.node
+    ports:                # Optional: port mappings (v1.5.0)
+      - "5173:15173"      # Auto-incremented per worker
+                          # drone-1: 15173, drone-2: 15174, etc.
     env:                  # Optional: custom environment variables
       VAR_NAME: value
+```
+
+#### hooks (v1.5.0)
+
+```yaml
+hooks:
+  init: |                 # Shell script executed at container startup
+    apt-get update && apt-get install -y postgresql-client
+    npm install -g @anthropic-ai/mcp-gitlab
+    pip install pandas
+```
+
+Custom init hooks let you install additional packages, configure tools, or run any setup commands when containers start.
+
+#### mcps (v1.5.0)
+
+```yaml
+mcps:
+  gitlab:
+    package: "@anthropic-ai/mcp-gitlab"    # NPM package to install
+    env: [GITLAB_TOKEN]                     # Required env vars (stored in .env.project)
+
+  playwright:
+    package: "@anthropic-ai/mcp-playwright"
+    args: ["--headless"]                    # Optional arguments
+
+  custom-mcp:
+    command: node                           # Custom command
+    args: ["/path/to/my-mcp.js"]           # Command arguments
+```
+
+Configure project-specific MCPs directly in hive.yaml instead of modifying global Claude settings.
+
+#### playwright (v1.5.0)
+
+```yaml
+playwright:
+  mode: headless          # "headless" (default) or "connect"
+  browser_endpoint: ""    # WebSocket endpoint for connect mode
+```
+
+**Headless mode** (default): Browsers run inside containers using pre-installed Playwright browsers.
+
+**Connect mode**: Attach to an external browser running on your Mac for visible debugging:
+
+```bash
+# 1. Start Chrome with remote debugging
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+
+# 2. Configure hive.yaml
+playwright:
+  mode: connect
+  browser_endpoint: "ws://host.docker.internal:9222"
 ```
 
 ### Available Dockerfiles

@@ -126,7 +126,7 @@ export GIT_USER_NAME="Test User"
 export WORKSPACE_NAME="test-project"
 
 if $HIVE_BIN init \
-    --no-interactive \
+    -y \
     --skip-start \
     --email "$GIT_USER_EMAIL" \
     --name "$GIT_USER_NAME" \
@@ -295,7 +295,7 @@ fi
 
 log_test "Testing re-initialization after clean"
 if $HIVE_BIN init \
-    --no-interactive \
+    -y \
     --email "$GIT_USER_EMAIL" \
     --name "$GIT_USER_NAME" \
     --workspace "$WORKSPACE_NAME" \

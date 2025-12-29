@@ -254,6 +254,7 @@ WORKER_3_MODE=daemon        # Background worker
 - **No manual prompts**: Agents receive role instructions automatically on startup
 - **Queen knows her role**: Orchestrates, monitors, assigns tasks
 - **Workers know their role**: Execute tasks, run tests, wait for CI
+- **Tool verification**: Agents verify configured tools/MCPs at startup and report missing items
 
 ### 📂 Git Worktree Isolation
 - **Parallel work**: Each agent has its own git worktree with dedicated branch
@@ -273,6 +274,62 @@ WORKER_3_MODE=daemon        # Background worker
 - **One command setup**: `hive init` does everything
 - **Sensible defaults**: Works out of the box (4GB memory per worker)
 - **Flexible override**: Configure via `hive.yaml`, `.env`, or CLI flags
+
+### 🌐 Multi-Project Support (v1.5.0)
+- **Dynamic container prefix**: Based on project directory name
+- **Run multiple Hives**: Work on different projects simultaneously
+- **No conflicts**: Each project gets its own containers/networks
+```yaml
+# hive.yaml - optional override
+workspace:
+  container_prefix: my-custom-prefix
+```
+
+### 🔌 Configurable Ports (v1.5.0)
+- **Expose dev servers**: Configure ports per agent
+- **Auto-increment**: Worker ports automatically offset
+```yaml
+# hive.yaml
+agents:
+  queen:
+    ports: ["3000:13000", "8080:18080"]
+  workers:
+    ports: ["5173:15173"]  # drone-1: 15173, drone-2: 15174, etc.
+```
+
+### 🎭 Custom Init Hooks (v1.5.0)
+- **Install packages**: Run custom scripts at container startup
+- **Configure tools**: Install CLIs, MCPs, or any dependencies
+```yaml
+# hive.yaml
+hooks:
+  init: |
+    apt-get update && apt-get install -y postgresql-client
+    npm install -g @anthropic-ai/mcp-gitlab
+```
+
+### 🔧 Project MCPs (v1.5.0)
+- **Configure MCPs in hive.yaml**: No need to modify global Claude settings
+- **Environment variables**: Define required env vars per MCP
+```yaml
+# hive.yaml
+mcps:
+  gitlab:
+    package: "@anthropic-ai/mcp-gitlab"
+    env: [GITLAB_TOKEN]
+  playwright:
+    package: "@anthropic-ai/mcp-playwright"
+```
+
+### 🎭 Playwright Dual-Mode (v1.5.0)
+- **Headless**: Run browsers inside containers (default)
+- **Connect**: Attach to visible browser on your Mac
+```yaml
+# hive.yaml
+playwright:
+  mode: connect  # or "headless"
+  browser_endpoint: "ws://host.docker.internal:9222"
+```
 
 ### 🎛️ Performance Tuning
 - **Configurable memory**: Adjust Node.js heap size via `NODE_MAX_OLD_SPACE_SIZE` in `.env`

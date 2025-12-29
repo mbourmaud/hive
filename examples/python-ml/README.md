@@ -37,7 +37,7 @@ GIT_REPO_URL=https://github.com/user/ml-project.git
 2. **Start Hive with 4 workers:**
 
 ```bash
-hive init --workspace ml-project --workers 4 --no-interactive
+hive init --workspace ml-project --workers 4 -y
 ```
 
 ## Example Workflow: Customer Churn Prediction

@@ -29,7 +29,7 @@ GIT_REPO_URL=https://github.com/user/my-app.git
 2. **Start Hive with 4 workers:**
 
 ```bash
-hive init --workspace my-app --workers 4 --no-interactive
+hive init --workspace my-app --workers 4 -y
 ```
 
 ## Example Workflow: Add User Management Feature

@@ -104,7 +104,7 @@ pass
 log_test "Running hive init (non-interactive)"
 export CLAUDE_CODE_OAUTH_TOKEN="test-token-$$"
 if $HIVE_BIN init \
-    --no-interactive \
+    -y \
     --skip-start \
     --email "test@example.com" \
     --name "Test User" \
@@ -277,7 +277,7 @@ fi
 
 log_test "Testing re-initialization after clean"
 if $HIVE_BIN init \
-    --no-interactive \
+    -y \
     --skip-start \
     --email "test@example.com" \
     --name "Test User" \

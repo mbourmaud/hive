@@ -182,7 +182,7 @@ func TestHiveConfigGeneration(t *testing.T) {
 
 	// Run hive init in non-interactive mode
 	cmd = exec.Command(hiveBin, "init",
-		"--no-interactive",
+		"-y",
 		"--skip-start",
 		"--workers", "1",
 	)
@@ -286,7 +286,7 @@ func TestDockerComposeStructure(t *testing.T) {
 	cmd.Run()
 
 	// Run hive init
-	cmd = exec.Command(hiveBin, "init", "--no-interactive", "--skip-start", "--workers", "2")
+	cmd = exec.Command(hiveBin, "init", "-y", "--skip-start", "--workers", "2")
 	cmd.Dir = tmpDir
 	cmd.Env = append(os.Environ(), "CLAUDE_CODE_OAUTH_TOKEN=test-token")
 	if err := cmd.Run(); err != nil {
