@@ -3,6 +3,9 @@
 
 FROM node:24-slim
 
+# Build argument for custom CA certificate (corporate proxy support)
+ARG CA_CERT_FILE=""
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
@@ -22,6 +25,18 @@ RUN apt-get update && apt-get install -y \
     procps \
     sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# Install custom CA certificate if provided (MUST be before any wget/curl)
+# This is required for corporate proxies like Zscaler
+COPY ca-cert.crt* /tmp/
+RUN if [ -f /tmp/ca-cert.crt ] && [ -s /tmp/ca-cert.crt ]; then \
+        echo "Installing custom CA certificate..." && \
+        cp /tmp/ca-cert.crt /usr/local/share/ca-certificates/custom-ca.crt && \
+        update-ca-certificates && \
+        echo "Custom CA certificate installed successfully"; \
+    else \
+        echo "No custom CA certificate provided, skipping..."; \
+    fi
 
 # Install Python packages for worker daemon
 RUN pip3 install --no-cache-dir redis anthropic --break-system-packages

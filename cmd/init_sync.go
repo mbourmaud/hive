@@ -105,6 +105,12 @@ func syncHostMCPs() error {
 // syncProjectCLAUDEmd copies CLAUDE.md to .hive/CLAUDE.md
 // This allows containers to access project guidelines
 func syncProjectCLAUDEmd() error {
+	// Safety check: make sure we're not running from inside .hive/
+	cwd, _ := os.Getwd()
+	if strings.HasSuffix(cwd, ".hive") || strings.Contains(cwd, ".hive"+string(filepath.Separator)) {
+		return fmt.Errorf("cannot sync from inside .hive directory")
+	}
+
 	src := "CLAUDE.md"
 	dst := filepath.Join(".hive", "CLAUDE.md")
 

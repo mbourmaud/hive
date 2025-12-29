@@ -8,13 +8,20 @@ import (
 
 // Options for docker-compose generation
 type Options struct {
-	WorkerCount     int
-	RedisPort       int      // External port (default 6379)
-	ContainerPrefix string   // Prefix for container names (default "hive")
-	QueenPorts      []string // Port mappings for queen (e.g., "3000:13000")
-	WorkerPorts     []string // Port mappings for workers (auto-incremented)
-	PlaywrightMode  string   // "headless" or "connect"
-	BrowserEndpoint string   // WebSocket endpoint for Playwright connect mode
+	WorkerCount      int
+	RedisPort        int                // External port (default 6379)
+	ContainerPrefix  string             // Prefix for container names (default "hive")
+	QueenDockerfile  string             // Dockerfile for queen (default "docker/Dockerfile.node")
+	WorkerDockerfile string             // Dockerfile for workers (default "docker/Dockerfile.node")
+	QueenPorts       []string           // Port mappings for queen (e.g., "3000:13000")
+	WorkerPorts      []string           // Port mappings for workers (auto-incremented)
+	PortsPerDrone    map[int][]string   // Per-drone port mappings (e.g., 1: ["4200:4200"])
+	ExtraVolumes     []string           // Additional volume mounts for all agents
+	PlaywrightMode   string             // "headless" or "connect"
+	BrowserEndpoint  string             // WebSocket endpoint for Playwright connect mode
+	CACertPath       string             // Path to CA certificate for corporate proxy
+	ExtraHosts       []string           // Extra /etc/hosts entries (e.g., "host.docker.internal:host-gateway")
+	NetworkEnv       map[string]string  // Network-related environment variables
 }
 
 // Generate creates a docker-compose.yml content with the specified options
@@ -35,6 +42,12 @@ func GenerateWithOptions(opts Options) string {
 	}
 	if opts.ContainerPrefix == "" {
 		opts.ContainerPrefix = "hive"
+	}
+	if opts.QueenDockerfile == "" {
+		opts.QueenDockerfile = "docker/Dockerfile.node"
+	}
+	if opts.WorkerDockerfile == "" {
+		opts.WorkerDockerfile = "docker/Dockerfile.node"
 	}
 
 	prefix := opts.ContainerPrefix
@@ -72,7 +85,7 @@ services:
 	sb.WriteString(fmt.Sprintf(`  queen:
     build:
       context: .
-      dockerfile: docker/Dockerfile.node
+      dockerfile: %s
     container_name: %s-queen
     hostname: queen
     env_file:
@@ -84,7 +97,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-`, prefix))
+`, opts.QueenDockerfile, prefix))
 
 	// Add Playwright environment variables if configured
 	if opts.PlaywrightMode != "" {
@@ -92,6 +105,19 @@ services:
 	}
 	if opts.BrowserEndpoint != "" {
 		sb.WriteString(fmt.Sprintf("      - PLAYWRIGHT_BROWSER_ENDPOINT=%s\n", opts.BrowserEndpoint))
+	}
+
+	// Add network environment variables (for duck services, etc.)
+	for key, value := range opts.NetworkEnv {
+		sb.WriteString(fmt.Sprintf("      - %s=%s\n", key, value))
+	}
+
+	// Add extra_hosts if configured (for host.docker.internal on Linux)
+	if len(opts.ExtraHosts) > 0 {
+		sb.WriteString("    extra_hosts:\n")
+		for _, host := range opts.ExtraHosts {
+			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", host))
+		}
 	}
 
 	// Add queen ports if configured
@@ -102,7 +128,7 @@ services:
 		}
 	}
 
-	sb.WriteString(fmt.Sprintf(`    volumes:
+	sb.WriteString(`    volumes:
       - ./workspaces/queen:/workspace
       - node-modules-queen:/workspace/node_modules
       - ../.git:/workspace-git
@@ -118,7 +144,14 @@ services:
       - pnpm-store-queen:/home/agent/.local/share/pnpm
       - node-modules-cache:/home/agent/node_modules_cache
       - tools-cache:/home/agent/.tools-cache
-    depends_on:
+`)
+
+	// Add extra volumes if configured
+	for _, vol := range opts.ExtraVolumes {
+		sb.WriteString(fmt.Sprintf("      - %s\n", vol))
+	}
+
+	sb.WriteString(fmt.Sprintf(`    depends_on:
       redis:
         condition: service_healthy
     stdin_open: true
@@ -165,7 +198,7 @@ func generateWorkerService(index int, prefix string, opts Options) string {
 	sb.WriteString(fmt.Sprintf(`  drone-%d:
     build:
       context: .
-      dockerfile: docker/Dockerfile.node
+      dockerfile: %s
     container_name: %s-drone-%d
     hostname: drone-%d
     env_file:
@@ -178,7 +211,7 @@ func generateWorkerService(index int, prefix string, opts Options) string {
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-`, index, prefix, index, index, index))
+`, index, opts.WorkerDockerfile, prefix, index, index, index))
 
 	// Add Playwright environment variables if configured
 	if opts.PlaywrightMode != "" {
@@ -188,11 +221,31 @@ func generateWorkerService(index int, prefix string, opts Options) string {
 		sb.WriteString(fmt.Sprintf("      - PLAYWRIGHT_BROWSER_ENDPOINT=%s\n", opts.BrowserEndpoint))
 	}
 
-	// Add worker ports if configured (auto-increment host port for each worker)
-	if len(opts.WorkerPorts) > 0 {
+	// Add network environment variables (for duck services, etc.)
+	for key, value := range opts.NetworkEnv {
+		sb.WriteString(fmt.Sprintf("      - %s=%s\n", key, value))
+	}
+
+	// Add extra_hosts if configured (for host.docker.internal on Linux)
+	if len(opts.ExtraHosts) > 0 {
+		sb.WriteString("    extra_hosts:\n")
+		for _, host := range opts.ExtraHosts {
+			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", host))
+		}
+	}
+
+	// Add worker ports: per-drone ports take priority over generic worker ports
+	dronePorts := opts.PortsPerDrone[index]
+	if len(dronePorts) > 0 {
+		// Use specific ports for this drone
+		sb.WriteString("    ports:\n")
+		for _, port := range dronePorts {
+			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", port))
+		}
+	} else if len(opts.WorkerPorts) > 0 {
+		// Fall back to auto-incremented generic worker ports
 		sb.WriteString("    ports:\n")
 		for _, port := range opts.WorkerPorts {
-			// Parse port mapping and increment host port based on worker index
 			incrementedPort := incrementPortForWorker(port, index)
 			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", incrementedPort))
 		}
@@ -214,7 +267,14 @@ func generateWorkerService(index int, prefix string, opts Options) string {
       - pnpm-store-drone-%d:/home/agent/.local/share/pnpm
       - node-modules-cache:/home/agent/node_modules_cache
       - tools-cache:/home/agent/.tools-cache
-    depends_on:
+`, index, index, index))
+
+	// Add extra volumes if configured
+	for _, vol := range opts.ExtraVolumes {
+		sb.WriteString(fmt.Sprintf("      - %s\n", vol))
+	}
+
+	sb.WriteString(fmt.Sprintf(`    depends_on:
       redis:
         condition: service_healthy
     stdin_open: true
@@ -222,7 +282,7 @@ func generateWorkerService(index int, prefix string, opts Options) string {
     networks:
       - %s-network
 
-`, index, index, index, prefix))
+`, prefix))
 
 	return sb.String()
 }

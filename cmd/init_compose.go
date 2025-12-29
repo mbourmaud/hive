@@ -25,13 +25,20 @@ func generateDockerComposeWithConfig(workers int, redisPort int) error {
 // generateDockerComposeFromConfig creates docker-compose.yml from a full Config object
 func generateDockerComposeFromConfig(cfg *config.Config) error {
 	opts := compose.Options{
-		WorkerCount:     cfg.Agents.Workers.Count,
-		RedisPort:       cfg.Redis.Port,
-		ContainerPrefix: cfg.GetContainerPrefix(),
-		QueenPorts:      cfg.Agents.Queen.Ports,
-		WorkerPorts:     cfg.Agents.Workers.Ports,
-		PlaywrightMode:  cfg.Playwright.Mode,
-		BrowserEndpoint: cfg.Playwright.BrowserEndpoint,
+		WorkerCount:      cfg.Agents.Workers.Count,
+		RedisPort:        cfg.Redis.Port,
+		ContainerPrefix:  cfg.GetContainerPrefix(),
+		QueenDockerfile:  cfg.Agents.Queen.Dockerfile,
+		WorkerDockerfile: cfg.Agents.Workers.Dockerfile,
+		QueenPorts:       cfg.Agents.Queen.Ports,
+		WorkerPorts:      cfg.Agents.Workers.Ports,
+		PortsPerDrone:    cfg.Agents.Workers.PortsPerDrone,
+		ExtraVolumes:     cfg.Volumes,
+		PlaywrightMode:   cfg.Playwright.Mode,
+		BrowserEndpoint:  cfg.Playwright.BrowserEndpoint,
+		CACertPath:       cfg.Network.CACert,
+		ExtraHosts:       cfg.Network.ExtraHosts,
+		NetworkEnv:       cfg.Network.Env,
 	}
 	content := compose.GenerateWithOptions(opts)
 	return os.WriteFile(".hive/docker-compose.yml", []byte(content), 0644)

@@ -108,6 +108,32 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 
+	// Sync custom Dockerfiles from project root to .hive/
+	if cfg.Agents.Queen.Dockerfile != "" || cfg.Agents.Workers.Dockerfile != "" {
+		fmt.Printf("%s ", ui.StyleDim.Render("🐳 Syncing custom Dockerfiles..."))
+		if err := syncCustomDockerfiles(cfg); err != nil {
+			fmt.Printf("%s\n", ui.StyleYellow.Render("⚠️ "+err.Error()))
+		} else {
+			fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
+		}
+	}
+
+	// Regenerate docker-compose.yml from hive.yaml config
+	fmt.Printf("%s ", ui.StyleDim.Render("📝 Regenerating docker-compose.yml..."))
+	if err := generateDockerComposeFromConfig(cfg); err != nil {
+		return fmt.Errorf("failed to regenerate docker-compose.yml: %w", err)
+	}
+	fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
+
+	// Copy CA certificate if configured (for corporate proxy support)
+	if cfg.Network.CACert != "" {
+		fmt.Printf("%s ", ui.StyleDim.Render("🔐 Copying CA certificate..."))
+		if err := copyCACertificate(cfg); err != nil {
+			return fmt.Errorf("failed to copy CA certificate: %w", err)
+		}
+		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
+	}
+
 	// Step 2: Pull base images (optional)
 	if updatePull {
 		fmt.Printf("%s ", ui.StyleDim.Render("📥 Pulling latest base images..."))

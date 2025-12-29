@@ -547,6 +547,23 @@ fi
 # Custom Init Hook (from hive.yaml)
 # ============================================
 
+# Install yq if not available (required for reading hooks from hive.yaml)
+if [ -f "/hive-config/hive.yaml" ] && ! command -v yq &> /dev/null; then
+    log "[*] Installing yq (required for hooks.init)..."
+    ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
+    if [ "$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="amd64"; fi
+
+    if wget -q "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_${ARCH}" \
+        -O /tmp/yq 2>/dev/null; then
+        sudo install /tmp/yq /usr/local/bin/yq 2>/dev/null || \
+            (mkdir -p ~/.local/bin && mv /tmp/yq ~/.local/bin/yq && chmod +x ~/.local/bin/yq && export PATH="$HOME/.local/bin:$PATH")
+        rm -f /tmp/yq
+        log "[+] yq installed successfully"
+    else
+        log "[!] Failed to install yq - hooks.init will be skipped"
+    fi
+fi
+
 # Execute custom init hook if defined in hive.yaml
 if [ -f "/hive-config/hive.yaml" ] && command -v yq &> /dev/null; then
     INIT_HOOK=$(yq -r '.hooks.init // empty' /hive-config/hive.yaml 2>/dev/null)
@@ -569,6 +586,11 @@ if [ -f "/hive-config/hive.yaml" ] && command -v yq &> /dev/null; then
         fi
 
         rm -f "$HOOK_FILE"
+    fi
+else
+    # Check if hooks.init is configured but yq is not available
+    if [ -f "/hive-config/hive.yaml" ] && grep -q "hooks:" /hive-config/hive.yaml 2>/dev/null; then
+        log "[!] WARNING: hooks.init found but yq not available - hooks will not execute"
     fi
 fi
 

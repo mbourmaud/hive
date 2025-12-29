@@ -246,12 +246,49 @@ func cleanWorktrees(runner *shell.Runner) error {
 		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
 	}
 
+	// Delete hive branches (hive/queen, hive/drone-*)
+	fmt.Printf("  %s ", ui.StyleDim.Render("🌿 Deleting hive branches..."))
+	branchesDeleted := 0
+
+	// Get list of hive branches
+	listCmd := exec.Command("git", "branch", "--list", "hive/*")
+	output, err := listCmd.Output()
+	if err == nil && len(output) > 0 {
+		branches := strings.Split(strings.TrimSpace(string(output)), "\n")
+		for _, branch := range branches {
+			branch = strings.TrimSpace(branch)
+			branch = strings.TrimPrefix(branch, "* ") // Remove current branch marker
+			if branch == "" {
+				continue
+			}
+
+			// Delete the branch
+			deleteCmd := exec.Command("git", "branch", "-D", branch)
+			if err := runner.RunQuiet(deleteCmd); err == nil {
+				branchesDeleted++
+			}
+		}
+	}
+
+	if branchesDeleted > 0 {
+		fmt.Printf("%s (%d branch%s)\n", ui.StyleGreen.Render("✓"), branchesDeleted, pluralizeEs(branchesDeleted))
+	} else {
+		fmt.Printf("%s\n", ui.StyleGreen.Render("✓"))
+	}
+
 	return nil
 }
 
 func pluralize(count int) string {
 	if count > 1 {
 		return "s"
+	}
+	return ""
+}
+
+func pluralizeEs(count int) string {
+	if count > 1 {
+		return "es"
 	}
 	return ""
 }

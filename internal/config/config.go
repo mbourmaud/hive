@@ -17,9 +17,18 @@ type Config struct {
 	Agents     AgentsConfig         `yaml:"agents"`
 	Monitoring MonitoringConfig     `yaml:"monitoring"`
 	MCPs       map[string]MCPConfig `yaml:"mcps,omitempty"`
-	Tools      []string             `yaml:"tools,omitempty"` // CLI tools to install in containers
+	Tools      []string             `yaml:"tools,omitempty"`   // CLI tools to install in containers
+	Volumes    []string             `yaml:"volumes,omitempty"` // Additional volume mounts for all agents
 	Hooks      HooksConfig          `yaml:"hooks,omitempty"`
 	Playwright PlaywrightConfig     `yaml:"playwright,omitempty"`
+	Network    NetworkConfig        `yaml:"network,omitempty"`
+}
+
+// NetworkConfig contains network/proxy settings
+type NetworkConfig struct {
+	CACert     string            `yaml:"ca_cert,omitempty"`     // Path to CA certificate for corporate proxy
+	ExtraHosts []string          `yaml:"extra_hosts,omitempty"` // Extra /etc/hosts entries (e.g., "host.docker.internal:host-gateway")
+	Env        map[string]string `yaml:"env,omitempty"`         // Network-related environment variables
 }
 
 // HooksConfig contains custom hook scripts
@@ -69,13 +78,14 @@ type AgentConfig struct {
 
 // WorkersConfig contains worker settings
 type WorkersConfig struct {
-	Count               int               `yaml:"count"`
-	Mode                string            `yaml:"mode,omitempty"` // "interactive" (default) or "daemon"
-	Model               string            `yaml:"model,omitempty"`
-	Dockerfile          string            `yaml:"dockerfile,omitempty"`
-	PollIntervalSeconds int               `yaml:"poll_interval_seconds,omitempty"`
-	Env                 map[string]string `yaml:"env,omitempty"`
-	Ports               []string          `yaml:"ports,omitempty"` // Port mappings for workers (auto-incremented per drone)
+	Count               int                  `yaml:"count"`
+	Mode                string               `yaml:"mode,omitempty"` // "interactive" (default) or "daemon"
+	Model               string               `yaml:"model,omitempty"`
+	Dockerfile          string               `yaml:"dockerfile,omitempty"`
+	PollIntervalSeconds int                  `yaml:"poll_interval_seconds,omitempty"`
+	Env                 map[string]string    `yaml:"env,omitempty"`
+	Ports               []string             `yaml:"ports,omitempty"`         // Port mappings for workers (auto-incremented per drone)
+	PortsPerDrone       map[int][]string     `yaml:"ports_per_drone,omitempty"` // Per-drone port mappings (e.g., 1: ["4200:4200"])
 }
 
 // MonitoringConfig contains background clock/polling settings

@@ -214,6 +214,29 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Print(ui.ProgressLine("Generated .hive/.env.generated", "✓"))
 
+	// Sync custom Dockerfiles from project root to .hive/
+	if hiveCfg.Agents.Queen.Dockerfile != "" || hiveCfg.Agents.Workers.Dockerfile != "" {
+		if err := syncCustomDockerfiles(hiveCfg); err != nil {
+			fmt.Printf("  %s\n", ui.Warning("Custom Dockerfiles: "+err.Error()))
+		} else {
+			fmt.Print(ui.ProgressLine("Synced custom Dockerfiles", "✓"))
+		}
+	}
+
+	// Regenerate docker-compose.yml with full config (ports, volumes, dockerfile paths)
+	if err := generateDockerComposeFromConfig(hiveCfg); err != nil {
+		return fmt.Errorf("failed to regenerate docker-compose.yml: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Regenerated docker-compose.yml with config", "✓"))
+
+	// Copy CA certificate if configured (for corporate proxy support)
+	if hiveCfg.Network.CACert != "" {
+		if err := copyCACertificate(hiveCfg); err != nil {
+			return fmt.Errorf("failed to copy CA certificate: %w", err)
+		}
+		fmt.Print(ui.ProgressLine("Copied CA certificate for proxy", "✓"))
+	}
+
 	// Update .gitignore
 	if err := updateGitignore(); err != nil {
 		fmt.Printf("  %s\n", ui.Warning(".gitignore: "+err.Error()))
