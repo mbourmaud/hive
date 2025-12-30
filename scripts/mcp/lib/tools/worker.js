@@ -74,6 +74,34 @@ const TOOL_DEFINITIONS = [
       },
       required: ['message']
     }
+  },
+  {
+    name: 'hive_get_test_url',
+    description: 'Get the accessible URL for a container port for autonomous testing. Use with Playwright MCP (browser_navigate) or iOS MCP (ios_open_url) to test your running app.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        port: {
+          type: 'number',
+          description: 'Container port your app is running on (e.g., 3000 for web, 8081 for Metro)'
+        },
+        protocol: {
+          type: 'string',
+          enum: ['http', 'https', 'exp'],
+          description: 'URL protocol (default: http). Use "exp" for Expo apps.'
+        }
+      },
+      required: ['port']
+    }
+  },
+  {
+    name: 'hive_list_exposed_ports',
+    description: 'List all exposed port mappings for this drone. Shows which container ports are mapped to which host ports.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
   }
 ];
 
@@ -371,8 +399,113 @@ const handlers = {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  },
+
+  /**
+   * Get test URL for a container port
+   * Parses HIVE_EXPOSED_PORTS env var to find the host port mapping
+   */
+  async hive_get_test_url(args) {
+    try {
+      const { port, protocol = 'http' } = args;
+      const hostBase = process.env.HIVE_HOST_BASE || 'host.docker.internal';
+      const exposedPorts = process.env.HIVE_EXPOSED_PORTS || '';
+
+      if (!exposedPorts) {
+        return {
+          success: false,
+          error: 'No exposed ports configured. Add ports_per_drone to your hive.yaml.',
+          hint: 'Example in hive.yaml:\n  agents:\n    workers:\n      ports_per_drone:\n        1: ["3000:13000", "8081:18081"]'
+        };
+      }
+
+      // Parse port mappings: "3000:13000,8081:18081"
+      const portMappings = parsePortMappings(exposedPorts);
+      const mapping = portMappings.find(m => m.container === port);
+
+      if (!mapping) {
+        return {
+          success: false,
+          error: `Port ${port} is not exposed. Available ports: ${portMappings.map(m => m.container).join(', ')}`,
+          available_ports: portMappings
+        };
+      }
+
+      // Construct URL based on protocol
+      let url;
+      if (protocol === 'exp') {
+        // Expo URL format: exp://host:port
+        url = `exp://${hostBase}:${mapping.host}`;
+      } else {
+        url = `${protocol}://${hostBase}:${mapping.host}`;
+      }
+
+      return {
+        success: true,
+        container_port: mapping.container,
+        host_port: mapping.host,
+        host_base: hostBase,
+        url,
+        usage: protocol === 'exp'
+          ? `Use ios_open_url with this URL to open in Expo Go`
+          : `Use browser_navigate with this URL to open in Playwright`
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * List all exposed port mappings for this drone
+   */
+  async hive_list_exposed_ports() {
+    try {
+      const hostBase = process.env.HIVE_HOST_BASE || 'host.docker.internal';
+      const exposedPorts = process.env.HIVE_EXPOSED_PORTS || '';
+      const drone = config.getAgentName();
+
+      if (!exposedPorts) {
+        return {
+          success: true,
+          drone,
+          message: 'No exposed ports configured',
+          ports: [],
+          hint: 'Add ports_per_drone to your hive.yaml to expose container ports'
+        };
+      }
+
+      const portMappings = parsePortMappings(exposedPorts);
+
+      return {
+        success: true,
+        drone,
+        host_base: hostBase,
+        ports: portMappings.map(m => ({
+          container: m.container,
+          host: m.host,
+          http_url: `http://${hostBase}:${m.host}`,
+          https_url: `https://${hostBase}:${m.host}`,
+          expo_url: `exp://${hostBase}:${m.host}`
+        }))
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 };
+
+/**
+ * Parse HIVE_EXPOSED_PORTS format: "3000:13000,8081:18081"
+ * Returns array of { container: number, host: number }
+ */
+function parsePortMappings(portsString) {
+  if (!portsString) return [];
+
+  return portsString.split(',').map(mapping => {
+    const [container, host] = mapping.trim().split(':').map(Number);
+    return { container, host };
+  }).filter(m => !isNaN(m.container) && !isNaN(m.host));
+}
 
 module.exports = {
   definitions: TOOL_DEFINITIONS,

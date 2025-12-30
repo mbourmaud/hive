@@ -144,6 +144,7 @@ services:
       - pnpm-store-queen:/home/agent/.local/share/pnpm
       - node-modules-cache:/home/agent/node_modules_cache
       - tools-cache:/home/agent/.tools-cache
+      - ./workspaces/queen/.claude-projects:/home/agent/.claude/projects
 `)
 
 	// Add extra volumes if configured
@@ -226,6 +227,25 @@ func generateWorkerService(index int, prefix string, opts Options) string {
 		sb.WriteString(fmt.Sprintf("      - %s=%s\n", key, value))
 	}
 
+	// Get port mappings for this drone (for HIVE_EXPOSED_PORTS)
+	dronePorts := opts.PortsPerDrone[index]
+	var effectivePorts []string
+	if len(dronePorts) > 0 {
+		effectivePorts = dronePorts
+	} else if len(opts.WorkerPorts) > 0 {
+		// Calculate auto-incremented ports
+		for _, port := range opts.WorkerPorts {
+			effectivePorts = append(effectivePorts, incrementPortForWorker(port, index))
+		}
+	}
+
+	// Add HIVE_EXPOSED_PORTS for autonomous testing (port discovery)
+	if len(effectivePorts) > 0 {
+		sb.WriteString(fmt.Sprintf("      - HIVE_EXPOSED_PORTS=%s\n", formatPortMappings(effectivePorts)))
+	}
+	// Add HIVE_HOST_BASE for constructing test URLs
+	sb.WriteString("      - HIVE_HOST_BASE=host.docker.internal\n")
+
 	// Add extra_hosts if configured (for host.docker.internal on Linux)
 	if len(opts.ExtraHosts) > 0 {
 		sb.WriteString("    extra_hosts:\n")
@@ -233,21 +253,11 @@ func generateWorkerService(index int, prefix string, opts Options) string {
 			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", host))
 		}
 	}
-
-	// Add worker ports: per-drone ports take priority over generic worker ports
-	dronePorts := opts.PortsPerDrone[index]
-	if len(dronePorts) > 0 {
-		// Use specific ports for this drone
+	// Add port mappings (using effectivePorts already calculated above)
+	if len(effectivePorts) > 0 {
 		sb.WriteString("    ports:\n")
-		for _, port := range dronePorts {
+		for _, port := range effectivePorts {
 			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", port))
-		}
-	} else if len(opts.WorkerPorts) > 0 {
-		// Fall back to auto-incremented generic worker ports
-		sb.WriteString("    ports:\n")
-		for _, port := range opts.WorkerPorts {
-			incrementedPort := incrementPortForWorker(port, index)
-			sb.WriteString(fmt.Sprintf("      - \"%s\"\n", incrementedPort))
 		}
 	}
 
@@ -267,7 +277,8 @@ func generateWorkerService(index int, prefix string, opts Options) string {
       - pnpm-store-drone-%d:/home/agent/.local/share/pnpm
       - node-modules-cache:/home/agent/node_modules_cache
       - tools-cache:/home/agent/.tools-cache
-`, index, index, index))
+      - ./workspaces/drone-%d/.claude-projects:/home/agent/.claude/projects
+`, index, index, index, index))
 
 	// Add extra volumes if configured
 	for _, vol := range opts.ExtraVolumes {
@@ -304,4 +315,12 @@ func incrementPortForWorker(portMapping string, workerIndex int) string {
 	// Increment host port: drone-1 uses base port, drone-2 uses base+1, etc.
 	newHostPort := hostPort + workerIndex - 1
 	return fmt.Sprintf("%s:%d", containerPort, newHostPort)
+}
+
+// formatPortMappings converts a list of port mappings to a comma-separated string
+// for the HIVE_EXPOSED_PORTS environment variable.
+// Input: ["3000:13000", "8081:18081"]
+// Output: "3000:13000,8081:18081"
+func formatPortMappings(ports []string) string {
+	return strings.Join(ports, ",")
 }

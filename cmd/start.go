@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mbourmaud/hive/internal/config"
+	"github.com/mbourmaud/hive/internal/hostmcp"
 	"github.com/mbourmaud/hive/internal/preflight"
 	"github.com/mbourmaud/hive/internal/shell"
 	"github.com/mbourmaud/hive/internal/ui"
@@ -109,6 +110,14 @@ var startCmd = &cobra.Command{
 			fmt.Printf("%s\n", ui.Warning("CLAUDE.md sync: "+err.Error()))
 		}
 
+		// Start host MCPs if configured
+		if cfg.HostMCPs.IsPlaywrightEnabled() || cfg.HostMCPs.IsIOSEnabled() || cfg.HostMCPs.IsClipboardEnabled() {
+			mcpManager := hostmcp.NewManager(hiveDir, cfg)
+			if err := startHostMCPs(mcpManager, cfg); err != nil {
+				fmt.Printf("%s\n", ui.Warning("Host MCPs: "+err.Error()))
+			}
+		}
+
 		// Header
 		fmt.Print(ui.Header("🚀", "Starting Hive"))
 		fmt.Printf("%sQueen + %d worker%s%s\n\n", ui.StyleDim.Render(""), count, pluralize(count), "")
@@ -189,6 +198,77 @@ func waitForContainersReady(runner *shell.Runner, services []string, timeout tim
 
 			time.Sleep(1 * time.Second)
 		}
+	}
+
+	return nil
+}
+
+// startHostMCPs starts configured host MCP servers
+func startHostMCPs(manager *hostmcp.Manager, cfg *config.Config) error {
+	var started []string
+	var errors []string
+
+	// Start Playwright MCP if enabled
+	if cfg.HostMCPs.IsPlaywrightEnabled() {
+		// Check prerequisites
+		if err := hostmcp.CheckPlaywrightInstalled(); err != nil {
+			errors = append(errors, fmt.Sprintf("playwright: %v", err))
+		} else {
+			fmt.Printf("%s Starting Playwright MCP on port %d...\n",
+				ui.StyleCyan.Render("🌐"),
+				cfg.HostMCPs.GetPlaywrightPort())
+
+			if err := manager.StartPlaywright(); err != nil {
+				errors = append(errors, fmt.Sprintf("playwright: %v", err))
+			} else {
+				started = append(started, fmt.Sprintf("playwright (port %d)", cfg.HostMCPs.GetPlaywrightPort()))
+			}
+		}
+	}
+
+	// Start iOS MCP if enabled
+	if cfg.HostMCPs.IsIOSEnabled() {
+		// Check prerequisites
+		if err := hostmcp.CheckXcodeInstalled(); err != nil {
+			errors = append(errors, fmt.Sprintf("ios: %v", err))
+		} else {
+			fmt.Printf("%s Starting iOS MCP on port %d...\n",
+				ui.StyleCyan.Render("📱"),
+				cfg.HostMCPs.GetIOSPort())
+
+			if err := manager.StartIOS(); err != nil {
+				errors = append(errors, fmt.Sprintf("ios: %v", err))
+			} else {
+				started = append(started, fmt.Sprintf("ios (port %d)", cfg.HostMCPs.GetIOSPort()))
+			}
+		}
+	}
+
+	// Start Clipboard MCP if enabled
+	if cfg.HostMCPs.IsClipboardEnabled() {
+		fmt.Printf("%s Starting Clipboard MCP on port %d...\n",
+			ui.StyleCyan.Render("📋"),
+			cfg.HostMCPs.GetClipboardPort())
+
+		if !hostmcp.CheckPngpasteInstalled() {
+			fmt.Printf("%s pngpaste not installed - image clipboard disabled (brew install pngpaste)\n",
+				ui.StyleYellow.Render("⚠"))
+		}
+
+		if err := manager.StartClipboard(); err != nil {
+			errors = append(errors, fmt.Sprintf("clipboard: %v", err))
+		} else {
+			started = append(started, fmt.Sprintf("clipboard (port %d)", cfg.HostMCPs.GetClipboardPort()))
+		}
+	}
+
+	// Print summary
+	if len(started) > 0 {
+		fmt.Printf("%s Host MCPs running: %v\n\n", ui.StyleGreen.Render("✓"), started)
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("some host MCPs failed: %v", errors)
 	}
 
 	return nil

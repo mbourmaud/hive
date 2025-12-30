@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/mbourmaud/hive/internal/compose"
@@ -24,6 +25,23 @@ func generateDockerComposeWithConfig(workers int, redisPort int) error {
 
 // generateDockerComposeFromConfig creates docker-compose.yml from a full Config object
 func generateDockerComposeFromConfig(cfg *config.Config) error {
+	// Start with network env from config or create empty map
+	networkEnv := cfg.Network.Env
+	if networkEnv == nil {
+		networkEnv = make(map[string]string)
+	}
+
+	// Add host MCP ports if enabled
+	if cfg.HostMCPs.IsPlaywrightEnabled() {
+		networkEnv["HOST_MCP_PLAYWRIGHT_PORT"] = fmt.Sprintf("%d", cfg.HostMCPs.GetPlaywrightPort())
+	}
+	if cfg.HostMCPs.IsIOSEnabled() {
+		networkEnv["HOST_MCP_IOS_PORT"] = fmt.Sprintf("%d", cfg.HostMCPs.GetIOSPort())
+	}
+	if cfg.HostMCPs.IsClipboardEnabled() {
+		networkEnv["HOST_MCP_CLIPBOARD_PORT"] = fmt.Sprintf("%d", cfg.HostMCPs.GetClipboardPort())
+	}
+
 	opts := compose.Options{
 		WorkerCount:      cfg.Agents.Workers.Count,
 		RedisPort:        cfg.Redis.Port,
@@ -38,7 +56,7 @@ func generateDockerComposeFromConfig(cfg *config.Config) error {
 		BrowserEndpoint:  cfg.Playwright.BrowserEndpoint,
 		CACertPath:       cfg.Network.CACert,
 		ExtraHosts:       cfg.Network.ExtraHosts,
-		NetworkEnv:       cfg.Network.Env,
+		NetworkEnv:       networkEnv,
 	}
 	content := compose.GenerateWithOptions(opts)
 	return os.WriteFile(".hive/docker-compose.yml", []byte(content), 0644)

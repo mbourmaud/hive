@@ -147,6 +147,52 @@ mcps["hive"] = {
 }
 print("  - hive: (built-in)")
 
+# 4. Add Host MCPs (SSE-based, running on host machine)
+# These are passed via environment variables from hive start
+import urllib.request
+import urllib.error
+
+def check_host_mcp(name, port):
+    """Check if a host MCP is reachable via SSE"""
+    try:
+        url = f"http://host.docker.internal:{port}/sse"
+        req = urllib.request.Request(url, method='HEAD')
+        req.add_header('Accept', 'text/event-stream')
+        urllib.request.urlopen(req, timeout=2)
+        return True
+    except:
+        return False
+
+# Playwright MCP on host
+playwright_port = os.environ.get("HOST_MCP_PLAYWRIGHT_PORT")
+if playwright_port:
+    sse_url = f"http://host.docker.internal:{playwright_port}/sse"
+    mcps["playwright"] = {
+        "type": "sse",
+        "url": sse_url
+    }
+    print(f"  - playwright: (host SSE @ port {playwright_port})")
+
+# iOS MCP on host
+ios_port = os.environ.get("HOST_MCP_IOS_PORT")
+if ios_port:
+    sse_url = f"http://host.docker.internal:{ios_port}/sse"
+    mcps["ios"] = {
+        "type": "sse",
+        "url": sse_url
+    }
+    print(f"  - ios: (host SSE @ port {ios_port})")
+
+# Clipboard MCP on host
+clipboard_port = os.environ.get("HOST_MCP_CLIPBOARD_PORT")
+if clipboard_port:
+    sse_url = f"http://host.docker.internal:{clipboard_port}/sse"
+    mcps["clipboard"] = {
+        "type": "sse",
+        "url": sse_url
+    }
+    print(f"  - clipboard: (host SSE @ port {clipboard_port})")
+
 # 3. Read existing ~/.claude.json (has OAuth token from earlier in entrypoint)
 claude_json_path = os.path.expanduser("~/.claude.json")
 claude_json = {}
@@ -236,6 +282,12 @@ if [ -f "/hive-config/templates/CLAUDE-QUEEN.md" ]; then
 fi
 if [ -f "/hive-config/templates/CLAUDE-WORKER.md" ]; then
     ln -sf /hive-config/templates/CLAUDE-WORKER.md ~/CLAUDE-WORKER.md
+fi
+
+# Link Hive Capabilities reference (comprehensive guide to all available tools)
+if [ -f "/hive-config/templates/HIVE-CAPABILITIES.md" ]; then
+    ln -sf /hive-config/templates/HIVE-CAPABILITIES.md ~/HIVE-CAPABILITIES.md
+    log "[+] Linked Hive Capabilities to ~/HIVE-CAPABILITIES.md"
 fi
 
 # Create hive-config symlink in workspace for relative path access

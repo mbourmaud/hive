@@ -17,8 +17,9 @@ type Config struct {
 	Agents     AgentsConfig         `yaml:"agents"`
 	Monitoring MonitoringConfig     `yaml:"monitoring"`
 	MCPs       map[string]MCPConfig `yaml:"mcps,omitempty"`
-	Tools      []string             `yaml:"tools,omitempty"`   // CLI tools to install in containers
-	Volumes    []string             `yaml:"volumes,omitempty"` // Additional volume mounts for all agents
+	HostMCPs   HostMCPsConfig       `yaml:"host_mcps,omitempty"` // MCPs that run on host machine
+	Tools      []string             `yaml:"tools,omitempty"`     // CLI tools to install in containers
+	Volumes    []string             `yaml:"volumes,omitempty"`   // Additional volume mounts for all agents
 	Hooks      HooksConfig          `yaml:"hooks,omitempty"`
 	Playwright PlaywrightConfig     `yaml:"playwright,omitempty"`
 	Network    NetworkConfig        `yaml:"network,omitempty"`
@@ -36,10 +37,93 @@ type HooksConfig struct {
 	Init string `yaml:"init,omitempty"` // Script executed at container startup
 }
 
-// PlaywrightConfig contains Playwright browser settings
+// PlaywrightConfig contains Playwright browser settings (for containers)
 type PlaywrightConfig struct {
 	Mode            string `yaml:"mode,omitempty"`             // "headless" (default) or "connect"
 	BrowserEndpoint string `yaml:"browser_endpoint,omitempty"` // WebSocket endpoint for connect mode
+}
+
+// HostMCPsConfig contains configuration for MCPs that run on the host machine
+// These MCPs are started by hive and exposed via SSE to containers
+type HostMCPsConfig struct {
+	Playwright *PlaywrightHostMCP `yaml:"playwright,omitempty"`
+	IOS        *IOSHostMCP        `yaml:"ios,omitempty"`
+	Clipboard  *ClipboardHostMCP  `yaml:"clipboard,omitempty"`
+}
+
+// PlaywrightHostMCP configures the Playwright MCP server running on host
+type PlaywrightHostMCP struct {
+	Enabled  bool   `yaml:"enabled"`            // Enable Playwright host MCP (default: false)
+	Port     int    `yaml:"port,omitempty"`     // SSE port (default: 8931)
+	Headless bool   `yaml:"headless,omitempty"` // Run browser headless (default: true)
+	Browser  string `yaml:"browser,omitempty"`  // Browser type: chromium, firefox, webkit (default: chromium)
+}
+
+// IOSHostMCP configures the iOS MCP server running on host
+type IOSHostMCP struct {
+	Enabled bool `yaml:"enabled"`        // Enable iOS host MCP (default: false)
+	Port    int  `yaml:"port,omitempty"` // SSE port (default: 8932)
+}
+
+// ClipboardHostMCP configures the Clipboard MCP server running on host
+type ClipboardHostMCP struct {
+	Enabled bool `yaml:"enabled"`        // Enable Clipboard host MCP (default: false)
+	Port    int  `yaml:"port,omitempty"` // SSE port (default: 8933)
+}
+
+// GetPlaywrightPort returns the port for Playwright MCP (default: 8931)
+func (h *HostMCPsConfig) GetPlaywrightPort() int {
+	if h.Playwright != nil && h.Playwright.Port > 0 {
+		return h.Playwright.Port
+	}
+	return 8931
+}
+
+// GetIOSPort returns the port for iOS MCP (default: 8932)
+func (h *HostMCPsConfig) GetIOSPort() int {
+	if h.IOS != nil && h.IOS.Port > 0 {
+		return h.IOS.Port
+	}
+	return 8932
+}
+
+// IsPlaywrightEnabled returns true if Playwright host MCP is enabled
+func (h *HostMCPsConfig) IsPlaywrightEnabled() bool {
+	return h.Playwright != nil && h.Playwright.Enabled
+}
+
+// IsIOSEnabled returns true if iOS host MCP is enabled
+func (h *HostMCPsConfig) IsIOSEnabled() bool {
+	return h.IOS != nil && h.IOS.Enabled
+}
+
+// GetPlaywrightBrowser returns the browser type (default: chromium)
+func (h *HostMCPsConfig) GetPlaywrightBrowser() string {
+	if h.Playwright != nil && h.Playwright.Browser != "" {
+		return h.Playwright.Browser
+	}
+	return "chromium"
+}
+
+// IsPlaywrightHeadless returns true if browser should run headless (default: true)
+func (h *HostMCPsConfig) IsPlaywrightHeadless() bool {
+	if h.Playwright == nil {
+		return true
+	}
+	return h.Playwright.Headless
+}
+
+// GetClipboardPort returns the port for Clipboard MCP (default: 8933)
+func (h *HostMCPsConfig) GetClipboardPort() int {
+	if h.Clipboard != nil && h.Clipboard.Port > 0 {
+		return h.Clipboard.Port
+	}
+	return 8933
+}
+
+// IsClipboardEnabled returns true if Clipboard host MCP is enabled
+func (h *HostMCPsConfig) IsClipboardEnabled() bool {
+	return h.Clipboard != nil && h.Clipboard.Enabled
 }
 
 // MCPConfig represents a Model Context Protocol server configuration

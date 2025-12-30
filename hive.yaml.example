@@ -39,3 +39,26 @@ agents:
 # - sonnet: Fast and capable (default, recommended)
 # - opus:   Most capable, slower
 # - haiku:  Fastest, less capable
+
+# Host MCPs - Browser, iOS & Clipboard (run on macOS host)
+# These MCP servers run on your host machine and provide
+# browser/iOS automation and clipboard access to Claude agents in Docker containers
+#
+# host_mcps:
+#   # Playwright browser automation
+#   playwright:
+#     enabled: true           # Enable Playwright MCP
+#     port: 8931              # SSE port (default: 8931)
+#     headless: false         # false = visible browser you can watch
+#     browser: chromium       # chromium, firefox, or webkit
+#
+#   # iOS Simulator automation (macOS only)
+#   ios:
+#     enabled: true           # Enable iOS MCP
+#     port: 8932              # SSE port (default: 8932)
+#
+#   # Clipboard access (text and images)
+#   clipboard:
+#     enabled: true           # Enable Clipboard MCP
+#     port: 8933              # SSE port (default: 8933)
+#   # Note: For image clipboard support, install pngpaste: brew install pngpaste

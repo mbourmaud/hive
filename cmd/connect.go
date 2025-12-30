@@ -14,6 +14,8 @@ import (
 // validAgentIDPattern matches valid agent IDs (queen, q, 0, or numbers 1-99)
 var validAgentIDPattern = regexp.MustCompile(`^(queen|q|0|[1-9][0-9]?)$`)
 
+var resumeFlag bool
+
 var connectCmd = &cobra.Command{
 	Use:   "connect <id>",
 	Short: "Connect to agent and launch Claude",
@@ -36,61 +38,67 @@ var connectCmd = &cobra.Command{
 		// Create role-specific initial prompt
 		var initialPrompt string
 		if isQueen {
-			initialPrompt = `Read your role and instructions from /home/agent/CLAUDE.md. You are the Queen (Orchestrator).
+			initialPrompt = `You are the QUEEN (Orchestrator) in a HIVE multi-agent system.
 
-Execute your mandatory startup sequence:
-1. Report your identity
-2. Check /hive-config/hive.yaml for required tools and MCPs:
-   a. Read the 'tools:' list and verify EACH tool is installed:
-      - Run: <tool> --version (e.g., glab --version, psql --version, jq --version)
-      - If a tool is MISSING, report it clearly and explain how to fix:
-        * For CLI tools: Add to hive.yaml hooks.init section, e.g.:
-          hooks:
-            init: |
-              apt-get update && apt-get install -y <package>
-        * For global npm packages: npm install -g <package>
-   b. Read the 'mcps:' section and verify MCPs are configured:
-      - Run: claude mcp list
-      - For each MCP in hive.yaml, check if it appears in the list
-      - If an MCP is MISSING, report it and explain the fix:
-        * Check if required env vars are set (e.g., GITLAB_TOKEN, JIRA_TOKEN)
-        * For env vars: Add them to .hive/.env or hive.yaml mcps.<name>.env
-        * Example fix for GitLab MCP:
-          mcps:
-            gitlab:
-              package: "@anthropic-ai/mcp-gitlab"
-              env: [GITLAB_TOKEN]
-   c. Report a SUMMARY with status of each tool/MCP:
-      ✅ glab: installed (v1.2.3)
-      ✅ playwright: configured
-      ❌ psql: MISSING - add to hooks.init: apt-get install -y postgresql-client
-      ❌ jira: MISSING ENV - set JIRA_TOKEN in .hive/.env
-3. Run hive-status to see current HIVE state
-4. Check monitoring configuration and start background monitoring if enabled
-5. Report current HIVE state and await instructions
+FIRST: Read your instruction files:
+1. /home/agent/CLAUDE-ROLE.md - Your role-specific instructions
+2. /home/agent/HIVE-CAPABILITIES.md - All available MCP tools (Playwright, iOS, Clipboard)
 
-IMPORTANT: You can monitor drone activity in real-time via Redis streams (hive:logs:drone-1, hive:logs:all). Use this to track what drones are doing.`
+Startup sequence:
+1. Report your identity (Queen)
+2. Check HIVE status using MCP tool: hive_status
+3. List drones: hive_list_drones
+4. Report summary and await instructions
+
+You have these MCP tools (use them directly, not bash):
+- hive MCP: hive_status, hive_list_drones, hive_assign_task, hive_get_drone_logs
+- playwright MCP: browser_navigate, browser_click, browser_type, browser_screenshot
+- ios MCP: ios_list_devices, ios_boot_device, ios_open_url, ios_screenshot
+- clipboard MCP: clipboard_read_text, clipboard_write_text, clipboard_read_image
+
+You can assign tasks to drones:
+  hive_assign_task(drone="drone-1", title="Implement feature X", description="...")`
 		} else {
-			initialPrompt = `Read your role and instructions from /home/agent/CLAUDE.md. Execute your mandatory startup sequence immediately:
-1. Report your agent ID
-2. Verify tools and MCPs from /hive-config/hive.yaml:
-   a. Read the 'tools:' list and verify each tool: <tool> --version
-   b. Read the 'mcps:' section and run: claude mcp list
-   c. Report any MISSING tools/MCPs with a clear summary:
-      ✅ tool: installed
-      ❌ tool: MISSING - explain how to fix (add to hooks.init or set env var)
-3. Run my-tasks
-4. Take action based on what you find`
+			initialPrompt = `You are a WORKER DRONE in a HIVE multi-agent system.
+
+FIRST: Read your instruction files:
+1. /home/agent/CLAUDE-ROLE.md - Your role-specific instructions
+2. /home/agent/HIVE-CAPABILITIES.md - All available MCP tools (Playwright, iOS, Clipboard, testing)
+
+Startup sequence:
+1. Report your agent ID (check $AGENT_NAME env var)
+2. Check your tasks using MCP tool: hive_my_tasks
+3. If you have a task, work on it
+4. If no tasks, use hive_start_monitoring then poll with hive_get_monitoring_events
+
+You have these MCP tools (use them directly, not bash):
+- hive MCP: hive_my_tasks, hive_take_task, hive_complete_task, hive_log_activity
+- playwright MCP: browser_navigate, browser_click, browser_type, browser_screenshot
+- ios MCP: ios_list_devices, ios_boot_device, ios_open_url, ios_screenshot
+- clipboard MCP: clipboard_read_text, clipboard_write_text, clipboard_read_image
+
+For AUTONOMOUS TESTING of your work:
+1. Start app: npm run dev (bind to 0.0.0.0)
+2. Get URL: hive_get_test_url(port=3000) -> returns host-accessible URL
+3. Test: browser_navigate(url), browser_screenshot()
+4. Complete: hive_complete_task(result="tested with screenshots")`
 		}
 
-		// Launch Claude in the container with initial prompt
+		// Launch Claude in the container
 		// Workspace is at /workspace (worktree root)
-		// Shell-escape the prompt to prevent injection
-		escapedPrompt := shellEscape(initialPrompt)
-		claudeCmd := fmt.Sprintf(
-			`cd /workspace && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" %s`,
-			escapedPrompt,
-		)
+		var claudeCmd string
+		if resumeFlag {
+			// Resume previous conversation using --continue
+			claudeCmd = `cd /workspace && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" --continue`
+		} else {
+			// New session with initial prompt
+			// Shell-escape the prompt to prevent injection
+			escapedPrompt := shellEscape(initialPrompt)
+			claudeCmd = fmt.Sprintf(
+				`cd /workspace && exec claude --dangerously-skip-permissions --model "${CLAUDE_MODEL:-sonnet}" %s`,
+				escapedPrompt,
+			)
+		}
 
 		command := []string{"exec", "-it", containerName, "bash", "-l", "-c", claudeCmd}
 
@@ -144,4 +152,5 @@ func shellEscape(s string) string {
 
 func init() {
 	rootCmd.AddCommand(connectCmd)
+	connectCmd.Flags().BoolVarP(&resumeFlag, "resume", "r", false, "Resume previous conversation with this agent")
 }

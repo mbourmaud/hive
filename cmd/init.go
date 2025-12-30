@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 
 	"github.com/mbourmaud/hive/internal/config"
+	"github.com/mbourmaud/hive/internal/hostmcp"
 	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -214,6 +216,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Print(ui.ProgressLine("Generated .hive/.env.generated", "✓"))
 
+	// Check and install pngpaste if clipboard MCP is enabled
+	if hiveCfg.HostMCPs.IsClipboardEnabled() {
+		if err := ensurePngpaste(flagNonInteractive); err != nil {
+			fmt.Printf("  %s\n", ui.Warning("pngpaste: "+err.Error()))
+		}
+	}
+
 	// Sync custom Dockerfiles from project root to .hive/
 	if hiveCfg.Agents.Queen.Dockerfile != "" || hiveCfg.Agents.Workers.Dockerfile != "" {
 		if err := syncCustomDockerfiles(hiveCfg); err != nil {
@@ -273,6 +282,64 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Print success message
 	printSuccessMessage(workers)
+
+	return nil
+}
+
+// ensurePngpaste checks if pngpaste is installed and offers to install it via Homebrew
+func ensurePngpaste(nonInteractive bool) error {
+	// Only works on macOS
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+
+	// Check if already installed
+	if hostmcp.CheckPngpasteInstalled() {
+		fmt.Print(ui.ProgressLine("pngpaste installed (clipboard image support)", "✓"))
+		return nil
+	}
+
+	// Check if Homebrew is available
+	_, err := exec.LookPath("brew")
+	if err != nil {
+		fmt.Print(ui.ProgressLine("pngpaste not installed (no Homebrew)", "⚠"))
+		fmt.Printf("  %s\n", ui.StyleDim.Render("Install manually: brew install pngpaste"))
+		return nil
+	}
+
+	// In non-interactive mode, auto-install
+	if nonInteractive {
+		fmt.Printf("%s Installing pngpaste for clipboard image support...\n", ui.StyleCyan.Render("📋"))
+		cmd := exec.Command("brew", "install", "pngpaste")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to install pngpaste: %w", err)
+		}
+		fmt.Print(ui.ProgressLine("Installed pngpaste", "✓"))
+		return nil
+	}
+
+	// Interactive mode: ask user
+	fmt.Println()
+	fmt.Printf("%s pngpaste is required for clipboard image support\n", ui.StyleYellow.Render("📋"))
+	response, err := ui.PromptDefault("Install pngpaste via Homebrew?", "y")
+	if err != nil {
+		return nil
+	}
+
+	if response == "y" || response == "Y" || response == "yes" {
+		fmt.Printf("%s Installing pngpaste...\n", ui.StyleCyan.Render("📦"))
+		cmd := exec.Command("brew", "install", "pngpaste")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to install pngpaste: %w", err)
+		}
+		fmt.Print(ui.ProgressLine("Installed pngpaste", "✓"))
+	} else {
+		fmt.Print(ui.ProgressLine("Skipped pngpaste (text-only clipboard)", "⚠"))
+	}
 
 	return nil
 }
