@@ -3,29 +3,16 @@
  * HIVE iOS MCP Server
  *
  * Provides iOS Simulator automation via xcrun simctl
- * Runs on macOS host and exposes tools via SSE transport
- *
- * Tools:
- *   - ios_list_devices: List available simulators
- *   - ios_boot_device: Boot a simulator
- *   - ios_shutdown_device: Shutdown a simulator
- *   - ios_install_app: Install .app bundle
- *   - ios_launch_app: Launch app by bundle ID
- *   - ios_terminate_app: Stop running app
- *   - ios_list_apps: List installed apps
- *   - ios_screenshot: Take screenshot
- *   - ios_open_url: Open URL in Safari
- *   - ios_set_location: Set GPS location
- *   - ios_push_notification: Send push notification
- *   - ios_get_status: Get current simulator status
+ * Uses @modelcontextprotocol/sdk with SSE transport
  */
 
-const http = require('http');
-const { spawn, execSync } = require('child_process');
-const { URL } = require('url');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import express from 'express';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -36,10 +23,42 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-// Tool definitions
-const TOOLS = [
+// Execute xcrun simctl command
+function simctl(...cmdArgs) {
+  try {
+    const result = execSync(`xcrun simctl ${cmdArgs.join(' ')}`, {
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024
+    });
+    return { success: true, output: result.trim() };
+  } catch (error) {
+    return { success: false, error: error.message, stderr: error.stderr?.toString() };
+  }
+}
+
+// Execute simctl with JSON output
+function simctlJson(...cmdArgs) {
+  const result = simctl(...cmdArgs, '-j');
+  if (result.success) {
+    try {
+      return { success: true, data: JSON.parse(result.output) };
+    } catch (e) {
+      return { success: false, error: 'Failed to parse JSON output' };
+    }
+  }
+  return result;
+}
+
+// Create MCP Server
+const server = new McpServer({
+  name: 'hive-ios-mcp',
+  version: '1.0.0'
+});
+
+// Tool: ios_list_devices
+server.tool(
+  'ios_list_devices',
   {
-    name: 'ios_list_devices',
     description: 'List all available iOS simulators with their states (Booted, Shutdown, etc.)',
     inputSchema: {
       type: 'object',
@@ -52,252 +71,10 @@ const TOOLS = [
       }
     }
   },
-  {
-    name: 'ios_boot_device',
-    description: 'Boot (start) an iOS simulator by UDID or name',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID or name (e.g., "iPhone 15" or "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")'
-        }
-      },
-      required: ['device']
-    }
-  },
-  {
-    name: 'ios_shutdown_device',
-    description: 'Shutdown (stop) a running iOS simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted" for the currently booted device'
-        }
-      },
-      required: ['device']
-    }
-  },
-  {
-    name: 'ios_install_app',
-    description: 'Install an .app bundle to the simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        appPath: {
-          type: 'string',
-          description: 'Path to the .app bundle to install'
-        }
-      },
-      required: ['device', 'appPath']
-    }
-  },
-  {
-    name: 'ios_launch_app',
-    description: 'Launch an installed app by its bundle identifier',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        bundleId: {
-          type: 'string',
-          description: 'App bundle identifier (e.g., "com.apple.mobilesafari")'
-        },
-        args: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional launch arguments'
-        }
-      },
-      required: ['device', 'bundleId']
-    }
-  },
-  {
-    name: 'ios_terminate_app',
-    description: 'Terminate (stop) a running app',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        bundleId: {
-          type: 'string',
-          description: 'App bundle identifier to terminate'
-        }
-      },
-      required: ['device', 'bundleId']
-    }
-  },
-  {
-    name: 'ios_list_apps',
-    description: 'List installed apps on a simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        }
-      },
-      required: ['device']
-    }
-  },
-  {
-    name: 'ios_screenshot',
-    description: 'Take a screenshot of the simulator and save it to a file',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        outputPath: {
-          type: 'string',
-          description: 'Path to save the screenshot (PNG format). If not provided, saves to temp directory.'
-        }
-      },
-      required: ['device']
-    }
-  },
-  {
-    name: 'ios_open_url',
-    description: 'Open a URL in the simulator (launches Safari or appropriate app)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        url: {
-          type: 'string',
-          description: 'URL to open (e.g., "https://example.com" or "myapp://deeplink")'
-        }
-      },
-      required: ['device', 'url']
-    }
-  },
-  {
-    name: 'ios_set_location',
-    description: 'Set the GPS location of the simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        latitude: {
-          type: 'number',
-          description: 'Latitude coordinate'
-        },
-        longitude: {
-          type: 'number',
-          description: 'Longitude coordinate'
-        }
-      },
-      required: ['device', 'latitude', 'longitude']
-    }
-  },
-  {
-    name: 'ios_push_notification',
-    description: 'Send a push notification to an app in the simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: {
-          type: 'string',
-          description: 'Device UDID, name, or "booted"'
-        },
-        bundleId: {
-          type: 'string',
-          description: 'Target app bundle identifier'
-        },
-        payload: {
-          type: 'object',
-          description: 'Push notification payload (APNS format)',
-          properties: {
-            aps: {
-              type: 'object',
-              properties: {
-                alert: {
-                  oneOf: [
-                    { type: 'string' },
-                    {
-                      type: 'object',
-                      properties: {
-                        title: { type: 'string' },
-                        body: { type: 'string' }
-                      }
-                    }
-                  ]
-                },
-                badge: { type: 'number' },
-                sound: { type: 'string' }
-              }
-            }
-          }
-        }
-      },
-      required: ['device', 'bundleId', 'payload']
-    }
-  },
-  {
-    name: 'ios_get_status',
-    description: 'Get the current status of iOS simulators and Xcode',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  }
-];
-
-// Execute xcrun simctl command
-function simctl(...args) {
-  try {
-    const result = execSync(`xcrun simctl ${args.join(' ')}`, {
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024
-    });
-    return { success: true, output: result.trim() };
-  } catch (error) {
-    return { success: false, error: error.message, stderr: error.stderr?.toString() };
-  }
-}
-
-// Execute simctl with JSON output
-function simctlJson(...args) {
-  const result = simctl(...args, '-j');
-  if (result.success) {
-    try {
-      return { success: true, data: JSON.parse(result.output) };
-    } catch (e) {
-      return { success: false, error: 'Failed to parse JSON output' };
-    }
-  }
-  return result;
-}
-
-// Tool implementations
-const toolHandlers = {
-  ios_list_devices: async (args) => {
-    const filter = args.filter || 'all';
+  async ({ filter = 'all' }) => {
     const result = simctlJson('list', 'devices');
-
     if (!result.success) {
-      return { error: result.error };
+      return { content: [{ type: 'text', text: JSON.stringify({ error: result.error }) }], isError: true };
     }
 
     const devices = [];
@@ -316,128 +93,278 @@ const toolHandlers = {
       }
     }
 
-    return { devices, count: devices.length };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ devices, count: devices.length }, null, 2) }] };
+  }
+);
 
-  ios_boot_device: async (args) => {
-    const result = simctl('boot', `"${args.device}"`);
-    if (result.success) {
-      return { status: 'booted', device: args.device };
+// Tool: ios_boot_device
+server.tool(
+  'ios_boot_device',
+  {
+    description: 'Boot (start) an iOS simulator by UDID or name',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' }
+      },
+      required: ['device']
     }
-    // Check if already booted
+  },
+  async ({ device }) => {
+    const result = simctl('boot', `"${device}"`);
+    if (result.success) {
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'booted', device }) }] };
+    }
     if (result.error?.includes('current state: Booted')) {
-      return { status: 'already_booted', device: args.device };
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'already_booted', device }) }] };
     }
-    return { error: result.error || result.stderr };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
 
-  ios_shutdown_device: async (args) => {
-    const result = simctl('shutdown', `"${args.device}"`);
+// Tool: ios_shutdown_device
+server.tool(
+  'ios_shutdown_device',
+  {
+    description: 'Shutdown (stop) a running iOS simulator',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' }
+      },
+      required: ['device']
+    }
+  },
+  async ({ device }) => {
+    const result = simctl('shutdown', `"${device}"`);
     if (result.success) {
-      return { status: 'shutdown', device: args.device };
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'shutdown', device }) }] };
     }
     if (result.error?.includes('current state: Shutdown')) {
-      return { status: 'already_shutdown', device: args.device };
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'already_shutdown', device }) }] };
     }
-    return { error: result.error || result.stderr };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
 
-  ios_install_app: async (args) => {
-    const result = simctl('install', `"${args.device}"`, `"${args.appPath}"`);
-    if (result.success) {
-      return { status: 'installed', device: args.device, app: args.appPath };
+// Tool: ios_install_app
+server.tool(
+  'ios_install_app',
+  {
+    description: 'Install an .app bundle to the simulator',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        appPath: { type: 'string', description: 'Path to .app bundle' }
+      },
+      required: ['device', 'appPath']
     }
-    return { error: result.error || result.stderr };
   },
-
-  ios_launch_app: async (args) => {
-    const launchArgs = args.args ? args.args.join(' ') : '';
-    const result = simctl('launch', `"${args.device}"`, args.bundleId, launchArgs);
+  async ({ device, appPath }) => {
+    const result = simctl('install', `"${device}"`, `"${appPath}"`);
     if (result.success) {
-      // Output contains PID
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'installed', device, app: appPath }) }] };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
+
+// Tool: ios_launch_app
+server.tool(
+  'ios_launch_app',
+  {
+    description: 'Launch an installed app by its bundle identifier',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        bundleId: { type: 'string', description: 'App bundle identifier (e.g., com.example.app)' },
+        args: { type: 'array', items: { type: 'string' }, description: 'Optional launch arguments' }
+      },
+      required: ['device', 'bundleId']
+    }
+  },
+  async ({ device, bundleId, args: launchArgs }) => {
+    const extraArgs = launchArgs ? launchArgs.join(' ') : '';
+    const result = simctl('launch', `"${device}"`, bundleId, extraArgs);
+    if (result.success) {
       const pid = result.output.match(/(\d+)/)?.[1];
-      return { status: 'launched', device: args.device, bundleId: args.bundleId, pid };
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'launched', device, bundleId, pid }) }] };
     }
-    return { error: result.error || result.stderr };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
 
-  ios_terminate_app: async (args) => {
-    const result = simctl('terminate', `"${args.device}"`, args.bundleId);
-    if (result.success) {
-      return { status: 'terminated', device: args.device, bundleId: args.bundleId };
+// Tool: ios_terminate_app
+server.tool(
+  'ios_terminate_app',
+  {
+    description: 'Terminate (stop) a running app',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        bundleId: { type: 'string', description: 'App bundle identifier' }
+      },
+      required: ['device', 'bundleId']
     }
-    return { error: result.error || result.stderr };
   },
-
-  ios_list_apps: async (args) => {
-    const result = simctl('listapps', `"${args.device}"`);
+  async ({ device, bundleId }) => {
+    const result = simctl('terminate', `"${device}"`, bundleId);
     if (result.success) {
-      // Parse plist output (simplified)
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'terminated', device, bundleId }) }] };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
+
+// Tool: ios_list_apps
+server.tool(
+  'ios_list_apps',
+  {
+    description: 'List installed apps on a simulator',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' }
+      },
+      required: ['device']
+    }
+  },
+  async ({ device }) => {
+    const result = simctl('listapps', `"${device}"`);
+    if (result.success) {
       try {
         const apps = [];
         const bundleIdMatches = result.output.matchAll(/CFBundleIdentifier\s*=\s*"([^"]+)"/g);
         const nameMatches = result.output.matchAll(/CFBundleDisplayName\s*=\s*"([^"]+)"/g);
-
         const bundleIds = [...bundleIdMatches].map(m => m[1]);
         const names = [...nameMatches].map(m => m[1]);
-
         for (let i = 0; i < bundleIds.length; i++) {
-          apps.push({
-            bundleId: bundleIds[i],
-            name: names[i] || bundleIds[i]
-          });
+          apps.push({ bundleId: bundleIds[i], name: names[i] || bundleIds[i] });
         }
-        return { apps, count: apps.length };
+        return { content: [{ type: 'text', text: JSON.stringify({ apps, count: apps.length }, null, 2) }] };
       } catch (e) {
-        return { rawOutput: result.output };
+        return { content: [{ type: 'text', text: result.output }] };
       }
     }
-    return { error: result.error || result.stderr };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
 
-  ios_screenshot: async (args) => {
-    const outputPath = args.outputPath || path.join(os.tmpdir(), `ios-screenshot-${Date.now()}.png`);
-    const result = simctl('io', `"${args.device}"`, 'screenshot', `"${outputPath}"`);
-    if (result.success) {
-      return { status: 'captured', path: outputPath };
+// Tool: ios_screenshot
+server.tool(
+  'ios_screenshot',
+  {
+    description: 'Take a screenshot of the simulator and save it to a file',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        outputPath: { type: 'string', description: 'Output file path (optional, defaults to temp file)' }
+      },
+      required: ['device']
     }
-    return { error: result.error || result.stderr };
   },
-
-  ios_open_url: async (args) => {
-    const result = simctl('openurl', `"${args.device}"`, `"${args.url}"`);
+  async ({ device, outputPath }) => {
+    const finalPath = outputPath || path.join(os.tmpdir(), `ios-screenshot-${Date.now()}.png`);
+    const result = simctl('io', `"${device}"`, 'screenshot', `"${finalPath}"`);
     if (result.success) {
-      return { status: 'opened', device: args.device, url: args.url };
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'captured', path: finalPath }) }] };
     }
-    return { error: result.error || result.stderr };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
 
-  ios_set_location: async (args) => {
-    const result = simctl('location', `"${args.device}"`, 'set', args.latitude.toString(), args.longitude.toString());
+// Tool: ios_open_url
+server.tool(
+  'ios_open_url',
+  {
+    description: 'Open a URL in the simulator (launches Safari or appropriate app)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        url: { type: 'string', description: 'URL to open' }
+      },
+      required: ['device', 'url']
+    }
+  },
+  async ({ device, url }) => {
+    const result = simctl('openurl', `"${device}"`, `"${url}"`);
     if (result.success) {
-      return { status: 'location_set', device: args.device, latitude: args.latitude, longitude: args.longitude };
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'opened', device, url }) }] };
     }
-    return { error: result.error || result.stderr };
-  },
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
 
-  ios_push_notification: async (args) => {
-    // Create temp file with payload
+// Tool: ios_set_location
+server.tool(
+  'ios_set_location',
+  {
+    description: 'Set the GPS location of the simulator',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        latitude: { type: 'number', description: 'Latitude coordinate' },
+        longitude: { type: 'number', description: 'Longitude coordinate' }
+      },
+      required: ['device', 'latitude', 'longitude']
+    }
+  },
+  async ({ device, latitude, longitude }) => {
+    const result = simctl('location', `"${device}"`, 'set', latitude.toString(), longitude.toString());
+    if (result.success) {
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'location_set', device, latitude, longitude }) }] };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
+  }
+);
+
+// Tool: ios_push_notification
+server.tool(
+  'ios_push_notification',
+  {
+    description: 'Send a push notification to an app in the simulator',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Device UDID or name' },
+        bundleId: { type: 'string', description: 'App bundle identifier' },
+        payload: { type: 'object', description: 'APNS payload object (e.g., { aps: { alert: "Hello" } })' }
+      },
+      required: ['device', 'bundleId', 'payload']
+    }
+  },
+  async ({ device, bundleId, payload }) => {
     const payloadPath = path.join(os.tmpdir(), `push-${Date.now()}.json`);
-    fs.writeFileSync(payloadPath, JSON.stringify(args.payload));
-
+    fs.writeFileSync(payloadPath, JSON.stringify(payload));
     try {
-      const result = simctl('push', `"${args.device}"`, args.bundleId, payloadPath);
+      const result = simctl('push', `"${device}"`, bundleId, payloadPath);
       if (result.success) {
-        return { status: 'sent', device: args.device, bundleId: args.bundleId };
+        return { content: [{ type: 'text', text: JSON.stringify({ status: 'sent', device, bundleId }) }] };
       }
-      return { error: result.error || result.stderr };
+      return { content: [{ type: 'text', text: JSON.stringify({ error: result.error || result.stderr }) }], isError: true };
     } finally {
       fs.unlinkSync(payloadPath);
     }
-  },
+  }
+);
 
-  ios_get_status: async () => {
-    // Check Xcode
+// Tool: ios_get_status
+server.tool(
+  'ios_get_status',
+  {
+    description: 'Get the current status of iOS simulators and Xcode',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  async () => {
     let xcodeVersion = 'unknown';
     try {
       xcodeVersion = execSync('xcodebuild -version', { encoding: 'utf8' }).trim().split('\n')[0];
@@ -445,7 +372,6 @@ const toolHandlers = {
       xcodeVersion = 'not installed or not configured';
     }
 
-    // Get booted devices
     const devicesResult = simctlJson('list', 'devices');
     const bootedDevices = [];
     if (devicesResult.success) {
@@ -463,168 +389,65 @@ const toolHandlers = {
     }
 
     return {
-      xcode: xcodeVersion,
-      bootedDevices,
-      bootedCount: bootedDevices.length
+      content: [{
+        type: 'text',
+        text: JSON.stringify({ xcode: xcodeVersion, bootedDevices, bootedCount: bootedDevices.length }, null, 2)
+      }]
     };
   }
-};
+);
 
-// SSE connection manager
-const connections = new Map();
-let connectionId = 0;
+// Express server with SSE transport
+const app = express();
+app.use(express.json());
 
-// Send SSE event to a connection
-function sendEvent(res, event, data) {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
+// Track active transports
+const transports = new Map();
 
-// Handle MCP requests
-async function handleMcpRequest(req, res) {
-  let body = '';
-  for await (const chunk of req) {
-    body += chunk;
-  }
+app.get('/sse', async (req, res) => {
+  const transport = new SSEServerTransport('/messages', res);
+  // Use the sessionId generated by SSEServerTransport (UUID sent to client)
+  const sessionId = transport.sessionId;
+  transports.set(sessionId, transport);
 
-  try {
-    const request = JSON.parse(body);
-    const { id, method, params } = request;
+  res.on('close', () => {
+    transports.delete(sessionId);
+  });
 
-    let result;
-    switch (method) {
-      case 'initialize':
-        result = {
-          protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
-          serverInfo: {
-            name: 'hive-ios-mcp',
-            version: '1.0.0',
-            description: 'iOS Simulator automation via xcrun simctl'
-          }
-        };
-        break;
-
-      case 'tools/list':
-        result = { tools: TOOLS };
-        break;
-
-      case 'tools/call':
-        const { name, arguments: args } = params;
-        const handler = toolHandlers[name];
-        if (!handler) {
-          res.statusCode = 404;
-          res.end(JSON.stringify({ error: `Unknown tool: ${name}` }));
-          return;
-        }
-
-        try {
-          const toolResult = await handler(args || {});
-          result = {
-            content: [{ type: 'text', text: JSON.stringify(toolResult, null, 2) }]
-          };
-        } catch (error) {
-          result = {
-            content: [{ type: 'text', text: `Error: ${error.message}` }],
-            isError: true
-          };
-        }
-        break;
-
-      default:
-        res.statusCode = 404;
-        res.end(JSON.stringify({ error: `Method not found: ${method}` }));
-        return;
-    }
-
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ jsonrpc: '2.0', id, result }));
-  } catch (error) {
-    res.statusCode = 400;
-    res.end(JSON.stringify({ error: `Parse error: ${error.message}` }));
-  }
-}
-
-// Create HTTP server with SSE support
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://localhost:${port}`);
-
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    res.statusCode = 204;
-    res.end();
-    return;
-  }
-
-  // SSE endpoint
-  if (url.pathname === '/sse' && req.method === 'GET') {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    const connId = ++connectionId;
-    connections.set(connId, res);
-
-    // Send initial connection event
-    sendEvent(res, 'connected', { connectionId: connId });
-
-    // Keep connection alive
-    const keepAlive = setInterval(() => {
-      res.write(':keepalive\n\n');
-    }, 30000);
-
-    req.on('close', () => {
-      clearInterval(keepAlive);
-      connections.delete(connId);
-    });
-
-    return;
-  }
-
-  // MCP request endpoint
-  if (url.pathname === '/mcp' && req.method === 'POST') {
-    await handleMcpRequest(req, res);
-    return;
-  }
-
-  // Health check
-  if (url.pathname === '/health') {
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ status: 'ok', connections: connections.size }));
-    return;
-  }
-
-  // 404 for other paths
-  res.statusCode = 404;
-  res.end('Not found');
+  await server.connect(transport);
 });
 
-// Start server
-server.listen(port, () => {
+app.post('/messages', async (req, res) => {
+  const sessionId = req.query.sessionId;
+  const transport = sessionId ? transports.get(sessionId) : [...transports.values()].pop();
+
+  if (transport) {
+    await transport.handlePostMessage(req, res, req.body);
+  } else {
+    res.status(400).json({ error: 'No active SSE connection' });
+  }
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', connections: transports.size });
+});
+
+app.listen(port, () => {
   console.log(`HIVE iOS MCP Server running on http://localhost:${port}`);
   console.log(`SSE endpoint: http://localhost:${port}/sse`);
-  console.log(`MCP endpoint: http://localhost:${port}/mcp`);
+  console.log(`Messages endpoint: http://localhost:${port}/messages`);
   console.log('');
   console.log('Available tools:');
-  TOOLS.forEach(tool => {
-    console.log(`  - ${tool.name}: ${tool.description}`);
-  });
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  server.close(() => {
-    process.exit(0);
-  });
-});
-
-process.on('SIGTERM', () => {
-  server.close(() => {
-    process.exit(0);
-  });
+  console.log('  - ios_list_devices: List available simulators');
+  console.log('  - ios_boot_device: Boot a simulator');
+  console.log('  - ios_shutdown_device: Shutdown a simulator');
+  console.log('  - ios_install_app: Install .app bundle');
+  console.log('  - ios_launch_app: Launch app by bundle ID');
+  console.log('  - ios_terminate_app: Stop running app');
+  console.log('  - ios_list_apps: List installed apps');
+  console.log('  - ios_screenshot: Take screenshot');
+  console.log('  - ios_open_url: Open URL in Safari');
+  console.log('  - ios_set_location: Set GPS location');
+  console.log('  - ios_push_notification: Send push notification');
+  console.log('  - ios_get_status: Get Xcode and simulator status');
 });
