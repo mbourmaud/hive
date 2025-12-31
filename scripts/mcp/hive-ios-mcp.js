@@ -269,6 +269,98 @@ server.tool(
   }
 );
 
+// Tool: ios_install_expo_go
+server.tool(
+  'ios_install_expo_go',
+  { device: z.string().describe('Device UDID or name to install Expo Go on') },
+  async ({ device }) => {
+    const tempDir = os.tmpdir();
+    const appPath = path.join(tempDir, 'Exponent.app');
+    const tarPath = path.join(tempDir, 'expo-go.tar.gz');
+
+    try {
+      // Get latest Expo Go version for iOS simulator
+      console.log('[ios_install_expo_go] Fetching latest Expo Go version...');
+      const versionsUrl = 'https://api.github.com/repos/expo/expo/releases?per_page=10';
+      const versionsResponse = execSync(`curl -s "${versionsUrl}"`, { encoding: 'utf8' });
+      const releases = JSON.parse(versionsResponse);
+
+      // Find latest release with ios-simulator asset
+      let downloadUrl = null;
+      for (const release of releases) {
+        if (release.assets) {
+          const iosAsset = release.assets.find(a => a.name.includes('ios-simulator') && a.name.endsWith('.tar.gz'));
+          if (iosAsset) {
+            downloadUrl = iosAsset.browser_download_url;
+            console.log(`[ios_install_expo_go] Found Expo Go ${release.tag_name}`);
+            break;
+          }
+        }
+      }
+
+      if (!downloadUrl) {
+        // Fallback to direct URL pattern
+        downloadUrl = 'https://d1ahtucjixef4r.cloudfront.net/Exponent-2.32.18.tar.gz';
+        console.log('[ios_install_expo_go] Using fallback Expo Go URL');
+      }
+
+      // Download Expo Go
+      console.log(`[ios_install_expo_go] Downloading from ${downloadUrl}...`);
+      execSync(`curl -L -o "${tarPath}" "${downloadUrl}"`, { encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 });
+
+      // Extract
+      console.log('[ios_install_expo_go] Extracting...');
+      if (fs.existsSync(appPath)) {
+        execSync(`rm -rf "${appPath}"`);
+      }
+      execSync(`tar -xzf "${tarPath}" -C "${tempDir}"`, { encoding: 'utf8' });
+
+      // Find the .app directory (might be Exponent.app or ExpoGo.app)
+      const extractedApps = fs.readdirSync(tempDir).filter(f => f.endsWith('.app'));
+      const expoApp = extractedApps.find(a => a.includes('Expo') || a.includes('Exponent'));
+
+      if (!expoApp) {
+        throw new Error('Could not find Expo Go app in downloaded archive');
+      }
+
+      const finalAppPath = path.join(tempDir, expoApp);
+
+      // Install on simulator
+      console.log(`[ios_install_expo_go] Installing on device ${device}...`);
+      const installResult = simctl('install', `"${device}"`, `"${finalAppPath}"`);
+
+      // Cleanup
+      fs.unlinkSync(tarPath);
+      execSync(`rm -rf "${finalAppPath}"`);
+
+      if (installResult.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'installed',
+              device,
+              app: 'Expo Go',
+              bundleId: 'host.exp.Exponent',
+              note: 'Use ios_launch_app with bundleId "host.exp.Exponent" to launch Expo Go'
+            }, null, 2)
+          }]
+        };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify({ error: installResult.error || installResult.stderr }) }], isError: true };
+    } catch (error) {
+      // Cleanup on error
+      if (fs.existsSync(tarPath)) fs.unlinkSync(tarPath);
+      if (fs.existsSync(appPath)) execSync(`rm -rf "${appPath}"`);
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ error: `Failed to install Expo Go: ${error.message}` }) }],
+        isError: true
+      };
+    }
+  }
+);
+
 // Tool: ios_get_status (no parameters)
 server.tool(
   'ios_get_status',
@@ -358,5 +450,6 @@ app.listen(port, () => {
   console.log('  - ios_open_url: Open URL in Safari');
   console.log('  - ios_set_location: Set GPS location');
   console.log('  - ios_push_notification: Send push notification');
+  console.log('  - ios_install_expo_go: Download and install Expo Go');
   console.log('  - ios_get_status: Get Xcode and simulator status');
 });
