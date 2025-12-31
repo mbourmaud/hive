@@ -48,3 +48,9 @@ temp/
 *.tmp
 .playwright-mcp/
 hive.yaml
+
+# MCP node_modules
+scripts/mcp/node_modules/
+scripts/mcp/package-lock.json
+internal/embed/files/scripts/mcp/node_modules/
+internal/embed/files/scripts/mcp/package-lock.json

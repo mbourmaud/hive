@@ -13,6 +13,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { z } from 'zod';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -59,19 +60,9 @@ const server = new McpServer({
 server.tool(
   'ios_list_devices',
   {
-    description: 'List all available iOS simulators with their states (Booted, Shutdown, etc.)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        filter: {
-          type: 'string',
-          enum: ['all', 'booted', 'available'],
-          description: 'Filter devices: all (default), booted (running only), available (installed only)'
-        }
-      }
-    }
+    filter: z.enum(['all', 'booted', 'available']).optional().default('all').describe('Filter devices: all (default), booted (running only), available (installed only)')
   },
-  async ({ filter = 'all' }) => {
+  async ({ filter }) => {
     const result = simctlJson('list', 'devices');
     if (!result.success) {
       return { content: [{ type: 'text', text: JSON.stringify({ error: result.error }) }], isError: true };
@@ -100,16 +91,7 @@ server.tool(
 // Tool: ios_boot_device
 server.tool(
   'ios_boot_device',
-  {
-    description: 'Boot (start) an iOS simulator by UDID or name',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' }
-      },
-      required: ['device']
-    }
-  },
+  { device: z.string().describe('Device UDID or name') },
   async ({ device }) => {
     const result = simctl('boot', `"${device}"`);
     if (result.success) {
@@ -125,16 +107,7 @@ server.tool(
 // Tool: ios_shutdown_device
 server.tool(
   'ios_shutdown_device',
-  {
-    description: 'Shutdown (stop) a running iOS simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' }
-      },
-      required: ['device']
-    }
-  },
+  { device: z.string().describe('Device UDID or name') },
   async ({ device }) => {
     const result = simctl('shutdown', `"${device}"`);
     if (result.success) {
@@ -151,15 +124,8 @@ server.tool(
 server.tool(
   'ios_install_app',
   {
-    description: 'Install an .app bundle to the simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        appPath: { type: 'string', description: 'Path to .app bundle' }
-      },
-      required: ['device', 'appPath']
-    }
+    device: z.string().describe('Device UDID or name'),
+    appPath: z.string().describe('Path to .app bundle')
   },
   async ({ device, appPath }) => {
     const result = simctl('install', `"${device}"`, `"${appPath}"`);
@@ -174,18 +140,11 @@ server.tool(
 server.tool(
   'ios_launch_app',
   {
-    description: 'Launch an installed app by its bundle identifier',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        bundleId: { type: 'string', description: 'App bundle identifier (e.g., com.example.app)' },
-        args: { type: 'array', items: { type: 'string' }, description: 'Optional launch arguments' }
-      },
-      required: ['device', 'bundleId']
-    }
+    device: z.string().describe('Device UDID or name'),
+    bundleId: z.string().describe('App bundle identifier (e.g., com.example.app)'),
+    launchArgs: z.array(z.string()).optional().describe('Optional launch arguments')
   },
-  async ({ device, bundleId, args: launchArgs }) => {
+  async ({ device, bundleId, launchArgs }) => {
     const extraArgs = launchArgs ? launchArgs.join(' ') : '';
     const result = simctl('launch', `"${device}"`, bundleId, extraArgs);
     if (result.success) {
@@ -200,15 +159,8 @@ server.tool(
 server.tool(
   'ios_terminate_app',
   {
-    description: 'Terminate (stop) a running app',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        bundleId: { type: 'string', description: 'App bundle identifier' }
-      },
-      required: ['device', 'bundleId']
-    }
+    device: z.string().describe('Device UDID or name'),
+    bundleId: z.string().describe('App bundle identifier')
   },
   async ({ device, bundleId }) => {
     const result = simctl('terminate', `"${device}"`, bundleId);
@@ -222,16 +174,7 @@ server.tool(
 // Tool: ios_list_apps
 server.tool(
   'ios_list_apps',
-  {
-    description: 'List installed apps on a simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' }
-      },
-      required: ['device']
-    }
-  },
+  { device: z.string().describe('Device UDID or name') },
   async ({ device }) => {
     const result = simctl('listapps', `"${device}"`);
     if (result.success) {
@@ -257,15 +200,8 @@ server.tool(
 server.tool(
   'ios_screenshot',
   {
-    description: 'Take a screenshot of the simulator and save it to a file',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        outputPath: { type: 'string', description: 'Output file path (optional, defaults to temp file)' }
-      },
-      required: ['device']
-    }
+    device: z.string().describe('Device UDID or name'),
+    outputPath: z.string().optional().describe('Output file path (optional, defaults to temp file)')
   },
   async ({ device, outputPath }) => {
     const finalPath = outputPath || path.join(os.tmpdir(), `ios-screenshot-${Date.now()}.png`);
@@ -281,15 +217,8 @@ server.tool(
 server.tool(
   'ios_open_url',
   {
-    description: 'Open a URL in the simulator (launches Safari or appropriate app)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        url: { type: 'string', description: 'URL to open' }
-      },
-      required: ['device', 'url']
-    }
+    device: z.string().describe('Device UDID or name'),
+    url: z.string().describe('URL to open')
   },
   async ({ device, url }) => {
     const result = simctl('openurl', `"${device}"`, `"${url}"`);
@@ -304,16 +233,9 @@ server.tool(
 server.tool(
   'ios_set_location',
   {
-    description: 'Set the GPS location of the simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        latitude: { type: 'number', description: 'Latitude coordinate' },
-        longitude: { type: 'number', description: 'Longitude coordinate' }
-      },
-      required: ['device', 'latitude', 'longitude']
-    }
+    device: z.string().describe('Device UDID or name'),
+    latitude: z.number().describe('Latitude coordinate'),
+    longitude: z.number().describe('Longitude coordinate')
   },
   async ({ device, latitude, longitude }) => {
     const result = simctl('location', `"${device}"`, 'set', latitude.toString(), longitude.toString());
@@ -328,16 +250,9 @@ server.tool(
 server.tool(
   'ios_push_notification',
   {
-    description: 'Send a push notification to an app in the simulator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        device: { type: 'string', description: 'Device UDID or name' },
-        bundleId: { type: 'string', description: 'App bundle identifier' },
-        payload: { type: 'object', description: 'APNS payload object (e.g., { aps: { alert: "Hello" } })' }
-      },
-      required: ['device', 'bundleId', 'payload']
-    }
+    device: z.string().describe('Device UDID or name'),
+    bundleId: z.string().describe('App bundle identifier'),
+    payload: z.record(z.unknown()).describe('APNS payload object (e.g., { aps: { alert: "Hello" } })')
   },
   async ({ device, bundleId, payload }) => {
     const payloadPath = path.join(os.tmpdir(), `push-${Date.now()}.json`);
@@ -354,16 +269,10 @@ server.tool(
   }
 );
 
-// Tool: ios_get_status
+// Tool: ios_get_status (no parameters)
 server.tool(
   'ios_get_status',
-  {
-    description: 'Get the current status of iOS simulators and Xcode',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  },
+  {},
   async () => {
     let xcodeVersion = 'unknown';
     try {

@@ -13,6 +13,7 @@ import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { z } from 'zod';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -66,16 +67,10 @@ const server = new McpServer({
   version: '1.0.0'
 });
 
-// Tool: clipboard_read_text
+// Tool: clipboard_read_text (no parameters)
 server.tool(
   'clipboard_read_text',
-  {
-    description: 'Read text content from the macOS clipboard',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  },
+  {},
   async () => {
     try {
       const text = execCommand('pbpaste');
@@ -97,24 +92,8 @@ server.tool(
 // Tool: clipboard_write_text
 server.tool(
   'clipboard_write_text',
-  {
-    description: 'Write text to the macOS clipboard',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: { type: 'string', description: 'Text to write to clipboard' }
-      },
-      required: ['text']
-    }
-  },
+  { text: z.string().describe('Text to write to clipboard') },
   async ({ text }) => {
-    if (!text) {
-      return {
-        content: [{ type: 'text', text: 'Error: text parameter is required' }],
-        isError: true
-      };
-    }
-
     try {
       const proc = spawn('pbcopy', [], { stdio: ['pipe', 'pipe', 'pipe'] });
       proc.stdin.write(text);
@@ -140,16 +119,10 @@ server.tool(
   }
 );
 
-// Tool: clipboard_read_image
+// Tool: clipboard_read_image (no parameters)
 server.tool(
   'clipboard_read_image',
-  {
-    description: 'Read image from clipboard (requires pngpaste: brew install pngpaste)',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  },
+  {},
   async () => {
     try {
       if (!isPngpasteInstalled()) {
@@ -204,14 +177,8 @@ server.tool(
 server.tool(
   'clipboard_write_image',
   {
-    description: 'Write image to clipboard from base64 data or file path',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        base64: { type: 'string', description: 'Base64-encoded PNG image data' },
-        filePath: { type: 'string', description: 'Path to image file' }
-      }
-    }
+    base64: z.string().optional().describe('Base64-encoded PNG image data'),
+    filePath: z.string().optional().describe('Path to image file')
   },
   async ({ base64, filePath }) => {
     if (!base64 && !filePath) {
@@ -262,16 +229,10 @@ server.tool(
   }
 );
 
-// Tool: clipboard_get_formats
+// Tool: clipboard_get_formats (no parameters)
 server.tool(
   'clipboard_get_formats',
-  {
-    description: 'Get available formats in the clipboard (text, image types, etc.)',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  },
+  {},
   async () => {
     try {
       const script = `
@@ -324,16 +285,10 @@ server.tool(
   }
 );
 
-// Tool: clipboard_clear
+// Tool: clipboard_clear (no parameters)
 server.tool(
   'clipboard_clear',
-  {
-    description: 'Clear the clipboard contents',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  },
+  {},
   async () => {
     try {
       execCommand(`osascript -e 'set the clipboard to ""'`);
