@@ -62,15 +62,19 @@ Control iOS Simulators on the host. Perfect for testing React Native, Expo, or n
 | `ios_open_url` | Open URL in Safari/Expo Go |
 | `ios_set_location` | Set GPS coordinates |
 | `ios_push_notification` | Send test notifications |
+| `ios_install_expo_go` | Download and install Expo Go |
 | `ios_get_status` | Get Xcode/simulator status |
 
 **Example - Testing an Expo App:**
 ```
 ios_list_devices()  # Find available simulators
-ios_boot_device(deviceId="iPhone 15")
-ios_open_url(deviceId="booted", url="exp://host.docker.internal:18081")
-ios_screenshot(deviceId="booted")
+ios_boot_device(device="iPhone 15")
+ios_install_expo_go(device="iPhone 15")  # Automatic Expo Go installation!
+ios_open_url(device="booted", url="exp://host.docker.internal:18081")
+ios_screenshot(device="booted", outputPath="/hive-shared/screenshot.png")
 ```
+
+> **📁 Shared Directory:** Screenshots saved to `/hive-shared/` are accessible from your container. The host saves to `.hive/shared/` which is mounted as `/hive-shared/` in containers.
 
 ### Clipboard MCP (System Clipboard)
 

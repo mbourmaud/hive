@@ -279,51 +279,78 @@ server.tool(
     const tarPath = path.join(tempDir, 'expo-go.tar.gz');
 
     try {
-      // Get latest Expo Go version for iOS simulator
+      // Get latest Expo Go version from Expo's versions endpoint
       console.log('[ios_install_expo_go] Fetching latest Expo Go version...');
-      const versionsUrl = 'https://api.github.com/repos/expo/expo/releases?per_page=10';
-      const versionsResponse = execSync(`curl -s "${versionsUrl}"`, { encoding: 'utf8' });
-      const releases = JSON.parse(versionsResponse);
+      let version = '2.32.18'; // Default fallback version
 
-      // Find latest release with ios-simulator asset
-      let downloadUrl = null;
-      for (const release of releases) {
-        if (release.assets) {
-          const iosAsset = release.assets.find(a => a.name.includes('ios-simulator') && a.name.endsWith('.tar.gz'));
-          if (iosAsset) {
-            downloadUrl = iosAsset.browser_download_url;
-            console.log(`[ios_install_expo_go] Found Expo Go ${release.tag_name}`);
-            break;
+      try {
+        const versionsResponse = execSync('curl -s "https://expo.dev/--/api/v2/versions"', {
+          encoding: 'utf8',
+          timeout: 10000
+        });
+        const versionsData = JSON.parse(versionsResponse);
+        if (versionsData.data?.sdkVersions) {
+          // Get the latest SDK version's iosClientVersion
+          const sdkVersions = Object.keys(versionsData.data.sdkVersions).sort().reverse();
+          for (const sdk of sdkVersions) {
+            const clientVersion = versionsData.data.sdkVersions[sdk]?.iosClientVersion;
+            if (clientVersion) {
+              version = clientVersion;
+              console.log(`[ios_install_expo_go] Found Expo Go version ${version} for SDK ${sdk}`);
+              break;
+            }
           }
         }
+      } catch (e) {
+        console.log('[ios_install_expo_go] Could not fetch version, using fallback');
       }
 
-      if (!downloadUrl) {
-        // Fallback to direct URL pattern
-        downloadUrl = 'https://d1ahtucjixef4r.cloudfront.net/Exponent-2.32.18.tar.gz';
-        console.log('[ios_install_expo_go] Using fallback Expo Go URL');
-      }
+      // Use Expo's official CDN for iOS simulator builds
+      const downloadUrl = `https://dpq5q02fu5f55.cloudfront.net/Exponent-${version}.tar.gz`;
 
       // Download Expo Go
-      console.log(`[ios_install_expo_go] Downloading from ${downloadUrl}...`);
-      execSync(`curl -L -o "${tarPath}" "${downloadUrl}"`, { encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 });
+      console.log(`[ios_install_expo_go] Downloading Expo Go ${version}...`);
+      execSync(`curl -L -f -o "${tarPath}" "${downloadUrl}"`, {
+        encoding: 'utf8',
+        maxBuffer: 100 * 1024 * 1024,
+        timeout: 120000
+      });
 
-      // Extract
+      // Extract to a temp subdirectory (ignore timestamp errors on macOS)
       console.log('[ios_install_expo_go] Extracting...');
-      if (fs.existsSync(appPath)) {
-        execSync(`rm -rf "${appPath}"`);
+      const extractDir = path.join(tempDir, `expo-extract-${Date.now()}`);
+      const finalAppPath = path.join(tempDir, 'Exponent.app');
+
+      // Clean up any existing directories
+      if (fs.existsSync(extractDir)) execSync(`rm -rf "${extractDir}"`);
+      if (fs.existsSync(finalAppPath)) execSync(`rm -rf "${finalAppPath}"`);
+
+      // Create extraction directory
+      fs.mkdirSync(extractDir, { recursive: true });
+
+      try {
+        execSync(`tar -xzf "${tarPath}" -C "${extractDir}" --no-same-permissions 2>/dev/null || tar -xzf "${tarPath}" -C "${extractDir}" 2>/dev/null || true`, { encoding: 'utf8' });
+      } catch (e) {
+        // Ignore tar timestamp errors - files are still extracted
       }
-      execSync(`tar -xzf "${tarPath}" -C "${tempDir}"`, { encoding: 'utf8' });
 
-      // Find the .app directory (might be Exponent.app or ExpoGo.app)
-      const extractedApps = fs.readdirSync(tempDir).filter(f => f.endsWith('.app'));
-      const expoApp = extractedApps.find(a => a.includes('Expo') || a.includes('Exponent'));
+      // Check if tar extracted a .app directory or just the contents
+      const extractedFiles = fs.readdirSync(extractDir);
+      const existingApp = extractedFiles.find(f => f.endsWith('.app'));
 
-      if (!expoApp) {
-        throw new Error('Could not find Expo Go app in downloaded archive');
+      if (existingApp) {
+        // Tar contained a .app folder - just rename it
+        fs.renameSync(path.join(extractDir, existingApp), finalAppPath);
+      } else {
+        // Tar contained the bundle contents directly - wrap in .app folder
+        console.log('[ios_install_expo_go] Wrapping extracted files in Exponent.app bundle...');
+        fs.renameSync(extractDir, finalAppPath);
       }
 
-      const finalAppPath = path.join(tempDir, expoApp);
+      // Verify we have the app bundle
+      if (!fs.existsSync(finalAppPath) || !fs.existsSync(path.join(finalAppPath, 'Info.plist'))) {
+        throw new Error('Could not create valid Expo Go app bundle');
+      }
 
       // Install on simulator
       console.log(`[ios_install_expo_go] Installing on device ${device}...`);

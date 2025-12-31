@@ -62,6 +62,11 @@ func extractHiveFiles(projectType string) error {
 		return fmt.Errorf("failed to create workspaces directory: %w", err)
 	}
 
+	// Create shared directory for host MCP ↔ container communication (screenshots, files)
+	if err := os.MkdirAll(filepath.Join(hiveDir, "shared"), 0755); err != nil {
+		return fmt.Errorf("failed to create shared directory: %w", err)
+	}
+
 	return nil
 }
 

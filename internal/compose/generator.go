@@ -134,6 +134,7 @@ services:
       - ../.git:/workspace-git
       - ../.claude:/workspace/.claude
       - .:/hive-config:ro
+      - ./shared:/hive-shared
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
       - ${HOME}/.config/gh:/home/agent/.config/gh:ro
@@ -267,6 +268,7 @@ func generateWorkerService(index int, prefix string, opts Options) string {
       - ../.git:/workspace-git
       - ../.claude:/workspace/.claude
       - .:/hive-config:ro
+      - ./shared:/hive-shared
       - ${HOME}/.claude/mcps:/home/agent/.claude/mcps:ro
       - ${HOME}/.claude/plugins:/home/agent/.claude/plugins:ro
       - ${HOME}/.config/gh:/home/agent/.config/gh:ro
