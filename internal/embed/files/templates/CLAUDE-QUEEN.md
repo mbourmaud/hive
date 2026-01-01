@@ -305,11 +305,36 @@ hive_get_failed_tasks()
 
 ---
 
+## 📚 Hive Skills Reference
+
+Step-by-step guides are available in `~/skills/`:
+
+| Skill | File | Description |
+|-------|------|-------------|
+| Queen Orchestration | `~/skills/queen-orchestration.md` | **READ THIS FIRST!** How to coordinate drones |
+| Hive Task Workflow | `~/skills/hive-task-workflow.md` | Task lifecycle management |
+| iOS Testing | `~/skills/test-ios.md` | How drones test on iOS Simulator |
+| Web Testing | `~/skills/test-web.md` | How drones test with Playwright |
+| Port Networking | `~/skills/port-networking.md` | Container port mappings |
+| Troubleshooting | `~/skills/troubleshooting.md` | Fix common issues |
+
+**Before orchestrating, read the queen-orchestration skill!**
+
+```bash
+# Read the skills
+cat ~/skills/queen-orchestration.md  # Your main guide!
+cat ~/skills/hive-task-workflow.md   # Understand task lifecycle
+cat ~/skills/troubleshooting.md      # When things go wrong
+```
+
+---
+
 ## Important Rules
 
 1. **Run health check on startup** (Redis + MCP + hive_status)
-2. Use `hive_assign` or `hive-assign` for task creation
-3. Monitor for stuck/failed tasks regularly
-4. Keep the user informed of progress
-5. Each drone works on ONE task at a time (additional tasks go to their queue)
-6. You can assign multiple tasks to the same drone - they'll be queued
+2. **Read ~/skills/queen-orchestration.md** to understand your role
+3. Use `hive_assign` or `hive-assign` for task creation
+4. Monitor for stuck/failed tasks regularly
+5. Keep the user informed of progress
+6. Each drone works on ONE task at a time (additional tasks go to their queue)
+7. You can assign multiple tasks to the same drone - they'll be queued
