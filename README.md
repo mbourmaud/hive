@@ -340,6 +340,55 @@ playwright:
 NODE_MAX_OLD_SPACE_SIZE=8192  # 8GB
 ```
 
+### 🧪 Autonomous Testing (Host MCPs)
+Drones can test their work **autonomously** using browser and iOS Simulator control:
+
+- **Playwright MCP**: Control a real browser on your Mac
+  - Navigate, click, type, screenshot
+  - Test web apps (React, Vue, Next.js)
+
+- **iOS MCP**: Control iOS Simulator
+  - Boot devices, install apps, take screenshots
+  - Test Expo/React Native apps
+
+- **Clipboard MCP**: Read/write system clipboard
+  - Share data between agents and user
+
+```yaml
+# hive.yaml - Enable host MCPs
+host_mcps:
+  playwright:
+    enabled: true
+    headless: false    # See the browser!
+  ios:
+    enabled: true
+  clipboard:
+    enabled: true
+```
+
+**Example: Drone testing an Expo app autonomously**
+```
+# 1. Drone implements feature
+# 2. Starts Metro bundler
+npx expo start --port 8081 &
+
+# 3. Gets test URL
+hive_get_test_url(port=8081, protocol="exp")
+# → exp://localhost:18081
+
+# 4. Tests on iOS Simulator
+ios_boot_device(device="iPhone 15")
+ios_open_url(device="booted", url="exp://localhost:18081")
+ios_screenshot(device="booted", outputPath="/hive-shared/result.png")
+
+# 5. Completes task with evidence
+hive_complete_task(result="Feature tested. Screenshot: /hive-shared/result.png")
+```
+
+See the example projects:
+- 📱 [Expo Mobile Example](examples/expo-mobile/) - React Native with iOS testing
+- 🌐 [React Web Example](examples/react-web/) - Vite React with Playwright testing
+
 ---
 
 ## 📖 Example: Fix 3 Bugs in Parallel

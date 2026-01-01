@@ -218,10 +218,10 @@ For all tasks, drones should follow this workflow:
 
 // 2. Get test URL
 hive_get_test_url({ port: 5173 })
-// Returns: { url: "http://host.docker.internal:15173" }
+// Returns: { url: "http://localhost:15173" }
 
 // 3. Navigate
-browser_navigate({ url: "http://host.docker.internal:15173" })
+browser_navigate({ url: "http://localhost:15173" })
 
 // 4. Understand the page
 browser_snapshot()

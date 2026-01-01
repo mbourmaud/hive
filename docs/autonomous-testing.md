@@ -12,21 +12,23 @@ Drones can autonomously develop features AND test them using Playwright (browser
 │        │                         │                    │              │
 │        │ browser_navigate        │ ios_open_url       │              │
 │        ▼                         ▼                    ▼              │
-│   localhost:13000 ◄──────── exp://host.docker.internal:18081        │
+│   localhost:13000 ◄─────────── exp://localhost:18081 ◄──────────────│
 │        │                                                             │
 └────────┼─────────────────────────────────────────────────────────────┘
-         │ port mapping (3000→13000)
+         │ port mapping (3000→13000, 8081→18081)
 ┌────────┴─────────────────────────────────────────────────────────────┐
 │                     Docker Container (drone-1)                        │
 │                                                                       │
 │  npm run dev → 0.0.0.0:3000    npx expo start → 0.0.0.0:8081        │
 │                                                                       │
 │  ENV: HIVE_EXPOSED_PORTS=3000:13000,8081:18081                       │
-│  ENV: HIVE_HOST_BASE=host.docker.internal                            │
 │                                                                       │
-│  MCP Tool: hive_get_test_url(3000) → http://host.docker.internal:13000│
+│  MCP Tool: hive_get_test_url(3000) → http://localhost:13000          │
+│  MCP Tool: hive_get_test_url(8081, "exp") → exp://localhost:18081    │
 └───────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Important**: Playwright and iOS Simulator run on the **host**, so they use `localhost:HOST_PORT`, not `host.docker.internal`. The drone just needs to know which host port its container port is mapped to.
 
 ## Configuration
 
@@ -85,13 +87,12 @@ Returns:
 {
   "success": true,
   "drone": "drone-1",
-  "host_base": "host.docker.internal",
   "ports": [
     {
       "container": 3000,
       "host": 13000,
-      "http_url": "http://host.docker.internal:13000",
-      "expo_url": "exp://host.docker.internal:13000"
+      "http_url": "http://localhost:13000",
+      "expo_url": "exp://localhost:13000"
     }
   ]
 }
@@ -109,7 +110,7 @@ Returns:
   "success": true,
   "container_port": 3000,
   "host_port": 13000,
-  "url": "http://host.docker.internal:13000"
+  "url": "http://localhost:13000"
 }
 ```
 
@@ -121,7 +122,7 @@ hive_get_test_url(port=8081, protocol="exp")
 Returns:
 ```json
 {
-  "url": "exp://host.docker.internal:18081"
+  "url": "exp://localhost:18081"
 }
 ```
 
@@ -134,9 +135,9 @@ Complete autonomous workflow:
 ```
 1. Drone implements feature
 2. Drone: npm run dev (port 3000)
-3. Drone: hive_get_test_url(3000) → http://host.docker.internal:13000
+3. Drone: hive_get_test_url(3000) → http://localhost:13000
 4. Drone uses Playwright MCP:
-   - browser_navigate("http://host.docker.internal:13000")
+   - browser_navigate("http://localhost:13000")
    - browser_snapshot()
    - browser_click/type to test
    - browser_screenshot() for evidence
@@ -148,11 +149,11 @@ Complete autonomous workflow:
 ```
 1. Drone implements feature
 2. Drone: npx expo start --port 8081
-3. Drone: hive_get_test_url(8081, protocol="exp") → exp://host.docker.internal:18081
+3. Drone: hive_get_test_url(8081, protocol="exp") → exp://localhost:18081
 4. Drone uses iOS MCP:
    - ios_list_devices() → find iPhone 15
    - ios_boot_device("iPhone 15")
-   - ios_open_url("booted", "exp://host.docker.internal:18081")
+   - ios_open_url("booted", "exp://localhost:18081")
    - ios_screenshot("booted")
 5. Drone: hive_complete_task("Feature tested on iOS Simulator")
 ```
@@ -178,7 +179,8 @@ These environment variables are automatically set for drones with port mappings:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `HIVE_EXPOSED_PORTS` | Comma-separated port mappings | `3000:13000,8081:18081` |
-| `HIVE_HOST_BASE` | Host address for URLs | `host.docker.internal` |
+
+> **Note**: URLs use `localhost:HOST_PORT` because Playwright and iOS Simulator run on the host machine, not inside Docker.
 
 ## MCP Tools Reference
 
@@ -244,11 +246,12 @@ hive clean && hive init
 ### Playwright MCP can't reach app
 
 1. Check MCP is running: `hive mcp status`
-2. Verify URL uses `host.docker.internal`, not `localhost`
-3. Check host port is correct (not container port)
+2. Verify URL uses `localhost:HOST_PORT` (e.g., `localhost:13000`, not `localhost:3000`)
+3. Check host port is correct (the second number in the mapping)
 
 ### iOS Simulator not opening Expo
 
-1. Ensure Expo Go is installed in simulator
-2. Check URL format: `exp://host.docker.internal:PORT`
-3. Verify Metro bundler is running on correct port
+1. Ensure Expo Go is installed in simulator: `ios_install_expo_go(device="iPhone 15")`
+2. Check URL format: `exp://localhost:HOST_PORT` (e.g., `exp://localhost:18081`)
+3. Verify Metro bundler is running on the container port
+4. Make sure `EXPO_PACKAGER_PROXY_URL` is set in `.env`

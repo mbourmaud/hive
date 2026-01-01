@@ -35,7 +35,7 @@ Control a real browser on the host machine. You can navigate, click, type, take 
 
 **Example - Testing a Login Flow:**
 ```
-browser_navigate(url="http://host.docker.internal:13000")
+browser_navigate(url="http://localhost:13000")
 browser_snapshot()  # Understand the page structure
 browser_type(element="email input", ref="input[name=email]", text="user@example.com")
 browser_type(element="password input", ref="input[name=password]", text="secret123")
@@ -70,7 +70,7 @@ Control iOS Simulators on the host. Perfect for testing React Native, Expo, or n
 ios_list_devices()  # Find available simulators
 ios_boot_device(device="iPhone 15")
 ios_install_expo_go(device="iPhone 15")  # Automatic Expo Go installation!
-ios_open_url(device="booted", url="exp://host.docker.internal:18081")
+ios_open_url(device="booted", url="exp://localhost:18081")
 ios_screenshot(device="booted", outputPath="/hive-shared/screenshot.png")
 ```
 
@@ -152,10 +152,10 @@ hive_list_exposed_ports()
 # Returns: { ports: [{ container: 3000, host: 13000, http_url: "http://..." }] }
 
 hive_get_test_url(port=3000)
-# Returns: { url: "http://host.docker.internal:13000" }
+# Returns: { url: "http://localhost:13000" }
 
 hive_get_test_url(port=8081, protocol="exp")
-# Returns: { url: "exp://host.docker.internal:18081" }
+# Returns: { url: "exp://localhost:18081" }
 ```
 
 ### Web App Testing Workflow
@@ -169,12 +169,12 @@ hive_get_test_url(port=8081, protocol="exp")
 
 3. **Get the test URL:**
    ```
-   hive_get_test_url(port=3000) → { url: "http://host.docker.internal:13000" }
+   hive_get_test_url(port=3000) → { url: "http://localhost:13000" }
    ```
 
 4. **Test with Playwright:**
    ```
-   browser_navigate(url="http://host.docker.internal:13000")
+   browser_navigate(url="http://localhost:13000")
    browser_snapshot()
    browser_type(element="...", text="...")
    browser_click(element="...")
@@ -197,14 +197,14 @@ hive_get_test_url(port=8081, protocol="exp")
 
 3. **Get the Expo URL:**
    ```
-   hive_get_test_url(port=8081, protocol="exp") → { url: "exp://host.docker.internal:18081" }
+   hive_get_test_url(port=8081, protocol="exp") → { url: "exp://localhost:18081" }
    ```
 
 4. **Test on iOS Simulator:**
    ```
    ios_list_devices()
    ios_boot_device(deviceId="iPhone 15")
-   ios_open_url(deviceId="booted", url="exp://host.docker.internal:18081")
+   ios_open_url(deviceId="booted", url="exp://localhost:18081")
    ios_screenshot(deviceId="booted")
    ```
 
@@ -237,11 +237,13 @@ When running servers in your container, you need to use the correct URL format:
 
 | Context | URL Format |
 |---------|------------|
-| Inside container (localhost) | `http://localhost:3000` |
-| From host to container | `http://host.docker.internal:HOST_PORT` |
-| Expo deep link | `exp://host.docker.internal:HOST_PORT` |
+| Inside container | `http://localhost:CONTAINER_PORT` |
+| From host (Playwright/iOS) | `http://localhost:HOST_PORT` |
+| Expo deep link | `exp://localhost:HOST_PORT` |
 
-**Use `hive_get_test_url()` to get the correct host-accessible URL!**
+> **Remember**: Playwright and iOS Simulator run on the host, so they access `localhost:HOST_PORT`.
+
+**Use `hive_get_test_url()` to get the correct URL automatically!**
 
 ---
 
@@ -304,7 +306,7 @@ These environment variables are available in your container:
 | `AGENT_ROLE` | Your role: `queen` or `worker` |
 | `AGENT_NAME` | Your name: `queen` or `drone-N` |
 | `HIVE_EXPOSED_PORTS` | Port mappings (e.g., `3000:13000,8081:18081`) |
-| `HIVE_HOST_BASE` | Host address (`host.docker.internal`) |
+| `HIVE_HOST_BASE` | Host address (`localhost`) |
 | `REDIS_HOST` | Redis hostname |
 | `REDIS_PASSWORD` | Redis auth password |
 

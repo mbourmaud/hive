@@ -195,7 +195,7 @@ For all tasks, drones should follow this workflow:
 
 // 2. Get test URL
 hive_get_test_url({ port: 8081, protocol: "exp" })
-// Returns: { url: "exp://host.docker.internal:18081" }
+// Returns: { url: "exp://localhost:18081" }
 
 // 3. Prepare simulator
 ios_list_devices()
@@ -205,7 +205,7 @@ ios_install_expo_go({ device: "iPhone 15" })
 // 4. Open app
 ios_open_url({
   device: "booted",
-  url: "exp://host.docker.internal:18081"
+  url: "exp://localhost:18081"
 })
 
 // 5. Wait for app to load

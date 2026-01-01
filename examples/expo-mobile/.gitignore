@@ -4,3 +4,7 @@
 
 expo-env.d.ts
 # @end expo-clinode_modules/
+
+# Hive (multi-agent Claude Code)
+.hive/
+hive.yaml

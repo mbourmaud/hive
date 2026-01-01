@@ -46,10 +46,10 @@ When a drone receives a task, it follows this workflow:
 
 3. GET TEST URL
    hive_get_test_url(port=5173)
-   -> http://host.docker.internal:15173
+   -> http://localhost:15173
 
 4. NAVIGATE WITH PLAYWRIGHT
-   browser_navigate(url="http://host.docker.internal:15173")
+   browser_navigate(url="http://localhost:15173")
    browser_snapshot()  # Understand the page structure
 
 5. INTERACT & TEST
@@ -115,8 +115,8 @@ host_mcps:
 
 | Drone | Container Port | Host Port | Test URL |
 |-------|----------------|-----------|----------|
-| drone-1 | 5173 | 15173 | `http://host.docker.internal:15173` |
-| drone-2 | 5173 | 15174 | `http://host.docker.internal:15174` |
+| drone-1 | 5173 | 15173 | `http://localhost:15173` |
+| drone-2 | 5173 | 15174 | `http://localhost:15174` |
 
 ## Example Tasks for Queen
 
@@ -184,11 +184,11 @@ server: {
 
 1. Verify server is running: `curl http://localhost:5173`
 2. Check port mapping in `hive.yaml`
-3. Use `host.docker.internal`, not `localhost`
+3. Use `localhost`, not `localhost`
 
 ## Development Tips
 
-1. **Always log server startup**: Use `hive-log "SERVER RUNNING: http://localhost:5173"` so Queen knows Vite is running.
+1. **Always log server startup**: Use `hive-log "🚀 SERVER RUNNING: http://localhost:5173"` so Queen knows Vite is running.
 
 2. **Use browser_snapshot() first**: Before interacting, always get the accessibility tree to understand the page.
 
@@ -197,3 +197,52 @@ server: {
 4. **Use headless: false for debugging**: Watch the browser as drones interact with it.
 
 5. **Share via clipboard**: Use `clipboard_write_text()` to share URLs or data with the user.
+
+## Skills Reference
+
+Drones have access to step-by-step skill guides in `~/skills/`:
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| Web Testing | `cat ~/skills/test-web.md` | Complete Playwright browser testing workflow |
+| Port Networking | `cat ~/skills/port-networking.md` | Port mapping and URL discovery |
+
+**Tip**: Before testing, drones should read the relevant skill to understand the workflow.
+
+## Environment Variables
+
+These are auto-configured by `hive init`:
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `HIVE_EXPOSED_PORTS` | Port mappings | `5173:15173` |
+| `HIVE_HOST_BASE` | Host address | `localhost` |
+
+## Quick Reference
+
+```bash
+# Start project with Hive
+cp -r examples/react-web ~/my-app && cd ~/my-app
+hive start
+
+# Connect to Queen
+hive connect queen
+
+# Assign web testing task
+hive-assign drone-1 "Add dark mode" "Implement dark mode toggle in Header.tsx, test with Playwright" "TASK-1"
+
+# Watch browser (headless: false)
+# Browser opens automatically on your Mac when drones test!
+```
+
+## Testing Workflow Summary
+
+```
+1. npm run dev &                    # Start dev server
+2. hive_get_test_url(port=5173)     # Get host-accessible URL
+3. browser_navigate(url="...")       # Open in Playwright
+4. browser_snapshot()               # Understand page structure
+5. browser_click/type/wait          # Interact with elements
+6. browser_screenshot()             # Capture evidence
+7. hive_complete_task(result="...") # Mark as done
+```

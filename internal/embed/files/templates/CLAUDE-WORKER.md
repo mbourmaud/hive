@@ -257,7 +257,7 @@ Use MCP tool: hive_get_test_url
 Arguments: { "port": 3000 }
 ```
 
-Returns: `http://host.docker.internal:13000` - use this with Playwright!
+Returns: `http://localhost:13000` - use this with Playwright!
 
 ### Web App Testing with Playwright
 
@@ -272,12 +272,12 @@ Returns: `http://host.docker.internal:13000` - use this with Playwright!
 2. **Get the test URL:**
    ```
    hive_get_test_url(port=3000)
-   → Returns: { url: "http://host.docker.internal:13000" }
+   → Returns: { url: "http://localhost:13000" }
    ```
 
 3. **Test with Playwright MCP:**
    ```
-   browser_navigate(url="http://host.docker.internal:13000")
+   browser_navigate(url="http://localhost:13000")
    browser_snapshot()   # Understand the page
    browser_type(element="email input", text="test@example.com")
    browser_click(element="login button")
@@ -302,14 +302,14 @@ Returns: `http://host.docker.internal:13000` - use this with Playwright!
 2. **Get the Expo URL:**
    ```
    hive_get_test_url(port=8081, protocol="exp")
-   → Returns: { url: "exp://host.docker.internal:18081" }
+   → Returns: { url: "exp://localhost:18081" }
    ```
 
 3. **Test with iOS MCP:**
    ```
    ios_list_devices()                    # Find available simulators
    ios_boot_device(deviceId="...")       # Start iPhone 15
-   ios_open_url(deviceId="booted", url="exp://host.docker.internal:18081")
+   ios_open_url(deviceId="booted", url="exp://localhost:18081")
    ios_screenshot(deviceId="booted")     # Capture the result
    ```
 
@@ -393,6 +393,31 @@ hive-log "EMOJI Action: details" [level]
 Levels: `info` (default), `warning`, `error`, `debug`
 
 **The Queen should NEVER be blind to what you're doing.** Log your progress continuously.
+
+---
+
+## 📚 Skills Reference
+
+Detailed step-by-step guides are available in `~/skills/`:
+
+| Skill | File | Description |
+|-------|------|-------------|
+| Hive Task Workflow | `~/skills/hive-task-workflow.md` | Complete task lifecycle management |
+| iOS Testing | `~/skills/test-ios.md` | Test Expo/React Native apps on iOS Simulator |
+| Web Testing | `~/skills/test-web.md` | Test web apps with Playwright browser automation |
+| Port Networking | `~/skills/port-networking.md` | Understand container port mappings |
+| Troubleshooting | `~/skills/troubleshooting.md` | Fix common issues |
+
+**Before starting work, read the relevant skill guide!**
+
+```bash
+# Read a skill
+cat ~/skills/hive-task-workflow.md  # ALWAYS read this first!
+cat ~/skills/test-ios.md
+cat ~/skills/test-web.md
+cat ~/skills/port-networking.md
+cat ~/skills/troubleshooting.md
+```
 
 ---
 

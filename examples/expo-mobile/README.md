@@ -45,7 +45,7 @@ When a drone receives a task, it follows this workflow:
 
 3. GET TEST URL
    hive_get_test_url(port=8081, protocol="exp")
-   -> exp://host.docker.internal:18081
+   -> exp://localhost:18081
 
 4. PREPARE SIMULATOR
    ios_list_devices()
@@ -53,7 +53,7 @@ When a drone receives a task, it follows this workflow:
    ios_install_expo_go(device="iPhone 15")
 
 5. OPEN APP IN EXPO GO
-   ios_open_url(device="booted", url="exp://host.docker.internal:18081")
+   ios_open_url(device="booted", url="exp://localhost:18081")
 
 6. TEST & CAPTURE
    ios_screenshot(device="booted", outputPath="/hive-shared/done.png")
@@ -110,8 +110,8 @@ host_mcps:
 
 | Drone | Container Port | Host Port | Test URL |
 |-------|----------------|-----------|----------|
-| drone-1 | 8081 | 18081 | `exp://host.docker.internal:18081` |
-| drone-2 | 8081 | 18082 | `exp://host.docker.internal:18082` |
+| drone-1 | 8081 | 18081 | `exp://localhost:18081` |
+| drone-2 | 8081 | 18082 | `exp://localhost:18082` |
 
 ## Example Tasks for Queen
 
@@ -184,14 +184,51 @@ ios_get_status()
 
 1. Verify Metro is running: `curl http://localhost:8081`
 2. Check the test URL: `hive_get_test_url(port=8081, protocol="exp")`
-3. Ensure you're using `host.docker.internal`, not `localhost`
+3. Ensure you're using `localhost`, not `localhost`
 
 ## Development Tips
 
-1. **Always log server startup**: Use `hive-log "SERVER RUNNING: http://localhost:8081"` so Queen knows Metro is running.
+1. **Always log server startup**: Use `hive-log "🚀 SERVER RUNNING: http://localhost:8081"` so Queen knows Metro is running.
 
 2. **Use screenshots as evidence**: Always capture screenshots before marking tasks complete.
 
 3. **Test on multiple devices**: Use `ios_list_devices()` to find different iPhone models.
 
 4. **Share data via clipboard**: Use `clipboard_write_text()` to share URLs or data with the user.
+
+## Skills Reference
+
+Drones have access to step-by-step skill guides in `~/skills/`:
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| iOS Testing | `cat ~/skills/test-ios.md` | Complete iOS Simulator testing workflow |
+| Port Networking | `cat ~/skills/port-networking.md` | Port mapping and URL discovery |
+
+**Tip**: Before testing, drones should read the relevant skill to understand the workflow.
+
+## Environment Variables
+
+These are auto-configured by `hive init`:
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `EXPO_PACKAGER_PROXY_URL` | Tells Metro to advertise host port | `http://localhost:18081` |
+| `HIVE_EXPOSED_PORTS` | Port mappings | `8081:18081` |
+
+## Quick Reference
+
+```bash
+# Start project with Hive
+cp -r examples/expo-mobile ~/my-app && cd ~/my-app
+hive start
+
+# Connect to Queen
+hive connect queen
+
+# Assign iOS testing task
+hive-assign drone-1 "Add login button" "Create login button on home screen, test on iOS Simulator" "TASK-1"
+
+# View screenshots
+open .hive/shared/
+```

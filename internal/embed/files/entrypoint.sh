@@ -290,6 +290,18 @@ if [ -f "/hive-config/templates/HIVE-CAPABILITIES.md" ]; then
     log "[+] Linked Hive Capabilities to ~/HIVE-CAPABILITIES.md"
 fi
 
+# Link skills directory (testing workflows, best practices)
+if [ -d "/hive-config/templates/skills" ]; then
+    mkdir -p ~/skills
+    for skill_file in /hive-config/templates/skills/*.md; do
+        if [ -f "$skill_file" ]; then
+            skill_name=$(basename "$skill_file")
+            ln -sf "$skill_file" ~/skills/"$skill_name"
+        fi
+    done
+    log "[+] Linked skills to ~/skills/"
+fi
+
 # Create hive-config symlink in workspace for relative path access
 # Allows agents to read hive-config/hive.yaml from /workspace
 ln -sf /hive-config /workspace/hive-config
