@@ -57,6 +57,7 @@ func generateDockerComposeFromConfig(cfg *config.Config) error {
 		CACertPath:       cfg.Network.CACert,
 		ExtraHosts:       cfg.Network.ExtraHosts,
 		NetworkEnv:       networkEnv,
+		MountSource:      cfg.Workspace.MountSource,
 	}
 	content := compose.GenerateWithOptions(opts)
 	return os.WriteFile(".hive/docker-compose.yml", []byte(content), 0644)

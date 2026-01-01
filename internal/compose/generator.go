@@ -22,6 +22,7 @@ type Options struct {
 	CACertPath       string             // Path to CA certificate for corporate proxy
 	ExtraHosts       []string           // Extra /etc/hosts entries (e.g., "host.docker.internal:host-gateway")
 	NetworkEnv       map[string]string  // Network-related environment variables
+	MountSource      bool               // Mount parent directory as workspace (instead of git worktrees)
 }
 
 // Generate creates a docker-compose.yml content with the specified options
@@ -128,9 +129,14 @@ services:
 		}
 	}
 
-	sb.WriteString(`    volumes:
-      - ./workspaces/queen:/workspace
-      - node-modules-queen:/workspace/node_modules
+	sb.WriteString("    volumes:\n")
+	// Choose workspace mount: parent directory (mount_source) or git worktree
+	if opts.MountSource {
+		sb.WriteString("      - ..:/workspace\n")
+	} else {
+		sb.WriteString("      - ./workspaces/queen:/workspace\n")
+	}
+	sb.WriteString(`      - node-modules-queen:/workspace/node_modules
       - ../.git:/workspace-git
       - ../.claude:/workspace/.claude
       - .:/hive-config:ro
@@ -262,9 +268,14 @@ func generateWorkerService(index int, prefix string, opts Options) string {
 		}
 	}
 
-	sb.WriteString(fmt.Sprintf(`    volumes:
-      - ./workspaces/drone-%d:/workspace
-      - node-modules-drone-%d:/workspace/node_modules
+	sb.WriteString("    volumes:\n")
+	// Choose workspace mount: parent directory (mount_source) or git worktree
+	if opts.MountSource {
+		sb.WriteString("      - ..:/workspace\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("      - ./workspaces/drone-%d:/workspace\n", index))
+	}
+	sb.WriteString(fmt.Sprintf(`      - node-modules-drone-%d:/workspace/node_modules
       - ../.git:/workspace-git
       - ../.claude:/workspace/.claude
       - .:/hive-config:ro
@@ -280,7 +291,7 @@ func generateWorkerService(index int, prefix string, opts Options) string {
       - node-modules-cache:/home/agent/node_modules_cache
       - tools-cache:/home/agent/.tools-cache
       - ./workspaces/drone-%d/.claude-projects:/home/agent/.claude/projects
-`, index, index, index, index))
+`, index, index, index))
 
 	// Add extra volumes if configured
 	for _, vol := range opts.ExtraVolumes {

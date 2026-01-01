@@ -30,6 +30,15 @@ var startCmd = &cobra.Command{
 		// Load config (from hive.yaml or defaults)
 		cfg := config.LoadOrDefault()
 
+		// Check if .hive/ exists, if not, run initial setup
+		if !fileExists(".hive/entrypoint.sh") {
+			fmt.Printf("%s\n", ui.StyleCyan.Render("📦 First run - setting up .hive/..."))
+			if err := runFirstTimeSetup(cfg); err != nil {
+				return fmt.Errorf("first-time setup failed: %w", err)
+			}
+			fmt.Println()
+		}
+
 		// Run preflight checks unless skipped
 		if !startSkipChecks {
 			results := preflight.RunAllChecks()
@@ -269,6 +278,95 @@ func startHostMCPs(manager *hostmcp.Manager, cfg *config.Config) error {
 
 	if len(errors) > 0 {
 		return fmt.Errorf("some host MCPs failed: %v", errors)
+	}
+
+	return nil
+}
+
+// runFirstTimeSetup extracts hive files and sets up .hive/ directory
+// This is called automatically by 'hive start' when .hive/ doesn't exist
+// but hive.yaml is present, enabling a simpler workflow where users just
+// copy a project with hive.yaml and run 'hive start' without 'hive init'
+func runFirstTimeSetup(cfg *config.Config) error {
+	hiveDir := ".hive"
+
+	// Extract hive files to .hive/ directory
+	if err := extractHiveFiles(""); err != nil {
+		return fmt.Errorf("failed to extract hive files: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Extracted .hive/", "✓"))
+
+	// Create logs and pids directories for host MCPs
+	if err := os.MkdirAll(filepath.Join(hiveDir, "logs"), 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(hiveDir, "pids"), 0755); err != nil {
+		return fmt.Errorf("failed to create pids directory: %w", err)
+	}
+
+	// Detect Claude OAuth token from host
+	claudeToken := detectClaudeToken()
+
+	// Generate .env file with defaults from config
+	envConfig := map[string]string{
+		"WORKSPACE_NAME":        cfg.Workspace.Name,
+		"GIT_REPO_URL":          cfg.Workspace.GitURL,
+		"HIVE_CLAUDE_BACKEND":   "cli",
+		"WORKER_MODE":           "interactive",
+		"CLAUDE_CODE_OAUTH_TOKEN": claudeToken,
+	}
+	if err := writeEnvFile(envConfig, cfg.Agents.Workers.Count); err != nil {
+		return fmt.Errorf("failed to write .env: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Created .hive/.env", "✓"))
+
+	// Generate .env.generated from hive.yaml
+	if err := cfg.WriteEnvGenerated(hiveDir); err != nil {
+		return fmt.Errorf("failed to generate .env.generated: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Generated .hive/.env.generated", "✓"))
+
+	// Generate docker-compose.yml
+	if err := generateDockerComposeFromConfig(cfg); err != nil {
+		return fmt.Errorf("failed to generate docker-compose.yml: %w", err)
+	}
+	fmt.Print(ui.ProgressLine("Generated docker-compose.yml", "✓"))
+
+	// Sync hive.yaml to .hive/
+	if err := syncHiveYAML(); err != nil {
+		fmt.Printf("  %s\n", ui.Warning("hive.yaml sync: "+err.Error()))
+	}
+
+	// Sync host MCPs to .hive/
+	if err := syncHostMCPs(); err != nil {
+		fmt.Printf("  %s\n", ui.Warning("host MCPs sync: "+err.Error()))
+	}
+
+	// Sync custom Dockerfiles if configured
+	if cfg.Agents.Queen.Dockerfile != "" || cfg.Agents.Workers.Dockerfile != "" {
+		if err := syncCustomDockerfiles(cfg); err != nil {
+			fmt.Printf("  %s\n", ui.Warning("Custom Dockerfiles: "+err.Error()))
+		}
+	}
+
+	// Copy CA certificate if configured
+	if cfg.Network.CACert != "" {
+		if err := copyCACertificate(cfg); err != nil {
+			return fmt.Errorf("failed to copy CA certificate: %w", err)
+		}
+		fmt.Print(ui.ProgressLine("Copied CA certificate", "✓"))
+	}
+
+	// Create git worktrees for each agent (ignore errors - may already exist or not in git repo)
+	if err := createWorktrees(cfg.Agents.Workers.Count); err != nil {
+		fmt.Printf("  %s\n", ui.StyleDim.Render("Worktrees: skipped ("+err.Error()+")"))
+	} else {
+		fmt.Print(ui.ProgressLine("Created git worktrees", "✓"))
+	}
+
+	// Update .gitignore
+	if err := updateGitignore(); err != nil {
+		fmt.Printf("  %s\n", ui.Warning(".gitignore: "+err.Error()))
 	}
 
 	return nil

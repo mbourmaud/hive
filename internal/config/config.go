@@ -139,6 +139,7 @@ type WorkspaceConfig struct {
 	Name            string `yaml:"name"`
 	GitURL          string `yaml:"git_url,omitempty"`
 	ContainerPrefix string `yaml:"container_prefix,omitempty"` // Prefix for container names (default: sanitized project dir name)
+	MountSource     bool   `yaml:"mount_source,omitempty"`     // Mount parent directory as workspace (instead of git worktrees)
 }
 
 // RedisConfig contains Redis settings

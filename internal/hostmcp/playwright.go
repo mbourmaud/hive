@@ -19,6 +19,8 @@ func (m *Manager) StartPlaywright() error {
 	args := []string{
 		"@playwright/mcp@latest",
 		"--port", fmt.Sprintf("%d", port),
+		"--host", "0.0.0.0",           // Bind to all interfaces so containers can access via host.docker.internal
+		"--allowed-hosts", "*",        // Allow connections from any host (needed for Docker containers)
 	}
 
 	// Add browser type
