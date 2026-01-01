@@ -48,6 +48,7 @@ temp/
 *.tmp
 .playwright-mcp/
 hive.yaml
+!examples/*/hive.yaml
 
 # MCP node_modules
 scripts/mcp/node_modules/
