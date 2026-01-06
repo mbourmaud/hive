@@ -58,6 +58,103 @@ func (s *WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data)
 }
 
+func (s *WebServer) handleAgentConversation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	agentID := r.URL.Query().Get("id")
+	if agentID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	messages, err := s.client.GetConversation(agentID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(messages)
+}
+
+func (s *WebServer) handleAgentKill(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	agentID := r.URL.Query().Get("id")
+	if agentID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.client.KillAgent(agentID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "killed"})
+}
+
+func (s *WebServer) handleAgentDestroy(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	agentID := r.URL.Query().Get("id")
+	if agentID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.client.DestroyAgent(agentID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "destroyed"})
+}
+
+func (s *WebServer) handleAgentMessage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	agentID := r.URL.Query().Get("id")
+	if agentID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.client.SendMessage(agentID, body.Content); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "sent"})
+}
+
 func (s *WebServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -112,6 +209,10 @@ func (s *WebServer) Start(port int) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/data", s.handleAPI)
+	mux.HandleFunc("/api/conversation", s.handleAgentConversation)
+	mux.HandleFunc("/api/kill", s.handleAgentKill)
+	mux.HandleFunc("/api/destroy", s.handleAgentDestroy)
+	mux.HandleFunc("/api/message", s.handleAgentMessage)
 	mux.HandleFunc("/ws", s.handleWS)
 
 	addr := fmt.Sprintf(":%d", port)

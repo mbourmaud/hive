@@ -5,22 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hive Monitor</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0d1117;
             color: #c9d1d9;
             min-height: 100vh;
-            padding: 20px;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .app { display: flex; height: 100vh; }
+        .main { flex: 1; padding: 20px; overflow-y: auto; }
+        .sidebar {
+            width: 400px;
+            background: #161b22;
+            border-left: 1px solid #30363d;
+            display: none;
+            flex-direction: column;
         }
+        .sidebar.open { display: flex; }
         header {
             display: flex;
             align-items: center;
@@ -29,10 +30,7 @@
             padding-bottom: 20px;
             border-bottom: 1px solid #30363d;
         }
-        header h1 {
-            font-size: 24px;
-            color: #FFD700;
-        }
+        header h1 { font-size: 24px; color: #FFD700; }
         .status-indicator {
             display: inline-flex;
             align-items: center;
@@ -43,20 +41,14 @@
             background: #238636;
             color: white;
         }
-        .status-indicator.disconnected {
-            background: #da3633;
-        }
+        .status-indicator.disconnected { background: #da3633; }
         .status-indicator .dot {
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: currentColor;
             animation: pulse 2s infinite;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -86,19 +78,22 @@
         .agent-list, .task-list, .solicitation-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
-        .agent-item, .task-item, .solicitation-item {
+        .agent-item {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 12px;
             background: #0d1117;
             border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
+        .agent-item:hover { background: #1c2128; }
+        .agent-item.selected { background: #1f6feb30; border: 1px solid #1f6feb; }
         .agent-status {
-            width: 10px;
-            height: 10px;
+            width: 10px; height: 10px;
             border-radius: 50%;
             flex-shrink: 0;
         }
@@ -106,19 +101,9 @@
         .agent-status.busy { background: #d29922; animation: pulse 1s infinite; }
         .agent-status.error { background: #f85149; }
         .agent-status.stopped { background: #484f58; }
-        .agent-info {
-            flex: 1;
-            min-width: 0;
-        }
-        .agent-name {
-            font-weight: 600;
-            color: #c9d1d9;
-        }
-        .agent-meta {
-            font-size: 12px;
-            color: #8b949e;
-            margin-top: 2px;
-        }
+        .agent-info { flex: 1; min-width: 0; }
+        .agent-name { font-weight: 600; color: #c9d1d9; }
+        .agent-meta { font-size: 12px; color: #8b949e; margin-top: 2px; }
         .agent-specialty {
             display: inline-block;
             padding: 2px 6px;
@@ -129,126 +114,219 @@
             margin-left: 8px;
         }
         .solicitation-item {
+            padding: 12px;
+            background: #0d1117;
+            border-radius: 6px;
             border-left: 3px solid #f85149;
         }
         .solicitation-item.high, .solicitation-item.critical {
             border-left-color: #da3633;
             background: #da363310;
         }
-        .solicitation-urgency {
-            font-size: 11px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .solicitation-urgency.high, .solicitation-urgency.critical {
-            background: #da363330;
-            color: #f85149;
-        }
-        .solicitation-urgency.medium {
-            background: #d2992230;
-            color: #d29922;
-        }
-        .solicitation-urgency.low {
-            background: #30363d;
-            color: #8b949e;
-        }
-        .solicitation-message {
-            flex: 1;
-            font-size: 13px;
-        }
         .empty-state {
             text-align: center;
             padding: 30px;
             color: #8b949e;
         }
-        .task-progress {
+        
+        /* Sidebar styles */
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #30363d;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 8px;
         }
-        .progress-bar {
-            flex: 1;
-            height: 6px;
-            background: #30363d;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        .progress-bar-fill {
-            height: 100%;
-            background: #3fb950;
-            transition: width 0.3s ease;
-        }
-        .progress-text {
-            font-size: 12px;
+        .sidebar-header h2 { font-size: 18px; color: #c9d1d9; }
+        .close-btn {
+            background: none;
+            border: none;
             color: #8b949e;
-            min-width: 40px;
+            font-size: 24px;
+            cursor: pointer;
         }
+        .close-btn:hover { color: #c9d1d9; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 20px; }
+        .detail-section { margin-bottom: 24px; }
+        .detail-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #8b949e;
+            margin-bottom: 12px;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #21262d;
+        }
+        .detail-label { color: #8b949e; }
+        .detail-value { color: #c9d1d9; font-family: monospace; }
+        .conversation {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 12px;
+        }
+        .message { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #21262d; }
+        .message:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .message-role {
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .message-role.user { color: #58a6ff; }
+        .message-role.assistant { color: #8b949e; }
+        .message-content {
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .sidebar-actions {
+            padding: 20px;
+            border-top: 1px solid #30363d;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid #30363d;
+            background: #21262d;
+            color: #c9d1d9;
+            flex: 1;
+        }
+        .btn:hover { background: #30363d; }
+        .btn.danger { background: #da363320; border-color: #da3633; color: #f85149; }
+        .btn.danger:hover { background: #da363340; }
+        .btn.primary { background: #238636; border-color: #238636; color: white; }
+        .btn.primary:hover { background: #2ea043; }
+        
+        .message-input {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            border-top: 1px solid #30363d;
+        }
+        .message-input input {
+            flex: 1;
+            padding: 10px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        .message-input input:focus { outline: none; border-color: #58a6ff; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <span style="font-size: 32px;">🐝</span>
-            <h1>Hive Monitor</h1>
-            <div class="status-indicator" id="connection-status">
-                <span class="dot"></span>
-                <span>Connected</span>
-            </div>
-        </header>
+    <div class="app">
+        <div class="main">
+            <header>
+                <span style="font-size: 32px;">🐝</span>
+                <h1>Hive Monitor</h1>
+                <div class="status-indicator" id="connection-status">
+                    <span class="dot"></span>
+                    <span>Connected</span>
+                </div>
+            </header>
 
-        <div class="grid">
-            <div class="card">
-                <h2>Agents <span class="count" id="agent-count">0</span></h2>
-                <div class="agent-list" id="agent-list">
-                    <div class="empty-state">No agents running</div>
+            <div class="grid">
+                <div class="card">
+                    <h2>Agents <span class="count" id="agent-count">0</span></h2>
+                    <div class="agent-list" id="agent-list">
+                        <div class="empty-state">No agents running</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Solicitations <span class="count" id="solicitation-count">0</span></h2>
+                    <div class="solicitation-list" id="solicitation-list">
+                        <div class="empty-state">No pending solicitations</div>
+                    </div>
+                </div>
+
+                <div class="card" style="grid-column: 1 / -1;">
+                    <h2>Active Tasks <span class="count" id="task-count">0</span></h2>
+                    <div class="task-list" id="task-list">
+                        <div class="empty-state">No active tasks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2 id="sidebar-title">Agent Details</h2>
+                <button class="close-btn" onclick="closeSidebar()">&times;</button>
+            </div>
+            <div class="sidebar-content">
+                <div class="detail-section">
+                    <h3>Information</h3>
+                    <div class="detail-row">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value" id="detail-status">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Port</span>
+                        <span class="detail-value" id="detail-port">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Branch</span>
+                        <span class="detail-value" id="detail-branch">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Specialty</span>
+                        <span class="detail-value" id="detail-specialty">-</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Conversation</h3>
+                    <div class="conversation" id="conversation">
+                        <div class="empty-state">No messages yet</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="card">
-                <h2>Solicitations <span class="count" id="solicitation-count">0</span></h2>
-                <div class="solicitation-list" id="solicitation-list">
-                    <div class="empty-state">No pending solicitations</div>
-                </div>
+            <div class="message-input">
+                <input type="text" id="message-input" placeholder="Send a message..." onkeypress="handleMessageKeypress(event)">
+                <button class="btn primary" onclick="sendMessage()">Send</button>
             </div>
 
-            <div class="card" style="grid-column: 1 / -1;">
-                <h2>Active Tasks <span class="count" id="task-count">0</span></h2>
-                <div class="task-list" id="task-list">
-                    <div class="empty-state">No active tasks</div>
-                </div>
+            <div class="sidebar-actions">
+                <button class="btn" onclick="killAgent()">Stop</button>
+                <button class="btn danger" onclick="destroyAgent()">Destroy</button>
             </div>
         </div>
     </div>
 
     <script>
-        const API_URL = '/api/data';
-        const WS_URL = `ws://${window.location.host}/ws`;
-        
+        let selectedAgent = null;
         let ws = null;
 
         function connectWebSocket() {
-            ws = new WebSocket(WS_URL);
-            
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
             ws.onopen = () => {
                 document.getElementById('connection-status').classList.remove('disconnected');
                 document.getElementById('connection-status').querySelector('span:last-child').textContent = 'Connected';
             };
-            
             ws.onclose = () => {
                 document.getElementById('connection-status').classList.add('disconnected');
                 document.getElementById('connection-status').querySelector('span:last-child').textContent = 'Disconnected';
                 setTimeout(connectWebSocket, 3000);
             };
-            
-            ws.onmessage = (event) => {
-                fetchData();
-            };
+            ws.onmessage = () => fetchData();
         }
 
         async function fetchData() {
             try {
-                const response = await fetch(API_URL);
+                const response = await fetch('/api/data');
                 const data = await response.json();
                 renderAgents(data.agents || []);
                 renderSolicitations(data.solicitations || []);
@@ -268,19 +346,19 @@
             }
 
             container.innerHTML = agents.map(agent => `
-                <div class="agent-item">
+                <div class="agent-item ${selectedAgent?.id === agent.id ? 'selected' : ''}" onclick="selectAgent('${agent.id}')">
                     <div class="agent-status ${agent.status}"></div>
                     <div class="agent-info">
                         <div class="agent-name">
                             ${agent.name}
                             ${agent.specialty ? `<span class="agent-specialty">${agent.specialty}</span>` : ''}
                         </div>
-                        <div class="agent-meta">
-                            :${agent.port} · ${agent.branch}
-                        </div>
+                        <div class="agent-meta">:${agent.port} · ${agent.branch}</div>
                     </div>
                 </div>
             `).join('');
+            
+            window.agentsData = agents;
         }
 
         function renderSolicitations(solicitations) {
@@ -295,10 +373,8 @@
 
             container.innerHTML = pending.map(sol => `
                 <div class="solicitation-item ${sol.urgency}">
-                    <span class="solicitation-urgency ${sol.urgency}">${sol.urgency}</span>
-                    <div class="solicitation-message">
-                        <strong>${sol.agent_name}</strong>: ${sol.message.substring(0, 100)}${sol.message.length > 100 ? '...' : ''}
-                    </div>
+                    <strong>${sol.agent_name}</strong> [${sol.type}]<br>
+                    <span style="color: #8b949e">${sol.message.substring(0, 150)}${sol.message.length > 150 ? '...' : ''}</span>
                 </div>
             `).join('');
         }
@@ -313,30 +389,113 @@
                 return;
             }
 
-            container.innerHTML = active.map(task => {
-                const progress = task.total_steps > 0 
-                    ? Math.round((task.current_step / task.total_steps) * 100) 
-                    : 0;
-                return `
-                    <div class="task-item">
-                        <div class="agent-info">
-                            <div class="agent-name">${task.agent_name || task.agent_id}</div>
-                            <div class="agent-meta">${task.title || 'Task in progress'}</div>
-                        </div>
-                        <div class="task-progress">
-                            <div class="progress-bar">
-                                <div class="progress-bar-fill" style="width: ${progress}%"></div>
-                            </div>
-                            <span class="progress-text">${task.current_step}/${task.total_steps || '?'}</span>
-                        </div>
+            container.innerHTML = active.map(task => `
+                <div class="agent-item">
+                    <div class="agent-info">
+                        <div class="agent-name">${task.agent_name || task.agent_id}</div>
+                        <div class="agent-meta">${task.title || 'Task in progress'}</div>
                     </div>
-                `;
-            }).join('');
+                    <span style="color: #8b949e">${task.current_step}/${task.total_steps || '?'}</span>
+                </div>
+            `).join('');
+        }
+
+        async function selectAgent(agentId) {
+            const agent = window.agentsData?.find(a => a.id === agentId);
+            if (!agent) return;
+
+            selectedAgent = agent;
+            document.getElementById('sidebar').classList.add('open');
+            document.getElementById('sidebar-title').textContent = agent.name;
+            document.getElementById('detail-status').textContent = agent.status;
+            document.getElementById('detail-port').textContent = agent.port;
+            document.getElementById('detail-branch').textContent = agent.branch;
+            document.getElementById('detail-specialty').textContent = agent.specialty || '-';
+
+            document.querySelectorAll('.agent-item').forEach(el => el.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+
+            await fetchConversation();
+        }
+
+        async function fetchConversation() {
+            if (!selectedAgent) return;
+
+            try {
+                const response = await fetch(`/api/conversation?id=${selectedAgent.id}`);
+                const messages = await response.json();
+                renderConversation(messages || []);
+            } catch (error) {
+                console.error('Failed to fetch conversation:', error);
+            }
+        }
+
+        function renderConversation(messages) {
+            const container = document.getElementById('conversation');
+
+            if (!messages || messages.length === 0) {
+                container.innerHTML = '<div class="empty-state">No messages yet</div>';
+                return;
+            }
+
+            container.innerHTML = messages.slice(-20).map(msg => `
+                <div class="message">
+                    <div class="message-role ${msg.role}">${msg.role}</div>
+                    <div class="message-content">${escapeHtml(msg.content?.substring(0, 500) || '')}${(msg.content?.length || 0) > 500 ? '...' : ''}</div>
+                </div>
+            `).join('');
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.querySelectorAll('.agent-item').forEach(el => el.classList.remove('selected'));
+            selectedAgent = null;
+        }
+
+        async function killAgent() {
+            if (!selectedAgent || !confirm(`Stop agent ${selectedAgent.name}?`)) return;
+            await fetch(`/api/kill?id=${selectedAgent.id}`, { method: 'POST' });
+            fetchData();
+        }
+
+        async function destroyAgent() {
+            if (!selectedAgent || !confirm(`Destroy agent ${selectedAgent.name}? This will also remove its worktree.`)) return;
+            await fetch(`/api/destroy?id=${selectedAgent.id}`, { method: 'POST' });
+            closeSidebar();
+            fetchData();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            if (!content || !selectedAgent) return;
+
+            await fetch(`/api/message?id=${selectedAgent.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+
+            input.value = '';
+            setTimeout(fetchConversation, 1000);
+        }
+
+        function handleMessageKeypress(event) {
+            if (event.key === 'Enter') sendMessage();
         }
 
         connectWebSocket();
         fetchData();
         setInterval(fetchData, 5000);
+        setInterval(() => { if (selectedAgent) fetchConversation(); }, 3000);
     </script>
 </body>
 </html>

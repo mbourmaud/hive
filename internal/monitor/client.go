@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -130,6 +131,65 @@ func (c *HubClient) GetHealth() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return health, nil
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+func (c *HubClient) GetConversation(agentID string) ([]Message, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/agents/" + agentID + "/conversation")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var messages []Message
+	if err := json.NewDecoder(resp.Body).Decode(&messages); err != nil {
+		return nil, err
+	}
+	return messages, nil
+}
+
+func (c *HubClient) KillAgent(agentID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/agents/"+agentID, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (c *HubClient) DestroyAgent(agentID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/agents/"+agentID+"/destroy", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (c *HubClient) SendMessage(agentID, content string) error {
+	body := fmt.Sprintf(`{"content": %q}`, content)
+	resp, err := c.httpClient.Post(
+		c.baseURL+"/agents/"+agentID+"/message",
+		"application/json",
+		strings.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
 }
 
 func (c *HubClient) ConnectWebSocket() error {

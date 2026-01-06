@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -19,6 +20,10 @@ var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#7D56F4"))
+
+	selectedStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#3b3b58")).
+			Foreground(lipgloss.Color("#ffffff"))
 
 	agentReadyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#04B575"))
@@ -39,10 +44,19 @@ var (
 	dimStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#666666"))
 
-	boxStyle = lipgloss.NewStyle().
+	panelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#444444")).
 			Padding(0, 1)
+
+	userMsgStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#58a6ff"))
+
+	assistantMsgStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#8b949e"))
+
+	actionStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#238636"))
 )
 
 type tickMsg time.Time
@@ -52,13 +66,32 @@ type dataMsg struct {
 	solicitations []Solicitation
 	err           error
 }
+type conversationMsg struct {
+	agentID  string
+	messages []Message
+	err      error
+}
+
+type viewMode int
+
+const (
+	viewList viewMode = iota
+	viewDetail
+	viewMessage
+)
 
 type Model struct {
 	client        *HubClient
 	spinner       spinner.Model
+	textInput     textinput.Model
 	agents        []Agent
 	tasks         []Task
 	solicitations []Solicitation
+	conversation  []Message
+	selectedIdx   int
+	selectedAgent *Agent
+	viewMode      viewMode
+	scrollOffset  int
 	width         int
 	height        int
 	err           error
@@ -70,9 +103,15 @@ func NewModel(hubURL string) Model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700"))
 
+	ti := textinput.New()
+	ti.Placeholder = "Type message to send..."
+	ti.CharLimit = 500
+	ti.Width = 50
+
 	return Model{
-		client:  NewHubClient(hubURL),
-		spinner: s,
+		client:    NewHubClient(hubURL),
+		spinner:   s,
+		textInput: ti,
 	}
 }
 
@@ -106,23 +145,32 @@ func (m Model) fetchData() tea.Msg {
 	}
 }
 
+func (m Model) fetchConversation(agentID string) tea.Cmd {
+	return func() tea.Msg {
+		messages, err := m.client.GetConversation(agentID)
+		return conversationMsg{agentID: agentID, messages: messages, err: err}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c", "esc":
-			m.client.Close()
-			return m, tea.Quit
-		case "r":
-			return m, m.fetchData
+		if m.viewMode == viewMessage {
+			return m.handleMessageInput(msg)
 		}
+		return m.handleKeyPress(msg)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
 	case tickMsg:
-		return m, tea.Batch(m.fetchData, m.tick())
+		cmds = append(cmds, m.fetchData, m.tick())
+		if m.selectedAgent != nil {
+			cmds = append(cmds, m.fetchConversation(m.selectedAgent.ID))
+		}
 
 	case dataMsg:
 		if msg.err != nil {
@@ -134,48 +182,211 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agents = msg.agents
 			m.tasks = msg.tasks
 			m.solicitations = msg.solicitations
+			if m.selectedAgent != nil {
+				for i, a := range m.agents {
+					if a.ID == m.selectedAgent.ID {
+						m.agents[i] = a
+						m.selectedAgent = &m.agents[i]
+						break
+					}
+				}
+			}
+		}
+
+	case conversationMsg:
+		if msg.err == nil && m.selectedAgent != nil && msg.agentID == m.selectedAgent.ID {
+			m.conversation = msg.messages
 		}
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		m.client.Close()
+		return m, tea.Quit
+
+	case "esc":
+		if m.viewMode == viewDetail {
+			m.viewMode = viewList
+			m.selectedAgent = nil
+			m.conversation = nil
+		}
+		return m, nil
+
+	case "up", "k":
+		if m.viewMode == viewList && m.selectedIdx > 0 {
+			m.selectedIdx--
+		} else if m.viewMode == viewDetail && m.scrollOffset > 0 {
+			m.scrollOffset--
+		}
+
+	case "down", "j":
+		if m.viewMode == viewList && m.selectedIdx < len(m.agents)-1 {
+			m.selectedIdx++
+		} else if m.viewMode == viewDetail {
+			m.scrollOffset++
+		}
+
+	case "enter":
+		if m.viewMode == viewList && len(m.agents) > 0 {
+			m.selectedAgent = &m.agents[m.selectedIdx]
+			m.viewMode = viewDetail
+			m.scrollOffset = 0
+			return m, m.fetchConversation(m.selectedAgent.ID)
+		}
+
+	case "r":
+		return m, m.fetchData
+
+	case "K":
+		if m.selectedAgent != nil {
+			_ = m.client.KillAgent(m.selectedAgent.ID)
+			return m, m.fetchData
+		}
+
+	case "D":
+		if m.selectedAgent != nil {
+			_ = m.client.DestroyAgent(m.selectedAgent.ID)
+			m.viewMode = viewList
+			m.selectedAgent = nil
+			return m, m.fetchData
+		}
+
+	case "m":
+		if m.selectedAgent != nil {
+			m.viewMode = viewMessage
+			m.textInput.Focus()
+			return m, textinput.Blink
+		}
 	}
 
 	return m, nil
 }
 
+func (m Model) handleMessageInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.viewMode = viewDetail
+		m.textInput.Reset()
+		return m, nil
+
+	case "enter":
+		content := m.textInput.Value()
+		if content != "" && m.selectedAgent != nil {
+			_ = m.client.SendMessage(m.selectedAgent.ID, content)
+			m.textInput.Reset()
+			m.viewMode = viewDetail
+			return m, m.fetchConversation(m.selectedAgent.ID)
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
 func (m Model) View() string {
+	if m.err != nil {
+		return m.renderError()
+	}
+
+	if !m.connected {
+		return m.renderConnecting()
+	}
+
+	if m.viewMode == viewMessage {
+		return m.renderMessageInput()
+	}
+
+	if m.viewMode == viewDetail {
+		return m.renderSplitView()
+	}
+
+	return m.renderListView()
+}
+
+func (m Model) renderError() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
+	b.WriteString("\n\n")
+	b.WriteString(agentErrorStyle.Render(fmt.Sprintf("❌ Connection error: %v", m.err)))
+	b.WriteString("\n\n")
+	b.WriteString(dimStyle.Render("Press 'r' to retry, 'q' to quit"))
+	return b.String()
+}
+
+func (m Model) renderConnecting() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
+	b.WriteString("\n\n")
+	b.WriteString(m.spinner.View())
+	b.WriteString(" Connecting to Hub...")
+	return b.String()
+}
+
+func (m Model) renderMessageInput() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("Send message to %s:\n\n", headerStyle.Render(m.selectedAgent.Name)))
+	b.WriteString(m.textInput.View())
+	b.WriteString("\n\n")
+	b.WriteString(dimStyle.Render("Enter: Send  Esc: Cancel"))
+	return b.String()
+}
+
+func (m Model) renderListView() string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
 	b.WriteString("\n\n")
 
-	if m.err != nil {
-		b.WriteString(agentErrorStyle.Render(fmt.Sprintf("❌ Connection error: %v", m.err)))
-		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Render("Press 'r' to retry, 'q' to quit"))
-		return b.String()
-	}
-
-	if !m.connected {
-		b.WriteString(m.spinner.View())
-		b.WriteString(" Connecting to Hub...")
-		return b.String()
-	}
-
-	b.WriteString(m.renderAgents())
+	b.WriteString(m.renderAgentsList())
 	b.WriteString("\n")
 	b.WriteString(m.renderSolicitations())
 	b.WriteString("\n")
 	b.WriteString(m.renderTasks())
 	b.WriteString("\n\n")
-	b.WriteString(dimStyle.Render("Press 'r' to refresh, 'q' to quit"))
+	b.WriteString(dimStyle.Render("↑↓: Navigate  Enter: Select  r: Refresh  q: Quit"))
 
 	return b.String()
 }
 
-func (m Model) renderAgents() string {
+func (m Model) renderSplitView() string {
+	leftWidth := 35
+	rightWidth := m.width - leftWidth - 5
+	if rightWidth < 40 {
+		rightWidth = 40
+	}
+
+	left := m.renderAgentsListCompact(leftWidth)
+	right := m.renderAgentDetail(rightWidth)
+
+	leftPanel := panelStyle.Width(leftWidth).Render(left)
+	rightPanel := panelStyle.Width(rightWidth).Render(right)
+
+	split := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, " ", rightPanel)
+
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
+	b.WriteString("\n\n")
+	b.WriteString(split)
+	b.WriteString("\n\n")
+	b.WriteString(dimStyle.Render("↑↓: Scroll  K: Kill  D: Destroy  m: Message  Esc: Back  q: Quit"))
+
+	return b.String()
+}
+
+func (m Model) renderAgentsList() string {
 	var b strings.Builder
 
 	b.WriteString(headerStyle.Render("AGENTS"))
@@ -186,19 +397,114 @@ func (m Model) renderAgents() string {
 		return b.String()
 	}
 
-	for _, agent := range m.agents {
-		statusIcon := m.getStatusIcon(agent.Status)
-		statusStyle := m.getStatusStyle(agent.Status)
-
-		line := fmt.Sprintf("  %s %s", statusIcon, statusStyle.Render(agent.Name))
-		if agent.Specialty != "" {
-			line += dimStyle.Render(fmt.Sprintf(" [%s]", agent.Specialty))
+	for i, agent := range m.agents {
+		line := m.formatAgentLine(agent)
+		if i == m.selectedIdx {
+			line = selectedStyle.Render(line)
 		}
-		line += dimStyle.Render(fmt.Sprintf(" :%d %s", agent.Port, agent.Branch))
 		b.WriteString(line + "\n")
 	}
 
 	return b.String()
+}
+
+func (m Model) renderAgentsListCompact(width int) string {
+	var b strings.Builder
+
+	b.WriteString(headerStyle.Render("AGENTS"))
+	b.WriteString(fmt.Sprintf(" (%d)\n\n", len(m.agents)))
+
+	for _, agent := range m.agents {
+		statusIcon := m.getStatusIcon(agent.Status)
+		statusStyle := m.getStatusStyle(agent.Status)
+
+		name := agent.Name
+		if len(name) > width-6 {
+			name = name[:width-9] + "..."
+		}
+
+		line := fmt.Sprintf("  %s %s", statusIcon, statusStyle.Render(name))
+
+		if m.selectedAgent != nil && agent.ID == m.selectedAgent.ID {
+			line = selectedStyle.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	return b.String()
+}
+
+func (m Model) renderAgentDetail(width int) string {
+	if m.selectedAgent == nil {
+		return dimStyle.Render("Select an agent")
+	}
+
+	var b strings.Builder
+	agent := m.selectedAgent
+
+	b.WriteString(headerStyle.Render(agent.Name))
+	if agent.Specialty != "" {
+		b.WriteString(dimStyle.Render(fmt.Sprintf(" [%s]", agent.Specialty)))
+	}
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("─", width-2))
+	b.WriteString("\n\n")
+
+	statusStyle := m.getStatusStyle(agent.Status)
+	b.WriteString(fmt.Sprintf("Status:  %s\n", statusStyle.Render(agent.Status)))
+	b.WriteString(fmt.Sprintf("Port:    %d\n", agent.Port))
+	b.WriteString(fmt.Sprintf("Branch:  %s\n", agent.Branch))
+	b.WriteString("\n")
+
+	b.WriteString(headerStyle.Render("CONVERSATION"))
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("─", width-2))
+	b.WriteString("\n")
+
+	if len(m.conversation) == 0 {
+		b.WriteString(dimStyle.Render("No messages yet\n"))
+	} else {
+		maxMessages := 10
+		start := 0
+		if len(m.conversation) > maxMessages {
+			start = len(m.conversation) - maxMessages
+		}
+
+		for _, msg := range m.conversation[start:] {
+			var style lipgloss.Style
+			var prefix string
+			if msg.Role == "user" {
+				style = userMsgStyle
+				prefix = "▶ "
+			} else {
+				style = assistantMsgStyle
+				prefix = "◀ "
+			}
+
+			content := msg.Content
+			if len(content) > width-10 {
+				content = content[:width-13] + "..."
+			}
+			content = strings.ReplaceAll(content, "\n", " ")
+
+			b.WriteString(style.Render(prefix + content))
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+func (m Model) formatAgentLine(agent Agent) string {
+	statusIcon := m.getStatusIcon(agent.Status)
+	statusStyle := m.getStatusStyle(agent.Status)
+
+	line := fmt.Sprintf("  %s %s", statusIcon, statusStyle.Render(agent.Name))
+	if agent.Specialty != "" {
+		line += dimStyle.Render(fmt.Sprintf(" [%s]", agent.Specialty))
+	}
+	line += dimStyle.Render(fmt.Sprintf(" :%d %s", agent.Port, agent.Branch))
+	return line
 }
 
 func (m Model) renderSolicitations() string {
