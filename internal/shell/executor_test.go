@@ -21,19 +21,19 @@ func TestNewMockExecutor(t *testing.T) {
 // TestMockExecutor_RunCommand tests mocked command execution
 func TestMockExecutor_RunCommand(t *testing.T) {
 	mock := NewMockExecutor()
-	mock.SetOutput("docker ps", "container123")
+	mock.SetOutput("git status", "main")
 
-	stdout, stderr, err := mock.RunCommand("docker", "ps", "-a")
+	stdout, stderr, err := mock.RunCommand("git", "status", "-s")
 	if err != nil {
 		t.Errorf("RunCommand() error = %v", err)
 	}
-	if stdout != "container123" {
-		t.Errorf("RunCommand() stdout = %q, want %q", stdout, "container123")
+	if stdout != "main" {
+		t.Errorf("RunCommand() stdout = %q, want %q", stdout, "main")
 	}
 	if stderr != "" {
 		t.Errorf("RunCommand() stderr = %q, want empty", stderr)
 	}
-	if !mock.HasCommand("docker ps") {
+	if !mock.HasCommand("git status") {
 		t.Error("Command not recorded")
 	}
 }
@@ -41,13 +41,13 @@ func TestMockExecutor_RunCommand(t *testing.T) {
 // TestMockExecutor_RunQuietCommand tests quiet command execution
 func TestMockExecutor_RunQuietCommand(t *testing.T) {
 	mock := NewMockExecutor()
-	mock.SetOutput("docker rm", "")
+	mock.SetOutput("rm file", "")
 
-	err := mock.RunQuietCommand("docker", "rm", "-f", "container123")
+	err := mock.RunQuietCommand("rm", "file", "-f")
 	if err != nil {
 		t.Errorf("RunQuietCommand() error = %v", err)
 	}
-	if !mock.HasCommand("docker rm") {
+	if !mock.HasCommand("rm file") {
 		t.Error("Command not recorded")
 	}
 }
@@ -55,9 +55,9 @@ func TestMockExecutor_RunQuietCommand(t *testing.T) {
 // TestMockExecutor_SetError tests error response
 func TestMockExecutor_SetError(t *testing.T) {
 	mock := NewMockExecutor()
-	mock.SetError("docker ps", errTest)
+	mock.SetError("git status", errTest)
 
-	_, _, err := mock.RunCommand("docker", "ps")
+	_, _, err := mock.RunCommand("git", "status")
 	if err == nil {
 		t.Error("RunCommand() expected error")
 	}
@@ -78,15 +78,15 @@ func (e *testError) Error() string {
 func TestMockExecutor_CommandCount(t *testing.T) {
 	mock := NewMockExecutor()
 
-	mock.RunCommand("docker", "ps")
-	mock.RunCommand("docker", "ps")
-	mock.RunCommand("docker", "images")
+	mock.RunCommand("git", "status")
+	mock.RunCommand("git", "status")
+	mock.RunCommand("git", "log")
 
-	if count := mock.CommandCount("docker ps"); count != 2 {
-		t.Errorf("CommandCount(docker ps) = %d, want 2", count)
+	if count := mock.CommandCount("git status"); count != 2 {
+		t.Errorf("CommandCount(git status) = %d, want 2", count)
 	}
-	if count := mock.CommandCount("docker images"); count != 1 {
-		t.Errorf("CommandCount(docker images) = %d, want 1", count)
+	if count := mock.CommandCount("git log"); count != 1 {
+		t.Errorf("CommandCount(git log) = %d, want 1", count)
 	}
 }
 
@@ -148,8 +148,8 @@ func TestRealExecutor_RunQuietCommand(t *testing.T) {
 // TestMockExecutor_FormatCommand tests command formatting
 func TestMockExecutor_FormatCommand(t *testing.T) {
 	mock := NewMockExecutor()
-	formatted := mock.formatCommand("docker", "ps", "-a", "--filter", "name=test")
-	expected := "docker ps -a --filter name=test"
+	formatted := mock.formatCommand("git", "log", "-n", "10", "--oneline")
+	expected := "git log -n 10 --oneline"
 	if formatted != expected {
 		t.Errorf("formatCommand() = %q, want %q", formatted, expected)
 	}

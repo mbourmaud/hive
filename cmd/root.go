@@ -13,17 +13,19 @@ var DebugMode bool
 var rootCmd = &cobra.Command{
 	Use:   "hive",
 	Short: "HIVE - Claude Multi-Agent System",
-	Long: `HIVE - Run multiple Claude Code agents in isolated Docker containers.
+	Long: `HIVE - Run multiple Claude Code agents with git worktree isolation.
 
-Core Commands:
-  start [N]        Start queen + N workers (default: 2)
-  stop [N|all]     Stop containers (default: all)
-  rm [N|all]       Remove containers (default: all)
-  status           Show running containers
+Commands:
+  spawn <name>     Spawn a new agent with git worktree
+  agents           List running agents
+  msg <agent> <m>  Send message to an agent
+  conv <agent>     Show conversation history
+  kill <agent>     Stop an agent
+  destroy <agent>  Stop agent and remove worktree
+  clean            Remove all agents and worktrees
 
-Direct Access:
-  queen            Start Queen and launch Claude
-  connect <id>     Connect to agent (queen, 1, 2, etc.)`,
+Server:
+  hub              Start the Hive API server`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Check for HIVE_DEBUG environment variable
 		if os.Getenv("HIVE_DEBUG") == "1" || os.Getenv("HIVE_DEBUG") == "true" {

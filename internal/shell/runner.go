@@ -33,7 +33,7 @@ func (r *Runner) RunWithTitle(cmd *exec.Cmd, title string) error {
 }
 
 // RunWithOutput executes a command and shows stdout even in normal mode
-// Useful for read commands like 'docker ps', 'git status', etc.
+// Useful for read commands like 'git status', 'hive agents', etc.
 func (r *Runner) RunWithOutput(cmd *exec.Cmd) error {
 	return r.runInternal(cmd, "", true)
 }

@@ -1,0 +1,44 @@
+{
+  "allowPty": true,
+  "filesystem": {
+    "denyRead": [
+      "{{HOME}}/.ssh",
+      "{{HOME}}/.aws",
+      "{{HOME}}/.gnupg",
+      "{{HOME}}/.config/gh"
+    ],
+    "allowWrite": [
+      "/tmp",
+      "/private/tmp",
+      "/var/folders",
+      "/private/var/folders",
+      "{{HOME}}"
+    ],
+    "denyWrite": [
+      "{{HOME}}/.ssh",
+      "{{HOME}}/.aws",
+      "{{HOME}}/.gnupg",
+      "{{HOME}}/.bashrc",
+      "{{HOME}}/.zshrc",
+      "{{HOME}}/.zprofile",
+      "{{HOME}}/.profile",
+      "{{HOME}}/.gitconfig"
+    ]
+  },
+  "network": {
+    "allowedDomains": [
+      "api.anthropic.com",
+      "claude.ai",
+      "statsig.anthropic.com",
+      "*.statsig.com",
+      "sentry.io",
+      "*.sentry.io",
+      "github.com",
+      "*.github.com",
+      "api.github.com",
+      "registry.npmjs.org"
+    ],
+    "deniedDomains": [],
+    "allowLocalBinding": true
+  }
+}

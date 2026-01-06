@@ -73,8 +73,8 @@ func TestFormatCommand(t *testing.T) {
 		},
 		{
 			name:     "command with multiple args",
-			cmd:      exec.Command("docker", "compose", "-f", "file.yml", "up"),
-			contains: []string{"docker", "compose", "-f", "file.yml", "up"},
+			cmd:      exec.Command("git", "log", "--oneline", "-n", "10"),
+			contains: []string{"git", "log", "--oneline", "-n", "10"},
 		},
 		{
 			name: "command with working directory",

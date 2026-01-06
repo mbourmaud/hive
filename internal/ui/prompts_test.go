@@ -275,8 +275,8 @@ func TestPromptMultiSelectWithStdio(t *testing.T) {
 	testutil.RunPromptTest(t,
 		func(c testutil.ExpectConsole) {
 			c.ExpectString("Select features:")
-			c.Send(" ")         // Toggle first option
-			c.SendLine("")      // Confirm selection
+			c.Send(" ")    // Toggle first option
+			c.SendLine("") // Confirm selection
 			c.ExpectEOF()
 		},
 		func(stdio terminal.Stdio) error {

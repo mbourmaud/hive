@@ -1,4 +1,4 @@
-.PHONY: build install clean test lint embed
+.PHONY: build install clean test lint
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -10,31 +10,11 @@ LDFLAGS := -ldflags "-X github.com/mbourmaud/hive/cmd.Version=$(VERSION) \
 	-X github.com/mbourmaud/hive/cmd.GitCommit=$(GIT_COMMIT) \
 	-X github.com/mbourmaud/hive/cmd.BuildDate=$(BUILD_DATE)"
 
-# Enable Docker BuildKit for faster Docker builds with cache mounts
-export DOCKER_BUILDKIT=1
-
-# Sync embedded files from root to internal/embed/files/
-# Note: docker-compose.yml is generated dynamically by hive init, not embedded
-embed:
-	@mkdir -p internal/embed/files
-	@cp -f entrypoint.sh internal/embed/files/
-	@cp -f start-worker.sh internal/embed/files/ 2>/dev/null || cp internal/embed/files/start-worker.sh start-worker.sh
-	@cp -f worker-daemon.py internal/embed/files/ 2>/dev/null || cp internal/embed/files/worker-daemon.py worker-daemon.py
-	@cp -f backends.py internal/embed/files/ 2>/dev/null || cp internal/embed/files/backends.py backends.py
-	@cp -f tools.py internal/embed/files/ 2>/dev/null || cp internal/embed/files/tools.py tools.py
-	@cp -rf docker internal/embed/files/
-	@cp -rf scripts internal/embed/files/
-	@cp -rf templates internal/embed/files/
-	@cp -f .env.example internal/embed/files/
-	@chmod -R a+r internal/embed/files/
-	@echo "Embedded files synced"
-
-# Build binary (syncs embedded files first)
-build: embed
+# Build binary
+build:
 	go build $(LDFLAGS) -o hive .
 
 # Install to /usr/local/bin
-# Note: Using cat instead of cp to avoid macOS adding com.apple.provenance attribute
 install: build
 	@cat hive | sudo tee /usr/local/bin/hive > /dev/null
 	sudo chmod +x /usr/local/bin/hive
@@ -45,7 +25,7 @@ clean:
 	rm -f hive
 	go clean
 
-# Run Go unit tests
+# Run Go tests
 test:
 	go test -v ./...
 
@@ -55,36 +35,8 @@ test-coverage:
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-# Run smoke tests (quick sanity checks)
-test-smoke: build
-	@echo "Running smoke tests..."
-	@bash tests/smoke/test_basic_workflow.sh
-
-# Run Docker integration tests
-test-docker:
-	@echo "Running Docker integration tests..."
-	@bash tests/integration/test_docker.sh
-
-# Run Git/worktree integration tests (CRITICAL)
-test-git: build
-	@echo "Running Git and worktree tests..."
-	@bash tests/integration/test_git_worktrees.sh
-
-# Run E2E worker daemon tests (bash script)
-test-e2e: build
-	@echo "Running E2E worker daemon tests..."
-	@bash tests/e2e/test_worker_daemon.sh
-
-# Run Go integration tests (requires Docker)
-test-go-integration:
-	@echo "Running Go integration tests with testcontainers..."
-	go test -v -tags=integration ./tests/integration/...
-
-# Run all integration tests (bash scripts)
-test-integration: test-docker test-git
-
-# Run all tests (Go unit + integration + E2E)
-test-all: test test-smoke test-integration test-e2e test-go-integration
+# Run all tests
+test-all: test
 	@echo "✓ All tests passed!"
 
 # Run linter

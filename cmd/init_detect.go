@@ -33,21 +33,31 @@ func detectGitConfig() (email, name, repoURL, workspaceName string) {
 	return
 }
 
+// fileExists checks if a file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // detectProjectType detects the project type based on config files
-func detectProjectType() string {
-	if fileExists("package.json") {
+func detectProjectType(dir string) string {
+	check := func(name string) bool {
+		return fileExists(filepath.Join(dir, name))
+	}
+
+	if check("package.json") {
 		return "node"
 	}
-	if fileExists("go.mod") {
+	if check("go.mod") {
 		return "go"
 	}
-	if fileExists("pyproject.toml") || fileExists("requirements.txt") {
+	if check("pyproject.toml") || check("requirements.txt") {
 		return "python"
 	}
-	if fileExists("Cargo.toml") {
+	if check("Cargo.toml") {
 		return "rust"
 	}
-	return "minimal"
+	return "unknown"
 }
 
 // detectClaudeToken attempts to find Claude OAuth token from existing config
