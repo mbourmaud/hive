@@ -23,6 +23,9 @@ var hiveCommandsScript string
 //go:embed sandbox-config.json
 var sandboxConfigTemplate string
 
+//go:embed agent-system-prompt.md
+var agentSystemPromptTemplate string
+
 const (
 	// DefaultBasePort is the starting port for AgentAPI instances.
 	DefaultBasePort = 3284
@@ -84,6 +87,22 @@ func (s *ProcessSpawner) Spawn(ctx context.Context, opts SpawnOptions) (*Agent, 
 		return nil, fmt.Errorf("failed to setup hive commands: %w", err)
 	}
 
+	hubURL := opts.HubURL
+	if hubURL == "" {
+		hubURL = "http://localhost:8080"
+	}
+
+	if err := s.setupSystemPrompt(wt.Path, systemPromptData{
+		AgentID:   id,
+		AgentName: opts.Name,
+		RepoPath:  opts.RepoPath,
+		Branch:    wt.Branch,
+		Specialty: opts.Specialty,
+		HubURL:    hubURL,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to setup system prompt: %w", err)
+	}
+
 	port, err := s.findAvailablePort()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find available port: %w", err)
@@ -98,11 +117,6 @@ func (s *ProcessSpawner) Spawn(ctx context.Context, opts SpawnOptions) (*Agent, 
 		Status:       StatusStarting,
 		Specialty:    opts.Specialty,
 		CreatedAt:    time.Now(),
-	}
-
-	hubURL := opts.HubURL
-	if hubURL == "" {
-		hubURL = "http://localhost:8080"
 	}
 
 	// Find absolute paths for binaries (needed for sandbox)
@@ -286,6 +300,32 @@ func (s *ProcessSpawner) setupSandboxConfig(worktreePath string) (string, error)
 	}
 
 	return configPath, nil
+}
+
+type systemPromptData struct {
+	AgentID   string
+	AgentName string
+	RepoPath  string
+	Branch    string
+	Specialty string
+	HubURL    string
+}
+
+func (s *ProcessSpawner) setupSystemPrompt(worktreePath string, data systemPromptData) error {
+	prompt := agentSystemPromptTemplate
+	prompt = strings.ReplaceAll(prompt, "{{.AgentID}}", data.AgentID)
+	prompt = strings.ReplaceAll(prompt, "{{.AgentName}}", data.AgentName)
+	prompt = strings.ReplaceAll(prompt, "{{.RepoPath}}", data.RepoPath)
+	prompt = strings.ReplaceAll(prompt, "{{.Branch}}", data.Branch)
+	prompt = strings.ReplaceAll(prompt, "{{.Specialty}}", data.Specialty)
+	prompt = strings.ReplaceAll(prompt, "{{.HubURL}}", data.HubURL)
+
+	claudeMdPath := filepath.Join(worktreePath, "CLAUDE.md")
+	if err := os.WriteFile(claudeMdPath, []byte(prompt), 0644); err != nil {
+		return fmt.Errorf("failed to write CLAUDE.md: %w", err)
+	}
+
+	return nil
 }
 
 // MockSpawner is a mock implementation for testing.
