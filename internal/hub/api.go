@@ -94,11 +94,12 @@ func (h *Hub) handleSpawnAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Emit event
 	h.eventHub.Broadcast(Event{
 		Type: EventAgentSpawned,
 		Data: agentToResponse(a),
 	})
+
+	_ = h.SaveState()
 
 	h.jsonResponse(w, http.StatusCreated, agentToResponse(a))
 }
@@ -142,11 +143,12 @@ func (h *Hub) handleStopAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Emit event
 	h.eventHub.Broadcast(Event{
 		Type: EventAgentStopped,
 		Data: map[string]string{"id": a.ID, "name": a.Name},
 	})
+
+	_ = h.SaveState()
 
 	h.jsonResponse(w, http.StatusOK, map[string]string{"status": "stopped"})
 }
@@ -173,11 +175,12 @@ func (h *Hub) handleDestroyAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Emit event
 	h.eventHub.Broadcast(Event{
 		Type: EventAgentDestroyed,
 		Data: map[string]string{"id": agentID, "name": agentName},
 	})
+
+	_ = h.SaveState()
 
 	h.jsonResponse(w, http.StatusOK, map[string]string{"status": "destroyed"})
 }

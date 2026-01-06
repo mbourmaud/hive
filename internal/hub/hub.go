@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mbourmaud/hive/internal/agent"
@@ -43,6 +45,7 @@ type Hub struct {
 	portRegistry    *port.Registry
 	taskManager     *task.Manager
 	solicitationMgr *solicitation.Manager
+	stateManager    *StateManager
 	server          *http.Server
 	eventHub        *EventHub
 	mu              sync.RWMutex
@@ -97,12 +100,19 @@ func New(cfg Config) (*Hub, error) {
 
 	h.worktreeMgr = worktreeMgr
 	h.agentManager = agent.NewManager(spawner, client)
+	h.stateManager = NewStateManager(cfg.RepoPath)
 
 	return h, nil
 }
 
 // Start starts the hub server.
 func (h *Hub) Start(ctx context.Context) error {
+	// Restore state from previous run
+	if err := h.restoreState(ctx); err != nil {
+		// Log but continue - state restoration is best-effort
+		fmt.Printf("Warning: failed to restore state: %v\n", err)
+	}
+
 	mux := http.NewServeMux()
 
 	// Agent endpoints
@@ -163,9 +173,10 @@ func (h *Hub) Start(ctx context.Context) error {
 
 // Stop gracefully stops the hub server.
 func (h *Hub) Stop(ctx context.Context) error {
-	// Stop all agents first
+	_ = h.SaveState()
+
 	if err := h.agentManager.StopAll(ctx); err != nil {
-		// Log but continue with server shutdown
+		fmt.Printf("Warning: failed to stop all agents: %v\n", err)
 	}
 
 	if h.server != nil {
@@ -222,6 +233,73 @@ func (h *Hub) jsonResponse(w http.ResponseWriter, status int, data interface{}) 
 
 func (h *Hub) jsonError(w http.ResponseWriter, status int, message string) {
 	h.jsonResponse(w, status, map[string]string{"error": message})
+}
+
+func (h *Hub) restoreState(ctx context.Context) error {
+	state, err := h.stateManager.LoadState()
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		return nil
+	}
+
+	restored := 0
+	failed := 0
+
+	for _, as := range state.Agents {
+		a := &agent.Agent{
+			ID:           as.ID,
+			Name:         as.Name,
+			WorktreePath: as.WorktreePath,
+			Branch:       as.Branch,
+			Port:         as.Port,
+			PID:          as.PID,
+			Status:       as.Status,
+			Specialty:    as.Specialty,
+			CreatedAt:    as.CreatedAt,
+		}
+
+		if h.isAgentAlive(ctx, a) {
+			a.Status = agent.StatusReady
+			h.agentManager.RegisterAgent(a)
+			restored++
+		} else {
+			a.Status = agent.StatusStopped
+			failed++
+		}
+	}
+
+	if restored > 0 || failed > 0 {
+		fmt.Printf("State restored: %d agents reconnected, %d agents dead\n", restored, failed)
+	}
+
+	return nil
+}
+
+func (h *Hub) isAgentAlive(ctx context.Context, a *agent.Agent) bool {
+	if a.PID <= 0 {
+		return false
+	}
+
+	process, err := os.FindProcess(a.PID)
+	if err != nil {
+		return false
+	}
+	if err := process.Signal(syscall.Signal(0)); err != nil {
+		return false
+	}
+
+	status, err := agent.NewHTTPClient().GetStatus(ctx, a.Port)
+	if err != nil {
+		return false
+	}
+
+	return status == agent.StatusReady || status == agent.StatusBusy
+}
+
+func (h *Hub) SaveState() error {
+	return h.stateManager.SaveState(h)
 }
 
 // Event type mapping helpers

@@ -242,6 +242,21 @@ func (m *Manager) Count() int {
 	return len(m.agents)
 }
 
+// RegisterAgent registers an existing agent (used for state restoration).
+// The agent is added to the manager but no process is spawned.
+func (m *Manager) RegisterAgent(agent *Agent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.agents[agent.ID] = agent
+}
+
+// UnregisterAgent removes an agent from the manager without stopping it.
+func (m *Manager) UnregisterAgent(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.agents, id)
+}
+
 // CountRunning returns the number of running agents.
 func (m *Manager) CountRunning() int {
 	m.mu.RLock()
