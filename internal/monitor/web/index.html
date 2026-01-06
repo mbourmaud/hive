@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hive Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        header h1 {
+            font-size: 24px;
+            color: #FFD700;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            background: #238636;
+            color: white;
+        }
+        .status-indicator.disconnected {
+            background: #da3633;
+        }
+        .status-indicator .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .card h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #8b949e;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card h2 .count {
+            background: #30363d;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        .agent-list, .task-list, .solicitation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .agent-item, .task-item, .solicitation-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #0d1117;
+            border-radius: 6px;
+        }
+        .agent-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .agent-status.ready { background: #3fb950; }
+        .agent-status.busy { background: #d29922; animation: pulse 1s infinite; }
+        .agent-status.error { background: #f85149; }
+        .agent-status.stopped { background: #484f58; }
+        .agent-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .agent-name {
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+        .agent-meta {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 2px;
+        }
+        .agent-specialty {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #388bfd20;
+            color: #388bfd;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        .solicitation-item {
+            border-left: 3px solid #f85149;
+        }
+        .solicitation-item.high, .solicitation-item.critical {
+            border-left-color: #da3633;
+            background: #da363310;
+        }
+        .solicitation-urgency {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .solicitation-urgency.high, .solicitation-urgency.critical {
+            background: #da363330;
+            color: #f85149;
+        }
+        .solicitation-urgency.medium {
+            background: #d2992230;
+            color: #d29922;
+        }
+        .solicitation-urgency.low {
+            background: #30363d;
+            color: #8b949e;
+        }
+        .solicitation-message {
+            flex: 1;
+            font-size: 13px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #8b949e;
+        }
+        .task-progress {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: #30363d;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: #3fb950;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            font-size: 12px;
+            color: #8b949e;
+            min-width: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <span style="font-size: 32px;">🐝</span>
+            <h1>Hive Monitor</h1>
+            <div class="status-indicator" id="connection-status">
+                <span class="dot"></span>
+                <span>Connected</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Agents <span class="count" id="agent-count">0</span></h2>
+                <div class="agent-list" id="agent-list">
+                    <div class="empty-state">No agents running</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Solicitations <span class="count" id="solicitation-count">0</span></h2>
+                <div class="solicitation-list" id="solicitation-list">
+                    <div class="empty-state">No pending solicitations</div>
+                </div>
+            </div>
+
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>Active Tasks <span class="count" id="task-count">0</span></h2>
+                <div class="task-list" id="task-list">
+                    <div class="empty-state">No active tasks</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/data';
+        const WS_URL = `ws://${window.location.host}/ws`;
+        
+        let ws = null;
+
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                document.getElementById('connection-status').classList.remove('disconnected');
+                document.getElementById('connection-status').querySelector('span:last-child').textContent = 'Connected';
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('connection-status').classList.add('disconnected');
+                document.getElementById('connection-status').querySelector('span:last-child').textContent = 'Disconnected';
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onmessage = (event) => {
+                fetchData();
+            };
+        }
+
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                renderAgents(data.agents || []);
+                renderSolicitations(data.solicitations || []);
+                renderTasks(data.tasks || []);
+            } catch (error) {
+                console.error('Failed to fetch data:', error);
+            }
+        }
+
+        function renderAgents(agents) {
+            const container = document.getElementById('agent-list');
+            document.getElementById('agent-count').textContent = agents.length;
+
+            if (agents.length === 0) {
+                container.innerHTML = '<div class="empty-state">No agents running</div>';
+                return;
+            }
+
+            container.innerHTML = agents.map(agent => `
+                <div class="agent-item">
+                    <div class="agent-status ${agent.status}"></div>
+                    <div class="agent-info">
+                        <div class="agent-name">
+                            ${agent.name}
+                            ${agent.specialty ? `<span class="agent-specialty">${agent.specialty}</span>` : ''}
+                        </div>
+                        <div class="agent-meta">
+                            :${agent.port} · ${agent.branch}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderSolicitations(solicitations) {
+            const pending = solicitations.filter(s => s.status === 'pending');
+            const container = document.getElementById('solicitation-list');
+            document.getElementById('solicitation-count').textContent = pending.length;
+
+            if (pending.length === 0) {
+                container.innerHTML = '<div class="empty-state">No pending solicitations</div>';
+                return;
+            }
+
+            container.innerHTML = pending.map(sol => `
+                <div class="solicitation-item ${sol.urgency}">
+                    <span class="solicitation-urgency ${sol.urgency}">${sol.urgency}</span>
+                    <div class="solicitation-message">
+                        <strong>${sol.agent_name}</strong>: ${sol.message.substring(0, 100)}${sol.message.length > 100 ? '...' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTasks(tasks) {
+            const active = tasks.filter(t => t.status === 'in_progress' || t.status === 'assigned');
+            const container = document.getElementById('task-list');
+            document.getElementById('task-count').textContent = active.length;
+
+            if (active.length === 0) {
+                container.innerHTML = '<div class="empty-state">No active tasks</div>';
+                return;
+            }
+
+            container.innerHTML = active.map(task => {
+                const progress = task.total_steps > 0 
+                    ? Math.round((task.current_step / task.total_steps) * 100) 
+                    : 0;
+                return `
+                    <div class="task-item">
+                        <div class="agent-info">
+                            <div class="agent-name">${task.agent_name || task.agent_id}</div>
+                            <div class="agent-meta">${task.title || 'Task in progress'}</div>
+                        </div>
+                        <div class="task-progress">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" style="width: ${progress}%"></div>
+                            </div>
+                            <span class="progress-text">${task.current_step}/${task.total_steps || '?'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        connectWebSocket();
+        fetchData();
+        setInterval(fetchData, 5000);
+    </script>
+</body>
+</html>
