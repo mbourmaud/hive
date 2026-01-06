@@ -146,6 +146,53 @@ Then Queen can use tools like:
 | `hive hub` | Start the Hub API server |
 | `hive mcp` | Start MCP server for Queen |
 | `hive status` | Show overall status |
+| `hive monitor` | TUI dashboard for real-time monitoring |
+| `hive monitor --web` | Web dashboard (default: port 3000) |
+
+---
+
+## Monitor Dashboard
+
+Hive includes a real-time monitoring dashboard available in both TUI and Web modes.
+
+### TUI Mode
+
+```bash
+hive monitor
+```
+
+**Navigation:**
+- `Tab` - Switch between Agents/Solicitations/Tasks panels
+- `↑↓` or `j/k` - Navigate within a panel
+- `Enter` - Select item (open agent detail view)
+- `Esc` - Go back
+- `r` - Refresh data
+- `q` - Quit
+
+**Agent Actions (in detail view):**
+- `K` - Kill agent
+- `D` - Destroy agent (removes worktree)
+- `m` - Send message
+
+**Solicitation Actions:**
+- `R` - Respond to solicitation
+- `X` - Dismiss solicitation
+
+**Task Actions:**
+- `s` - Start task
+- `c` - Complete task
+- `x` - Cancel task
+
+### Web Mode
+
+```bash
+hive monitor --web --port 3000
+```
+
+Open http://localhost:3000 in your browser to see:
+- **Agents panel** - Click to see details, conversation, and actions
+- **Solicitations panel** - Click to respond or dismiss
+- **Tasks panel** - Create tasks with "+ New Task" button
 
 ---
 
