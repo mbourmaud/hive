@@ -241,3 +241,99 @@ func (c *HubClient) Close() {
 		c.wsConn = nil
 	}
 }
+
+// Task Management
+
+type CreateTaskRequest struct {
+	AgentID     string              `json:"agent_id"`
+	AgentName   string              `json:"agent_name,omitempty"`
+	Title       string              `json:"title"`
+	Description string              `json:"description,omitempty"`
+	Steps       []CreateStepRequest `json:"steps"`
+}
+
+type CreateStepRequest struct {
+	Action      string   `json:"action"`
+	Description string   `json:"description,omitempty"`
+	DoD         []string `json:"dod"`
+	Autonomy    string   `json:"autonomy"`
+}
+
+func (c *HubClient) CreateTask(req CreateTaskRequest) (map[string]interface{}, error) {
+	body, _ := json.Marshal(req)
+	resp, err := c.httpClient.Post(
+		c.baseURL+"/tasks",
+		"application/json",
+		strings.NewReader(string(body)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *HubClient) StartTask(taskID string) error {
+	resp, err := c.httpClient.Post(c.baseURL+"/tasks/"+taskID+"/start", "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (c *HubClient) CompleteTask(taskID string) error {
+	resp, err := c.httpClient.Post(c.baseURL+"/tasks/"+taskID+"/complete", "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (c *HubClient) CancelTask(taskID string) error {
+	req, err := http.NewRequest("DELETE", c.baseURL+"/tasks/"+taskID, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// Solicitation Management
+
+func (c *HubClient) RespondSolicitation(solicitationID, response string) error {
+	body := fmt.Sprintf(`{"response": %q}`, response)
+	resp, err := c.httpClient.Post(
+		c.baseURL+"/solicitations/"+solicitationID+"/respond",
+		"application/json",
+		strings.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (c *HubClient) DismissSolicitation(solicitationID string) error {
+	resp, err := c.httpClient.Post(
+		c.baseURL+"/solicitations/"+solicitationID+"/dismiss",
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}

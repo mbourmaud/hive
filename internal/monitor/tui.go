@@ -78,24 +78,39 @@ const (
 	viewList viewMode = iota
 	viewDetail
 	viewMessage
+	viewSolicitation
+	viewSolicitationResponse
+)
+
+type focusPanel int
+
+const (
+	focusAgents focusPanel = iota
+	focusSolicitations
+	focusTasks
 )
 
 type Model struct {
-	client        *HubClient
-	spinner       spinner.Model
-	textInput     textinput.Model
-	agents        []Agent
-	tasks         []Task
-	solicitations []Solicitation
-	conversation  []Message
-	selectedIdx   int
-	selectedAgent *Agent
-	viewMode      viewMode
-	scrollOffset  int
-	width         int
-	height        int
-	err           error
-	connected     bool
+	client               *HubClient
+	spinner              spinner.Model
+	textInput            textinput.Model
+	agents               []Agent
+	tasks                []Task
+	solicitations        []Solicitation
+	conversation         []Message
+	selectedIdx          int
+	selectedAgent        *Agent
+	selectedSolicitation *Solicitation
+	selectedTask         *Task
+	viewMode             viewMode
+	focusPanel           focusPanel
+	solicitationIdx      int
+	taskIdx              int
+	scrollOffset         int
+	width                int
+	height               int
+	err                  error
+	connected            bool
 }
 
 func NewModel(hubURL string) Model {
@@ -218,33 +233,122 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewMode = viewList
 			m.selectedAgent = nil
 			m.conversation = nil
+		} else if m.viewMode == viewSolicitation || m.viewMode == viewSolicitationResponse {
+			m.viewMode = viewList
+			m.selectedSolicitation = nil
+			m.textInput.Reset()
+		}
+		return m, nil
+
+	case "tab":
+		if m.viewMode == viewList {
+			m.focusPanel = (m.focusPanel + 1) % 3
 		}
 		return m, nil
 
 	case "up", "k":
-		if m.viewMode == viewList && m.selectedIdx > 0 {
-			m.selectedIdx--
+		if m.viewMode == viewList {
+			switch m.focusPanel {
+			case focusAgents:
+				if m.selectedIdx > 0 {
+					m.selectedIdx--
+				}
+			case focusSolicitations:
+				if m.solicitationIdx > 0 {
+					m.solicitationIdx--
+				}
+			case focusTasks:
+				if m.taskIdx > 0 {
+					m.taskIdx--
+				}
+			}
 		} else if m.viewMode == viewDetail && m.scrollOffset > 0 {
 			m.scrollOffset--
 		}
 
 	case "down", "j":
-		if m.viewMode == viewList && m.selectedIdx < len(m.agents)-1 {
-			m.selectedIdx++
+		if m.viewMode == viewList {
+			switch m.focusPanel {
+			case focusAgents:
+				if m.selectedIdx < len(m.agents)-1 {
+					m.selectedIdx++
+				}
+			case focusSolicitations:
+				pending := m.getPendingSolicitations()
+				if m.solicitationIdx < len(pending)-1 {
+					m.solicitationIdx++
+				}
+			case focusTasks:
+				if m.taskIdx < len(m.tasks)-1 {
+					m.taskIdx++
+				}
+			}
 		} else if m.viewMode == viewDetail {
 			m.scrollOffset++
 		}
 
 	case "enter":
-		if m.viewMode == viewList && len(m.agents) > 0 {
-			m.selectedAgent = &m.agents[m.selectedIdx]
-			m.viewMode = viewDetail
-			m.scrollOffset = 0
-			return m, m.fetchConversation(m.selectedAgent.ID)
+		if m.viewMode == viewList {
+			switch m.focusPanel {
+			case focusAgents:
+				if len(m.agents) > 0 {
+					m.selectedAgent = &m.agents[m.selectedIdx]
+					m.viewMode = viewDetail
+					m.scrollOffset = 0
+					return m, m.fetchConversation(m.selectedAgent.ID)
+				}
+			case focusSolicitations:
+				pending := m.getPendingSolicitations()
+				if len(pending) > 0 && m.solicitationIdx < len(pending) {
+					m.selectedSolicitation = &pending[m.solicitationIdx]
+					m.viewMode = viewSolicitation
+				}
+			case focusTasks:
+				if len(m.tasks) > 0 && m.taskIdx < len(m.tasks) {
+					m.selectedTask = &m.tasks[m.taskIdx]
+				}
+			}
 		}
 
 	case "r":
 		return m, m.fetchData
+
+	case "R":
+		if m.viewMode == viewSolicitation && m.selectedSolicitation != nil {
+			m.viewMode = viewSolicitationResponse
+			m.textInput.Focus()
+			return m, textinput.Blink
+		}
+
+	case "X":
+		if m.viewMode == viewSolicitation && m.selectedSolicitation != nil {
+			_ = m.client.DismissSolicitation(m.selectedSolicitation.ID)
+			m.viewMode = viewList
+			m.selectedSolicitation = nil
+			return m, m.fetchData
+		}
+
+	case "s":
+		if m.viewMode == viewList && m.focusPanel == focusTasks && m.selectedTask != nil {
+			if m.selectedTask.Status == "pending" {
+				_ = m.client.StartTask(m.selectedTask.ID)
+				return m, m.fetchData
+			}
+		}
+
+	case "c":
+		if m.viewMode == viewList && m.focusPanel == focusTasks && m.selectedTask != nil {
+			if m.selectedTask.Status == "in_progress" {
+				_ = m.client.CompleteTask(m.selectedTask.ID)
+				return m, m.fetchData
+			}
+		}
+
+	case "x":
+		if m.viewMode == viewList && m.focusPanel == focusTasks && m.selectedTask != nil {
+			_ = m.client.CancelTask(m.selectedTask.ID)
+			return m, m.fetchData
+		}
 
 	case "K":
 		if m.selectedAgent != nil {
@@ -271,20 +375,42 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) getPendingSolicitations() []Solicitation {
+	var pending []Solicitation
+	for _, s := range m.solicitations {
+		if s.Status == "pending" {
+			pending = append(pending, s)
+		}
+	}
+	return pending
+}
+
 func (m Model) handleMessageInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.viewMode = viewDetail
+		if m.viewMode == viewSolicitationResponse {
+			m.viewMode = viewSolicitation
+		} else {
+			m.viewMode = viewDetail
+		}
 		m.textInput.Reset()
 		return m, nil
 
 	case "enter":
 		content := m.textInput.Value()
-		if content != "" && m.selectedAgent != nil {
-			_ = m.client.SendMessage(m.selectedAgent.ID, content)
-			m.textInput.Reset()
-			m.viewMode = viewDetail
-			return m, m.fetchConversation(m.selectedAgent.ID)
+		if content != "" {
+			if m.viewMode == viewSolicitationResponse && m.selectedSolicitation != nil {
+				_ = m.client.RespondSolicitation(m.selectedSolicitation.ID, content)
+				m.textInput.Reset()
+				m.viewMode = viewList
+				m.selectedSolicitation = nil
+				return m, m.fetchData
+			} else if m.selectedAgent != nil {
+				_ = m.client.SendMessage(m.selectedAgent.ID, content)
+				m.textInput.Reset()
+				m.viewMode = viewDetail
+				return m, m.fetchConversation(m.selectedAgent.ID)
+			}
 		}
 		return m, nil
 	}
@@ -307,11 +433,63 @@ func (m Model) View() string {
 		return m.renderMessageInput()
 	}
 
+	if m.viewMode == viewSolicitationResponse {
+		return m.renderSolicitationResponseInput()
+	}
+
+	if m.viewMode == viewSolicitation {
+		return m.renderSolicitationDetail()
+	}
+
 	if m.viewMode == viewDetail {
 		return m.renderSplitView()
 	}
 
 	return m.renderListView()
+}
+
+func (m Model) renderSolicitationDetail() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
+	b.WriteString("\n\n")
+
+	if m.selectedSolicitation == nil {
+		b.WriteString(dimStyle.Render("No solicitation selected"))
+		return b.String()
+	}
+
+	sol := m.selectedSolicitation
+	b.WriteString(solicitationStyle.Render("SOLICITATION"))
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("─", 50))
+	b.WriteString("\n\n")
+
+	b.WriteString(fmt.Sprintf("From:     %s\n", headerStyle.Render(sol.AgentName)))
+	b.WriteString(fmt.Sprintf("Type:     %s\n", sol.Type))
+	b.WriteString(fmt.Sprintf("Urgency:  %s\n", sol.Urgency))
+	b.WriteString("\n")
+
+	b.WriteString(headerStyle.Render("MESSAGE"))
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("─", 50))
+	b.WriteString("\n")
+	b.WriteString(sol.Message)
+	b.WriteString("\n\n")
+
+	b.WriteString(dimStyle.Render("R: Respond  X: Dismiss  Esc: Back  q: Quit"))
+	return b.String()
+}
+
+func (m Model) renderSolicitationResponseInput() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("Respond to %s:\n\n", headerStyle.Render(m.selectedSolicitation.AgentName)))
+	b.WriteString(dimStyle.Render(fmt.Sprintf("[%s] %s\n\n", m.selectedSolicitation.Type, truncate(m.selectedSolicitation.Message, 60))))
+	b.WriteString(m.textInput.View())
+	b.WriteString("\n\n")
+	b.WriteString(dimStyle.Render("Enter: Send  Esc: Cancel"))
+	return b.String()
 }
 
 func (m Model) renderError() string {
@@ -350,13 +528,124 @@ func (m Model) renderListView() string {
 	b.WriteString(titleStyle.Render("🐝 Hive Monitor"))
 	b.WriteString("\n\n")
 
-	b.WriteString(m.renderAgentsList())
+	b.WriteString(m.renderAgentsListWithFocus())
 	b.WriteString("\n")
-	b.WriteString(m.renderSolicitations())
+	b.WriteString(m.renderSolicitationsWithFocus())
 	b.WriteString("\n")
-	b.WriteString(m.renderTasks())
+	b.WriteString(m.renderTasksWithFocus())
 	b.WriteString("\n\n")
-	b.WriteString(dimStyle.Render("↑↓: Navigate  Enter: Select  r: Refresh  q: Quit"))
+
+	help := "Tab: Switch Panel  ↑↓: Navigate  Enter: Select  r: Refresh  q: Quit"
+	if m.focusPanel == focusTasks {
+		help = "Tab: Switch  ↑↓: Navigate  s: Start  c: Complete  x: Cancel  q: Quit"
+	}
+	b.WriteString(dimStyle.Render(help))
+
+	return b.String()
+}
+
+func (m Model) renderAgentsListWithFocus() string {
+	var b strings.Builder
+
+	header := "AGENTS"
+	if m.focusPanel == focusAgents {
+		header = "▶ " + header
+	}
+	b.WriteString(headerStyle.Render(header))
+	b.WriteString(fmt.Sprintf(" (%d)\n", len(m.agents)))
+
+	if len(m.agents) == 0 {
+		b.WriteString(dimStyle.Render("  No agents running\n"))
+		return b.String()
+	}
+
+	for i, agent := range m.agents {
+		line := m.formatAgentLine(agent)
+		if m.focusPanel == focusAgents && i == m.selectedIdx {
+			line = selectedStyle.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	return b.String()
+}
+
+func (m Model) renderSolicitationsWithFocus() string {
+	var b strings.Builder
+
+	pending := m.getPendingSolicitations()
+
+	header := "SOLICITATIONS"
+	if m.focusPanel == focusSolicitations {
+		header = "▶ " + header
+	}
+
+	if len(pending) > 0 {
+		b.WriteString(solicitationStyle.Render(fmt.Sprintf("⚠️  %s (%d pending)\n", header, len(pending))))
+		for i, s := range pending {
+			urgencyIcon := "○"
+			if s.Urgency == "high" || s.Urgency == "critical" {
+				urgencyIcon = "●"
+			}
+			line := fmt.Sprintf("  %s [%s] %s: %s",
+				urgencyIcon,
+				s.Type,
+				s.AgentName,
+				truncate(s.Message, 50))
+			if m.focusPanel == focusSolicitations && i == m.solicitationIdx {
+				line = selectedStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
+	} else {
+		b.WriteString(headerStyle.Render(header))
+		b.WriteString(dimStyle.Render(" (none pending)\n"))
+	}
+
+	return b.String()
+}
+
+func (m Model) renderTasksWithFocus() string {
+	var b strings.Builder
+
+	header := "TASKS"
+	if m.focusPanel == focusTasks {
+		header = "▶ " + header
+	}
+
+	b.WriteString(headerStyle.Render(header))
+	b.WriteString(fmt.Sprintf(" (%d)\n", len(m.tasks)))
+
+	if len(m.tasks) == 0 {
+		b.WriteString(dimStyle.Render("  No tasks\n"))
+		return b.String()
+	}
+
+	for i, t := range m.tasks {
+		statusIcon := "○"
+		switch t.Status {
+		case "in_progress":
+			statusIcon = "◐"
+		case "completed":
+			statusIcon = "●"
+		case "failed":
+			statusIcon = "✗"
+		}
+		progress := ""
+		if t.TotalSteps > 0 {
+			progress = fmt.Sprintf(" [%d/%d]", t.CurrentStep, t.TotalSteps)
+		}
+		line := fmt.Sprintf("  %s %s%s %s",
+			statusIcon,
+			t.AgentName,
+			progress,
+			dimStyle.Render(truncate(t.Title, 40)))
+		if m.focusPanel == focusTasks && i == m.taskIdx {
+			line = selectedStyle.Render(line)
+			m.selectedTask = &m.tasks[i]
+		}
+		b.WriteString(line + "\n")
+	}
 
 	return b.String()
 }

@@ -155,6 +155,126 @@ func (s *WebServer) handleAgentMessage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "sent"})
 }
 
+func (s *WebServer) handleCreateTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	var req CreateTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	result, err := s.client.CreateTask(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *WebServer) handleTaskAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	taskID := r.URL.Query().Get("id")
+	action := r.URL.Query().Get("action")
+
+	if taskID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	var err error
+	switch action {
+	case "start":
+		err = s.client.StartTask(taskID)
+	case "complete":
+		err = s.client.CompleteTask(taskID)
+	case "cancel":
+		err = s.client.CancelTask(taskID)
+	default:
+		http.Error(w, "invalid action", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *WebServer) handleSolicitationRespond(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	solID := r.URL.Query().Get("id")
+	if solID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Response string `json:"response"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.client.RespondSolicitation(solID, body.Response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "responded"})
+}
+
+func (s *WebServer) handleSolicitationDismiss(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	solID := r.URL.Query().Get("id")
+	if solID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.client.DismissSolicitation(solID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "dismissed"})
+}
+
 func (s *WebServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -213,6 +333,10 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/kill", s.handleAgentKill)
 	mux.HandleFunc("/api/destroy", s.handleAgentDestroy)
 	mux.HandleFunc("/api/message", s.handleAgentMessage)
+	mux.HandleFunc("/api/task/create", s.handleCreateTask)
+	mux.HandleFunc("/api/task/action", s.handleTaskAction)
+	mux.HandleFunc("/api/solicitation/respond", s.handleSolicitationRespond)
+	mux.HandleFunc("/api/solicitation/dismiss", s.handleSolicitationDismiss)
 	mux.HandleFunc("/ws", s.handleWS)
 
 	addr := fmt.Sprintf(":%d", port)

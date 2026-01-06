@@ -31,6 +31,7 @@
             border-bottom: 1px solid #30363d;
         }
         header h1 { font-size: 24px; color: #FFD700; }
+        .header-actions { margin-left: auto; display: flex; gap: 10px; }
         .status-indicator {
             display: inline-flex;
             align-items: center;
@@ -75,12 +76,25 @@
             border-radius: 10px;
             font-size: 12px;
         }
+        .card h2 .add-btn {
+            margin-left: auto;
+            background: #238636;
+            border: none;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .card h2 .add-btn:hover { background: #2ea043; }
         .agent-list, .task-list, .solicitation-list {
             display: flex;
             flex-direction: column;
             gap: 8px;
+            max-height: 400px;
+            overflow-y: auto;
         }
-        .agent-item {
+        .agent-item, .task-item {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -90,20 +104,21 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .agent-item:hover { background: #1c2128; }
+        .agent-item:hover, .task-item:hover { background: #1c2128; }
         .agent-item.selected { background: #1f6feb30; border: 1px solid #1f6feb; }
-        .agent-status {
+        .agent-status, .task-status-dot {
             width: 10px; height: 10px;
             border-radius: 50%;
             flex-shrink: 0;
         }
-        .agent-status.ready { background: #3fb950; }
-        .agent-status.busy { background: #d29922; animation: pulse 1s infinite; }
-        .agent-status.error { background: #f85149; }
-        .agent-status.stopped { background: #484f58; }
-        .agent-info { flex: 1; min-width: 0; }
-        .agent-name { font-weight: 600; color: #c9d1d9; }
-        .agent-meta { font-size: 12px; color: #8b949e; margin-top: 2px; }
+        .agent-status.ready, .task-status-dot.completed { background: #3fb950; }
+        .agent-status.busy, .task-status-dot.in_progress { background: #d29922; animation: pulse 1s infinite; }
+        .agent-status.error, .task-status-dot.failed { background: #f85149; }
+        .agent-status.stopped, .task-status-dot.pending { background: #484f58; }
+        .task-status-dot.assigned { background: #58a6ff; }
+        .agent-info, .task-info { flex: 1; min-width: 0; }
+        .agent-name, .task-title { font-weight: 600; color: #c9d1d9; }
+        .agent-meta, .task-meta { font-size: 12px; color: #8b949e; margin-top: 2px; }
         .agent-specialty {
             display: inline-block;
             padding: 2px 6px;
@@ -113,15 +128,52 @@
             font-size: 11px;
             margin-left: 8px;
         }
+        .task-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .task-actions button {
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+            background: #21262d;
+            color: #c9d1d9;
+            cursor: pointer;
+        }
+        .task-actions button:hover { background: #30363d; }
+        .task-actions button.complete { background: #238636; border-color: #238636; }
+        .task-actions button.cancel { background: #da363320; border-color: #da3633; color: #f85149; }
         .solicitation-item {
             padding: 12px;
             background: #0d1117;
             border-radius: 6px;
             border-left: 3px solid #f85149;
+            cursor: pointer;
         }
+        .solicitation-item:hover { background: #1c2128; }
         .solicitation-item.high, .solicitation-item.critical {
             border-left-color: #da3633;
             background: #da363310;
+        }
+        .solicitation-item.medium { border-left-color: #d29922; }
+        .solicitation-item.low { border-left-color: #8b949e; }
+        .solicitation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .solicitation-type {
+            padding: 2px 6px;
+            background: #30363d;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .solicitation-message {
+            color: #8b949e;
+            font-size: 13px;
+            line-height: 1.4;
         }
         .empty-state {
             text-align: center;
@@ -212,7 +264,7 @@
             padding: 20px;
             border-top: 1px solid #30363d;
         }
-        .message-input input {
+        .message-input input, .message-input textarea {
             flex: 1;
             padding: 10px 12px;
             background: #0d1117;
@@ -220,8 +272,125 @@
             border-radius: 6px;
             color: #c9d1d9;
             font-size: 14px;
+            font-family: inherit;
+            resize: none;
         }
-        .message-input input:focus { outline: none; border-color: #58a6ff; }
+        .message-input input:focus, .message-input textarea:focus { outline: none; border-color: #58a6ff; }
+
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            width: 500px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 { font-size: 18px; }
+        .modal-body { padding: 20px; }
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #30363d;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .steps-list { margin-top: 12px; }
+        .step-item {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px;
+            background: #0d1117;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .step-item input { flex: 1; }
+        .step-item button {
+            padding: 4px 8px;
+            background: #da363320;
+            border: 1px solid #da3633;
+            color: #f85149;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .add-step-btn {
+            width: 100%;
+            padding: 8px;
+            background: #21262d;
+            border: 1px dashed #30363d;
+            color: #8b949e;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .add-step-btn:hover { background: #30363d; }
+
+        /* Solicitation detail in sidebar */
+        .solicitation-options {
+            margin-top: 12px;
+        }
+        .solicitation-option {
+            display: block;
+            padding: 10px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .solicitation-option:hover {
+            background: #1c2128;
+            border-color: #58a6ff;
+        }
+        .solicitation-option.selected {
+            background: #1f6feb30;
+            border-color: #1f6feb;
+        }
     </style>
 </head>
 <body>
@@ -245,22 +414,28 @@
                 </div>
 
                 <div class="card">
-                    <h2>Solicitations <span class="count" id="solicitation-count">0</span></h2>
+                    <h2>
+                        Solicitations <span class="count" id="solicitation-count">0</span>
+                    </h2>
                     <div class="solicitation-list" id="solicitation-list">
                         <div class="empty-state">No pending solicitations</div>
                     </div>
                 </div>
 
                 <div class="card" style="grid-column: 1 / -1;">
-                    <h2>Active Tasks <span class="count" id="task-count">0</span></h2>
+                    <h2>
+                        Tasks <span class="count" id="task-count">0</span>
+                        <button class="add-btn" onclick="openTaskModal()">+ New Task</button>
+                    </h2>
                     <div class="task-list" id="task-list">
-                        <div class="empty-state">No active tasks</div>
+                        <div class="empty-state">No tasks</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="sidebar" id="sidebar">
+        <!-- Agent Sidebar -->
+        <div class="sidebar" id="agent-sidebar">
             <div class="sidebar-header">
                 <h2 id="sidebar-title">Agent Details</h2>
                 <button class="close-btn" onclick="closeSidebar()">&times;</button>
@@ -304,11 +479,93 @@
                 <button class="btn danger" onclick="destroyAgent()">Destroy</button>
             </div>
         </div>
+
+        <!-- Solicitation Sidebar -->
+        <div class="sidebar" id="solicitation-sidebar">
+            <div class="sidebar-header">
+                <h2 id="sol-sidebar-title">Solicitation</h2>
+                <button class="close-btn" onclick="closeSolicitationSidebar()">&times;</button>
+            </div>
+            <div class="sidebar-content">
+                <div class="detail-section">
+                    <h3>Details</h3>
+                    <div class="detail-row">
+                        <span class="detail-label">Agent</span>
+                        <span class="detail-value" id="sol-agent">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Type</span>
+                        <span class="detail-value" id="sol-type">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Urgency</span>
+                        <span class="detail-value" id="sol-urgency">-</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Message</h3>
+                    <div class="conversation" id="sol-message" style="max-height: 150px;">-</div>
+                </div>
+
+                <div class="detail-section" id="sol-options-section" style="display: none;">
+                    <h3>Options</h3>
+                    <div class="solicitation-options" id="sol-options"></div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Response</h3>
+                    <textarea id="sol-response" rows="4" placeholder="Type your response..."></textarea>
+                </div>
+            </div>
+
+            <div class="sidebar-actions">
+                <button class="btn" onclick="dismissSolicitation()">Dismiss</button>
+                <button class="btn primary" onclick="respondSolicitation()">Respond</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div class="modal-overlay" id="task-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create Task</h2>
+                <button class="close-btn" onclick="closeTaskModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Agent</label>
+                    <select id="task-agent">
+                        <option value="">Select an agent...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="task-title" placeholder="Task title...">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="task-description" placeholder="Task description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Steps</label>
+                    <div class="steps-list" id="steps-list"></div>
+                    <button class="add-step-btn" onclick="addStep()">+ Add Step</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeTaskModal()">Cancel</button>
+                <button class="btn primary" onclick="createTask()">Create Task</button>
+            </div>
+        </div>
     </div>
 
     <script>
         let selectedAgent = null;
+        let selectedSolicitation = null;
         let ws = null;
+        let steps = [];
 
         function connectWebSocket() {
             ws = new WebSocket(`ws://${window.location.host}/ws`);
@@ -350,10 +607,10 @@
                     <div class="agent-status ${agent.status}"></div>
                     <div class="agent-info">
                         <div class="agent-name">
-                            ${agent.name}
-                            ${agent.specialty ? `<span class="agent-specialty">${agent.specialty}</span>` : ''}
+                            ${escapeHtml(agent.name)}
+                            ${agent.specialty ? `<span class="agent-specialty">${escapeHtml(agent.specialty)}</span>` : ''}
                         </div>
-                        <div class="agent-meta">:${agent.port} · ${agent.branch}</div>
+                        <div class="agent-meta">:${agent.port} · ${escapeHtml(agent.branch)}</div>
                     </div>
                 </div>
             `).join('');
@@ -372,40 +629,55 @@
             }
 
             container.innerHTML = pending.map(sol => `
-                <div class="solicitation-item ${sol.urgency}">
-                    <strong>${sol.agent_name}</strong> [${sol.type}]<br>
-                    <span style="color: #8b949e">${sol.message.substring(0, 150)}${sol.message.length > 150 ? '...' : ''}</span>
+                <div class="solicitation-item ${sol.urgency}" onclick="selectSolicitation('${sol.id}')">
+                    <div class="solicitation-header">
+                        <strong>${escapeHtml(sol.agent_name)}</strong>
+                        <span class="solicitation-type">${escapeHtml(sol.type)}</span>
+                    </div>
+                    <div class="solicitation-message">${escapeHtml(sol.message.substring(0, 100))}${sol.message.length > 100 ? '...' : ''}</div>
                 </div>
             `).join('');
+
+            window.solicitationsData = solicitations;
         }
 
         function renderTasks(tasks) {
-            const active = tasks.filter(t => t.status === 'in_progress' || t.status === 'assigned');
             const container = document.getElementById('task-list');
-            document.getElementById('task-count').textContent = active.length;
+            document.getElementById('task-count').textContent = tasks.length;
 
-            if (active.length === 0) {
-                container.innerHTML = '<div class="empty-state">No active tasks</div>';
+            if (tasks.length === 0) {
+                container.innerHTML = '<div class="empty-state">No tasks</div>';
                 return;
             }
 
-            container.innerHTML = active.map(task => `
-                <div class="agent-item">
-                    <div class="agent-info">
-                        <div class="agent-name">${task.agent_name || task.agent_id}</div>
-                        <div class="agent-meta">${task.title || 'Task in progress'}</div>
+            container.innerHTML = tasks.map(task => {
+                const plan = task.plan || {};
+                const totalSteps = plan.steps?.length || 0;
+                return `
+                <div class="task-item">
+                    <div class="task-status-dot ${task.status}"></div>
+                    <div class="task-info">
+                        <div class="task-title">${escapeHtml(plan.title || 'Untitled')}</div>
+                        <div class="task-meta">${escapeHtml(task.agent_name || task.agent_id)} · Step ${task.current_step}/${totalSteps} · ${task.status}</div>
                     </div>
-                    <span style="color: #8b949e">${task.current_step}/${task.total_steps || '?'}</span>
+                    <div class="task-actions">
+                        ${task.status === 'pending' ? `<button onclick="startTask('${task.id}')">Start</button>` : ''}
+                        ${task.status === 'in_progress' ? `<button class="complete" onclick="completeTask('${task.id}')">Complete</button>` : ''}
+                        ${['pending', 'in_progress', 'assigned'].includes(task.status) ? `<button class="cancel" onclick="cancelTask('${task.id}')">Cancel</button>` : ''}
+                    </div>
                 </div>
-            `).join('');
+            `}).join('');
+
+            window.tasksData = tasks;
         }
 
         async function selectAgent(agentId) {
             const agent = window.agentsData?.find(a => a.id === agentId);
             if (!agent) return;
 
+            closeSolicitationSidebar();
             selectedAgent = agent;
-            document.getElementById('sidebar').classList.add('open');
+            document.getElementById('agent-sidebar').classList.add('open');
             document.getElementById('sidebar-title').textContent = agent.name;
             document.getElementById('detail-status').textContent = agent.status;
             document.getElementById('detail-port').textContent = agent.port;
@@ -416,6 +688,38 @@
             event.currentTarget.classList.add('selected');
 
             await fetchConversation();
+        }
+
+        function selectSolicitation(solId) {
+            const sol = window.solicitationsData?.find(s => s.id === solId);
+            if (!sol) return;
+
+            closeSidebar();
+            selectedSolicitation = sol;
+            document.getElementById('solicitation-sidebar').classList.add('open');
+            document.getElementById('sol-sidebar-title').textContent = `${sol.type} from ${sol.agent_name}`;
+            document.getElementById('sol-agent').textContent = sol.agent_name;
+            document.getElementById('sol-type').textContent = sol.type;
+            document.getElementById('sol-urgency').textContent = sol.urgency;
+            document.getElementById('sol-message').textContent = sol.message;
+            document.getElementById('sol-response').value = '';
+
+            const optionsSection = document.getElementById('sol-options-section');
+            const optionsContainer = document.getElementById('sol-options');
+            if (sol.options && sol.options.length > 0) {
+                optionsSection.style.display = 'block';
+                optionsContainer.innerHTML = sol.options.map((opt, i) => `
+                    <div class="solicitation-option" onclick="selectOption(this, '${escapeHtml(opt)}')">${escapeHtml(opt)}</div>
+                `).join('');
+            } else {
+                optionsSection.style.display = 'none';
+            }
+        }
+
+        function selectOption(el, value) {
+            document.querySelectorAll('.solicitation-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('sol-response').value = value;
         }
 
         async function fetchConversation() {
@@ -449,15 +753,21 @@
         }
 
         function escapeHtml(text) {
+            if (!text) return '';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
         function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('agent-sidebar').classList.remove('open');
             document.querySelectorAll('.agent-item').forEach(el => el.classList.remove('selected'));
             selectedAgent = null;
+        }
+
+        function closeSolicitationSidebar() {
+            document.getElementById('solicitation-sidebar').classList.remove('open');
+            selectedSolicitation = null;
         }
 
         async function killAgent() {
@@ -490,6 +800,131 @@
 
         function handleMessageKeypress(event) {
             if (event.key === 'Enter') sendMessage();
+        }
+
+        async function respondSolicitation() {
+            if (!selectedSolicitation) return;
+            const response = document.getElementById('sol-response').value.trim();
+            if (!response) {
+                alert('Please enter a response');
+                return;
+            }
+
+            await fetch(`/api/solicitation/respond?id=${selectedSolicitation.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ response })
+            });
+
+            closeSolicitationSidebar();
+            fetchData();
+        }
+
+        async function dismissSolicitation() {
+            if (!selectedSolicitation || !confirm('Dismiss this solicitation?')) return;
+            await fetch(`/api/solicitation/dismiss?id=${selectedSolicitation.id}`, { method: 'POST' });
+            closeSolicitationSidebar();
+            fetchData();
+        }
+
+        // Task management
+        function openTaskModal() {
+            const select = document.getElementById('task-agent');
+            select.innerHTML = '<option value="">Select an agent...</option>' + 
+                (window.agentsData || []).map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+            
+            steps = [];
+            renderSteps();
+            document.getElementById('task-title').value = '';
+            document.getElementById('task-description').value = '';
+            document.getElementById('task-modal').classList.add('open');
+        }
+
+        function closeTaskModal() {
+            document.getElementById('task-modal').classList.remove('open');
+        }
+
+        function addStep() {
+            steps.push({ action: '', autonomy: 'full' });
+            renderSteps();
+        }
+
+        function removeStep(index) {
+            steps.splice(index, 1);
+            renderSteps();
+        }
+
+        function updateStep(index, value) {
+            steps[index].action = value;
+        }
+
+        function renderSteps() {
+            const container = document.getElementById('steps-list');
+            container.innerHTML = steps.map((step, i) => `
+                <div class="step-item">
+                    <span style="color: #8b949e">${i + 1}.</span>
+                    <input type="text" value="${escapeHtml(step.action)}" placeholder="Step action..." onchange="updateStep(${i}, this.value)">
+                    <button onclick="removeStep(${i})">×</button>
+                </div>
+            `).join('');
+        }
+
+        async function createTask() {
+            const agentId = document.getElementById('task-agent').value;
+            const title = document.getElementById('task-title').value.trim();
+            const description = document.getElementById('task-description').value.trim();
+
+            if (!agentId) {
+                alert('Please select an agent');
+                return;
+            }
+            if (!title) {
+                alert('Please enter a title');
+                return;
+            }
+            if (steps.length === 0 || !steps.some(s => s.action.trim())) {
+                alert('Please add at least one step');
+                return;
+            }
+
+            const agent = window.agentsData?.find(a => a.id === agentId);
+
+            const taskData = {
+                agent_id: agentId,
+                agent_name: agent?.name || agentId,
+                title,
+                description,
+                steps: steps.filter(s => s.action.trim()).map(s => ({
+                    action: s.action,
+                    dod: [],
+                    autonomy: 'full'
+                }))
+            };
+
+            await fetch('/api/task/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(taskData)
+            });
+
+            closeTaskModal();
+            fetchData();
+        }
+
+        async function startTask(taskId) {
+            await fetch(`/api/task/action?id=${taskId}&action=start`, { method: 'POST' });
+            fetchData();
+        }
+
+        async function completeTask(taskId) {
+            await fetch(`/api/task/action?id=${taskId}&action=complete`, { method: 'POST' });
+            fetchData();
+        }
+
+        async function cancelTask(taskId) {
+            if (!confirm('Cancel this task?')) return;
+            await fetch(`/api/task/action?id=${taskId}&action=cancel`, { method: 'POST' });
+            fetchData();
         }
 
         connectWebSocket();
