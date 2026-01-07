@@ -391,6 +391,44 @@
             background: #1f6feb30;
             border-color: #1f6feb;
         }
+
+        .logs-toggle {
+            float: right;
+            padding: 2px 8px;
+            font-size: 11px;
+            background: #238636;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .logs-toggle:hover { background: #2ea043; }
+        .logs-toggle.active {
+            background: #da3633;
+        }
+        .logs-toggle.active:hover { background: #f85149; }
+        .logs-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .log-entry.user { background: #1f6feb20; }
+        .log-entry.agent { background: #23863620; }
+        .log-entry.status { background: #d2992220; color: #d29922; font-style: italic; }
+        .log-time { color: #8b949e; margin-right: 8px; }
+        .log-role { font-weight: bold; margin-right: 4px; }
+        .log-role.user { color: #58a6ff; }
+        .log-role.agent { color: #3fb950; }
     </style>
 </head>
 <body>
@@ -458,6 +496,16 @@
                     <div class="detail-row">
                         <span class="detail-label">Specialty</span>
                         <span class="detail-value" id="detail-specialty">-</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>
+                        Live Logs
+                        <button id="logs-toggle" class="logs-toggle" onclick="toggleLogs()">▶ Start</button>
+                    </h3>
+                    <div class="logs-container" id="logs-container">
+                        <div class="empty-state">Click Start to stream logs</div>
                     </div>
                 </div>
 
@@ -926,6 +974,100 @@
             await fetch(`/api/task/action?id=${taskId}&action=cancel`, { method: 'POST' });
             fetchData();
         }
+
+        // Log streaming
+        let logsEventSource = null;
+        let logsActive = false;
+
+        function toggleLogs() {
+            if (logsActive) {
+                stopLogs();
+            } else {
+                startLogs();
+            }
+        }
+
+        function startLogs() {
+            if (!selectedAgent || logsEventSource) return;
+
+            const container = document.getElementById('logs-container');
+            const toggle = document.getElementById('logs-toggle');
+            
+            container.innerHTML = '';
+            toggle.textContent = '■ Stop';
+            toggle.classList.add('active');
+            logsActive = true;
+
+            logsEventSource = new EventSource(`/api/logs?id=${selectedAgent.id}`);
+            
+            logsEventSource.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    appendLog(data);
+                } catch (err) {}
+            };
+
+            logsEventSource.addEventListener('message', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    appendLog({ type: 'message', ...data });
+                } catch (err) {}
+            });
+
+            logsEventSource.addEventListener('status', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    appendLog({ type: 'status', ...data });
+                } catch (err) {}
+            });
+
+            logsEventSource.onerror = () => {
+                stopLogs();
+            };
+        }
+
+        function stopLogs() {
+            if (logsEventSource) {
+                logsEventSource.close();
+                logsEventSource = null;
+            }
+            const toggle = document.getElementById('logs-toggle');
+            toggle.textContent = '▶ Start';
+            toggle.classList.remove('active');
+            logsActive = false;
+        }
+
+        function appendLog(data) {
+            const container = document.getElementById('logs-container');
+            const time = new Date().toLocaleTimeString();
+            
+            let html = '';
+            if (data.type === 'status') {
+                html = `<div class="log-entry status"><span class="log-time">${time}</span>Status: ${data.status}</div>`;
+            } else {
+                const role = data.role === 'user' ? 'user' : 'agent';
+                const icon = role === 'user' ? '👤' : '🤖';
+                let content = data.message || '';
+                if (content.length > 150) content = content.substring(0, 150) + '...';
+                content = escapeHtml(content).replace(/\n/g, ' ');
+                html = `<div class="log-entry ${role}"><span class="log-time">${time}</span><span class="log-role ${role}">${icon}</span>${content}</div>`;
+            }
+            
+            container.insertAdjacentHTML('beforeend', html);
+            container.scrollTop = container.scrollHeight;
+
+            // Keep only last 50 entries
+            while (container.children.length > 50) {
+                container.removeChild(container.firstChild);
+            }
+        }
+
+        // Close logs when sidebar closes
+        const origCloseSidebar = closeSidebar;
+        closeSidebar = function() {
+            stopLogs();
+            origCloseSidebar();
+        };
 
         connectWebSocket();
         fetchData();

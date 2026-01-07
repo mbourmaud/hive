@@ -127,6 +127,7 @@ func (h *Hub) Start(ctx context.Context) error {
 	mux.HandleFunc("GET /agents/{id}/messages", h.handleGetConversation)
 	mux.HandleFunc("GET /agents/{id}/conversation", h.handleGetConversation)
 	mux.HandleFunc("GET /agents/{id}/status", h.handleGetAgentStatus)
+	mux.HandleFunc("GET /agents/{id}/events", h.handleAgentEvents)
 
 	// Task endpoints
 	mux.HandleFunc("GET /tasks", h.handleListTasks)

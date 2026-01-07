@@ -337,3 +337,7 @@ func (c *HubClient) DismissSolicitation(solicitationID string) error {
 	defer resp.Body.Close()
 	return nil
 }
+
+func (c *HubClient) GetAgentEventsURL(agentID string) string {
+	return c.baseURL + "/agents/" + agentID + "/events"
+}

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/mbourmaud/hive/internal/agent"
@@ -278,4 +279,65 @@ func (h *Hub) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"agents_total":   h.agentManager.Count(),
 		"agents_running": h.agentManager.CountRunning(),
 	})
+}
+
+// handleAgentEvents proxies SSE events from an agent's AgentAPI
+func (h *Hub) handleAgentEvents(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	a, err := h.agentManager.GetAgent(id)
+	if err != nil {
+		a, err = h.agentManager.GetAgentByName(id)
+		if err != nil {
+			h.jsonError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+	}
+
+	agentURL := fmt.Sprintf("http://localhost:%d/events", a.Port)
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, agentURL, nil)
+	if err != nil {
+		h.jsonError(w, http.StatusInternalServerError, "failed to create request")
+		return
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.jsonError(w, http.StatusBadGateway, "failed to connect to agent")
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.jsonError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	buf := make([]byte, 4096)
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		default:
+			n, err := resp.Body.Read(buf)
+			if n > 0 {
+				w.Write(buf[:n])
+				flusher.Flush()
+			}
+			if err != nil {
+				return
+			}
+		}
+	}
 }

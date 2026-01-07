@@ -275,6 +275,60 @@ func (s *WebServer) handleSolicitationDismiss(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(map[string]string{"status": "dismissed"})
 }
 
+func (s *WebServer) handleAgentLogs(w http.ResponseWriter, r *http.Request) {
+	agentID := r.URL.Query().Get("id")
+	if agentID == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+
+	eventsURL := s.client.GetAgentEventsURL(agentID)
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, eventsURL, nil)
+	if err != nil {
+		http.Error(w, "failed to create request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "failed to connect to agent", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	buf := make([]byte, 4096)
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		default:
+			n, err := resp.Body.Read(buf)
+			if n > 0 {
+				w.Write(buf[:n])
+				flusher.Flush()
+			}
+			if err != nil {
+				return
+			}
+		}
+	}
+}
+
 func (s *WebServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -337,6 +391,7 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/task/action", s.handleTaskAction)
 	mux.HandleFunc("/api/solicitation/respond", s.handleSolicitationRespond)
 	mux.HandleFunc("/api/solicitation/dismiss", s.handleSolicitationDismiss)
+	mux.HandleFunc("/api/logs", s.handleAgentLogs)
 	mux.HandleFunc("/ws", s.handleWS)
 
 	addr := fmt.Sprintf(":%d", port)
