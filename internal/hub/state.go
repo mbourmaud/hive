@@ -82,10 +82,14 @@ func (sm *StateManager) SaveState(h *Hub) error {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 
-	// Collect agent states
+	// Collect agent states (only active agents - ready or busy)
 	agents := h.agentManager.ListAgents()
 	agentStates := make([]AgentState, 0, len(agents))
 	for _, a := range agents {
+		// Skip stopped/error agents - they shouldn't be persisted
+		if a.Status == agent.StatusStopped || a.Status == agent.StatusError {
+			continue
+		}
 		agentStates = append(agentStates, AgentState{
 			ID:           a.ID,
 			Name:         a.Name,

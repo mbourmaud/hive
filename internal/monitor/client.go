@@ -24,14 +24,28 @@ type Agent struct {
 	Error        string `json:"error,omitempty"`
 }
 
+type TaskStep struct {
+	ID       int      `json:"id"`
+	Action   string   `json:"action"`
+	DoD      []string `json:"dod,omitempty"`
+	Autonomy string   `json:"autonomy,omitempty"`
+	Status   string   `json:"status,omitempty"`
+}
+
+type TaskPlan struct {
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
+	Steps       []TaskStep `json:"steps,omitempty"`
+}
+
 type Task struct {
-	ID          string `json:"id"`
-	AgentID     string `json:"agent_id"`
-	AgentName   string `json:"agent_name,omitempty"`
-	Status      string `json:"status"`
-	CurrentStep int    `json:"current_step"`
-	TotalSteps  int    `json:"total_steps,omitempty"`
-	Title       string `json:"title,omitempty"`
+	ID          string    `json:"id"`
+	AgentID     string    `json:"agent_id"`
+	AgentName   string    `json:"agent_name,omitempty"`
+	Plan        *TaskPlan `json:"plan,omitempty"`
+	Status      string    `json:"status"`
+	CurrentStep int       `json:"current_step"`
 }
 
 type Solicitation struct {

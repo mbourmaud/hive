@@ -97,14 +97,14 @@ hive destroy frontend
 
 ```bash
 # Start the Hub API server
-hive hub --port 8080
+hive hub --port 7433
 
 # In another terminal, use the REST API
-curl -X POST http://localhost:8080/agents \
+curl -X POST http://localhost:7433/agents \
   -H "Content-Type: application/json" \
   -d '{"name": "backend", "sandbox": true}'
 
-curl -X POST http://localhost:8080/agents/AGENT_ID/message \
+curl -X POST http://localhost:7433/agents/AGENT_ID/message \
   -H "Content-Type: application/json" \
   -d '{"content": "Implement the user API"}'
 ```
@@ -147,7 +147,7 @@ Then Queen can use tools like:
 | `hive mcp` | Start MCP server for Queen |
 | `hive status` | Show overall status |
 | `hive monitor` | TUI dashboard for real-time monitoring |
-| `hive monitor --web` | Web dashboard (default: port 3000) |
+| `hive monitor --web` | Web dashboard (default: port 7434) |
 
 ---
 
@@ -186,10 +186,10 @@ hive monitor
 ### Web Mode
 
 ```bash
-hive monitor --web --port 3000
+hive monitor --web --port 7434
 ```
 
-Open http://localhost:3000 in your browser to see:
+Open http://localhost:7434 in your browser to see:
 - **Agents panel** - Click to see details, conversation, and actions
 - **Solicitations panel** - Click to respond or dismiss
 - **Tasks panel** - Create tasks with "+ New Task" button

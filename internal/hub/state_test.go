@@ -14,7 +14,7 @@ func TestStateManager_SaveAndLoad(t *testing.T) {
 	sm := NewStateManager(tmpDir)
 
 	cfg := Config{
-		Port:     8080,
+		Port:     7433,
 		RepoPath: tmpDir,
 	}
 
@@ -28,7 +28,7 @@ func TestStateManager_SaveAndLoad(t *testing.T) {
 		Name:         "test-agent",
 		WorktreePath: "/tmp/test-worktree",
 		Branch:       "feature/test",
-		Port:         3284,
+		Port:         7440,
 		PID:          12345,
 		Status:       agent.StatusReady,
 		Specialty:    "backend",
@@ -101,7 +101,7 @@ func TestStateManager_Exists(t *testing.T) {
 	}
 
 	cfg := Config{
-		Port:     8080,
+		Port:     7433,
 		RepoPath: tmpDir,
 	}
 
@@ -124,7 +124,7 @@ func TestStateManager_DeleteState(t *testing.T) {
 	sm := NewStateManager(tmpDir)
 
 	cfg := Config{
-		Port:     8080,
+		Port:     7433,
 		RepoPath: tmpDir,
 	}
 

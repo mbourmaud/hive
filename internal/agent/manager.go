@@ -44,15 +44,16 @@ func (m *Manager) SpawnAgent(ctx context.Context, opts SpawnOptions) (*Agent, er
 	return agent, nil
 }
 
-// StopAgent stops an agent by ID.
+// StopAgent stops an agent by ID and removes it from the manager.
 func (m *Manager) StopAgent(ctx context.Context, id string) error {
 	m.mu.Lock()
 	agent, ok := m.agents[id]
-	m.mu.Unlock()
-
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("agent %s not found", id)
 	}
+	delete(m.agents, id)
+	m.mu.Unlock()
 
 	return m.spawner.Stop(ctx, agent)
 }

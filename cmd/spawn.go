@@ -44,7 +44,7 @@ func init() {
 	spawnCmd.Flags().StringVar(&spawnBaseBranch, "base", "", "Base branch to create from (default: current branch)")
 	spawnCmd.Flags().StringVarP(&spawnSpecialty, "specialty", "s", "fullstack", "Agent specialty (front, back, infra, fullstack)")
 	spawnCmd.Flags().BoolVar(&spawnNoSandbox, "no-sandbox", false, "Disable Claude Code sandbox")
-	spawnCmd.Flags().IntVarP(&spawnPort, "port", "p", 3284, "Base port for AgentAPI")
+	spawnCmd.Flags().IntVarP(&spawnPort, "port", "p", 7440, "Base port for AgentAPI")
 }
 
 func runSpawn(cmd *cobra.Command, args []string) error {

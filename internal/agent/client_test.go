@@ -221,7 +221,7 @@ func TestMockClient(t *testing.T) {
 	}
 
 	// Test SendMessage
-	err := mock.SendMessage(context.Background(), 3284, "test")
+	err := mock.SendMessage(context.Background(), 7440, "test")
 	if err != nil {
 		t.Fatalf("SendMessage failed: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestMockClient(t *testing.T) {
 	}
 
 	// Test GetMessages
-	messages, err := mock.GetMessages(context.Background(), 3284)
+	messages, err := mock.GetMessages(context.Background(), 7440)
 	if err != nil {
 		t.Fatalf("GetMessages failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestMockClient(t *testing.T) {
 	}
 
 	// Test GetStatus
-	status, err := mock.GetStatus(context.Background(), 3284)
+	status, err := mock.GetStatus(context.Background(), 7440)
 	if err != nil {
 		t.Fatalf("GetStatus failed: %v", err)
 	}
@@ -251,13 +251,13 @@ func TestMockClient(t *testing.T) {
 	}
 
 	// Test WaitReady
-	err = mock.WaitReady(context.Background(), 3284, time.Second)
+	err = mock.WaitReady(context.Background(), 7440, time.Second)
 	if err != nil {
 		t.Fatalf("WaitReady failed: %v", err)
 	}
 
 	// Test Health
-	if !mock.Health(context.Background(), 3284) {
+	if !mock.Health(context.Background(), 7440) {
 		t.Error("expected Health to return true")
 	}
 }

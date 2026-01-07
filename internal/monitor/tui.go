@@ -632,14 +632,20 @@ func (m Model) renderTasksWithFocus() string {
 			statusIcon = "✗"
 		}
 		progress := ""
-		if t.TotalSteps > 0 {
-			progress = fmt.Sprintf(" [%d/%d]", t.CurrentStep, t.TotalSteps)
+		totalSteps := 0
+		title := "Untitled"
+		if t.Plan != nil {
+			totalSteps = len(t.Plan.Steps)
+			title = t.Plan.Title
+		}
+		if totalSteps > 0 {
+			progress = fmt.Sprintf(" [%d/%d]", t.CurrentStep, totalSteps)
 		}
 		line := fmt.Sprintf("  %s %s%s %s",
 			statusIcon,
 			t.AgentName,
 			progress,
-			dimStyle.Render(truncate(t.Title, 40)))
+			dimStyle.Render(truncate(title, 40)))
 		if m.focusPanel == focusTasks && i == m.taskIdx {
 			line = selectedStyle.Render(line)
 			m.selectedTask = &m.tasks[i]
@@ -850,13 +856,19 @@ func (m Model) renderTasks() string {
 	for _, t := range m.tasks {
 		if t.Status == "in_progress" || t.Status == "assigned" {
 			progress := ""
-			if t.TotalSteps > 0 {
-				progress = fmt.Sprintf(" [%d/%d]", t.CurrentStep, t.TotalSteps)
+			totalSteps := 0
+			title := "Untitled"
+			if t.Plan != nil {
+				totalSteps = len(t.Plan.Steps)
+				title = t.Plan.Title
+			}
+			if totalSteps > 0 {
+				progress = fmt.Sprintf(" [%d/%d]", t.CurrentStep, totalSteps)
 			}
 			b.WriteString(fmt.Sprintf("  → %s%s %s\n",
 				t.AgentName,
 				progress,
-				dimStyle.Render(truncate(t.Title, 40))))
+				dimStyle.Render(truncate(title, 40))))
 		}
 	}
 

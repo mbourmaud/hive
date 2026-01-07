@@ -59,10 +59,10 @@ func TestNew(t *testing.T) {
 	defer cleanup()
 
 	cfg := Config{
-		Port:         8080,
+		Port:         7433,
 		RepoPath:     repoDir,
 		WorktreesDir: workDir,
-		BasePort:     3284,
+		BasePort:     7440,
 	}
 
 	hub, err := New(cfg)
@@ -81,7 +81,7 @@ func TestNew(t *testing.T) {
 
 func TestNew_MissingRepoPath(t *testing.T) {
 	cfg := Config{
-		Port: 8080,
+		Port: 7433,
 	}
 
 	_, err := New(cfg)
@@ -290,12 +290,12 @@ func TestEventHub(t *testing.T) {
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.Port != 8080 {
-		t.Errorf("expected port 8080, got %d", cfg.Port)
+	if cfg.Port != 7433 {
+		t.Errorf("expected port 7433, got %d", cfg.Port)
 	}
 
-	if cfg.BasePort != 3284 {
-		t.Errorf("expected base port 3284, got %d", cfg.BasePort)
+	if cfg.BasePort != 7440 {
+		t.Errorf("expected base port 7440, got %d", cfg.BasePort)
 	}
 
 	if !cfg.Sandbox {

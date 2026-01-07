@@ -1,0 +1,49 @@
+appId: com.hive.monitor
+productName: Hive Monitor
+copyright: Copyright © 2024
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - electron/**/*.cjs
+  - package.json
+
+extraResources:
+  - from: "../hive"
+    to: "hive"
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+    - target: zip
+  darkModeSupport: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  extraResources:
+    - from: "../hive.exe"
+      to: "hive.exe"
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: Development
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

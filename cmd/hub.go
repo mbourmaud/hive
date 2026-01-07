@@ -24,8 +24,8 @@ The hub provides a REST API for:
   - Real-time events via Server-Sent Events
 
 Examples:
-  hive hub                    # Start on default port 8080
-  hive hub --port 3000        # Start on custom port
+  hive hub                    # Start on default port 7433
+  hive hub --port 9000        # Start on custom port
   hive hub --no-sandbox       # Disable sandbox for agents`,
 	RunE: runHub,
 }
@@ -39,9 +39,9 @@ var (
 func init() {
 	rootCmd.AddCommand(hubCmd)
 
-	hubCmd.Flags().IntVarP(&hubPort, "port", "p", 8080, "Hub server port")
+	hubCmd.Flags().IntVarP(&hubPort, "port", "p", 7433, "Hub server port")
 	hubCmd.Flags().BoolVar(&hubNoSandbox, "no-sandbox", false, "Disable sandbox for spawned agents")
-	hubCmd.Flags().IntVar(&hubBasePort, "agent-port", 3284, "Base port for agent AgentAPI instances")
+	hubCmd.Flags().IntVar(&hubBasePort, "agent-port", 7440, "Base port for agent AgentAPI instances")
 }
 
 func runHub(cmd *cobra.Command, args []string) error {

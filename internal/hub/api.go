@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/mbourmaud/hive/internal/agent"
+	"github.com/mbourmaud/hive/internal/solicitation"
 )
 
 // SpawnRequest represents a request to spawn a new agent.
@@ -71,6 +72,11 @@ func (h *Hub) handleSpawnAgent(w http.ResponseWriter, r *http.Request) {
 
 	if req.Name == "" {
 		h.jsonError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	if h.config.MaxAgents > 0 && h.agentManager.CountRunning() >= h.config.MaxAgents {
+		h.jsonError(w, http.StatusTooManyRequests, fmt.Sprintf("max agents limit reached (%d)", h.config.MaxAgents))
 		return
 	}
 
@@ -278,6 +284,20 @@ func (h *Hub) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":         "ok",
 		"agents_total":   h.agentManager.Count(),
 		"agents_running": h.agentManager.CountRunning(),
+	})
+}
+
+func (h *Hub) handleData(w http.ResponseWriter, r *http.Request) {
+	agents := h.agentManager.ListAgents()
+	agentResponses := make([]AgentResponse, len(agents))
+	for i, a := range agents {
+		agentResponses[i] = agentToResponse(a)
+	}
+
+	h.jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"agents":        agentResponses,
+		"tasks":         h.taskManager.List("", ""),
+		"solicitations": h.solicitationMgr.List(solicitation.ListFilter{}),
 	})
 }
 

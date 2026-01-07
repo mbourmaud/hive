@@ -13,7 +13,7 @@ func TestHubClient_GetAgents(t *testing.T) {
 			t.Errorf("Expected /agents path, got %s", r.URL.Path)
 		}
 		agents := []Agent{
-			{ID: "1", Name: "test-agent", Status: "ready", Port: 3284},
+			{ID: "1", Name: "test-agent", Status: "ready", Port: 7440},
 		}
 		json.NewEncoder(w).Encode(agents)
 	}))
@@ -39,7 +39,7 @@ func TestHubClient_GetTasks(t *testing.T) {
 			t.Errorf("Expected /tasks path, got %s", r.URL.Path)
 		}
 		tasks := []Task{
-			{ID: "1", AgentID: "agent-1", Status: "in_progress", Title: "Test Task"},
+			{ID: "1", AgentID: "agent-1", Status: "in_progress", Plan: &TaskPlan{Title: "Test Task"}},
 		}
 		json.NewEncoder(w).Encode(tasks)
 	}))
@@ -54,8 +54,8 @@ func TestHubClient_GetTasks(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Errorf("Expected 1 task, got %d", len(tasks))
 	}
-	if tasks[0].Title != "Test Task" {
-		t.Errorf("Expected task title 'Test Task', got '%s'", tasks[0].Title)
+	if tasks[0].Plan == nil || tasks[0].Plan.Title != "Test Task" {
+		t.Errorf("Expected task plan title 'Test Task', got '%v'", tasks[0].Plan)
 	}
 }
 

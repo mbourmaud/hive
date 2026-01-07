@@ -25,15 +25,17 @@ type Config struct {
 	BasePort     int    `yaml:"base_port"`
 	RepoPath     string `yaml:"repo_path"`
 	Sandbox      bool   `yaml:"sandbox"`
+	MaxAgents    int    `yaml:"max_agents"`
 }
 
 // DefaultConfig returns the default hub configuration.
 func DefaultConfig() Config {
 	return Config{
-		Port:         8080,
+		Port:         7433,
 		WorktreesDir: "",
-		BasePort:     3284,
+		BasePort:     7440,
 		Sandbox:      true,
+		MaxAgents:    3,
 	}
 }
 
@@ -159,6 +161,7 @@ func (h *Hub) Start(ctx context.Context) error {
 	// Status endpoints
 	mux.HandleFunc("GET /health", h.handleHealth)
 	mux.HandleFunc("GET /status", h.handleStatus)
+	mux.HandleFunc("GET /data", h.handleData)
 
 	h.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", h.config.Port),

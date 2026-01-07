@@ -108,7 +108,7 @@ func TestHubCreation(t *testing.T) {
 	cfg := hub.Config{
 		Port:     0,
 		RepoPath: repoDir,
-		BasePort: 13284,
+		BasePort: 17440,
 		Sandbox:  false,
 	}
 
@@ -140,7 +140,7 @@ func TestStatePersistence(t *testing.T) {
 	cfg := hub.Config{
 		Port:     0,
 		RepoPath: repoDir,
-		BasePort: 13284,
+		BasePort: 17440,
 		Sandbox:  false,
 	}
 
@@ -154,7 +154,7 @@ func TestStatePersistence(t *testing.T) {
 		Name:         "integration-test",
 		WorktreePath: "/tmp/test",
 		Branch:       "main",
-		Port:         13284,
+		Port:         17440,
 		PID:          99999,
 		Status:       agent.StatusReady,
 		CreatedAt:    time.Now(),
@@ -202,7 +202,7 @@ func TestAgentSpawnWithSystemPrompt(t *testing.T) {
 		Branch:    "feature/prompt-test",
 		Specialty: "backend",
 		Sandbox:   false,
-		HubURL:    "http://localhost:8080",
+		HubURL:    "http://localhost:7433",
 	})
 	if err != nil {
 		t.Fatalf("Failed to spawn agent: %v", err)
@@ -228,7 +228,7 @@ func TestAgentSpawnWithSystemPrompt(t *testing.T) {
 	}{
 		{"agent name", "prompt-test"},
 		{"specialty", "backend"},
-		{"hub url", "http://localhost:8080"},
+		{"hub url", "http://localhost:7433"},
 		{"branch", "feature/prompt-test"},
 	}
 

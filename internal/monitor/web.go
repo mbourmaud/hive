@@ -1,17 +1,19 @@
 package monitor
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
-//go:embed web/index.html
-var indexHTML string
+//go:embed dist/*
+var distFS embed.FS
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -34,11 +36,6 @@ func NewWebServer(hubURL string) *WebServer {
 		clients:   make(map[*websocket.Conn]bool),
 		broadcast: make(chan []byte, 256),
 	}
-}
-
-func (s *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(indexHTML))
 }
 
 func (s *WebServer) handleAPI(w http.ResponseWriter, r *http.Request) {
@@ -381,7 +378,7 @@ func (s *WebServer) Start(port int) error {
 	go s.broadcastLoop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
+
 	mux.HandleFunc("/api/data", s.handleAPI)
 	mux.HandleFunc("/api/conversation", s.handleAgentConversation)
 	mux.HandleFunc("/api/kill", s.handleAgentKill)
@@ -393,6 +390,22 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/solicitation/dismiss", s.handleSolicitationDismiss)
 	mux.HandleFunc("/api/logs", s.handleAgentLogs)
 	mux.HandleFunc("/ws", s.handleWS)
+
+	distContent, err := fs.Sub(distFS, "dist")
+	if err != nil {
+		return fmt.Errorf("failed to access dist: %w", err)
+	}
+	fileServer := http.FileServer(http.FS(distContent))
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path != "/" && !strings.HasPrefix(path, "/api") && !strings.HasPrefix(path, "/ws") {
+			if _, err := fs.Stat(distContent, strings.TrimPrefix(path, "/")); err != nil {
+				r.URL.Path = "/"
+			}
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 
 	addr := fmt.Sprintf(":%d", port)
 	return http.ListenAndServe(addr, mux)

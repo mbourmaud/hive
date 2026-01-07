@@ -301,8 +301,8 @@ func TestNextSteps_Empty(t *testing.T) {
 func TestTable(t *testing.T) {
 	headers := []string{"Name", "Status", "Port"}
 	rows := [][]string{
-		{"queen", "running", "8080"},
-		{"drone-1", "stopped", "8081"},
+		{"queen", "running", "7433"},
+		{"drone-1", "stopped", "7441"},
 	}
 
 	result := Table(headers, rows)

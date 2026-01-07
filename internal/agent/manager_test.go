@@ -137,13 +137,11 @@ func TestManager_StopAgent(t *testing.T) {
 		t.Fatalf("StopAgent failed: %v", err)
 	}
 
-	// Verify status changed
-	found, _ := mgr.GetAgent(agent.ID)
-	if found.Status != StatusStopped {
-		t.Errorf("expected status stopped, got %s", found.Status)
+	_, err = mgr.GetAgent(agent.ID)
+	if err == nil {
+		t.Error("stopped agent should be removed from manager")
 	}
 
-	// Stop non-existent
 	err = mgr.StopAgent(ctx, "notfound")
 	if err == nil {
 		t.Error("stopping non-existent agent should fail")

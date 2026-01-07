@@ -3,7 +3,7 @@
 # These commands are available to agents for communicating with the Hub
 
 # Configuration (set by agent spawner)
-HIVE_HUB_URL="${HIVE_HUB_URL:-http://localhost:8080}"
+HIVE_HUB_URL="${HIVE_HUB_URL:-http://localhost:7433}"
 HIVE_AGENT_ID="${HIVE_AGENT_ID:-}"
 HIVE_AGENT_NAME="${HIVE_AGENT_NAME:-}"
 

@@ -46,7 +46,7 @@ var (
 func init() {
 	rootCmd.AddCommand(mcpCmd)
 
-	mcpCmd.Flags().IntVar(&mcpHubPort, "hub-port", 8080, "Hub server port to connect to")
+	mcpCmd.Flags().IntVar(&mcpHubPort, "hub-port", 7433, "Hub server port to connect to")
 }
 
 func runMCP(cmd *cobra.Command, args []string) error {
@@ -66,7 +66,7 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	cfg := hub.Config{
 		Port:         mcpHubPort,
 		WorktreesDir: home + "/hive-worktrees",
-		BasePort:     3284,
+		BasePort:     7440,
 		RepoPath:     repoRoot,
 		Sandbox:      true,
 	}

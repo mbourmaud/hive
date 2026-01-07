@@ -1,0 +1,33 @@
+{
+  "name": "hive-monitor",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Hive Monitor - Multi-Agent Orchestration Dashboard",
+  "author": "mbourmaud",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --port 7435",
+    "build": "vite build && cp -r dist ../internal/monitor/dist",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:7435 && electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:linux": "npm run build && electron-builder --linux"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@tsconfig/svelte": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "svelte": "^5.43.8",
+    "svelte-check": "^4.3.4",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "wait-on": "^9.0.3"
+  }
+}

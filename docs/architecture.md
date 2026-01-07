@@ -125,8 +125,8 @@ Queen controls drones via MCP protocol:
 ## Port Allocation
 
 Default ports:
-- Hub API: 8080
-- Agent base port: 3284 (auto-increments)
+- Hub API: 7433
+- Agent base port: 7440 (auto-increments)
 - Each agent gets next available port
 
 ## File Structure

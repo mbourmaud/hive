@@ -27,9 +27,7 @@ var sandboxConfigTemplate string
 var agentSystemPromptTemplate string
 
 const (
-	// DefaultBasePort is the starting port for AgentAPI instances.
-	DefaultBasePort = 3284
-	// DefaultReadyTimeout is the default timeout waiting for an agent to be ready.
+	DefaultBasePort     = 7440
 	DefaultReadyTimeout = 60 * time.Second
 )
 
@@ -89,7 +87,7 @@ func (s *ProcessSpawner) Spawn(ctx context.Context, opts SpawnOptions) (*Agent, 
 
 	hubURL := opts.HubURL
 	if hubURL == "" {
-		hubURL = "http://localhost:8080"
+		hubURL = "http://localhost:7433"
 	}
 
 	if err := s.setupSystemPrompt(wt.Path, systemPromptData{
