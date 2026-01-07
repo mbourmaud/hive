@@ -24,12 +24,24 @@ clean:
 test:
 	go test -v ./...
 
+test-unit:
+	go test -v -short ./...
+
+test-smoke: build
+	@echo "Running smoke tests..."
+	./hive --version
+	./hive --help
+	@echo "Smoke tests passed!"
+
+test-go-integration:
+	go test -v -run Integration ./tests/integration/...
+
 test-coverage:
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-test-all: test
+test-all: test-unit test-smoke test-go-integration
 	@echo "All tests passed!"
 
 lint:
