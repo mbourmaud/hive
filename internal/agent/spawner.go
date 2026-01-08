@@ -26,6 +26,9 @@ var sandboxConfigTemplate string
 //go:embed agent-system-prompt.md
 var agentSystemPromptTemplate string
 
+//go:embed skills/ralph-loop.md
+var ralphLoopSkill string
+
 const (
 	DefaultBasePort     = 7440
 	DefaultReadyTimeout = 60 * time.Second
@@ -99,6 +102,10 @@ func (s *ProcessSpawner) Spawn(ctx context.Context, opts SpawnOptions) (*Agent, 
 		HubURL:    hubURL,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to setup system prompt: %w", err)
+	}
+
+	if err := s.setupSkills(wt.Path); err != nil {
+		return nil, fmt.Errorf("failed to setup skills: %w", err)
 	}
 
 	port, err := s.findAvailablePort()
@@ -321,6 +328,20 @@ func (s *ProcessSpawner) setupSystemPrompt(worktreePath string, data systemPromp
 	claudeMdPath := filepath.Join(worktreePath, "CLAUDE.md")
 	if err := os.WriteFile(claudeMdPath, []byte(prompt), 0644); err != nil {
 		return fmt.Errorf("failed to write CLAUDE.md: %w", err)
+	}
+
+	return nil
+}
+
+func (s *ProcessSpawner) setupSkills(worktreePath string) error {
+	skillsDir := filepath.Join(worktreePath, ".claude", "skills")
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .claude/skills directory: %w", err)
+	}
+
+	ralphLoopPath := filepath.Join(skillsDir, "ralph-loop.md")
+	if err := os.WriteFile(ralphLoopPath, []byte(ralphLoopSkill), 0644); err != nil {
+		return fmt.Errorf("failed to write ralph-loop.md skill: %w", err)
 	}
 
 	return nil

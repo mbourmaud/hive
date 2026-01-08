@@ -249,16 +249,169 @@ hive-status() {
     _hive_api GET "/ports" | jq ".leases | map(select(.agent_id == \"${HIVE_AGENT_ID}\"))"
 }
 
+# hive-verify: Run verification checks (typecheck, test, build)
+hive-verify() {
+    local check_only="${1:-}"
+    local failed=0
+    local results=""
+
+    echo "🔍 Running Ralph Loop verification..."
+    echo ""
+
+    # Detect package manager
+    local pm="npm"
+    if [ -f "pnpm-lock.yaml" ]; then
+        pm="pnpm"
+    elif [ -f "yarn.lock" ]; then
+        pm="yarn"
+    elif [ -f "bun.lockb" ]; then
+        pm="bun"
+    fi
+
+    # Check if package.json exists
+    if [ ! -f "package.json" ]; then
+        echo "⚠️  No package.json found, skipping npm checks"
+        echo ""
+        
+        # Try Go checks
+        if [ -f "go.mod" ]; then
+            echo "📦 Go project detected"
+            echo ""
+            
+            echo "→ Running go vet..."
+            if go vet ./... 2>&1; then
+                echo "✅ go vet passed"
+                results="${results}go_vet:pass,"
+            else
+                echo "❌ go vet failed"
+                results="${results}go_vet:fail,"
+                failed=1
+            fi
+            echo ""
+            
+            echo "→ Running go test..."
+            if go test ./... 2>&1; then
+                echo "✅ go test passed"
+                results="${results}go_test:pass,"
+            else
+                echo "❌ go test failed"
+                results="${results}go_test:fail,"
+                failed=1
+            fi
+            echo ""
+            
+            echo "→ Running go build..."
+            if go build ./... 2>&1; then
+                echo "✅ go build passed"
+                results="${results}go_build:pass,"
+            else
+                echo "❌ go build failed"
+                results="${results}go_build:fail,"
+                failed=1
+            fi
+        fi
+    else
+        # Node.js project
+        echo "📦 Node.js project detected (using $pm)"
+        echo ""
+
+        # Typecheck
+        if grep -q '"typecheck"' package.json 2>/dev/null || grep -q '"tsc"' package.json 2>/dev/null; then
+            echo "→ Running typecheck..."
+            if $pm run typecheck 2>&1; then
+                echo "✅ Typecheck passed"
+                results="${results}typecheck:pass,"
+            else
+                echo "❌ Typecheck failed"
+                results="${results}typecheck:fail,"
+                failed=1
+            fi
+            echo ""
+        elif command -v tsc &> /dev/null && [ -f "tsconfig.json" ]; then
+            echo "→ Running tsc --noEmit..."
+            if tsc --noEmit 2>&1; then
+                echo "✅ Typecheck passed"
+                results="${results}typecheck:pass,"
+            else
+                echo "❌ Typecheck failed"
+                results="${results}typecheck:fail,"
+                failed=1
+            fi
+            echo ""
+        fi
+
+        # Test
+        if grep -q '"test"' package.json 2>/dev/null; then
+            echo "→ Running tests..."
+            if $pm run test 2>&1; then
+                echo "✅ Tests passed"
+                results="${results}test:pass,"
+            else
+                echo "❌ Tests failed"
+                results="${results}test:fail,"
+                failed=1
+            fi
+            echo ""
+        fi
+
+        # Build
+        if grep -q '"build"' package.json 2>/dev/null; then
+            echo "→ Running build..."
+            if $pm run build 2>&1; then
+                echo "✅ Build passed"
+                results="${results}build:pass,"
+            else
+                echo "❌ Build failed"
+                results="${results}build:fail,"
+                failed=1
+            fi
+            echo ""
+        fi
+
+        # Lint (optional, don't fail on this)
+        if grep -q '"lint"' package.json 2>/dev/null; then
+            echo "→ Running lint..."
+            if $pm run lint 2>&1; then
+                echo "✅ Lint passed"
+                results="${results}lint:pass,"
+            else
+                echo "⚠️  Lint has warnings/errors (non-blocking)"
+                results="${results}lint:warn,"
+            fi
+            echo ""
+        fi
+    fi
+
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ $failed -eq 0 ]; then
+        echo "✅ All verification checks passed!"
+        echo ""
+        echo "Ready to commit and mark task complete."
+        return 0
+    else
+        echo "❌ Some verification checks failed!"
+        echo ""
+        echo "Fix the issues above and run hive-verify again."
+        echo "Remember: Ralph Loop - iterate until ALL checks pass!"
+        return 1
+    fi
+}
+
 # hive-help: Show help
 hive-help() {
     cat << 'EOF'
-Hive Agent Commands
-===================
+Hive Agent Commands (Ralph Loop Edition)
+=========================================
+
+Ralph Loop:
+  hive-verify            Run all verification checks (typecheck, test, build)
+                         MUST pass before marking task complete!
 
 Task Management:
   hive-task              Show current task
   hive-step              Show current step
-  hive-complete '<json>' Mark task as complete
+  hive-complete '<json>' Mark task as complete (run hive-verify first!)
   hive-fail '<json>'     Mark task as failed
   hive-progress '<msg>'  Send progress update
 
@@ -275,13 +428,22 @@ Status:
   hive-status            Show agent status
   hive-help              Show this help
 
+Ralph Loop Workflow:
+  1. Receive task
+  2. Execute changes
+  3. hive-verify          # Run checks
+  4. If failed → fix and goto 3
+  5. git commit
+  6. hive-complete
+
 Examples:
-  hive-solicit '{"type": "decision", "message": "Which option?"}'
+  hive-verify
+  hive-solicit '{"type": "blocker", "message": "Build fails after 3 attempts"}'
   hive-port acquire 3000 --service=frontend
-  hive-complete '{"result": "Feature implemented"}'
+  hive-complete '{"result": "Feature implemented, all checks pass"}'
 
 EOF
 }
 
 # Export functions
-export -f hive-task hive-step hive-solicit hive-progress hive-complete hive-fail hive-port hive-status hive-help _hive_api
+export -f hive-task hive-step hive-solicit hive-progress hive-complete hive-fail hive-port hive-status hive-help hive-verify _hive_api
