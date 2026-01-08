@@ -1,14 +1,22 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/mbourmaud/hive/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-// DebugMode is a global flag for debug output
 var DebugMode bool
+
+var skipHealthcheck = map[string]bool{
+	"setup":   true,
+	"install": true,
+	"help":    true,
+	"version": true,
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "hive",
@@ -27,9 +35,12 @@ Commands:
 Server:
   hub              Start the Hive API server`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Check for HIVE_DEBUG environment variable
 		if os.Getenv("HIVE_DEBUG") == "1" || os.Getenv("HIVE_DEBUG") == "true" {
 			DebugMode = true
+		}
+
+		if !skipHealthcheck[cmd.Name()] && cmd.Name() != "hive" {
+			runQuickHealthcheck()
 		}
 	},
 }
@@ -48,10 +59,24 @@ func GetVersionString() string {
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
-	// Use a PersistentPreRun to set version dynamically
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate(GetVersionString())
-
-	// Add global --debug flag
 	rootCmd.PersistentFlags().BoolVar(&DebugMode, "debug", false, "Enable debug mode (shows all commands)")
+}
+
+func runQuickHealthcheck() {
+	var missing []string
+
+	if _, err := exec.LookPath("agentapi"); err != nil {
+		missing = append(missing, "agentapi")
+	}
+
+	if _, err := exec.LookPath("claude"); err != nil {
+		missing = append(missing, "claude")
+	}
+
+	if len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "%s Missing dependencies: %v\n", ui.StyleYellow.Render("⚠"), missing)
+		fmt.Fprintf(os.Stderr, "  Run %s to install them.\n\n", ui.StyleCyan.Render("hive setup"))
+	}
 }
