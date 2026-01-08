@@ -9,7 +9,7 @@
 
 ## What is Hive?
 
-Hive lets you spawn multiple Claude Code agents, each working in an isolated git worktree. A Queen (your main Claude/OpenCode instance) orchestrates Drones via MCP.
+Hive lets you spawn multiple Claude Code agents (Drones), each working in an isolated git worktree. A Queen (your main Claude instance) orchestrates Drones via MCP. Each Drone uses the **Ralph Loop** pattern - iterating until tasks are verified complete.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -26,35 +26,35 @@ Hive lets you spawn multiple Claude Code agents, each working in an isolated git
        │               │               │
 ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
 │   Drone 1   │ │   Drone 2   │ │   Drone 3   │
+│ Ralph Loop  │ │ Ralph Loop  │ │ Ralph Loop  │
 │ (worktree)  │ │ (worktree)  │ │ (worktree)  │
 └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
 **Perfect for:**
 - Fixing multiple bugs simultaneously
-- Developing features in parallel
-- Large-scale refactoring
-- Running tests while building features
+- Developing features in parallel (frontend + backend + tests)
+- Large-scale refactoring with sub-agents
+- Continuous iteration until all tests pass
 
 ---
 
 ## Installation
 
-### Prerequisites
-
-- Go 1.21+
-- [agentapi](https://github.com/coder/agentapi) - HTTP control for Claude
-- [Claude Code CLI](https://claude.ai/download) - Anthropic's CLI
-
-### Install AgentAPI
+### Quick Setup (Recommended)
 
 ```bash
-# macOS/Linux
-curl -fsSL "https://github.com/coder/agentapi/releases/latest/download/agentapi-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" -o ~/go/bin/agentapi
-chmod +x ~/go/bin/agentapi
+# Install Hive
+go install github.com/mbourmaud/hive@latest
+
+# Auto-install dependencies (agentapi, claude CLI)
+hive setup
+
+# Optional: Install desktop app (macOS)
+hive install desktop
 ```
 
-### Install Hive
+### Manual Installation
 
 ```bash
 # From source
@@ -62,35 +62,62 @@ git clone https://github.com/mbourmaud/hive
 cd hive
 make install
 
-# Or with go install
-go install github.com/mbourmaud/hive@latest
+# Check dependencies
+hive setup --check
 ```
+
+### What `hive setup` installs:
+- **agentapi** - HTTP control layer for Claude Code
+- **claude** - Claude Code CLI (via npm)
 
 ---
 
 ## Quick Start
 
-### CLI Mode
+### 1. Initialize in your project
 
 ```bash
-# Spawn an agent
 cd your-project
-hive spawn frontend
+hive init
+```
 
-# List agents
-hive agents
+### 2. Start the Hub
 
-# Send a message
-hive msg frontend "Fix the login bug in src/auth.ts"
+```bash
+hive hub
+```
 
-# View conversation
-hive conv frontend
+### 3. Spawn a Drone
 
-# Stop agent
-hive kill frontend
+```bash
+hive spawn frontend --specialty frontend
+```
 
-# Stop and remove worktree
-hive destroy frontend
+### 4. Send a task
+
+```bash
+hive msg frontend "Add a login form with email/password validation"
+```
+
+The Drone will:
+1. Analyze the task
+2. Execute with sub-agents if needed
+3. Run `hive-verify` (typecheck, test, build)
+4. Iterate until all checks pass
+5. Commit and notify
+
+### 5. Monitor progress
+
+```bash
+# TUI dashboard
+hive monitor
+
+# Web dashboard
+hive monitor --web
+# → Open http://localhost:7434
+
+# Or use the desktop app
+open '/Applications/Hive Monitor.app'
 ```
 
 ### Hub Mode (for programmatic access)
@@ -134,20 +161,37 @@ Then Queen can use tools like:
 
 ## Commands
 
+### Setup & Installation
+
 | Command | Description |
 |---------|-------------|
-| `hive spawn <name>` | Spawn a new agent with git worktree |
-| `hive agents` | List running agents |
-| `hive msg <agent> <message>` | Send message to an agent |
+| `hive setup` | Auto-install dependencies (agentapi, claude) |
+| `hive setup --check` | Check what's installed |
+| `hive install desktop` | Install Hive Monitor desktop app (macOS) |
+| `hive init` | Initialize Hive in current project |
+
+### Agent Management
+
+| Command | Description |
+|---------|-------------|
+| `hive spawn <name>` | Spawn a new Drone with git worktree |
+| `hive agents` | List running Drones |
+| `hive msg <agent> <message>` | Send message to a Drone |
 | `hive conv <agent>` | Show conversation history |
-| `hive kill <agent>` | Stop an agent |
+| `hive logs <agent>` | Stream Drone logs in real-time |
+| `hive kill <agent>` | Stop a Drone |
 | `hive destroy <agent>` | Stop and remove worktree |
-| `hive clean` | Remove all agents and worktrees |
+| `hive clean` | Remove all Drones and worktrees |
+
+### Server & Monitoring
+
+| Command | Description |
+|---------|-------------|
 | `hive hub` | Start the Hub API server |
-| `hive mcp` | Start MCP server for Queen |
+| `hive mcp` | Start MCP server for Queen integration |
 | `hive status` | Show overall status |
-| `hive monitor` | TUI dashboard for real-time monitoring |
-| `hive monitor --web` | Web dashboard (default: port 7434) |
+| `hive monitor` | TUI dashboard |
+| `hive monitor --web` | Web dashboard (port 7434) |
 
 ---
 
@@ -193,6 +237,44 @@ Open http://localhost:7434 in your browser to see:
 - **Agents panel** - Click to see details, conversation, and actions
 - **Solicitations panel** - Click to respond or dismiss
 - **Tasks panel** - Create tasks with "+ New Task" button
+
+---
+
+## Ralph Loop Pattern
+
+Drones execute tasks using the **Ralph Loop** pattern - a continuous iteration loop that doesn't stop until the task is verified complete.
+
+```
+RECEIVE → ANALYZE → PLAN → EXECUTE → VERIFY → (iterate if failed) → DONE
+```
+
+### Key Principles
+
+1. **Never stop on first attempt** - always verify with `hive-verify`
+2. **Parallelize with sub-agents** - spawn Task() for multi-layer work
+3. **Iterate until green** - typecheck, test, build must all pass
+4. **Commit atomically** - one logical change per commit
+
+### Sub-Agent Dispatch
+
+For full-stack tasks, Drones automatically spawn sub-agents:
+
+```typescript
+Task("contract", "Create ts-rest contract for GET /users")
+Task("gateway", "Implement NestJS resolver")
+Task("frontend", "Create React hook with TanStack Query")
+Task("tests", "Write integration tests")
+```
+
+### Verification
+
+Before marking complete, Drones run:
+
+```bash
+hive-verify  # Runs: typecheck → test → build
+```
+
+Only when ALL checks pass does the Drone commit and notify completion.
 
 ---
 
