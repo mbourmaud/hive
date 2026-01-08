@@ -75,8 +75,25 @@ func runQuickHealthcheck() {
 		missing = append(missing, "claude")
 	}
 
-	if len(missing) > 0 {
-		fmt.Fprintf(os.Stderr, "%s Missing dependencies: %v\n", ui.StyleYellow.Render("⚠"), missing)
-		fmt.Fprintf(os.Stderr, "  Run %s to install them.\n\n", ui.StyleCyan.Render("hive setup"))
+	if len(missing) == 0 {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "%s Missing dependencies: %v\n", ui.StyleYellow.Render("⚠"), missing)
+	fmt.Fprintf(os.Stderr, "  Install them now? [Y/n] ")
+
+	var response string
+	fmt.Scanln(&response)
+
+	if response == "" || response == "y" || response == "Y" || response == "yes" {
+		fmt.Println()
+		cmd := exec.Command(os.Args[0], "setup")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Setup failed: %v\n", err)
+		}
+		fmt.Println()
 	}
 }
