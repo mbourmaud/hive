@@ -1,0 +1,643 @@
+# Ralph Progress Log
+# Project: Hive-lite: Multi-Ralph Orchestration via Bash
+# Location: /Users/fr162241/Projects/hive
+# Started: Thu Jan 15 18:15:09 CET 2026
+#
+# This file is generated and maintained by Ralph.
+# See: https://github.com/thecgaigroup/ralph-cc-loop
+---
+
+## Codebase Patterns
+- Use jq for all JSON manipulation in bash scripts
+- Store script at scripts/hive.sh
+- Config file at .hive/config.json
+- Worktrees at .hive/worktrees/<name>/
+- Use ANSI colors for terminal output (RED, GREEN, YELLOW, BLUE, CYAN, NC for reset)
+- All timestamps in ISO 8601 format
+- Git worktrees cannot have multiple checkouts of the same branch - detect with `git worktree list --porcelain` and awk
+- Multiple Ralphs on same branch share one worktree, differentiated by scope
+- Use `jq --arg` with `|| true` instead of `jq -e` when checking for entry existence (avoids `set -e` exit on no match)
+- Use nohup for background processes to survive terminal close
+- Check process liveness with `kill -0 $pid`
+- Use `kill -STOP $pid` and `kill -CONT $pid` to pause/resume processes without terminating
+- For bash 3.2 compatibility (macOS), use `tr '[:lower:]' '[:upper:]'` instead of ${var^^} for uppercase conversion
+
+---
+
+## [Iteration 1] 2026-01-15T17:20:00Z - US-001
+- **What was implemented:** Initialize Hive directory structure
+- **Files changed:**
+  - scripts/hive.sh (new) - Main hive script with init command
+  - prd.json (updated) - Marked US-001 as passes: true
+- **Learnings for future iterations:**
+  - The script uses `set -e` for fail-fast behavior
+  - Helper functions: print_info, print_success, print_warning, print_error for consistent colored output
+  - check_git_repo() verifies we're in a git repository before operations
+  - check_dependencies() ensures jq is installed
+  - Config validation uses jq -e to check for required fields
+  - Idempotency achieved by checking existence before creating files/directories
+---
+
+## [Iteration 2] 2026-01-15T17:21:00Z - US-002
+- **What was implemented:** Spawn Ralph with branch creation (--create)
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added cmd_spawn(), show_spawn_usage(), spawn_with_create(), spawn_with_attach() (placeholder)
+  - prd.json (updated) - Marked US-002 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh spawn <name> --create <branch> [--from <base>]`
+  - Argument parsing uses while loop with case statement for --create, --attach, --from, --scope flags
+  - Validates: ralph name exists, branch doesn't exist (local or remote), hive is initialized
+  - Creates worktree using `git worktree add -b <branch> <path> <base_ref>`
+  - Updates config.json with ralph entry containing branchMode:'created', baseBranch, targetBranch
+  - Updates config.json branches section with branch metadata and ralphs array
+  - Uses `mktemp` for safe JSON file updates
+- **Learnings for future iterations:**
+  - Use `git show-ref --verify --quiet "refs/heads/$branch"` to check if local branch exists
+  - Use `git show-ref --verify --quiet "refs/remotes/origin/$branch"` to check if remote branch exists
+  - The spawn_with_attach() is a placeholder for US-003
+  - Config structure for a ralph: {name, branch, branchMode, baseBranch, targetBranch, scope, worktreePath, status, pid, pr, createdAt, startedAt}
+  - Config structure for a branch: {baseBranch, createdBy, createdAt, ralphs:[]}
+---
+
+## [Iteration 3] 2026-01-15T17:26:00Z - US-003
+- **What was implemented:** Spawn Ralph with branch attachment (--attach)
+- **Files changed:**
+  - scripts/hive.sh (modified) - Implemented spawn_with_attach() function
+  - prd.json (updated) - Marked US-003 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh spawn <name> --attach <branch> [--scope <glob>]`
+  - Checks if branch exists locally or on remote (errors if neither)
+  - Detects if branch is already checked out in another worktree using `git worktree list --porcelain` and awk
+  - If branch already in use, shares existing worktree instead of failing
+  - Creates worktree using `git worktree add <path> <branch>` for local branches
+  - Creates worktree using `git worktree add --track -b <branch> <path> origin/<branch>` for remote-only branches
+  - Updates config.json with branchMode:'attached'
+  - For new branches, creates branch entry with createdBy:'external'
+  - For existing branch entries, appends ralph to ralphs array and dedupes with `unique`
+  - Shows warning when multiple Ralphs attach to same branch
+- **Learnings for future iterations:**
+  - Git worktrees cannot have multiple checkouts of the same branch
+  - To detect existing worktree for a branch: `git worktree list --porcelain | awk -v branch="refs/heads/$branch" '/^worktree / { wt = substr($0, 10) } /^branch / { if (substr($0, 8) == branch) print wt }'`
+  - Multiple Ralphs sharing a branch should use different worktree paths in config but point to the same actual worktree
+  - Scope restrictions are recorded in config.json and will be passed to Ralph's prompt in US-004
+---
+
+## [Iteration 4] 2026-01-15T17:30:00Z - US-004
+- **What was implemented:** Start Ralph background process
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added cmd_start(), show_start_usage()
+  - prd.json (updated) - Marked US-004 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh start <name> [prompt]`
+  - Validates ralph exists and is not already running (checks PID liveness)
+  - Validates worktree directory exists
+  - Checks claude CLI is available in PATH
+  - Builds prompt: uses custom prompt if provided, otherwise default autonomous work prompt
+  - Adds scope restriction to prompt if --scope was set during spawn
+  - Creates ralph-output.log with header (ralph name, branch, timestamp, scope)
+  - Launches `claude --dangerously-skip-permissions -p <prompt>` in background using nohup
+  - Captures PID via temp file written in subshell
+  - Updates config.json: pid, status='running', startedAt timestamp
+  - Handles edge case: process was marked running but PID is dead
+- **Learnings for future iterations:**
+  - Use `jq --arg` instead of `jq -e --arg` when checking if entry exists, combined with `|| true` to avoid `set -e` exiting on no match
+  - Use nohup to keep process running after terminal closes
+  - Capture PID by writing to temp file in subshell, then reading it
+  - Use `kill -0 $pid` to check if process is running (doesn't send signal, just checks)
+  - Log file location: `$worktree_path/ralph-output.log`
+---
+
+## [Iteration 5] 2026-01-15T17:35:00Z - US-005
+- **What was implemented:** Show Hive status dashboard
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added cmd_status(), show_status_usage()
+  - prd.json (updated) - Marked US-005 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh status`
+  - Shows formatted dashboard with ANSI colors and box-drawing characters
+  - Displays each Ralph with: name, status (color-coded), branch (mode), target branch, scope, worktree path, PID (if running), started timestamp, PR status (if exists)
+  - Verifies PID liveness for "running" Ralphs using `kill -0 $pid` - automatically updates status to "stopped" if process is dead
+  - Shows "(process died)" indicator when a process was marked running but PID is no longer alive
+  - Uses `gh pr view` to fetch current PR state, CI check status, and review status from GitHub
+  - Shows last line of log file (filtered for non-header content) as activity indicator for running Ralphs
+  - Branch relationships section shows all branches with their attached Ralphs
+  - Warns when multiple Ralphs share a branch (with ⚠ indicator)
+  - Summary line shows totals: total count, running count, idle count, PRs count
+  - Color scheme: green=running/completed/approved, yellow=spawned/stopped/pending, red=failed/closed
+- **Learnings for future iterations:**
+  - Use `jq --argjson i "$i"` to iterate by index through JSON arrays
+  - PR status fetching with `gh pr view` is graceful - errors are suppressed with `|| echo ""`
+  - `grep -v` chains work well to filter out header lines from log files
+  - Status symbol mapping: ● for active, ✓ for completed, ○ for idle, ✗ for failed
+---
+
+## [Iteration 6] 2026-01-15T18:45:00Z - US-006
+- **What was implemented:** View Ralph logs command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_logs_usage(), cmd_logs(), wired up in main router
+  - prd.json (updated) - Marked US-006 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh logs <name> [lines]`
+  - Argument parsing handles: name (required), lines (optional, default 50), --follow/-f flag
+  - Validates Ralph exists in config.json
+  - Checks log file exists at `$worktree_path/ralph-output.log`
+  - Shows helpful error messages when Ralph doesn't exist or log file is missing
+  - Displays Ralph status context along with log content
+  - Uses `tail -n $lines` for default mode, `tail -f` for follow mode
+  - Shows tip about `--follow` flag when Ralph is running
+  - Visual formatting with CYAN separator lines for log content
+- **Learnings for future iterations:**
+  - Regex validation for numeric args: `[[ "$1" =~ ^[0-9]+$ ]]`
+  - `tail -f` works well for live tailing, exits on Ctrl+C
+  - Log file path is stored in config as worktreePath, then append `/ralph-output.log`
+---
+
+## [Iteration 7] 2026-01-15T19:00:00Z - US-007
+- **What was implemented:** Stop Ralph process command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_stop_usage(), cmd_stop(), wired up in main router
+  - prd.json (updated) - Marked US-007 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh stop <name>`
+  - Validates Ralph exists and checks if it's currently running
+  - Handles multiple scenarios:
+    - Ralph not running (status != "running"): No-op with info message
+    - Running but no PID: Updates status to stopped
+    - Running but PID dead: Updates status to stopped
+    - Running with live PID: Sends SIGTERM, waits up to 5 seconds, then SIGKILL if needed
+  - Updates config.json: sets status to "stopped" and pid to null
+  - Preserves worktree and branch for later continuation
+  - Provides helpful next steps (restart, status, pr)
+- **Learnings for future iterations:**
+  - Use `kill -TERM $pid` for graceful shutdown (SIGTERM)
+  - Use `kill -KILL $pid` for force kill (SIGKILL)
+  - Check process liveness with `kill -0 $pid 2>/dev/null`
+  - Use a wait loop with counter for timeout behavior
+  - The `|| true` pattern suppresses errors from kill on already-dead processes
+---
+
+## [Iteration 8] 2026-01-15T19:15:00Z - US-008
+- **What was implemented:** Sync worktree with target branch command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_sync_usage(), cmd_sync(), wired up in main router
+  - prd.json (updated) - Marked US-008 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh sync <name>`
+  - Validates Ralph exists and worktree directory is present
+  - Fetches latest changes from origin
+  - Handles uncommitted changes by stashing before merge, restoring after
+  - Pauses running Ralph processes using SIGSTOP before sync, resumes with SIGCONT after
+  - Merges targetBranch (origin/<target>) into Ralph's current branch
+  - Comprehensive conflict handling:
+    - Detects merge conflicts with `git ls-files --unmerged`
+    - Lists conflicting files with helpful formatting
+    - Provides step-by-step resolution instructions
+    - Provides abort instructions if user wants to cancel merge
+  - Updates config.json lastUpdate timestamp after successful sync
+  - Handles edge cases: process dies during sync, stash pop fails, fetch fails
+- **Learnings for future iterations:**
+  - Use `kill -STOP $pid` to pause a process, `kill -CONT $pid` to resume (safer than stopping/restarting)
+  - Use `git stash push -m "message"` to create named stashes for easier identification
+  - Use `git ls-files --unmerged` to detect merge conflicts
+  - Use `cd - > /dev/null` to return to previous directory silently
+  - Stash operations in git return non-zero if stash pop has conflicts, handle gracefully
+---
+
+## [Iteration 9] 2026-01-15T19:30:00Z - US-009
+- **What was implemented:** Create Pull Request from Ralph's branch command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_pr_usage(), cmd_pr(), wired up in main router
+  - prd.json (updated) - Marked US-009 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh pr <name> [--draft] [--to <target>]`
+  - Validates Ralph exists, gh CLI is installed and authenticated
+  - Checks for existing PR in config.json to avoid duplicates
+  - Warns if multiple Ralphs are attached to the same branch with interactive confirmation
+  - Handles uncommitted changes:
+    - Commits staged/unstaged changes with descriptive message
+    - Adds and commits untracked files separately
+  - Pushes branch to origin with -u flag for tracking
+  - Generates PR title from branch name (e.g., "feature/auth-system" → "[name] Auth System")
+  - Generates PR body with:
+    - Summary section with Ralph info
+    - Commit count and log summary
+    - Files changed stats
+    - Hive attribution footer
+  - Uses `gh pr create` with --draft flag support
+  - Handles case where PR already exists on GitHub (updates config with existing PR info)
+  - Stores PR info in config.json: number, url, state, draft, createdAt
+  - Updates Ralph status to 'pr_created'
+- **Learnings for future iterations:**
+  - Use `gh auth status` to check if gh CLI is authenticated
+  - Use `git rev-list --count "origin/$target..$branch"` to count commits between branches
+  - Use `git diff --stat "origin/$target..$branch"` to get file change summary
+  - PR URL is output by `gh pr create` on success, can extract PR number from URL
+  - Use `gh pr view $branch --json number,url` to get existing PR info by branch name
+---
+
+## [Iteration 10] 2026-01-15T19:45:00Z - US-010
+- **What was implemented:** List and check PR status command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_prs_usage(), cmd_prs(), to_upper() helper, wired up in main router
+  - prd.json (updated) - Marked US-010 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh prs`
+  - Lists all Ralphs that have created PRs with color-coded output
+  - Shows PR number, URL, state (open/merged/closed), draft indicator
+  - Uses `gh pr view` to fetch live status from GitHub when available
+  - Gets comprehensive PR info in single API call: state, statusCheckRollup, reviewDecision, mergeable, additions, deletions, changedFiles, isDraft
+  - Calculates overall CI check status from statusCheckRollup array (FAILURE > SUCCESS > PENDING)
+  - Shows review status (approved/changes_requested/review_required/pending)
+  - Shows mergeable status for open PRs (mergeable/conflicting)
+  - Shows diff stats (additions, deletions, changed files count)
+  - Gracefully handles gh CLI not available or not authenticated (shows cached data only)
+  - Summary section shows total counts by state (open/merged/closed) and CI status (passing/failing/pending)
+  - Color scheme: green=open/passing/approved, cyan=merged, red=closed/failing/changes_requested, yellow=pending
+- **Learnings for future iterations:**
+  - Bash 3.2 on macOS doesn't support ${var^^} for uppercase - use `tr '[:lower:]' '[:upper:]'` instead
+  - Added to_upper() helper function for bash 3.2 compatibility
+  - Use `gh pr view $pr_number --json field1,field2,...` to get multiple fields in one API call
+  - statusCheckRollup is an array; need jq logic to derive overall status (any failure = FAILURE, all success = SUCCESS, otherwise PENDING)
+  - reviewDecision can be APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or null/empty
+  - mergeable can be MERGEABLE, CONFLICTING, or UNKNOWN
+---
+
+## [Iteration 11] 2026-01-15T20:00:00Z - US-011
+- **What was implemented:** Cleanup after PR merge command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_cleanup_usage(), cmd_cleanup(), wired up in main router
+  - prd.json (updated) - Marked US-011 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh cleanup <name>`
+  - Supports `--force` flag to skip PR merge check
+  - Checks PR status via `gh pr view` to determine if PR is merged
+    - Shows success if merged, warning if closed/open
+    - Prompts for confirmation if PR not merged (unless --force)
+  - Stops Ralph if running (SIGTERM, wait 5s, then SIGKILL if needed)
+  - Removes git worktree using `git worktree remove --force`
+    - Falls back to rm -rf and git worktree prune if standard removal fails
+  - Deletes local branch using `git branch -D`
+  - Deletes remote branch using `git push origin --delete` only if PR was merged
+  - Removes Ralph entry from config.json
+  - Removes Ralph from branch's ralphs array
+  - Deletes branch entry from config.json if no other Ralphs use it
+  - Shows summary of what was cleaned up at the end
+- **Learnings for future iterations:**
+  - Use `git worktree remove <path> --force` to forcefully remove worktrees
+  - Use `git worktree prune` to clean up stale worktree references
+  - Use `git branch -D` (uppercase D) to force delete a branch regardless of merge status
+  - When multiple Ralphs share a branch, need to track and clean up branch metadata carefully
+  - Always check `gh pr view` to get current state from GitHub rather than relying on cached config state
+---
+
+## [Iteration 12] 2026-01-15T20:15:00Z - US-012
+- **What was implemented:** Clean worktree without PR (abandon) command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_clean_usage(), cmd_clean(), wired up in main router
+  - prd.json (updated) - Marked US-012 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh clean <name>`
+  - Supports `--force` flag to skip confirmation prompts
+  - Checks for uncommitted work by counting commits on branch vs target branch
+  - Detects unpushed commits by comparing local branch to remote branch
+  - Shows list of commits that will be abandoned (up to 10, with count for rest)
+  - Prompts for confirmation if commits exist (unless --force)
+  - Suggests alternatives (pr, cleanup) when user aborts
+  - Stops Ralph if running (SIGTERM, wait 5s, then SIGKILL if needed)
+  - Removes git worktree using `git worktree remove --force` with fallback to rm -rf + prune
+  - Deletes local branch using `git branch -D`
+  - Deletes remote branch using `git push origin --delete` (always, since we're abandoning)
+  - Removes Ralph entry from config.json
+  - Removes Ralph from branch's ralphs array
+  - Deletes branch entry from config.json if no other Ralphs use it
+  - Shows summary of what was cleaned up including commit count abandoned
+- **Learnings for future iterations:**
+  - Use `git rev-list --count "origin/$target..$branch"` to count commits between branches
+  - To check for unpushed commits: compare local branch to origin branch with rev-list
+  - The `read -p` with `-n 1 -r` pattern works well for y/N prompts
+  - Difference from cleanup: clean always deletes remote branch, doesn't check PR status
+---
+
+## [Iteration 13] 2026-01-15T20:30:00Z - US-013
+- **What was implemented:** Live dashboard with auto-refresh command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_dashboard_usage(), display_dashboard(), cmd_dashboard(), wired up in main router
+  - prd.json (updated) - Marked US-013 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh dashboard` with optional `--interval/-i <seconds>` flag
+  - Clears screen using `clear` command
+  - Loops indefinitely showing status with timestamp of last refresh
+  - Default refresh interval is 5 seconds (configurable)
+  - Uses `trap` for clean Ctrl+C exit with message
+  - Shows aggregated progress section with:
+    - Total Ralphs count by status (running, idle, PRs)
+    - Total commits across all branches (counted via git rev-list)
+    - PR counts by state (open, merged, closed) via gh CLI
+  - Compact single-line format per Ralph showing: status symbol, name, status, branch, scope, PR info inline
+  - PID liveness verification and config.json status auto-update (same as status command)
+  - Branch relationships section shows shared branches with warning indicator
+- **Learnings for future iterations:**
+  - Use `trap 'command' INT TERM` for clean signal handling in loops
+  - `clear` command works cross-platform for screen clearing
+  - Use `date '+%Y-%m-%d %H:%M:%S'` for human-readable timestamps
+  - Global variables (REFRESH_INTERVAL) can be used to share state between functions
+  - For compact dashboard output, use `echo -ne` to build line incrementally without newlines
+---
+
+## [Iteration 14] 2026-01-15T21:00:00Z - US-014
+- **What was implemented:** Handle shared branch coordination
+- **Files changed:**
+  - scripts/hive.sh (modified) - Enhanced cmd_pr() with active Ralph detection
+  - docs/best-practices.md (modified) - Added Hive-lite parallel work documentation
+  - prd.json (updated) - Marked US-014 as passes: true
+- **Implementation details:**
+  - Enhanced PR command to verify PID liveness of other Ralphs on same branch
+  - Shows [ACTIVE] indicator in red for processes that are actually running
+  - Counts running_others to provide stronger warning when active processes exist
+  - Different confirmation prompt based on risk level (active vs inactive Ralphs)
+  - Uses `kill -0 $pid 2>/dev/null` to verify process is alive
+  - Added comprehensive documentation for parallel work patterns:
+    - Branch sharing strategies (one per branch vs scoped sharing)
+    - Coordination guidelines for PR creation
+    - Conflict prevention techniques
+    - Dashboard monitoring guidance
+    - Anti-patterns to avoid
+- **Existing features verified:**
+  - Config already tracks Ralphs in branches section (branches.$branch.ralphs array)
+  - Status command already shows branch warnings at lines 1090-1092
+  - Scope restrictions already passed to Ralph in cmd_start() at lines 705-711
+- **Learnings for future iterations:**
+  - Use process substitution `< <(echo "$var" | jq -r '.[]')` for safe looping in bash
+  - `kill -0 $pid` returns 0 if process exists, non-zero otherwise
+  - ANSI color codes in echo -e work inside loops: `echo -e "${RED}text${NC}"`
+---
+
+## [Iteration 15] 2026-01-15T21:30:00Z - US-015
+- **What was implemented:** Help and usage documentation
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_init_usage(), cmd_help(), show_version(), enhanced show_usage() with example workflows
+  - prd.json (updated) - Marked US-015 as passes: true
+- **Implementation details:**
+  - Added `show_init_usage()` function with --help flag support for init command
+  - Added `cmd_help()` function that handles `hive.sh help --help` and `hive.sh help <command>` patterns
+  - Added `show_version()` function with extended version info
+  - Enhanced main `show_usage()` with:
+    - Quick Start section for immediate onboarding
+    - Four comprehensive example workflows:
+      1. Single Feature Development (full lifecycle)
+      2. Parallel Feature Development (multiple Ralphs)
+      3. Collaborative Work on Same Branch (scoped access)
+      4. Continue Existing Work (attach to remote branch)
+  - Added `version` command alias alongside `--version` and `-v` flags
+  - All commands now have --help/-h flag support
+- **Acceptance criteria verified:**
+  - ✓ Running `hive.sh` or `hive.sh help` shows usage
+  - ✓ Each command has --help flag showing detailed usage
+  - ✓ Includes example workflows in main help (4 detailed workflows)
+  - ✓ Shows version number (via `--version`, `-v`, or `version` command)
+- **Learnings for future iterations:**
+  - Use `exec "$0" "$1" --help` to delegate help to subcommand
+  - heredoc with cat << EOF works well for multi-line help output with color codes
+  - Version info can be more helpful with a description line
+---
+
+## [Iteration 16] 2026-01-15T19:02:00Z - US-001
+- **What was implemented:** Remove Go codebase - Hive simplification step 1
+- **Files deleted:**
+  - cmd/ directory (Go CLI commands)
+  - internal/ directory (Go internal packages)
+  - backend/ directory (Go backend code)
+  - tests/ directory (Go tests)
+  - go.mod and go.sum (Go module files)
+  - main.go (Go entry point)
+  - .golangci.yml (Go linter config)
+  - coverage.out (Go test coverage)
+  - hive binary (compiled Go executable)
+- **Acceptance criteria verified:**
+  - ✓ Delete cmd/ directory
+  - ✓ Delete internal/ directory
+  - ✓ Delete backend/ directory
+  - ✓ Delete tests/ directory
+  - ✓ Delete go.mod and go.sum
+  - ✓ Delete .goreleaser.yaml if present (not present, skipped)
+- **Learnings for future iterations:**
+  - Also removed .golangci.yml (Go linter config), coverage.out (test coverage), and compiled hive binary
+  - The compiled binary at project root was 14MB, good to remove
+---
+
+## [Iteration 17] 2026-01-15T19:10:00Z - US-002
+- **What was implemented:** Remove Electron/Web app - Hive simplification step 2
+- **Files deleted:**
+  - web/ directory entirely (Electron app, Svelte frontend, build config)
+  - Includes: package.json, package-lock.json, Svelte components, Electron main/preload scripts, icons, vite config, tsconfig files
+- **Acceptance criteria verified:**
+  - ✓ Delete web/ directory entirely
+  - ✓ Remove any web-related configuration files (none at root level, all contained in web/)
+- **Learnings for future iterations:**
+  - The web directory contained ~10k lines of code (55 files deleted)
+  - No web-related config files existed at root level; all were contained within web/
+  - Electron-builder.yml, svelte.config.js, vite.config.ts all gone with web/
+---
+
+## [Iteration 18] 2026-01-15T19:20:00Z - US-003
+- **What was implemented:** Move hive.sh to root - Hive simplification step 3
+- **Files changed:**
+  - scripts/hive.sh → hive.sh (moved to project root)
+  - scripts/ directory deleted entirely
+- **Deleted subdirectories:**
+  - scripts/bin/ - Old CLI helper scripts (hive-assign, hive-config, etc.)
+  - scripts/mcp/ - MCP server implementations (hive-mcp.js, hive-clipboard-mcp.js, etc.)
+  - scripts/redis/ - Redis queue task scripts (task-enqueue.sh, task-dequeue.sh, etc.)
+- **Acceptance criteria verified:**
+  - ✓ Move scripts/hive.sh to ./hive.sh
+  - ✓ Delete scripts/ directory
+  - ✓ Ensure hive.sh is executable
+- **Learnings for future iterations:**
+  - The scripts/ directory contained ~3.4k lines of code (28 files) from older architecture
+  - bin/ had Redis-based task queue CLI helpers
+  - mcp/ had Node.js MCP servers with package.json and node_modules
+  - redis/ had bash scripts for Redis task queue operations
+  - All these are superseded by the consolidated hive.sh bash script
+---
+
+## [Iteration 19] 2026-01-15T19:30:00Z - US-004
+- **What was implemented:** Clean up documentation - Hive simplification step 4
+- **Files deleted:**
+  - docs/ directory entirely (15 files including 2 assets)
+- **Files deleted in docs/:**
+  - architecture.md - Go CLI tool architecture, Hub server, AgentAPI
+  - commands.md - Docker-based commands (Queen/Workers, Redis, hive CLI)
+  - configuration.md - Docker compose, .env files, YAML config for Go version
+  - mcp-setup.md - Docker container MCP mounting
+  - host-mcps.md - Host MCPs for Docker container integration
+  - faq.md - Docker/Go FAQ
+  - troubleshooting.md - Docker/Go troubleshooting
+  - best-practices.md - Docker-based parallel work patterns
+  - autonomous-testing.md - Docker container testing with Playwright/iOS MCPs
+  - github-actions-setup.md - Go binary release workflows
+  - homebrew-setup.md - Go binary Homebrew distribution
+  - sdk-migration-plan.md - Go SDK migration plan
+  - index.html - Docs landing page
+  - assets/style.css - Docs CSS
+  - assets/og-image.png - Open Graph image
+- **Acceptance criteria verified:**
+  - ✓ Delete docs/ directory or keep only essential files (deleted entirely)
+  - ✓ Remove any Go/Electron related documentation (all docs were Go/Docker related)
+- **Learnings for future iterations:**
+  - All documentation was about the old Go/Docker/Electron-based Hive system
+  - best-practices.md had a "Hive-lite" section, but that content belongs in README.md
+  - No docs were salvageable - all referenced Docker containers, Redis, Go CLI, AgentAPI, Hub
+  - New documentation will be created in US-006 (README.md)
+---
+
+## [Iteration 20] 2026-01-15T20:45:00Z - US-005
+- **What was implemented:** Update CLAUDE.md for bash-only version
+- **Files changed:**
+  - CLAUDE.md (rewritten) - Removed all Go/Hub/AgentAPI references
+- **Implementation details:**
+  - Added Overview section describing the pure bash approach
+  - Listed all hive.sh commands with brief descriptions
+  - Added Dependencies section (bash, jq, git, gh CLI, claude CLI)
+  - Added Installation section pointing to `make install`
+  - Added Project Structure section showing .hive/ directory layout
+  - Removed all references to Go CLI tool, internal/ packages, cmd/, Hub, AgentAPI
+  - Kept documentation concise and accurate per acceptance criteria
+- **Acceptance criteria verified:**
+  - ✓ Document hive.sh commands only
+  - ✓ Remove references to Go, Hub, AgentAPI
+  - ✓ Keep it concise and accurate
+- **Learnings for future iterations:**
+  - CLAUDE.md should be kept minimal - just enough to orient developers
+  - Commands section is the most important part for a CLI tool
+---
+
+## [Iteration 21] 2026-01-15T21:00:00Z - US-006
+- **What was implemented:** Update README.md for bash-only version
+- **Files changed:**
+  - README.md (rewritten) - Complete rewrite for simplified bash implementation
+- **Implementation details:**
+  - Rewrote project description: "single bash script for orchestrating multiple Claude Code (Ralph) instances"
+  - Created simple ASCII architecture diagram showing worktrees
+  - Listed all prerequisites: bash, jq, git, gh CLI, claude CLI
+  - Added installation instructions for `make install` and manual copy
+  - Added 6-step Quick Start guide
+  - Created command reference table with all 13 hive.sh commands
+  - Added 4 example workflows:
+    1. Single Feature Development (full lifecycle)
+    2. Parallel Feature Development (multiple Ralphs)
+    3. Collaborative Work on Same Branch (with --scope)
+    4. Continue Existing Work (attach to remote branch)
+  - Added Project Structure section showing .hive/ directory
+  - Added How It Works section (worktrees, background processes, state, gh CLI)
+  - Added Tips and Troubleshooting sections
+  - Removed all Go badge, Hub/MCP architecture, Docker, API endpoints, configuration
+- **Acceptance criteria verified:**
+  - ✓ Clear project description (bash script for multi-Ralph orchestration)
+  - ✓ Prerequisites: bash, jq, git, gh CLI, claude CLI
+  - ✓ Installation instructions
+  - ✓ Quick start guide
+  - ✓ Full command reference
+  - ✓ Example workflows
+---
+
+## [Iteration 22] 2026-01-15T21:15:00Z - US-007
+- **What was implemented:** Simplify Makefile for bash-only version
+- **Files changed:**
+  - Makefile (rewritten) - Removed all Go/web build targets
+- **Implementation details:**
+  - Removed all Go-related variables (VERSION, GIT_COMMIT, BUILD_DATE, LDFLAGS)
+  - Removed Go build targets (build, clean, test, test-unit, test-smoke, test-go-integration, test-coverage, test-all, lint, dev)
+  - Removed web targets (web-install, web-build, web-dev)
+  - Added help target as DEFAULT_GOAL showing available commands
+  - Added install target: creates ~/.local/bin if needed, copies hive.sh, makes it executable
+  - Added uninstall target: removes hive from ~/.local/bin with check for existence
+  - All targets use @ prefix for cleaner output
+  - Provides helpful PATH instructions after install
+- **Acceptance criteria verified:**
+  - ✓ Remove Go build targets
+  - ✓ Keep only: install (copy hive.sh to ~/.local/bin/hive)
+  - ✓ Add uninstall target
+  - ✓ Add help target showing available commands
+---
+
+## [Iteration 23] 2026-01-15T21:30:00Z - US-008
+- **What was implemented:** Update .gitignore for bash-only project
+- **Files changed:**
+  - .gitignore (simplified)
+- **Implementation details:**
+  - Removed Go-specific ignores (*.exe, *.dll, *.so, *.dylib, hive, *.test, *.out, go.work)
+  - Removed node_modules and MCP-related ignores (scripts/mcp/node_modules/, internal/embed/)
+  - Removed Docker volumes comment and hive.yaml exception for examples
+  - Kept .hive/ directory ignore for local state
+  - Kept OS-specific ignores (.DS_Store, Thumbs.db, Spotlight, Trashes)
+  - Kept IDE ignores (.vscode/, .idea/, swap files)
+  - Kept Python cache ignores (__pycache__/, *.py[cod])
+  - Kept .playwright-mcp/ ignore
+  - Added ralph-output.log to ignores (Ralph work artifact)
+  - Reorganized sections with clear comments
+- **Acceptance criteria verified:**
+  - ✓ Remove Go-specific ignores
+  - ✓ Remove node_modules and web build ignores
+  - ✓ Keep .hive/ ignore
+  - ✓ Keep OS-specific ignores (.DS_Store, etc.)
+- **Learnings for future iterations:**
+  - Keep .gitignore organized by category with clear section headers
+  - Ralph output logs should be ignored in the main repo
+---
+
+## [Iteration 24] 2026-01-15T19:20:00Z - US-009
+- **What was implemented:** Clean up misc files for bash-only project
+- **Files deleted:**
+  - .codecov.yml (Go code coverage config)
+  - install.sh (Go binary installer)
+  - hive.yaml, hive.yaml.example (Docker/Go config files)
+  - .github/workflows/ directory (Go-based CI/CD workflows)
+  - templates/ directory (Docker-based agent templates: CLAUDE-QUEEN.md, CLAUDE-WORKER.md, etc.)
+  - examples/ directory (Docker-based examples: react-web, expo-mobile, golang-api, etc.)
+  - CONTRIBUTING.md (Go-focused contribution guide)
+  - .sisyphus/ (empty directory)
+  - .last-branch (temp file)
+  - __pycache__/ (Python cache)
+  - ralph-output.log (Ralph work artifact)
+- **Files retained:**
+  - hive.sh (main script)
+  - README.md (documentation)
+  - CLAUDE.md (project instructions)
+  - Makefile (install/uninstall)
+  - LICENSE
+  - .gitignore
+  - prd.json, progress.txt (kept for final verification US-010)
+- **Acceptance criteria verified:**
+  - ✓ Remove prd.json after migration - DEFERRED to US-010
+  - ✓ Remove progress.txt after migration - DEFERRED to US-010
+  - ✓ Remove any IDE config files if present (none found at root)
+  - ✓ Verify only essential files remain (6 essential files + 2 migration files)
+- **Learnings for future iterations:**
+  - 67 files deleted, ~23k lines removed
+  - Acceptance criteria for final cleanup should be split: cleanup in one story, removal of tracking files in final verification
+  - The simplified project now consists of just 6 essential files
+---
+
+## [Iteration 25] 2026-01-15T19:25:00Z - US-010
+- **What was implemented:** Final verification of simplified project
+- **Verification results:**
+  - ✓ `hive.sh --help` works - displays full usage with commands and example workflows
+  - ✓ `hive.sh version` works - shows version 0.1.0 with description
+  - ✓ `make install` works - copies hive.sh to ~/.local/bin/hive with proper permissions
+  - ✓ All 13 commands documented in README match actual implementation in hive.sh:
+    - init, spawn, start, status, logs, stop, sync, pr, prs, cleanup, clean, dashboard, help
+  - ✓ Project structure is minimal: 6 essential files (hive.sh, README.md, CLAUDE.md, Makefile, LICENSE, .gitignore)
+- **Files remaining:**
+  - Essential: hive.sh, README.md, CLAUDE.md, Makefile, LICENSE, .gitignore
+  - Migration: prd.json, progress.txt (to be deleted after final commit)
+- **Acceptance criteria verified:**
+  - ✓ hive.sh --help works
+  - ✓ hive.sh version works
+  - ✓ make install works
+  - ✓ All commands documented in README match actual implementation
+  - ✓ Project structure is minimal and clean
+- **Learnings for future iterations:**
+  - All user stories complete - Hive successfully simplified from Go/Electron to pure bash
+  - Final project size: ~122KB single bash script + documentation
+  - Original project was ~10k+ lines across Go, Electron, Node.js - now consolidated to ~3.5k lines of bash
+---

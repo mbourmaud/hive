@@ -1,61 +1,40 @@
-.PHONY: build install clean test lint web-install web-build web-dev
+.PHONY: install uninstall help
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Default target
+.DEFAULT_GOAL := help
 
-LDFLAGS := -ldflags "-X github.com/mbourmaud/hive/cmd.Version=$(VERSION) \
-	-X github.com/mbourmaud/hive/cmd.GitCommit=$(GIT_COMMIT) \
-	-X github.com/mbourmaud/hive/cmd.BuildDate=$(BUILD_DATE)"
+# Installation directory
+INSTALL_DIR := $(HOME)/.local/bin
+INSTALL_PATH := $(INSTALL_DIR)/hive
 
-build: web-build
-	go build $(LDFLAGS) -o hive .
+help:
+	@echo "Hive - Multi-Ralph Orchestration via Git Worktrees"
+	@echo ""
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  install    Copy hive.sh to ~/.local/bin/hive"
+	@echo "  uninstall  Remove hive from ~/.local/bin"
+	@echo "  help       Show this help message"
+	@echo ""
+	@echo "After installation, ensure ~/.local/bin is in your PATH:"
+	@echo "  export PATH=\"\$$HOME/.local/bin:\$$PATH\""
 
-install: build
-	@cat hive | sudo tee /usr/local/bin/hive > /dev/null
-	sudo chmod +x /usr/local/bin/hive
-	@echo "hive installed to /usr/local/bin/hive"
+install:
+	@mkdir -p $(INSTALL_DIR)
+	@cp hive.sh $(INSTALL_PATH)
+	@chmod +x $(INSTALL_PATH)
+	@echo "Installed hive to $(INSTALL_PATH)"
+	@echo ""
+	@echo "Ensure ~/.local/bin is in your PATH:"
+	@echo "  export PATH=\"\$$HOME/.local/bin:\$$PATH\""
+	@echo ""
+	@echo "Run 'hive --help' to get started."
 
-clean:
-	rm -f hive
-	rm -rf internal/monitor/dist
-	go clean
-
-test:
-	go test -v ./...
-
-test-unit:
-	go test -v -short ./...
-
-test-smoke: build
-	@echo "Running smoke tests..."
-	./hive --version
-	./hive --help
-	@echo "Smoke tests passed!"
-
-test-go-integration:
-	go test -v -run Integration ./tests/integration/...
-
-test-coverage:
-	go test -v -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
-
-test-all: test-unit test-smoke test-go-integration
-	@echo "All tests passed!"
-
-lint:
-	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run
-
-dev:
-	go run . $(ARGS)
-
-web-install:
-	cd web && npm install
-
-web-build: web-install
-	cd web && npm run build
-
-web-dev:
-	cd web && npm run dev
+uninstall:
+	@if [ -f $(INSTALL_PATH) ]; then \
+		rm -f $(INSTALL_PATH); \
+		echo "Removed hive from $(INSTALL_PATH)"; \
+	else \
+		echo "hive is not installed at $(INSTALL_PATH)"; \
+	fi

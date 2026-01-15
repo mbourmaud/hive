@@ -1,57 +1,40 @@
+# Hive state directory
+.hive/
+
 # Secrets and credentials
 .env
 .env.local
 .env.*.local
-.env.project
 *.key
 *.pem
 *.token
 credentials.json
 
-workspaces/
-tasks/
-.hive/
+# OS-specific files
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
 
-# Docker volumes
-*.log
-
-# Go build artifacts
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-hive
-*.test
-*.out
-go.work
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# IDE
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
-
 # Temporary files
 tmp/
 temp/
 *.tmp
-.playwright-mcp/
-hive.yaml
-!examples/*/hive.yaml
+*.log
 
-# MCP node_modules
-scripts/mcp/node_modules/
-scripts/mcp/package-lock.json
-internal/embed/files/scripts/mcp/node_modules/
-internal/embed/files/scripts/mcp/package-lock.json
+# Python cache (if using Python scripts)
+__pycache__/
+*.py[cod]
+
+# Playwright MCP
+.playwright-mcp/
+
+# Ralph work artifacts (not tracked in main repo)
+ralph-output.log

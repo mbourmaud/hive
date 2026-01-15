@@ -1,74 +1,69 @@
-# Hive v2 - Multi-Agent Orchestration
+# Hive - Multi-Ralph Orchestration
 
-**Run multiple Claude Code agents in parallel.** No Docker, no Redis - just git worktrees and native processes.
+**Run multiple Claude Code instances in parallel.** A single bash script for orchestrating multiple Claude Code (Ralph) instances via git worktrees.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://go.dev)
 
 ---
 
 ## What is Hive?
 
-Hive lets you spawn multiple Claude Code agents (Drones), each working in an isolated git worktree. A Queen (your main Claude instance) orchestrates Drones via MCP. Each Drone uses the **Ralph Loop** pattern - iterating until tasks are verified complete.
+Hive lets you spawn multiple Claude Code agents (Ralphs), each working in an isolated git worktree. Each Ralph runs autonomously, iterating until tasks are verified complete.
 
 ```
-┌─────────────────────────────────────────────────┐
-│              Queen (Claude/OpenCode)            │
-│                      │ MCP                      │
-└──────────────────────┼──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│                  Hub Server                     │
-│              (REST API + SSE Events)            │
-└──────────────────────┬──────────────────────────┘
-                       │
-       ┌───────────────┼───────────────┐
-       │               │               │
-┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
-│   Drone 1   │ │   Drone 2   │ │   Drone 3   │
-│ Ralph Loop  │ │ Ralph Loop  │ │ Ralph Loop  │
-│ (worktree)  │ │ (worktree)  │ │ (worktree)  │
-└─────────────┘ └─────────────┘ └─────────────┘
+┌─────────────────────────────────────────────────────┐
+│              Your Project Repository                │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐       │
+│  │  Ralph 1  │  │  Ralph 2  │  │  Ralph 3  │       │
+│  │ (worktree)│  │ (worktree)│  │ (worktree)│       │
+│  │ feature/A │  │ feature/B │  │ feature/C │       │
+│  └───────────┘  └───────────┘  └───────────┘       │
+│                                                     │
+│  Orchestrated by hive.sh                           │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
 
 **Perfect for:**
 - Fixing multiple bugs simultaneously
 - Developing features in parallel (frontend + backend + tests)
-- Large-scale refactoring with sub-agents
+- Large-scale refactoring with isolated workspaces
 - Continuous iteration until all tests pass
+
+---
+
+## Prerequisites
+
+- **bash** - Shell interpreter (included on macOS/Linux)
+- **jq** - JSON processor ([install](https://jqlang.github.io/jq/download/))
+- **git** - Version control
+- **gh** - GitHub CLI ([install](https://cli.github.com/))
+- **claude** - Claude Code CLI
 
 ---
 
 ## Installation
 
-### Quick Setup (Recommended)
-
 ```bash
-# Install Hive
-go install github.com/mbourmaud/hive@latest
+# Clone the repository
+git clone https://github.com/mbourmaud/hive
+cd hive
 
-# Auto-install dependencies (agentapi, claude CLI)
-hive setup
-
-# Optional: Install desktop app (macOS)
-hive install desktop
+# Install hive to ~/.local/bin
+make install
 ```
+
+This copies `hive.sh` to `~/.local/bin/hive`. Make sure `~/.local/bin` is in your PATH.
 
 ### Manual Installation
 
 ```bash
-# From source
-git clone https://github.com/mbourmaud/hive
-cd hive
-make install
-
-# Check dependencies
-hive setup --check
+# Or just copy the script directly
+cp hive.sh ~/.local/bin/hive
+chmod +x ~/.local/bin/hive
 ```
-
-### What `hive setup` installs:
-- **agentapi** - HTTP control layer for Claude Code
-- **claude** - Claude Code CLI (via npm)
 
 ---
 
@@ -81,285 +76,188 @@ cd your-project
 hive init
 ```
 
-### 2. Start the Hub
+### 2. Create a Ralph
 
 ```bash
-hive hub
+# Create a new branch for the Ralph
+hive spawn my-feature --create feature/my-feature
+
+# Or attach to an existing branch
+hive spawn my-feature --attach feature/existing-branch
 ```
 
-### 3. Spawn a Drone
+### 3. Start the Ralph
 
 ```bash
-hive spawn frontend --specialty frontend
+hive start my-feature "Implement user authentication"
 ```
 
-### 4. Send a task
+### 4. Monitor progress
 
 ```bash
-hive msg frontend "Add a login form with email/password validation"
+# Check status of all Ralphs
+hive status
+
+# Watch live logs
+hive logs my-feature --follow
+
+# Live dashboard with auto-refresh
+hive dashboard
 ```
 
-The Drone will:
-1. Analyze the task
-2. Execute with sub-agents if needed
-3. Run `hive-verify` (typecheck, test, build)
-4. Iterate until all checks pass
-5. Commit and notify
-
-### 5. Monitor progress
+### 5. Create a Pull Request
 
 ```bash
-# TUI dashboard
-hive monitor
-
-# Web dashboard
-hive monitor --web
-# → Open http://localhost:7434
-
-# Or use the desktop app
-open '/Applications/Hive Monitor.app'
+hive pr my-feature
 ```
 
-### Hub Mode (for programmatic access)
+### 6. Cleanup after merge
 
 ```bash
-# Start the Hub API server
-hive hub --port 7433
-
-# In another terminal, use the REST API
-curl -X POST http://localhost:7433/agents \
-  -H "Content-Type: application/json" \
-  -d '{"name": "backend", "sandbox": true}'
-
-curl -X POST http://localhost:7433/agents/AGENT_ID/message \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Implement the user API"}'
+hive cleanup my-feature
 ```
-
-### MCP Mode (for Queen integration)
-
-Configure in Claude's settings:
-```json
-{
-  "mcpServers": {
-    "hive": {
-      "command": "hive",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-Then Queen can use tools like:
-- `manage_agent` - spawn/stop/destroy/list agents
-- `send_message` - send messages to agents
-- `get_conversation` - get conversation history
-- `manage_task` - create/track tasks
-- `get_status` - overall hive status
 
 ---
 
 ## Commands
 
-### Setup & Installation
-
 | Command | Description |
 |---------|-------------|
-| `hive setup` | Auto-install dependencies (agentapi, claude) |
-| `hive setup --check` | Check what's installed |
-| `hive install desktop` | Install Hive Monitor desktop app (macOS) |
-| `hive init` | Initialize Hive in current project |
+| `hive init` | Initialize Hive in current repository |
+| `hive spawn <name> --create <branch>` | Create new Ralph with new branch |
+| `hive spawn <name> --attach <branch>` | Attach Ralph to existing branch |
+| `hive start <name> [prompt]` | Start Ralph background process |
+| `hive status` | Show status of all Ralphs |
+| `hive logs <name> [lines]` | View Ralph's output log |
+| `hive stop <name>` | Stop a running Ralph |
+| `hive sync <name>` | Sync worktree with target branch |
+| `hive pr <name> [--draft]` | Create Pull Request |
+| `hive prs` | List all PRs created by Hive |
+| `hive cleanup <name>` | Remove worktree after PR merge |
+| `hive clean <name>` | Remove worktree (abandon work) |
+| `hive dashboard` | Live status dashboard |
 
-### Agent Management
-
-| Command | Description |
-|---------|-------------|
-| `hive spawn <name>` | Spawn a new Drone with git worktree |
-| `hive agents` | List running Drones |
-| `hive msg <agent> <message>` | Send message to a Drone |
-| `hive conv <agent>` | Show conversation history |
-| `hive logs <agent>` | Stream Drone logs in real-time |
-| `hive kill <agent>` | Stop a Drone |
-| `hive destroy <agent>` | Stop and remove worktree |
-| `hive clean` | Remove all Drones and worktrees |
-
-### Server & Monitoring
-
-| Command | Description |
-|---------|-------------|
-| `hive hub` | Start the Hub API server |
-| `hive mcp` | Start MCP server for Queen integration |
-| `hive status` | Show overall status |
-| `hive monitor` | TUI dashboard |
-| `hive monitor --web` | Web dashboard (port 7434) |
+Run `hive <command> --help` for detailed information on each command.
 
 ---
 
-## Monitor Dashboard
+## Example Workflows
 
-Hive includes a real-time monitoring dashboard available in both TUI and Web modes.
-
-### TUI Mode
+### Single Feature Development
 
 ```bash
-hive monitor
+# Initialize Hive in your repo
+hive init
+
+# Create a Ralph for a new feature
+hive spawn auth-feature --create feature/auth --from main
+
+# Start Ralph with a task
+hive start auth-feature "Implement JWT authentication"
+
+# Monitor progress
+hive status
+hive logs auth-feature --follow
+
+# When done, create a PR
+hive pr auth-feature
+
+# After PR is merged, cleanup
+hive cleanup auth-feature
 ```
 
-**Navigation:**
-- `Tab` - Switch between Agents/Solicitations/Tasks panels
-- `↑↓` or `j/k` - Navigate within a panel
-- `Enter` - Select item (open agent detail view)
-- `Esc` - Go back
-- `r` - Refresh data
-- `q` - Quit
-
-**Agent Actions (in detail view):**
-- `K` - Kill agent
-- `D` - Destroy agent (removes worktree)
-- `m` - Send message
-
-**Solicitation Actions:**
-- `R` - Respond to solicitation
-- `X` - Dismiss solicitation
-
-**Task Actions:**
-- `s` - Start task
-- `c` - Complete task
-- `x` - Cancel task
-
-### Web Mode
+### Parallel Feature Development
 
 ```bash
-hive monitor --web --port 7434
+# Create multiple Ralphs for different features
+hive spawn frontend --create feature/ui-redesign
+hive spawn backend --create feature/api-v2
+hive spawn tests --create feature/e2e-tests
+
+# Start all Ralphs
+hive start frontend "Redesign the dashboard UI"
+hive start backend "Implement REST API v2"
+hive start tests "Add end-to-end test coverage"
+
+# Monitor all with dashboard
+hive dashboard
 ```
 
-Open http://localhost:7434 in your browser to see:
-- **Agents panel** - Click to see details, conversation, and actions
-- **Solicitations panel** - Click to respond or dismiss
-- **Tasks panel** - Create tasks with "+ New Task" button
-
----
-
-## Ralph Loop Pattern
-
-Drones execute tasks using the **Ralph Loop** pattern - a continuous iteration loop that doesn't stop until the task is verified complete.
-
-```
-RECEIVE → ANALYZE → PLAN → EXECUTE → VERIFY → (iterate if failed) → DONE
-```
-
-### Key Principles
-
-1. **Never stop on first attempt** - always verify with `hive-verify`
-2. **Parallelize with sub-agents** - spawn Task() for multi-layer work
-3. **Iterate until green** - typecheck, test, build must all pass
-4. **Commit atomically** - one logical change per commit
-
-### Sub-Agent Dispatch
-
-For full-stack tasks, Drones automatically spawn sub-agents:
-
-```typescript
-Task("contract", "Create ts-rest contract for GET /users")
-Task("gateway", "Implement NestJS resolver")
-Task("frontend", "Create React hook with TanStack Query")
-Task("tests", "Write integration tests")
-```
-
-### Verification
-
-Before marking complete, Drones run:
+### Collaborative Work on Same Branch
 
 ```bash
-hive-verify  # Runs: typecheck → test → build
+# First Ralph creates the branch
+hive spawn lead --create feature/big-feature
+
+# Second Ralph attaches with scoped access
+hive spawn helper --attach feature/big-feature --scope "src/utils/*"
+
+# Start both with different tasks
+hive start lead "Implement main feature logic"
+hive start helper "Create utility functions"
 ```
 
-Only when ALL checks pass does the Drone commit and notify completion.
-
----
-
-## Architecture
-
-### Key Design Decisions
-
-- **No Docker** - Uses git worktrees for isolation, native processes
-- **No Redis** - In-memory task management, SSE for events
-- **Sandbox** - Optional `@anthropic-ai/sandbox-runtime` for security
-- **AgentAPI** - HTTP control of Claude via [agentapi](https://github.com/coder/agentapi)
-
-### Components
-
-```
-internal/
-├── agent/      # Agent spawning, HTTP client
-├── hub/        # REST API + SSE server
-├── mcp/        # MCP server for Queen
-├── worktree/   # Git worktree management
-├── task/       # Task tracking
-└── port/       # Port allocation
-```
-
-See [docs/architecture.md](docs/architecture.md) for details.
-
----
-
-## API Endpoints
-
-### Agents
-- `GET /agents` - List all agents
-- `POST /agents` - Spawn new agent
-- `GET /agents/{id}` - Get agent details
-- `DELETE /agents/{id}` - Stop agent
-- `DELETE /agents/{id}/destroy` - Stop and remove worktree
-
-### Messages
-- `POST /agents/{id}/message` - Send message
-- `GET /agents/{id}/messages` - Get conversation
-- `GET /agents/{id}/status` - Get agent status
-
-### Events
-- `GET /ws` - SSE event stream
-
-### Tasks
-- `GET /tasks` - List tasks
-- `POST /tasks` - Create task
-- `POST /tasks/{id}/start` - Start task
-- `POST /tasks/{id}/complete` - Complete task
-
----
-
-## Configuration
-
-### Environment Variables
-
-- `HIVE_DEBUG=1` - Enable debug logging
-- `ANTHROPIC_API_KEY` - API key for Claude
-
-### Spawn Options
+### Continue Existing Work
 
 ```bash
-hive spawn myagent \
-  --branch feature/my-feature \
-  --base main \
-  --specialty backend \
-  --port 3300 \
-  --no-sandbox
+# Attach to an existing remote branch
+hive spawn continue-work --attach feature/existing-branch
+hive start continue-work "Complete the remaining tasks"
 ```
 
 ---
 
-## Development
+## Project Structure
 
-```bash
-# Build
-make build
+After running `hive init`, the following structure is created:
 
-# Test
-make test
-
-# Install locally
-make install
 ```
+your-project/
+├── .hive/
+│   ├── config.json      # Configuration and state
+│   └── worktrees/       # Git worktrees for each Ralph
+│       ├── ralph-1/
+│       ├── ralph-2/
+│       └── ...
+└── ...
+```
+
+---
+
+## How It Works
+
+1. **Git Worktrees**: Each Ralph works in an isolated git worktree, allowing parallel development on different branches without conflicts.
+
+2. **Background Processes**: Ralphs run as background processes using `nohup`, surviving terminal sessions.
+
+3. **State Management**: All state is stored in `.hive/config.json`, tracking Ralph status, PIDs, branches, and PR information.
+
+4. **GitHub Integration**: Uses `gh` CLI for PR creation and status tracking.
+
+---
+
+## Tips
+
+- Use `hive dashboard` for a live view of all Ralphs
+- Use `--scope` when attaching multiple Ralphs to the same branch to avoid conflicts
+- Run `hive sync <name>` regularly to keep worktrees up-to-date with the target branch
+- Use `hive clean <name>` to abandon work without creating a PR
+
+---
+
+## Troubleshooting
+
+### "Not a git repository"
+Make sure you're in a git repository before running `hive init`.
+
+### "jq is required but not installed"
+Install jq: `brew install jq` (macOS) or `apt install jq` (Ubuntu).
+
+### "gh CLI not authenticated"
+Run `gh auth login` to authenticate with GitHub.
+
+### Ralph process died unexpectedly
+Check the logs with `hive logs <name>` to see what went wrong. You can restart with `hive start <name>`.
 
 ---
 
