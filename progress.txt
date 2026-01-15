@@ -459,3 +459,33 @@
   - redis/ had bash scripts for Redis task queue operations
   - All these are superseded by the consolidated hive.sh bash script
 ---
+
+## [Iteration 19] 2026-01-15T19:30:00Z - US-004
+- **What was implemented:** Clean up documentation - Hive simplification step 4
+- **Files deleted:**
+  - docs/ directory entirely (15 files including 2 assets)
+- **Files deleted in docs/:**
+  - architecture.md - Go CLI tool architecture, Hub server, AgentAPI
+  - commands.md - Docker-based commands (Queen/Workers, Redis, hive CLI)
+  - configuration.md - Docker compose, .env files, YAML config for Go version
+  - mcp-setup.md - Docker container MCP mounting
+  - host-mcps.md - Host MCPs for Docker container integration
+  - faq.md - Docker/Go FAQ
+  - troubleshooting.md - Docker/Go troubleshooting
+  - best-practices.md - Docker-based parallel work patterns
+  - autonomous-testing.md - Docker container testing with Playwright/iOS MCPs
+  - github-actions-setup.md - Go binary release workflows
+  - homebrew-setup.md - Go binary Homebrew distribution
+  - sdk-migration-plan.md - Go SDK migration plan
+  - index.html - Docs landing page
+  - assets/style.css - Docs CSS
+  - assets/og-image.png - Open Graph image
+- **Acceptance criteria verified:**
+  - ✓ Delete docs/ directory or keep only essential files (deleted entirely)
+  - ✓ Remove any Go/Electron related documentation (all docs were Go/Docker related)
+- **Learnings for future iterations:**
+  - All documentation was about the old Go/Docker/Electron-based Hive system
+  - best-practices.md had a "Hive-lite" section, but that content belongs in README.md
+  - No docs were salvageable - all referenced Docker containers, Redis, Go CLI, AgentAPI, Hub
+  - New documentation will be created in US-006 (README.md)
+---

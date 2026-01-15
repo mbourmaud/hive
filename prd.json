@@ -55,8 +55,8 @@
       "description": "Remove outdated docs and simplify",
       "priority": 2,
       "dependsOn": ["US-001", "US-002"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Delete docs/ directory or keep only essential files",
         "Remove any Go/Electron related documentation"
