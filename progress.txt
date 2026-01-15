@@ -19,6 +19,7 @@
 - Use `jq --arg` with `|| true` instead of `jq -e` when checking for entry existence (avoids `set -e` exit on no match)
 - Use nohup for background processes to survive terminal close
 - Check process liveness with `kill -0 $pid`
+- Use `kill -STOP $pid` and `kill -CONT $pid` to pause/resume processes without terminating
 
 ---
 
@@ -172,4 +173,31 @@
   - Check process liveness with `kill -0 $pid 2>/dev/null`
   - Use a wait loop with counter for timeout behavior
   - The `|| true` pattern suppresses errors from kill on already-dead processes
+---
+
+## [Iteration 8] 2026-01-15T19:15:00Z - US-008
+- **What was implemented:** Sync worktree with target branch command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_sync_usage(), cmd_sync(), wired up in main router
+  - prd.json (updated) - Marked US-008 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh sync <name>`
+  - Validates Ralph exists and worktree directory is present
+  - Fetches latest changes from origin
+  - Handles uncommitted changes by stashing before merge, restoring after
+  - Pauses running Ralph processes using SIGSTOP before sync, resumes with SIGCONT after
+  - Merges targetBranch (origin/<target>) into Ralph's current branch
+  - Comprehensive conflict handling:
+    - Detects merge conflicts with `git ls-files --unmerged`
+    - Lists conflicting files with helpful formatting
+    - Provides step-by-step resolution instructions
+    - Provides abort instructions if user wants to cancel merge
+  - Updates config.json lastUpdate timestamp after successful sync
+  - Handles edge cases: process dies during sync, stash pop fails, fetch fails
+- **Learnings for future iterations:**
+  - Use `kill -STOP $pid` to pause a process, `kill -CONT $pid` to resume (safer than stopping/restarting)
+  - Use `git stash push -m "message"` to create named stashes for easier identification
+  - Use `git ls-files --unmerged` to detect merge conflicts
+  - Use `cd - > /dev/null` to return to previous directory silently
+  - Stash operations in git return non-zero if stash pop has conflicts, handle gracefully
 ---

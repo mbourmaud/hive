@@ -1420,6 +1420,253 @@ cmd_stop() {
 }
 
 # ============================================================================
+# Sync Command
+# ============================================================================
+
+show_sync_usage() {
+    cat << EOF
+${CYAN}hive.sh sync${NC} - Sync worktree with target branch
+
+${YELLOW}Usage:${NC}
+  hive.sh sync <name>
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph whose worktree to sync
+
+${YELLOW}Options:${NC}
+  --help, -h  Show this help message
+
+${YELLOW}Behavior:${NC}
+  - Fetches latest changes from origin
+  - Merges targetBranch (usually main) into Ralph's branch
+  - Reports merge conflicts if any occur
+  - Pauses Ralph if running, then resumes after sync
+  - Use after another Ralph's PR is merged to get latest changes
+
+${YELLOW}Examples:${NC}
+  hive.sh sync auth-feature    # Merge main into auth-feature's branch
+  hive.sh sync fix-bug         # Sync fix-bug worktree with its target
+EOF
+}
+
+cmd_sync() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_sync_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_sync_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_sync_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_sync_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist."
+        exit 1
+    fi
+
+    # Get ralph info
+    local worktree_path branch target_branch status pid
+    worktree_path=$(echo "$ralph_entry" | jq -r '.worktreePath')
+    branch=$(echo "$ralph_entry" | jq -r '.branch')
+    target_branch=$(echo "$ralph_entry" | jq -r '.targetBranch')
+    status=$(echo "$ralph_entry" | jq -r '.status')
+    pid=$(echo "$ralph_entry" | jq -r '.pid // empty')
+
+    # Verify worktree exists
+    if [[ ! -d "$worktree_path" ]]; then
+        print_error "Worktree directory '$worktree_path' does not exist."
+        print_info "The worktree may have been removed. Consider cleaning up with 'hive.sh clean $name'."
+        exit 1
+    fi
+
+    print_info "Syncing Ralph '$name' worktree with '$target_branch'..."
+
+    # Track if we paused a running Ralph
+    local was_running=false
+    local original_pid=""
+
+    # If Ralph is running, pause it first
+    if [[ "$status" == "running" ]] && [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        print_warning "Ralph '$name' is currently running. Pausing for sync..."
+        was_running=true
+        original_pid="$pid"
+
+        # Send SIGSTOP to pause (not kill) the process
+        kill -STOP "$pid" 2>/dev/null || true
+        print_info "Ralph process paused (PID: $pid)"
+    fi
+
+    # Change to worktree directory for git operations
+    cd "$worktree_path"
+
+    # Fetch latest from origin
+    print_info "Fetching latest from origin..."
+    if ! git fetch origin 2>&1; then
+        print_warning "Could not fetch from origin. Proceeding with local state."
+    fi
+
+    # Check for uncommitted changes
+    local has_changes=false
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        has_changes=true
+        print_warning "Worktree has uncommitted changes."
+        print_info "Stashing changes before merge..."
+
+        if ! git stash push -m "hive-sync-$(date +%s)" 2>&1; then
+            print_error "Failed to stash changes."
+
+            # Resume Ralph if we paused it
+            if [[ "$was_running" == true ]] && [[ -n "$original_pid" ]]; then
+                kill -CONT "$original_pid" 2>/dev/null || true
+                print_info "Ralph process resumed"
+            fi
+            exit 1
+        fi
+        print_success "Changes stashed"
+    fi
+
+    # Attempt to merge target branch
+    print_info "Merging 'origin/$target_branch' into '$branch'..."
+
+    local merge_result=0
+    local merge_output
+    merge_output=$(git merge "origin/$target_branch" -m "Merge $target_branch into $branch (hive sync)" 2>&1) || merge_result=$?
+
+    if [[ $merge_result -ne 0 ]]; then
+        # Check if it's a conflict
+        if git ls-files --unmerged | grep -q .; then
+            print_error "Merge conflicts detected!"
+            echo ""
+            echo -e "${YELLOW}Conflicting files:${NC}"
+            git ls-files --unmerged | cut -f2 | sort -u | while read -r file; do
+                echo "  - $file"
+            done
+            echo ""
+            echo -e "${YELLOW}To resolve conflicts:${NC}"
+            echo "  1. cd $worktree_path"
+            echo "  2. Edit the conflicting files to resolve conflicts"
+            echo "  3. git add <resolved-files>"
+            echo "  4. git commit"
+            echo ""
+            echo -e "${YELLOW}To abort the merge:${NC}"
+            echo "  cd $worktree_path && git merge --abort"
+
+            # Pop stash if we stashed changes (but warn about potential conflicts)
+            if [[ "$has_changes" == true ]]; then
+                echo ""
+                print_warning "Your uncommitted changes are stashed. After resolving merge conflicts:"
+                echo "  git stash pop"
+            fi
+
+            # Resume Ralph if we paused it
+            if [[ "$was_running" == true ]] && [[ -n "$original_pid" ]]; then
+                print_info "Ralph process left paused due to conflicts."
+                print_info "Resume manually after resolving: kill -CONT $original_pid"
+            fi
+
+            exit 1
+        else
+            # Some other merge error
+            print_error "Merge failed: $merge_output"
+
+            # Resume Ralph if we paused it
+            if [[ "$was_running" == true ]] && [[ -n "$original_pid" ]]; then
+                kill -CONT "$original_pid" 2>/dev/null || true
+                print_info "Ralph process resumed"
+            fi
+            exit 1
+        fi
+    fi
+
+    print_success "Merged successfully!"
+
+    # Pop stash if we stashed changes
+    if [[ "$has_changes" == true ]]; then
+        print_info "Restoring stashed changes..."
+        if ! git stash pop 2>&1; then
+            print_warning "Failed to restore stashed changes. They remain in stash."
+            print_info "To restore manually: cd $worktree_path && git stash pop"
+        else
+            print_success "Stashed changes restored"
+        fi
+    fi
+
+    # Resume Ralph if we paused it
+    if [[ "$was_running" == true ]] && [[ -n "$original_pid" ]]; then
+        if kill -0 "$original_pid" 2>/dev/null; then
+            kill -CONT "$original_pid" 2>/dev/null || true
+            print_success "Ralph process resumed (PID: $original_pid)"
+        else
+            print_warning "Ralph process (PID: $original_pid) is no longer running."
+
+            # Update config.json since process died
+            local timestamp=$(get_timestamp)
+            local tmp_config=$(mktemp)
+            jq --arg name "$name" \
+               --arg status "stopped" \
+               --arg timestamp "$timestamp" \
+               '(.ralphs[] | select(.name == $name)) |= . + {status: $status, pid: null} | .lastUpdate = $timestamp' \
+               "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+        fi
+    fi
+
+    # Update lastUpdate in config
+    cd - > /dev/null
+    local timestamp=$(get_timestamp)
+    local tmp_config=$(mktemp)
+    jq --arg timestamp "$timestamp" \
+       '.lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    print_success "Sync completed for Ralph '$name'!"
+    echo ""
+    echo "Branch '$branch' is now up to date with '$target_branch'."
+    echo ""
+    echo "Next steps:"
+    if [[ "$status" != "running" ]] || [[ "$was_running" == false ]]; then
+        echo "  1. Start Ralph: hive.sh start $name"
+    fi
+    echo "  2. Check status: hive.sh status"
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -1484,7 +1731,10 @@ main() {
         stop)
             cmd_stop "$@"
             ;;
-        sync|pr|prs|cleanup|clean|dashboard)
+        sync)
+            cmd_sync "$@"
+            ;;
+        pr|prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

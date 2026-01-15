@@ -124,8 +124,8 @@
       "title": "Sync worktree with target branch",
       "description": "Pull latest changes from target branch into Ralph's worktree",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh sync <name>`",
         "Fetches latest from origin",
