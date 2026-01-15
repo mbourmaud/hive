@@ -2389,6 +2389,273 @@ cmd_prs() {
 }
 
 # ============================================================================
+# Cleanup Command
+# ============================================================================
+
+show_cleanup_usage() {
+    cat << EOF
+${CYAN}hive.sh cleanup${NC} - Remove worktree after PR merge
+
+${YELLOW}Usage:${NC}
+  hive.sh cleanup <name>
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph to clean up
+
+${YELLOW}Options:${NC}
+  --force     Skip PR merge check and force cleanup
+  --help, -h  Show this help message
+
+${YELLOW}Behavior:${NC}
+  - Checks if PR is merged (warns and prompts if not)
+  - Stops Ralph if still running
+  - Removes git worktree
+  - Deletes local branch
+  - Deletes remote branch (if PR was merged)
+  - Removes Ralph entry from config.json
+  - Removes branch entry from config.json (if no other Ralphs use it)
+
+${YELLOW}Examples:${NC}
+  hive.sh cleanup auth-feature       # Clean up after PR merge
+  hive.sh cleanup fix-bug --force    # Force cleanup without PR check
+EOF
+}
+
+cmd_cleanup() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+    local force=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force)
+                force=true
+                shift
+                ;;
+            --help|-h)
+                show_cleanup_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_cleanup_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_cleanup_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_cleanup_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist."
+        exit 1
+    fi
+
+    # Get ralph info
+    local worktree_path branch status pid pr_json branch_mode
+    worktree_path=$(echo "$ralph_entry" | jq -r '.worktreePath')
+    branch=$(echo "$ralph_entry" | jq -r '.branch')
+    status=$(echo "$ralph_entry" | jq -r '.status')
+    pid=$(echo "$ralph_entry" | jq -r '.pid // empty')
+    pr_json=$(echo "$ralph_entry" | jq '.pr')
+    branch_mode=$(echo "$ralph_entry" | jq -r '.branchMode')
+
+    print_info "Cleaning up Ralph '$name'..."
+
+    # Check PR status
+    local pr_merged=false
+    local pr_number=""
+
+    if [[ "$pr_json" != "null" ]] && [[ -n "$pr_json" ]]; then
+        pr_number=$(echo "$pr_json" | jq -r '.number // empty')
+
+        if [[ -n "$pr_number" ]] && command -v gh &> /dev/null; then
+            # Get current PR state from GitHub
+            local gh_pr_state
+            gh_pr_state=$(gh pr view "$pr_number" --json state -q '.state' 2>/dev/null || echo "")
+
+            if [[ -n "$gh_pr_state" ]]; then
+                local gh_pr_state_upper
+                gh_pr_state_upper=$(to_upper "$gh_pr_state")
+
+                if [[ "$gh_pr_state_upper" == "MERGED" ]]; then
+                    pr_merged=true
+                    print_success "PR #$pr_number is merged."
+                elif [[ "$gh_pr_state_upper" == "CLOSED" ]]; then
+                    print_warning "PR #$pr_number is closed but not merged."
+                elif [[ "$gh_pr_state_upper" == "OPEN" ]]; then
+                    print_warning "PR #$pr_number is still open (not merged)."
+                fi
+            fi
+        fi
+    else
+        print_warning "No PR has been created for Ralph '$name'."
+    fi
+
+    # Warn and prompt if PR is not merged (unless --force)
+    if [[ "$pr_merged" == false ]] && [[ "$force" == false ]]; then
+        echo ""
+        print_warning "The PR has not been merged. Are you sure you want to clean up?"
+        print_warning "This will remove the worktree and delete the branch."
+        echo ""
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Aborted."
+            exit 0
+        fi
+    fi
+
+    # Stop Ralph if running
+    if [[ "$status" == "running" ]] && [[ -n "$pid" ]]; then
+        if kill -0 "$pid" 2>/dev/null; then
+            print_info "Stopping Ralph process (PID: $pid)..."
+            kill -TERM "$pid" 2>/dev/null || true
+
+            # Wait up to 5 seconds for graceful shutdown
+            local wait_count=0
+            while kill -0 "$pid" 2>/dev/null && [[ $wait_count -lt 5 ]]; do
+                sleep 1
+                wait_count=$((wait_count + 1))
+            done
+
+            # Force kill if still running
+            if kill -0 "$pid" 2>/dev/null; then
+                print_warning "Process did not stop gracefully. Force killing..."
+                kill -KILL "$pid" 2>/dev/null || true
+            fi
+
+            print_success "Ralph process stopped."
+        fi
+    fi
+
+    # Remove git worktree
+    if [[ -d "$worktree_path" ]]; then
+        print_info "Removing git worktree at '$worktree_path'..."
+
+        # First, try to remove the worktree properly
+        if git worktree remove "$worktree_path" --force 2>/dev/null; then
+            print_success "Worktree removed."
+        else
+            # If that fails, try to remove the directory and prune
+            print_warning "Standard worktree removal failed. Attempting force removal..."
+            rm -rf "$worktree_path" 2>/dev/null || true
+            git worktree prune 2>/dev/null || true
+            print_success "Worktree directory removed and pruned."
+        fi
+    else
+        print_info "Worktree directory does not exist (already removed?)."
+        git worktree prune 2>/dev/null || true
+    fi
+
+    # Delete local branch
+    print_info "Deleting local branch '$branch'..."
+    if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+        if git branch -D "$branch" 2>/dev/null; then
+            print_success "Local branch deleted."
+        else
+            print_warning "Could not delete local branch (may be checked out elsewhere)."
+        fi
+    else
+        print_info "Local branch does not exist (already deleted?)."
+    fi
+
+    # Delete remote branch if PR was merged
+    if [[ "$pr_merged" == true ]]; then
+        print_info "Deleting remote branch 'origin/$branch'..."
+        if git push origin --delete "$branch" 2>/dev/null; then
+            print_success "Remote branch deleted."
+        else
+            print_info "Remote branch may already be deleted or doesn't exist."
+        fi
+    else
+        print_info "Skipping remote branch deletion (PR not merged)."
+        print_info "To delete remote branch manually: git push origin --delete $branch"
+    fi
+
+    # Remove Ralph entry from config.json
+    print_info "Updating config.json..."
+    local timestamp=$(get_timestamp)
+    local tmp_config=$(mktemp)
+
+    jq --arg name "$name" \
+       --arg timestamp "$timestamp" \
+       '.ralphs = [.ralphs[] | select(.name != $name)] | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    print_success "Ralph '$name' removed from config."
+
+    # Remove Ralph from branch entry and clean up if no more Ralphs use this branch
+    local branch_ralphs_count
+    branch_ralphs_count=$(jq --arg branch "$branch" '.branches[$branch].ralphs | length // 0' "$CONFIG_FILE" 2>/dev/null || echo "0")
+
+    if [[ "$branch_ralphs_count" -gt 0 ]]; then
+        # Remove this Ralph from the branch's ralphs array
+        tmp_config=$(mktemp)
+        jq --arg branch "$branch" \
+           --arg name "$name" \
+           --arg timestamp "$timestamp" \
+           '.branches[$branch].ralphs = [.branches[$branch].ralphs[] | select(. != $name)] | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+        # Check if any Ralphs remain on this branch
+        local remaining_ralphs
+        remaining_ralphs=$(jq --arg branch "$branch" '.branches[$branch].ralphs | length // 0' "$CONFIG_FILE" 2>/dev/null || echo "0")
+
+        if [[ "$remaining_ralphs" -eq 0 ]]; then
+            # Remove the branch entry entirely
+            tmp_config=$(mktemp)
+            jq --arg branch "$branch" \
+               --arg timestamp "$timestamp" \
+               'del(.branches[$branch]) | .lastUpdate = $timestamp' \
+               "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+            print_success "Branch '$branch' removed from config (no more Ralphs)."
+        else
+            print_info "Branch '$branch' still has $remaining_ralphs other Ralph(s) attached."
+        fi
+    fi
+
+    print_success "Cleanup completed for Ralph '$name'!"
+    echo ""
+    echo "Summary:"
+    echo "  - Worktree removed: $worktree_path"
+    echo "  - Local branch deleted: $branch"
+    if [[ "$pr_merged" == true ]]; then
+        echo "  - Remote branch deleted: origin/$branch"
+    fi
+    echo "  - Config entries removed"
+    echo ""
+    echo "Run 'hive.sh status' to see remaining Ralphs."
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -2462,7 +2729,10 @@ main() {
         prs)
             cmd_prs "$@"
             ;;
-        cleanup|clean|dashboard)
+        cleanup)
+            cmd_cleanup "$@"
+            ;;
+        clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

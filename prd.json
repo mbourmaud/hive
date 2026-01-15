@@ -175,8 +175,8 @@
       "title": "Cleanup after PR merge",
       "description": "Remove worktree and optionally branch after PR is merged",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh cleanup <name>`",
         "Checks if PR is merged (warns if not)",

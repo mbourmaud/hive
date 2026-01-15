@@ -261,3 +261,31 @@
   - reviewDecision can be APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or null/empty
   - mergeable can be MERGEABLE, CONFLICTING, or UNKNOWN
 ---
+
+## [Iteration 11] 2026-01-15T20:00:00Z - US-011
+- **What was implemented:** Cleanup after PR merge command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_cleanup_usage(), cmd_cleanup(), wired up in main router
+  - prd.json (updated) - Marked US-011 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh cleanup <name>`
+  - Supports `--force` flag to skip PR merge check
+  - Checks PR status via `gh pr view` to determine if PR is merged
+    - Shows success if merged, warning if closed/open
+    - Prompts for confirmation if PR not merged (unless --force)
+  - Stops Ralph if running (SIGTERM, wait 5s, then SIGKILL if needed)
+  - Removes git worktree using `git worktree remove --force`
+    - Falls back to rm -rf and git worktree prune if standard removal fails
+  - Deletes local branch using `git branch -D`
+  - Deletes remote branch using `git push origin --delete` only if PR was merged
+  - Removes Ralph entry from config.json
+  - Removes Ralph from branch's ralphs array
+  - Deletes branch entry from config.json if no other Ralphs use it
+  - Shows summary of what was cleaned up at the end
+- **Learnings for future iterations:**
+  - Use `git worktree remove <path> --force` to forcefully remove worktrees
+  - Use `git worktree prune` to clean up stale worktree references
+  - Use `git branch -D` (uppercase D) to force delete a branch regardless of merge status
+  - When multiple Ralphs share a branch, need to track and clean up branch metadata carefully
+  - Always check `gh pr view` to get current state from GitHub rather than relying on cached config state
+---
