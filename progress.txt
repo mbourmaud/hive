@@ -489,3 +489,73 @@
   - No docs were salvageable - all referenced Docker containers, Redis, Go CLI, AgentAPI, Hub
   - New documentation will be created in US-006 (README.md)
 ---
+
+## [Iteration 20] 2026-01-15T20:45:00Z - US-005
+- **What was implemented:** Update CLAUDE.md for bash-only version
+- **Files changed:**
+  - CLAUDE.md (rewritten) - Removed all Go/Hub/AgentAPI references
+- **Implementation details:**
+  - Added Overview section describing the pure bash approach
+  - Listed all hive.sh commands with brief descriptions
+  - Added Dependencies section (bash, jq, git, gh CLI, claude CLI)
+  - Added Installation section pointing to `make install`
+  - Added Project Structure section showing .hive/ directory layout
+  - Removed all references to Go CLI tool, internal/ packages, cmd/, Hub, AgentAPI
+  - Kept documentation concise and accurate per acceptance criteria
+- **Acceptance criteria verified:**
+  - ✓ Document hive.sh commands only
+  - ✓ Remove references to Go, Hub, AgentAPI
+  - ✓ Keep it concise and accurate
+- **Learnings for future iterations:**
+  - CLAUDE.md should be kept minimal - just enough to orient developers
+  - Commands section is the most important part for a CLI tool
+---
+
+## [Iteration 21] 2026-01-15T21:00:00Z - US-006
+- **What was implemented:** Update README.md for bash-only version
+- **Files changed:**
+  - README.md (rewritten) - Complete rewrite for simplified bash implementation
+- **Implementation details:**
+  - Rewrote project description: "single bash script for orchestrating multiple Claude Code (Ralph) instances"
+  - Created simple ASCII architecture diagram showing worktrees
+  - Listed all prerequisites: bash, jq, git, gh CLI, claude CLI
+  - Added installation instructions for `make install` and manual copy
+  - Added 6-step Quick Start guide
+  - Created command reference table with all 13 hive.sh commands
+  - Added 4 example workflows:
+    1. Single Feature Development (full lifecycle)
+    2. Parallel Feature Development (multiple Ralphs)
+    3. Collaborative Work on Same Branch (with --scope)
+    4. Continue Existing Work (attach to remote branch)
+  - Added Project Structure section showing .hive/ directory
+  - Added How It Works section (worktrees, background processes, state, gh CLI)
+  - Added Tips and Troubleshooting sections
+  - Removed all Go badge, Hub/MCP architecture, Docker, API endpoints, configuration
+- **Acceptance criteria verified:**
+  - ✓ Clear project description (bash script for multi-Ralph orchestration)
+  - ✓ Prerequisites: bash, jq, git, gh CLI, claude CLI
+  - ✓ Installation instructions
+  - ✓ Quick start guide
+  - ✓ Full command reference
+  - ✓ Example workflows
+---
+
+## [Iteration 22] 2026-01-15T21:15:00Z - US-007
+- **What was implemented:** Simplify Makefile for bash-only version
+- **Files changed:**
+  - Makefile (rewritten) - Removed all Go/web build targets
+- **Implementation details:**
+  - Removed all Go-related variables (VERSION, GIT_COMMIT, BUILD_DATE, LDFLAGS)
+  - Removed Go build targets (build, clean, test, test-unit, test-smoke, test-go-integration, test-coverage, test-all, lint, dev)
+  - Removed web targets (web-install, web-build, web-dev)
+  - Added help target as DEFAULT_GOAL showing available commands
+  - Added install target: creates ~/.local/bin if needed, copies hive.sh, makes it executable
+  - Added uninstall target: removes hive from ~/.local/bin with check for existence
+  - All targets use @ prefix for cleaner output
+  - Provides helpful PATH instructions after install
+- **Acceptance criteria verified:**
+  - ✓ Remove Go build targets
+  - ✓ Keep only: install (copy hive.sh to ~/.local/bin/hive)
+  - ✓ Add uninstall target
+  - ✓ Add help target showing available commands
+---

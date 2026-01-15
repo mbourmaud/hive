@@ -68,8 +68,8 @@
       "description": "Rewrite CLAUDE.md for the simplified bash-only version",
       "priority": 3,
       "dependsOn": ["US-003"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Document hive.sh commands only",
         "Remove references to Go, Hub, AgentAPI",
@@ -82,8 +82,8 @@
       "description": "Rewrite README for the simplified project",
       "priority": 3,
       "dependsOn": ["US-003"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Clear project description (bash script for multi-Ralph orchestration)",
         "Prerequisites: bash, jq, git, gh CLI, claude CLI",
@@ -99,8 +99,8 @@
       "description": "Reduce Makefile to essential install target",
       "priority": 3,
       "dependsOn": ["US-003"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Remove Go build targets",
         "Keep only: install (copy hive.sh to ~/.local/bin/hive)",
