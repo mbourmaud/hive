@@ -144,8 +144,8 @@
       "description": "Verify the simplified project works correctly",
       "priority": 5,
       "dependsOn": ["US-005", "US-006", "US-007", "US-008", "US-009"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "hive.sh --help works",
         "hive.sh version works",
