@@ -76,7 +76,46 @@ to_upper() {
 # Init Command
 # ============================================================================
 
+show_init_usage() {
+    cat << EOF
+${CYAN}hive.sh init${NC} - Initialize Hive in current repository
+
+${YELLOW}Usage:${NC}
+  hive.sh init
+
+${YELLOW}Options:${NC}
+  --help, -h  Show this help message
+
+${YELLOW}Description:${NC}
+  Initializes the Hive directory structure for managing multiple Ralph
+  instances. Creates the following:
+  - .hive/             Main Hive directory
+  - .hive/config.json  Configuration and state
+  - .hive/worktrees/   Directory for git worktrees
+  - .hive/.gitignore   Excludes worktrees from git
+
+${YELLOW}Examples:${NC}
+  cd my-project
+  hive.sh init
+EOF
+}
+
 cmd_init() {
+    # Handle --help flag
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_init_usage
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                show_init_usage
+                exit 1
+                ;;
+        esac
+    done
+
     check_git_repo
     check_dependencies
 
@@ -3342,19 +3381,105 @@ ${YELLOW}Commands:${NC}
   clean             Remove worktree without PR (abandon)
   dashboard         Live status dashboard
   help              Show this help message
+  --version, -v     Show version number
 
-${YELLOW}Examples:${NC}
+${YELLOW}Quick Start:${NC}
   hive.sh init
-  hive.sh spawn auth-feature --create feature/auth --from main
-  hive.sh spawn fix-bug --attach feature/auth --scope "src/auth/*"
-  hive.sh start auth-feature "Implement user authentication"
+  hive.sh spawn my-feature --create feature/my-feature
+  hive.sh start my-feature "Implement the new feature"
   hive.sh status
-  hive.sh logs auth-feature 100
-  hive.sh stop auth-feature
-  hive.sh pr auth-feature --draft
 
-Run 'hive.sh <command> --help' for more information on a specific command.
+${YELLOW}Example Workflows:${NC}
+
+  ${CYAN}1. Single Feature Development${NC}
+     # Initialize Hive in your repo
+     hive.sh init
+
+     # Create a Ralph for a new feature
+     hive.sh spawn auth-feature --create feature/auth --from main
+
+     # Start Ralph with a task
+     hive.sh start auth-feature "Implement JWT authentication"
+
+     # Monitor progress
+     hive.sh status
+     hive.sh logs auth-feature --follow
+
+     # When done, create a PR
+     hive.sh pr auth-feature
+
+     # After PR is merged, cleanup
+     hive.sh cleanup auth-feature
+
+  ${CYAN}2. Parallel Feature Development${NC}
+     # Create multiple Ralphs for different features
+     hive.sh spawn frontend --create feature/ui-redesign
+     hive.sh spawn backend --create feature/api-v2
+     hive.sh spawn tests --create feature/e2e-tests
+
+     # Start all Ralphs
+     hive.sh start frontend "Redesign the dashboard UI"
+     hive.sh start backend "Implement REST API v2"
+     hive.sh start tests "Add end-to-end test coverage"
+
+     # Monitor all with dashboard
+     hive.sh dashboard
+
+  ${CYAN}3. Collaborative Work on Same Branch${NC}
+     # First Ralph creates the branch
+     hive.sh spawn lead --create feature/big-feature
+
+     # Second Ralph attaches with scoped access
+     hive.sh spawn helper --attach feature/big-feature --scope "src/utils/*"
+
+     # Start both with different tasks
+     hive.sh start lead "Implement main feature logic"
+     hive.sh start helper "Create utility functions"
+
+  ${CYAN}4. Continue Existing Work${NC}
+     # Attach to an existing remote branch
+     hive.sh spawn continue-work --attach feature/existing-branch
+     hive.sh start continue-work "Complete the remaining tasks"
+
+Run 'hive.sh <command> --help' for detailed information on a specific command.
 EOF
+}
+
+show_version() {
+    cat << EOF
+hive.sh version $VERSION
+
+Multi-Ralph Orchestration via Bash
+Manages multiple Claude Code (Ralph) instances in parallel git worktrees.
+EOF
+}
+
+cmd_help() {
+    # Handle --help on the help command itself
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                cat << EOF
+${CYAN}hive.sh help${NC} - Show usage information
+
+${YELLOW}Usage:${NC}
+  hive.sh help
+  hive.sh help <command>
+  hive.sh <command> --help
+
+${YELLOW}Description:${NC}
+  Shows usage information for hive.sh or a specific command.
+  Running 'hive.sh help <command>' is equivalent to 'hive.sh <command> --help'.
+EOF
+                exit 0
+                ;;
+            *)
+                # Treat as a command name to get help for
+                exec "$0" "$1" --help
+                ;;
+        esac
+    done
+    show_usage
 }
 
 # Main entry point
@@ -3399,11 +3524,14 @@ main() {
         dashboard)
             cmd_dashboard "$@"
             ;;
-        help|--help|-h|"")
-            show_usage
+        help|--help|-h)
+            cmd_help "$@"
             ;;
-        --version|-v)
-            echo "hive.sh version $VERSION"
+        version|--version|-v)
+            show_version
+            ;;
+        "")
+            show_usage
             ;;
         *)
             print_error "Unknown command: $command"

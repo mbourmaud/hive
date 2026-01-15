@@ -239,8 +239,8 @@
       "title": "Help and usage documentation",
       "description": "Built-in help for all commands",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Running `hive.sh` or `hive.sh help` shows usage",
         "Each command has --help flag showing detailed usage",

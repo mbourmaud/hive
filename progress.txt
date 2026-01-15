@@ -343,3 +343,60 @@
   - Global variables (REFRESH_INTERVAL) can be used to share state between functions
   - For compact dashboard output, use `echo -ne` to build line incrementally without newlines
 ---
+
+## [Iteration 14] 2026-01-15T21:00:00Z - US-014
+- **What was implemented:** Handle shared branch coordination
+- **Files changed:**
+  - scripts/hive.sh (modified) - Enhanced cmd_pr() with active Ralph detection
+  - docs/best-practices.md (modified) - Added Hive-lite parallel work documentation
+  - prd.json (updated) - Marked US-014 as passes: true
+- **Implementation details:**
+  - Enhanced PR command to verify PID liveness of other Ralphs on same branch
+  - Shows [ACTIVE] indicator in red for processes that are actually running
+  - Counts running_others to provide stronger warning when active processes exist
+  - Different confirmation prompt based on risk level (active vs inactive Ralphs)
+  - Uses `kill -0 $pid 2>/dev/null` to verify process is alive
+  - Added comprehensive documentation for parallel work patterns:
+    - Branch sharing strategies (one per branch vs scoped sharing)
+    - Coordination guidelines for PR creation
+    - Conflict prevention techniques
+    - Dashboard monitoring guidance
+    - Anti-patterns to avoid
+- **Existing features verified:**
+  - Config already tracks Ralphs in branches section (branches.$branch.ralphs array)
+  - Status command already shows branch warnings at lines 1090-1092
+  - Scope restrictions already passed to Ralph in cmd_start() at lines 705-711
+- **Learnings for future iterations:**
+  - Use process substitution `< <(echo "$var" | jq -r '.[]')` for safe looping in bash
+  - `kill -0 $pid` returns 0 if process exists, non-zero otherwise
+  - ANSI color codes in echo -e work inside loops: `echo -e "${RED}text${NC}"`
+---
+
+## [Iteration 15] 2026-01-15T21:30:00Z - US-015
+- **What was implemented:** Help and usage documentation
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_init_usage(), cmd_help(), show_version(), enhanced show_usage() with example workflows
+  - prd.json (updated) - Marked US-015 as passes: true
+- **Implementation details:**
+  - Added `show_init_usage()` function with --help flag support for init command
+  - Added `cmd_help()` function that handles `hive.sh help --help` and `hive.sh help <command>` patterns
+  - Added `show_version()` function with extended version info
+  - Enhanced main `show_usage()` with:
+    - Quick Start section for immediate onboarding
+    - Four comprehensive example workflows:
+      1. Single Feature Development (full lifecycle)
+      2. Parallel Feature Development (multiple Ralphs)
+      3. Collaborative Work on Same Branch (scoped access)
+      4. Continue Existing Work (attach to remote branch)
+  - Added `version` command alias alongside `--version` and `-v` flags
+  - All commands now have --help/-h flag support
+- **Acceptance criteria verified:**
+  - ✓ Running `hive.sh` or `hive.sh help` shows usage
+  - ✓ Each command has --help flag showing detailed usage
+  - ✓ Includes example workflows in main help (4 detailed workflows)
+  - ✓ Shows version number (via `--version`, `-v`, or `version` command)
+- **Learnings for future iterations:**
+  - Use `exec "$0" "$1" --help` to delegate help to subcommand
+  - heredoc with cat << EOF works well for multi-line help output with color codes
+  - Version info can be more helpful with a description line
+---
