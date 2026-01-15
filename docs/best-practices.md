@@ -594,6 +594,190 @@ See language-specific best practices:
 
 ---
 
+## Hive-lite: Parallel Work with hive.sh
+
+When using `hive.sh` for multi-Ralph orchestration via git worktrees, follow these best practices for coordinating parallel work.
+
+### Branch Sharing Strategies
+
+**Strategy A: One Ralph per Branch (Recommended)**
+
+The safest approach - each Ralph works on its own branch.
+
+```bash
+# Ralph 1: Auth feature
+hive.sh spawn ralph-auth --create feature/auth --from main
+
+# Ralph 2: Search feature
+hive.sh spawn ralph-search --create feature/search --from main
+
+# Ralph 3: UI improvements
+hive.sh spawn ralph-ui --create feature/ui --from main
+
+# All work independently, merge via PRs
+```
+
+**Strategy B: Multiple Ralphs on Same Branch (With Scope)**
+
+When you need multiple workers on the same branch, use scope restrictions.
+
+```bash
+# First Ralph: Backend work on auth branch
+hive.sh spawn ralph-backend --create feature/auth --from main
+hive.sh start ralph-backend "Implement auth API endpoints"
+
+# Second Ralph: Frontend work on SAME branch (scoped)
+hive.sh spawn ralph-frontend --attach feature/auth --scope "src/components/*"
+hive.sh start ralph-frontend "Implement login form UI"
+
+# Scopes prevent file conflicts:
+# - ralph-backend: can modify any file
+# - ralph-frontend: restricted to src/components/*
+```
+
+**Scope Pattern Examples:**
+```bash
+--scope "src/api/*"           # Only API files
+--scope "src/components/**/*" # All component files (recursive)
+--scope "tests/**/*.spec.ts"  # Only test files
+--scope "*.go"                # Only Go files in root
+--scope "internal/auth/*"     # Only auth module
+```
+
+### Coordination Guidelines
+
+**Before Creating a PR:**
+
+1. **Check branch status**: `hive.sh status` shows which Ralphs share branches
+2. **Stop other Ralphs**: If multiple Ralphs are on your branch, stop them first
+3. **Sync if needed**: `hive.sh sync <name>` pulls latest changes
+
+```bash
+# Check who's on your branch
+hive.sh status
+
+# If ralph-frontend is still running on your branch:
+hive.sh stop ralph-frontend
+
+# Then create your PR
+hive.sh pr ralph-backend
+```
+
+**Warning System:**
+
+The `hive.sh pr` command warns you when:
+- Multiple Ralphs are attached to the same branch
+- Other Ralphs are **actively running** (stronger warning)
+- Shows `[ACTIVE]` indicator for running processes
+
+```
+[WARN] Multiple Ralphs (2) are attached to branch 'feature/auth':
+  - ralph-backend (status: stopped)
+  - ralph-frontend (status: running) [ACTIVE]
+
+[ERROR] WARNING: 1 other Ralph(s) are ACTIVELY RUNNING on this branch!
+[WARN] Creating a PR while other Ralphs are running may cause conflicts.
+[INFO] Consider stopping them first with: hive.sh stop <name>
+```
+
+### Conflict Prevention
+
+**When Scopes Overlap:**
+
+If two Ralphs might edit the same files:
+1. Stop one Ralph before the other continues
+2. Use `hive.sh sync <name>` to pull latest changes
+3. Let one Ralph complete before starting the other on same files
+
+**After PR Merge:**
+
+When a PR is merged, other Ralphs on that base branch may have stale code:
+
+```bash
+# Ralph-B's PR was merged to main
+
+# Ralph-A needs to sync with updated main
+hive.sh sync ralph-a
+
+# If conflicts occur, hive.sh shows instructions
+```
+
+### Cleanup Patterns
+
+**After Successful Work:**
+```bash
+# PR was merged - clean up completely
+hive.sh cleanup ralph-auth  # Removes worktree, branches, config entry
+```
+
+**Abandoning Work:**
+```bash
+# Work didn't pan out - discard all changes
+hive.sh clean ralph-experiment  # Removes everything, warns about lost commits
+```
+
+**Before Creating New Work:**
+```bash
+# Check for orphaned Ralphs
+hive.sh status
+
+# Clean up any stuck/dead Ralphs
+hive.sh clean ralph-old --force
+```
+
+### Dashboard Monitoring
+
+Use the live dashboard to monitor multiple Ralphs:
+
+```bash
+hive.sh dashboard          # Auto-refresh every 5 seconds
+hive.sh dashboard -i 10    # Refresh every 10 seconds
+```
+
+The dashboard shows:
+- Real-time status of all Ralphs
+- Branch sharing warnings (⚠ indicator)
+- PR status from GitHub
+- Last activity from logs
+
+### Anti-Patterns to Avoid
+
+❌ **Don't run multiple Ralphs on same branch without scope:**
+```bash
+# BAD - both can edit any file, conflicts likely
+hive.sh spawn ralph-1 --attach feature/auth
+hive.sh spawn ralph-2 --attach feature/auth
+```
+
+❌ **Don't create PR while other Ralphs are running:**
+```bash
+# BAD - running Ralph may commit after PR is created
+hive.sh pr ralph-1  # Creates PR
+# Meanwhile ralph-2 is still committing to the branch
+```
+
+❌ **Don't forget to sync after merges:**
+```bash
+# BAD - Ralph has stale code after main was updated
+hive.sh start ralph-old  # Working on outdated base
+```
+
+✅ **Do use explicit scopes:**
+```bash
+# GOOD - clear separation of concerns
+hive.sh spawn ralph-api --attach feature/big --scope "src/api/*"
+hive.sh spawn ralph-ui --attach feature/big --scope "src/ui/*"
+```
+
+✅ **Do stop Ralphs before PR:**
+```bash
+# GOOD - clean state before PR
+hive.sh stop ralph-helper
+hive.sh pr ralph-main
+```
+
+---
+
 ## See Also
 
 - [Commands Reference](commands.md) - All available commands

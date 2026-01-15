@@ -1827,15 +1827,48 @@ cmd_pr() {
     ralph_count=$(echo "$branch_ralphs" | jq 'length')
 
     if [[ "$ralph_count" -gt 1 ]]; then
+        # Count how many OTHER Ralphs are actively running on this branch
+        local running_others=0
+        local running_names=""
+
+        while read -r ralph_name; do
+            if [[ "$ralph_name" != "$name" ]]; then
+                local ralph_status ralph_pid
+                ralph_status=$(jq -r --arg n "$ralph_name" '.ralphs[] | select(.name == $n) | .status' "$CONFIG_FILE")
+                ralph_pid=$(jq -r --arg n "$ralph_name" '.ralphs[] | select(.name == $n) | .pid // empty' "$CONFIG_FILE")
+
+                # Verify if process is actually running
+                if [[ "$ralph_status" == "running" ]] && [[ -n "$ralph_pid" ]] && kill -0 "$ralph_pid" 2>/dev/null; then
+                    running_others=$((running_others + 1))
+                    running_names="$running_names $ralph_name"
+                fi
+            fi
+        done < <(echo "$branch_ralphs" | jq -r '.[]')
+
         print_warning "Multiple Ralphs ($ralph_count) are attached to branch '$branch':"
-        echo "$branch_ralphs" | jq -r '.[]' | while read -r ralph_name; do
-            local ralph_status
-            ralph_status=$(jq --arg name "$ralph_name" '.ralphs[] | select(.name == $name) | .status' "$CONFIG_FILE" | tr -d '"')
-            echo "  - $ralph_name (status: $ralph_status)"
-        done
+        while read -r ralph_name; do
+            local ralph_status ralph_pid is_active=""
+            ralph_status=$(jq -r --arg n "$ralph_name" '.ralphs[] | select(.name == $n) | .status' "$CONFIG_FILE")
+            ralph_pid=$(jq -r --arg n "$ralph_name" '.ralphs[] | select(.name == $n) | .pid // empty' "$CONFIG_FILE")
+
+            # Check if process is actually alive
+            if [[ "$ralph_status" == "running" ]] && [[ -n "$ralph_pid" ]] && kill -0 "$ralph_pid" 2>/dev/null; then
+                is_active=" ${RED}[ACTIVE]${NC}"
+            fi
+            echo -e "  - $ralph_name (status: $ralph_status)$is_active"
+        done < <(echo "$branch_ralphs" | jq -r '.[]')
         echo ""
-        print_warning "Consider stopping other Ralphs before creating a PR."
-        read -p "Continue anyway? [y/N] " -n 1 -r
+
+        if [[ $running_others -gt 0 ]]; then
+            print_error "WARNING: $running_others other Ralph(s) are ACTIVELY RUNNING on this branch!"
+            print_warning "Creating a PR while other Ralphs are running may cause conflicts."
+            print_info "Consider stopping them first with: hive.sh stop <name>"
+            echo ""
+            read -p "Continue anyway? This is risky! [y/N] " -n 1 -r
+        else
+            print_warning "Consider cleaning up inactive Ralphs before creating a PR."
+            read -p "Continue anyway? [y/N] " -n 1 -r
+        fi
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             print_info "Aborted."
