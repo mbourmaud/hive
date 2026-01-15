@@ -201,3 +201,35 @@
   - Use `cd - > /dev/null` to return to previous directory silently
   - Stash operations in git return non-zero if stash pop has conflicts, handle gracefully
 ---
+
+## [Iteration 9] 2026-01-15T19:30:00Z - US-009
+- **What was implemented:** Create Pull Request from Ralph's branch command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_pr_usage(), cmd_pr(), wired up in main router
+  - prd.json (updated) - Marked US-009 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh pr <name> [--draft] [--to <target>]`
+  - Validates Ralph exists, gh CLI is installed and authenticated
+  - Checks for existing PR in config.json to avoid duplicates
+  - Warns if multiple Ralphs are attached to the same branch with interactive confirmation
+  - Handles uncommitted changes:
+    - Commits staged/unstaged changes with descriptive message
+    - Adds and commits untracked files separately
+  - Pushes branch to origin with -u flag for tracking
+  - Generates PR title from branch name (e.g., "feature/auth-system" → "[name] Auth System")
+  - Generates PR body with:
+    - Summary section with Ralph info
+    - Commit count and log summary
+    - Files changed stats
+    - Hive attribution footer
+  - Uses `gh pr create` with --draft flag support
+  - Handles case where PR already exists on GitHub (updates config with existing PR info)
+  - Stores PR info in config.json: number, url, state, draft, createdAt
+  - Updates Ralph status to 'pr_created'
+- **Learnings for future iterations:**
+  - Use `gh auth status` to check if gh CLI is authenticated
+  - Use `git rev-list --count "origin/$target..$branch"` to count commits between branches
+  - Use `git diff --stat "origin/$target..$branch"` to get file change summary
+  - PR URL is output by `gh pr create` on success, can extract PR number from URL
+  - Use `gh pr view $branch --json number,url` to get existing PR info by branch name
+---

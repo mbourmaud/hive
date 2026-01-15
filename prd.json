@@ -140,8 +140,8 @@
       "title": "Create Pull Request from Ralph's branch",
       "description": "Create a GitHub PR from Ralph's feature branch to target branch",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh pr <name> [--draft] [--to <target>]`",
         "Commits any uncommitted changes in worktree",

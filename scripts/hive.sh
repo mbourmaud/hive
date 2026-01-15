@@ -1667,6 +1667,394 @@ cmd_sync() {
 }
 
 # ============================================================================
+# PR Command
+# ============================================================================
+
+show_pr_usage() {
+    cat << EOF
+${CYAN}hive.sh pr${NC} - Create Pull Request from Ralph's branch
+
+${YELLOW}Usage:${NC}
+  hive.sh pr <name> [--draft] [--to <target>]
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph whose branch to create a PR from
+
+${YELLOW}Options:${NC}
+  --draft       Create a draft PR (work-in-progress)
+  --to <target> Override target branch (default: Ralph's targetBranch)
+  --help, -h    Show this help message
+
+${YELLOW}Behavior:${NC}
+  - Commits any uncommitted changes in worktree
+  - Pushes branch to origin
+  - Creates PR using GitHub CLI (gh)
+  - Generates PR title and body from Ralph info
+  - Stores PR number and URL in config.json
+  - Updates Ralph status to 'pr_created'
+  - Warns if other Ralphs are active on the same branch
+
+${YELLOW}Examples:${NC}
+  hive.sh pr auth-feature              # Create PR to default target
+  hive.sh pr auth-feature --draft      # Create a draft PR
+  hive.sh pr fix-bug --to develop      # Create PR targeting develop branch
+EOF
+}
+
+cmd_pr() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+    local draft=false
+    local target_override=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --draft)
+                draft=true
+                shift
+                ;;
+            --to)
+                if [[ -z "${2:-}" ]]; then
+                    print_error "--to requires a branch name"
+                    exit 1
+                fi
+                target_override="$2"
+                shift 2
+                ;;
+            --help|-h)
+                show_pr_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_pr_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_pr_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_pr_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if gh CLI is available
+    if ! command -v gh &> /dev/null; then
+        print_error "GitHub CLI (gh) is not installed or not in PATH."
+        print_info "Please install it: https://cli.github.com/"
+        exit 1
+    fi
+
+    # Check if gh is authenticated
+    if ! gh auth status &> /dev/null; then
+        print_error "GitHub CLI is not authenticated."
+        print_info "Run 'gh auth login' to authenticate."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist."
+        exit 1
+    fi
+
+    # Get ralph info
+    local worktree_path branch target_branch status pr_json
+    worktree_path=$(echo "$ralph_entry" | jq -r '.worktreePath')
+    branch=$(echo "$ralph_entry" | jq -r '.branch')
+    target_branch=$(echo "$ralph_entry" | jq -r '.targetBranch')
+    status=$(echo "$ralph_entry" | jq -r '.status')
+    pr_json=$(echo "$ralph_entry" | jq '.pr')
+
+    # Use target override if provided
+    if [[ -n "$target_override" ]]; then
+        target_branch="$target_override"
+    fi
+
+    # Check if PR already exists
+    if [[ "$pr_json" != "null" ]] && [[ -n "$pr_json" ]]; then
+        local existing_pr_number existing_pr_url
+        existing_pr_number=$(echo "$pr_json" | jq -r '.number // empty')
+        existing_pr_url=$(echo "$pr_json" | jq -r '.url // empty')
+
+        if [[ -n "$existing_pr_number" ]]; then
+            print_warning "A PR already exists for Ralph '$name'."
+            print_info "PR #$existing_pr_number: $existing_pr_url"
+            print_info "To view the PR status, run: hive.sh prs"
+            exit 0
+        fi
+    fi
+
+    # Verify worktree exists
+    if [[ ! -d "$worktree_path" ]]; then
+        print_error "Worktree directory '$worktree_path' does not exist."
+        print_info "The worktree may have been removed."
+        exit 1
+    fi
+
+    # Check if other Ralphs are active on the same branch
+    local branch_ralphs
+    branch_ralphs=$(jq --arg branch "$branch" '.branches[$branch].ralphs // []' "$CONFIG_FILE")
+    local ralph_count
+    ralph_count=$(echo "$branch_ralphs" | jq 'length')
+
+    if [[ "$ralph_count" -gt 1 ]]; then
+        print_warning "Multiple Ralphs ($ralph_count) are attached to branch '$branch':"
+        echo "$branch_ralphs" | jq -r '.[]' | while read -r ralph_name; do
+            local ralph_status
+            ralph_status=$(jq --arg name "$ralph_name" '.ralphs[] | select(.name == $name) | .status' "$CONFIG_FILE" | tr -d '"')
+            echo "  - $ralph_name (status: $ralph_status)"
+        done
+        echo ""
+        print_warning "Consider stopping other Ralphs before creating a PR."
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Aborted."
+            exit 0
+        fi
+    fi
+
+    print_info "Creating Pull Request for Ralph '$name'..."
+    print_info "Branch: $branch → $target_branch"
+
+    # Change to worktree directory
+    cd "$worktree_path"
+
+    # Check for uncommitted changes and commit them
+    local has_changes=false
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        has_changes=true
+        print_info "Found uncommitted changes. Committing..."
+
+        # Stage all changes
+        git add -A
+
+        # Create a commit
+        local commit_msg="WIP: Changes from Ralph '$name'
+
+Automatic commit by hive.sh before PR creation.
+
+🤖 Generated by Hive"
+
+        if git commit -m "$commit_msg" 2>&1; then
+            print_success "Changes committed"
+        else
+            print_warning "No changes to commit (may be empty)"
+        fi
+    fi
+
+    # Check for untracked files
+    if [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+        print_info "Found untracked files. Adding..."
+        git add -A
+        if git diff --cached --quiet 2>/dev/null; then
+            print_info "No new files to commit"
+        else
+            local commit_msg="Add new files from Ralph '$name'
+
+🤖 Generated by Hive"
+            git commit -m "$commit_msg" 2>&1 || true
+            print_success "New files committed"
+        fi
+    fi
+
+    # Push branch to origin
+    print_info "Pushing branch '$branch' to origin..."
+    if ! git push -u origin "$branch" 2>&1; then
+        print_error "Failed to push branch to origin."
+        exit 1
+    fi
+    print_success "Branch pushed to origin"
+
+    # Generate PR title
+    # Convert branch name to a readable title
+    # e.g., "feature/auth-system" -> "Feature: Auth System"
+    local pr_title
+    pr_title=$(echo "$branch" | sed 's|^feature/||; s|^fix/||; s|^bugfix/||; s|^hotfix/||' | sed 's/-/ /g; s/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2))}1')
+    pr_title="[$name] $pr_title"
+
+    # Generate PR body with summary of work
+    local commit_count
+    commit_count=$(git rev-list --count "origin/$target_branch..$branch" 2>/dev/null || echo "0")
+
+    local commit_summary=""
+    if [[ "$commit_count" -gt 0 ]]; then
+        commit_summary=$(git log --oneline "origin/$target_branch..$branch" 2>/dev/null | head -10)
+    fi
+
+    local pr_body
+    pr_body="## Summary
+
+Pull request created by Ralph \`$name\` using Hive.
+
+**Branch:** \`$branch\`
+**Target:** \`$target_branch\`
+**Commits:** $commit_count
+
+## Changes
+
+\`\`\`
+$commit_summary
+\`\`\`
+
+## Files Changed
+
+$(git diff --stat "origin/$target_branch..$branch" 2>/dev/null | tail -20 || echo "Unable to determine")
+
+---
+🤖 Generated by Hive"
+
+    # Build gh pr create command
+    local gh_args=("pr" "create")
+    gh_args+=("--title" "$pr_title")
+    gh_args+=("--body" "$pr_body")
+    gh_args+=("--base" "$target_branch")
+    gh_args+=("--head" "$branch")
+
+    if [[ "$draft" == true ]]; then
+        gh_args+=("--draft")
+        print_info "Creating draft PR..."
+    else
+        print_info "Creating PR..."
+    fi
+
+    # Create the PR
+    local pr_output
+    pr_output=$(gh "${gh_args[@]}" 2>&1)
+    local pr_result=$?
+
+    if [[ $pr_result -ne 0 ]]; then
+        # Check if PR already exists on GitHub
+        if echo "$pr_output" | grep -q "already exists"; then
+            print_warning "A PR already exists for this branch on GitHub."
+            # Try to get the existing PR info
+            local existing_pr_info
+            existing_pr_info=$(gh pr view "$branch" --json number,url 2>/dev/null || echo "")
+            if [[ -n "$existing_pr_info" ]]; then
+                local existing_number existing_url
+                existing_number=$(echo "$existing_pr_info" | jq -r '.number')
+                existing_url=$(echo "$existing_pr_info" | jq -r '.url')
+                print_info "Existing PR: #$existing_number"
+                print_info "URL: $existing_url"
+
+                # Update config with existing PR info
+                local timestamp=$(get_timestamp)
+                local pr_info=$(jq -n \
+                    --argjson number "$existing_number" \
+                    --arg url "$existing_url" \
+                    --arg state "open" \
+                    --arg createdAt "$timestamp" \
+                    '{number: $number, url: $url, state: $state, createdAt: $createdAt}')
+
+                local tmp_config=$(mktemp)
+                jq --arg name "$name" \
+                   --argjson pr "$pr_info" \
+                   --arg status "pr_created" \
+                   --arg timestamp "$timestamp" \
+                   '(.ralphs[] | select(.name == $name)) |= . + {pr: $pr, status: $status} | .lastUpdate = $timestamp' \
+                   "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+                print_success "Config updated with existing PR info."
+            fi
+            exit 0
+        fi
+
+        print_error "Failed to create PR: $pr_output"
+        exit 1
+    fi
+
+    # Extract PR URL from output (last line usually contains the URL)
+    local pr_url
+    pr_url=$(echo "$pr_output" | grep -E 'https://github.com' | tail -1)
+
+    # Extract PR number from URL
+    local pr_number
+    pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
+
+    if [[ -z "$pr_number" ]]; then
+        # Try to get PR info via gh
+        local pr_info
+        pr_info=$(gh pr view "$branch" --json number,url 2>/dev/null || echo "")
+        if [[ -n "$pr_info" ]]; then
+            pr_number=$(echo "$pr_info" | jq -r '.number')
+            pr_url=$(echo "$pr_info" | jq -r '.url')
+        fi
+    fi
+
+    print_success "Pull Request created successfully!"
+    echo ""
+    if [[ -n "$pr_number" ]]; then
+        echo "PR #$pr_number: $pr_url"
+    else
+        echo "PR URL: $pr_url"
+    fi
+
+    # Update config.json with PR info
+    cd - > /dev/null
+    local timestamp=$(get_timestamp)
+
+    local pr_info
+    if [[ -n "$pr_number" ]]; then
+        pr_info=$(jq -n \
+            --argjson number "$pr_number" \
+            --arg url "$pr_url" \
+            --arg state "open" \
+            --arg createdAt "$timestamp" \
+            --argjson draft "$draft" \
+            '{number: $number, url: $url, state: $state, draft: $draft, createdAt: $createdAt}')
+    else
+        pr_info=$(jq -n \
+            --arg url "$pr_url" \
+            --arg state "open" \
+            --arg createdAt "$timestamp" \
+            --argjson draft "$draft" \
+            '{number: null, url: $url, state: $state, draft: $draft, createdAt: $createdAt}')
+    fi
+
+    local tmp_config=$(mktemp)
+    jq --arg name "$name" \
+       --argjson pr "$pr_info" \
+       --arg status "pr_created" \
+       --arg timestamp "$timestamp" \
+       '(.ralphs[] | select(.name == $name)) |= . + {pr: $pr, status: $status} | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    print_success "Config updated with PR info."
+
+    echo ""
+    echo "Next steps:"
+    echo "  1. View PR status: hive.sh prs"
+    echo "  2. After PR merge: hive.sh cleanup $name"
+    if [[ "$draft" == true ]]; then
+        echo "  3. When ready, mark PR as ready: gh pr ready $pr_number"
+    fi
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -1734,7 +2122,10 @@ main() {
         sync)
             cmd_sync "$@"
             ;;
-        pr|prs|cleanup|clean|dashboard)
+        pr)
+            cmd_pr "$@"
+            ;;
+        prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;
