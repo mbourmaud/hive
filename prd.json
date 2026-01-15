@@ -208,8 +208,8 @@
       "title": "Live dashboard with auto-refresh",
       "description": "Continuous status display that updates automatically",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh dashboard`",
         "Clears screen and shows status",

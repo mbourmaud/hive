@@ -317,3 +317,29 @@
   - The `read -p` with `-n 1 -r` pattern works well for y/N prompts
   - Difference from cleanup: clean always deletes remote branch, doesn't check PR status
 ---
+
+## [Iteration 13] 2026-01-15T20:30:00Z - US-013
+- **What was implemented:** Live dashboard with auto-refresh command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_dashboard_usage(), display_dashboard(), cmd_dashboard(), wired up in main router
+  - prd.json (updated) - Marked US-013 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh dashboard` with optional `--interval/-i <seconds>` flag
+  - Clears screen using `clear` command
+  - Loops indefinitely showing status with timestamp of last refresh
+  - Default refresh interval is 5 seconds (configurable)
+  - Uses `trap` for clean Ctrl+C exit with message
+  - Shows aggregated progress section with:
+    - Total Ralphs count by status (running, idle, PRs)
+    - Total commits across all branches (counted via git rev-list)
+    - PR counts by state (open, merged, closed) via gh CLI
+  - Compact single-line format per Ralph showing: status symbol, name, status, branch, scope, PR info inline
+  - PID liveness verification and config.json status auto-update (same as status command)
+  - Branch relationships section shows shared branches with warning indicator
+- **Learnings for future iterations:**
+  - Use `trap 'command' INT TERM` for clean signal handling in loops
+  - `clear` command works cross-platform for screen clearing
+  - Use `date '+%Y-%m-%d %H:%M:%S'` for human-readable timestamps
+  - Global variables (REFRESH_INTERVAL) can be used to share state between functions
+  - For compact dashboard output, use `echo -ne` to build line incrementally without newlines
+---
