@@ -149,3 +149,27 @@
   - `tail -f` works well for live tailing, exits on Ctrl+C
   - Log file path is stored in config as worktreePath, then append `/ralph-output.log`
 ---
+
+## [Iteration 7] 2026-01-15T19:00:00Z - US-007
+- **What was implemented:** Stop Ralph process command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_stop_usage(), cmd_stop(), wired up in main router
+  - prd.json (updated) - Marked US-007 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh stop <name>`
+  - Validates Ralph exists and checks if it's currently running
+  - Handles multiple scenarios:
+    - Ralph not running (status != "running"): No-op with info message
+    - Running but no PID: Updates status to stopped
+    - Running but PID dead: Updates status to stopped
+    - Running with live PID: Sends SIGTERM, waits up to 5 seconds, then SIGKILL if needed
+  - Updates config.json: sets status to "stopped" and pid to null
+  - Preserves worktree and branch for later continuation
+  - Provides helpful next steps (restart, status, pr)
+- **Learnings for future iterations:**
+  - Use `kill -TERM $pid` for graceful shutdown (SIGTERM)
+  - Use `kill -KILL $pid` for force kill (SIGKILL)
+  - Check process liveness with `kill -0 $pid 2>/dev/null`
+  - Use a wait loop with counter for timeout behavior
+  - The `|| true` pattern suppresses errors from kill on already-dead processes
+---

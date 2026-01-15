@@ -1235,6 +1235,191 @@ cmd_logs() {
 }
 
 # ============================================================================
+# Stop Command
+# ============================================================================
+
+show_stop_usage() {
+    cat << EOF
+${CYAN}hive.sh stop${NC} - Stop a running Ralph process
+
+${YELLOW}Usage:${NC}
+  hive.sh stop <name>
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph to stop
+
+${YELLOW}Options:${NC}
+  --help, -h  Show this help message
+
+${YELLOW}Behavior:${NC}
+  - Sends SIGTERM to gracefully stop the Ralph process
+  - Waits up to 5 seconds for graceful shutdown
+  - Sends SIGKILL if process doesn't stop gracefully
+  - Updates status to 'stopped' in config
+  - Preserves worktree and branch for later continuation
+  - No-op if Ralph is already stopped
+
+${YELLOW}Examples:${NC}
+  hive.sh stop auth-feature
+  hive.sh stop fix-bug
+EOF
+}
+
+cmd_stop() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_stop_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_stop_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_stop_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_stop_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist."
+        exit 1
+    fi
+
+    # Get ralph info
+    local status pid branch
+    status=$(echo "$ralph_entry" | jq -r '.status')
+    pid=$(echo "$ralph_entry" | jq -r '.pid // empty')
+    branch=$(echo "$ralph_entry" | jq -r '.branch')
+
+    # Check if already stopped
+    if [[ "$status" != "running" ]]; then
+        print_info "Ralph '$name' is not running (status: $status)."
+        print_info "No action needed."
+        exit 0
+    fi
+
+    # Check if PID exists and is valid
+    if [[ -z "$pid" ]]; then
+        print_warning "Ralph '$name' was marked as running but has no PID."
+        print_info "Updating status to 'stopped'..."
+
+        # Update config.json
+        local timestamp=$(get_timestamp)
+        local tmp_config=$(mktemp)
+        jq --arg name "$name" \
+           --arg status "stopped" \
+           --arg timestamp "$timestamp" \
+           '(.ralphs[] | select(.name == $name)) |= . + {status: $status, pid: null} | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+        print_success "Ralph '$name' status updated to 'stopped'."
+        exit 0
+    fi
+
+    # Check if process is still running
+    if ! kill -0 "$pid" 2>/dev/null; then
+        print_warning "Ralph '$name' process (PID: $pid) is no longer running."
+        print_info "Updating status to 'stopped'..."
+
+        # Update config.json
+        local timestamp=$(get_timestamp)
+        local tmp_config=$(mktemp)
+        jq --arg name "$name" \
+           --arg status "stopped" \
+           --arg timestamp "$timestamp" \
+           '(.ralphs[] | select(.name == $name)) |= . + {status: $status, pid: null} | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+        print_success "Ralph '$name' status updated to 'stopped'."
+        exit 0
+    fi
+
+    print_info "Stopping Ralph '$name' (PID: $pid) on branch '$branch'..."
+
+    # Send SIGTERM for graceful shutdown
+    print_info "Sending SIGTERM for graceful shutdown..."
+    kill -TERM "$pid" 2>/dev/null || true
+
+    # Wait up to 5 seconds for graceful shutdown
+    local wait_count=0
+    local max_wait=5
+    while [[ $wait_count -lt $max_wait ]]; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            print_success "Ralph '$name' stopped gracefully."
+            break
+        fi
+        sleep 1
+        wait_count=$((wait_count + 1))
+        print_info "Waiting for process to stop... ($wait_count/$max_wait)"
+    done
+
+    # If still running, send SIGKILL
+    if kill -0 "$pid" 2>/dev/null; then
+        print_warning "Process didn't stop gracefully. Sending SIGKILL..."
+        kill -KILL "$pid" 2>/dev/null || true
+        sleep 1
+
+        if kill -0 "$pid" 2>/dev/null; then
+            print_error "Failed to kill process (PID: $pid). It may require manual intervention."
+            print_info "Try: kill -9 $pid"
+            exit 1
+        else
+            print_success "Ralph '$name' force-stopped with SIGKILL."
+        fi
+    fi
+
+    # Update config.json
+    local timestamp=$(get_timestamp)
+    local tmp_config=$(mktemp)
+    jq --arg name "$name" \
+       --arg status "stopped" \
+       --arg timestamp "$timestamp" \
+       '(.ralphs[] | select(.name == $name)) |= . + {status: $status, pid: null} | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    print_success "Ralph '$name' stopped successfully!"
+    echo ""
+    echo "Branch '$branch' and worktree preserved for later continuation."
+    echo ""
+    echo "Next steps:"
+    echo "  1. Restart Ralph: hive.sh start $name"
+    echo "  2. Check status: hive.sh status"
+    echo "  3. Create PR: hive.sh pr $name"
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -1296,7 +1481,10 @@ main() {
         logs)
             cmd_logs "$@"
             ;;
-        stop|sync|pr|prs|cleanup|clean|dashboard)
+        stop)
+            cmd_stop "$@"
+            ;;
+        sync|pr|prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

@@ -108,8 +108,8 @@
       "title": "Stop Ralph process",
       "description": "Gracefully stop a running Ralph",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh stop <name>`",
         "Sends SIGTERM to Ralph's PID",
