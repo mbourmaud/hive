@@ -28,8 +28,8 @@
       "description": "Delete the entire web application",
       "priority": 1,
       "dependsOn": [],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Delete web/ directory entirely",
         "Remove any web-related configuration files"
@@ -41,8 +41,8 @@
       "description": "Relocate the main script from scripts/ to project root",
       "priority": 2,
       "dependsOn": ["US-001", "US-002"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Move scripts/hive.sh to ./hive.sh",
         "Delete scripts/ directory",

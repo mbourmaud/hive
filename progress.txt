@@ -424,3 +424,38 @@
   - Also removed .golangci.yml (Go linter config), coverage.out (test coverage), and compiled hive binary
   - The compiled binary at project root was 14MB, good to remove
 ---
+
+## [Iteration 17] 2026-01-15T19:10:00Z - US-002
+- **What was implemented:** Remove Electron/Web app - Hive simplification step 2
+- **Files deleted:**
+  - web/ directory entirely (Electron app, Svelte frontend, build config)
+  - Includes: package.json, package-lock.json, Svelte components, Electron main/preload scripts, icons, vite config, tsconfig files
+- **Acceptance criteria verified:**
+  - ✓ Delete web/ directory entirely
+  - ✓ Remove any web-related configuration files (none at root level, all contained in web/)
+- **Learnings for future iterations:**
+  - The web directory contained ~10k lines of code (55 files deleted)
+  - No web-related config files existed at root level; all were contained within web/
+  - Electron-builder.yml, svelte.config.js, vite.config.ts all gone with web/
+---
+
+## [Iteration 18] 2026-01-15T19:20:00Z - US-003
+- **What was implemented:** Move hive.sh to root - Hive simplification step 3
+- **Files changed:**
+  - scripts/hive.sh → hive.sh (moved to project root)
+  - scripts/ directory deleted entirely
+- **Deleted subdirectories:**
+  - scripts/bin/ - Old CLI helper scripts (hive-assign, hive-config, etc.)
+  - scripts/mcp/ - MCP server implementations (hive-mcp.js, hive-clipboard-mcp.js, etc.)
+  - scripts/redis/ - Redis queue task scripts (task-enqueue.sh, task-dequeue.sh, etc.)
+- **Acceptance criteria verified:**
+  - ✓ Move scripts/hive.sh to ./hive.sh
+  - ✓ Delete scripts/ directory
+  - ✓ Ensure hive.sh is executable
+- **Learnings for future iterations:**
+  - The scripts/ directory contained ~3.4k lines of code (28 files) from older architecture
+  - bin/ had Redis-based task queue CLI helpers
+  - mcp/ had Node.js MCP servers with package.json and node_modules
+  - redis/ had bash scripts for Redis task queue operations
+  - All these are superseded by the consolidated hive.sh bash script
+---
