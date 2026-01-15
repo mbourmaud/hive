@@ -1,44 +1,47 @@
 # HIVE Project Instructions
 
-## Architecture (v2)
+## Overview
 
-- Go CLI tool for orchestrating multiple Claude Code agents
-- Uses git worktrees for filesystem isolation (no Docker)
-- AgentAPI for HTTP control of agents
-- Claude Code's native sandbox (Seatbelt/Bubblewrap) for security
-
-## Key Packages
-
-- `internal/worktree/` - Git worktree management
-- `internal/agent/` - Agent types, HTTP client, process spawner
-- `internal/hub/` - Hub API server (REST + SSE)
-- `cmd/` - CLI commands (spawn, agents, msg, kill, etc.)
+Pure bash script for orchestrating multiple Claude Code (Ralph) instances via git worktrees. No build step required.
 
 ## Commands
 
 ```bash
-hive init            # Initialize Hive in current repo
-hive spawn <name>    # Spawn a new agent with git worktree
-hive agents          # List running agents
-hive msg <agent> <m> # Send message to agent
-hive conv <agent>    # Show conversation history
-hive kill <agent>    # Stop an agent
-hive destroy <agent> # Stop and remove worktree
-hive clean           # Remove all agents and worktrees
-hive hub             # Start the Hub API server
+hive.sh init                              # Initialize Hive in current repo
+hive.sh spawn <name> --create <branch>    # Create new Ralph with new branch
+hive.sh spawn <name> --attach <branch>    # Attach Ralph to existing branch
+hive.sh start <name> [prompt]             # Start Ralph background process
+hive.sh status                            # Show status of all Ralphs
+hive.sh logs <name> [lines]               # View Ralph's output log
+hive.sh stop <name>                       # Stop a running Ralph
+hive.sh sync <name>                       # Sync worktree with target branch
+hive.sh pr <name> [--draft]               # Create Pull Request
+hive.sh prs                               # List all PRs created by Hive
+hive.sh cleanup <name>                    # Remove worktree after PR merge
+hive.sh clean <name>                      # Remove worktree (abandon work)
+hive.sh dashboard                         # Live status dashboard
 ```
 
-## Testing
+## Dependencies
+
+- bash
+- jq
+- git
+- gh CLI (for PR operations)
+- claude CLI
+
+## Installation
 
 ```bash
-make test            # Go unit tests
-make test-all        # All tests
-go test ./...        # Run tests directly
+make install    # Copies hive.sh to ~/.local/bin/hive
 ```
 
-## Build
+## Project Structure
 
-```bash
-make build           # Build hive binary
-make install         # Install to ~/.local/bin
+```
+.hive/              # Created by 'hive.sh init'
+  config.json       # Configuration and state
+  worktrees/        # Git worktrees for each Ralph
+hive.sh             # Main script
+Makefile            # Install/uninstall targets
 ```
