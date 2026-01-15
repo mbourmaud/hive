@@ -1,270 +1,158 @@
 {
-  "id": "hive-lite-v1",
-  "title": "Hive-lite: Multi-Ralph Orchestration via Bash",
-  "description": "Simplify Hive to a single bash script (hive.sh) that orchestrates multiple Claude Code (Ralph) instances in parallel git worktrees. No Go hub, no AgentAPI - just bash, git worktrees, and claude CLI.",
-  "context": "Current Hive (v2) is complex with Go CLI, Hub API, AgentAPI. We want a simpler approach: one bash script that a 'Queen' Claude session can invoke to spawn/manage parallel Ralph workers. Each Ralph runs in its own git worktree on a feature branch. Since main/master is typically protected, Ralphs create PRs instead of merging directly.",
-  "createdAt": "2026-01-15",
+  "project": "Hive Simplification: Pure Bash Implementation",
+  "description": "Strip Hive down to its essence: a single bash script for orchestrating multiple Claude Code (Ralph) instances via git worktrees. Remove all Go code, Electron app, and complexity.",
+  "branchName": "feature/hive-lite",
+  "baseBranch": "main",
+  "mode": "feature",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Initialize Hive directory structure",
-      "description": "Create .hive/ directory with config.json and worktrees/ subdirectory",
-      "assignedTo": null,
-      "status": "completed",
+      "title": "Remove Go codebase",
+      "description": "Delete all Go source code and related files",
+      "priority": 1,
+      "dependsOn": [],
+      "status": "done",
       "passes": true,
       "acceptanceCriteria": [
-        "Running `hive.sh` in any git repo creates `.hive/` directory if not exists",
-        "Creates `.hive/config.json` with initial schema: {version, ralphs:[], branches:{}, lastUpdate}",
-        "Creates `.hive/worktrees/` directory for worktree storage",
-        "Creates `.hive/.gitignore` containing `worktrees/` to avoid committing worktrees",
-        "Idempotent: running init multiple times doesn't corrupt existing config"
+        "Delete cmd/ directory",
+        "Delete internal/ directory",
+        "Delete backend/ directory",
+        "Delete tests/ directory",
+        "Delete go.mod and go.sum",
+        "Delete .goreleaser.yaml if present"
       ]
     },
     {
       "id": "US-002",
-      "title": "Spawn Ralph with branch creation (--create)",
-      "description": "Create a new git worktree and feature branch for a Ralph to work in",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Remove Electron/Web app",
+      "description": "Delete the entire web application",
+      "priority": 1,
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh spawn <name> --create <branch> [--from <base>]`",
-        "Creates git worktree at `.hive/worktrees/<name>/`",
-        "Creates new branch `<branch>` from `<base>` (default: main)",
-        "Fetches latest from origin before branching to ensure up-to-date base",
-        "Updates config.json with new ralph entry including branchMode:'created', baseBranch, targetBranch",
-        "Records branch metadata in config.json branches section",
-        "Fails gracefully if branch already exists with helpful error message"
+        "Delete web/ directory entirely",
+        "Remove any web-related configuration files"
       ]
     },
     {
       "id": "US-003",
-      "title": "Spawn Ralph with branch attachment (--attach)",
-      "description": "Create a worktree attached to an existing branch for continuation or parallel work",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Move hive.sh to root",
+      "description": "Relocate the main script from scripts/ to project root",
+      "priority": 2,
+      "dependsOn": ["US-001", "US-002"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh spawn <name> --attach <branch> [--scope <glob>]`",
-        "Creates git worktree at `.hive/worktrees/<name>/` using existing branch",
-        "Pulls latest changes from origin for that branch",
-        "Updates config.json with branchMode:'attached'",
-        "Supports --scope flag to restrict which files this Ralph can modify",
-        "Records scope in config.json for Ralph's instructions",
-        "Multiple Ralphs can attach to same branch (tracked in branches.ralphs array)"
+        "Move scripts/hive.sh to ./hive.sh",
+        "Delete scripts/ directory",
+        "Ensure hive.sh is executable"
       ]
     },
     {
       "id": "US-004",
-      "title": "Start Ralph background process",
-      "description": "Launch Claude Code in background on a spawned worktree",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Clean up documentation",
+      "description": "Remove outdated docs and simplify",
+      "priority": 2,
+      "dependsOn": ["US-001", "US-002"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh start <name> [prompt]`",
-        "Changes to worktree directory before launching",
-        "Launches `claude --dangerously-skip-permissions -p <prompt>` in background",
-        "Redirects output to `.hive/worktrees/<name>/ralph-output.log`",
-        "Stores PID in config.json for process management",
-        "Updates status to 'running' with startedAt timestamp",
-        "Default prompt instructs Ralph to work autonomously using Ralph Loop pattern",
-        "If --scope was set, includes scope restriction in prompt"
+        "Delete docs/ directory or keep only essential files",
+        "Remove any Go/Electron related documentation"
       ]
     },
     {
       "id": "US-005",
-      "title": "Show Hive status dashboard",
-      "description": "Display status of all Ralphs with progress and branch info",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Update CLAUDE.md",
+      "description": "Rewrite CLAUDE.md for the simplified bash-only version",
+      "priority": 3,
+      "dependsOn": ["US-003"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh status`",
-        "Shows table/list of all Ralphs with: name, status, branch, targetBranch, scope",
-        "Verifies PIDs are still running (updates status if process died)",
-        "Shows branch relationships (which Ralphs share branches)",
-        "Shows PR status if PR was created (number, state, CI status)",
-        "Color-coded status: green=running/completed, yellow=stopped, red=failed",
-        "Shows last line of log for running Ralphs as activity indicator"
+        "Document hive.sh commands only",
+        "Remove references to Go, Hub, AgentAPI",
+        "Keep it concise and accurate"
       ]
     },
     {
       "id": "US-006",
-      "title": "View Ralph logs",
-      "description": "Tail the output log of a specific Ralph",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Update README.md",
+      "description": "Rewrite README for the simplified project",
+      "priority": 3,
+      "dependsOn": ["US-003"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh logs <name> [lines]`",
-        "Tails last N lines (default 50) of ralph-output.log",
-        "Shows error if Ralph doesn't exist or has no log",
-        "Optional: --follow flag for live tailing"
+        "Clear project description (bash script for multi-Ralph orchestration)",
+        "Prerequisites: bash, jq, git, gh CLI, claude CLI",
+        "Installation instructions",
+        "Quick start guide",
+        "Full command reference",
+        "Example workflows"
       ]
     },
     {
       "id": "US-007",
-      "title": "Stop Ralph process",
-      "description": "Gracefully stop a running Ralph",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Simplify Makefile",
+      "description": "Reduce Makefile to essential install target",
+      "priority": 3,
+      "dependsOn": ["US-003"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh stop <name>`",
-        "Sends SIGTERM to Ralph's PID",
-        "Waits briefly then SIGKILL if still running",
-        "Updates config.json status to 'stopped'",
-        "Preserves worktree and branch for later continuation",
-        "No-op if Ralph already stopped"
+        "Remove Go build targets",
+        "Keep only: install (copy hive.sh to ~/.local/bin/hive)",
+        "Add uninstall target",
+        "Add help target showing available commands"
       ]
     },
     {
       "id": "US-008",
-      "title": "Sync worktree with target branch",
-      "description": "Pull latest changes from target branch into Ralph's worktree",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Update .gitignore",
+      "description": "Simplify .gitignore for bash-only project",
+      "priority": 4,
+      "dependsOn": ["US-001", "US-002"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh sync <name>`",
-        "Fetches latest from origin",
-        "Merges targetBranch (usually main) into Ralph's branch",
-        "If conflicts occur, outputs conflict list and instructions",
-        "Can be run while Ralph is stopped (preferred) or pauses Ralph if running",
-        "Useful after another Ralph's PR is merged to get latest main"
+        "Remove Go-specific ignores",
+        "Remove node_modules and web build ignores",
+        "Keep .hive/ ignore",
+        "Keep OS-specific ignores (.DS_Store, etc.)"
       ]
     },
     {
       "id": "US-009",
-      "title": "Create Pull Request from Ralph's branch",
-      "description": "Create a GitHub PR from Ralph's feature branch to target branch",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Clean up misc files",
+      "description": "Remove any remaining unnecessary files",
+      "priority": 4,
+      "dependsOn": ["US-001", "US-002", "US-003", "US-004"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh pr <name> [--draft] [--to <target>]`",
-        "Commits any uncommitted changes in worktree",
-        "Pushes branch to origin",
-        "Uses `gh pr create` to create PR",
-        "Generates PR title from branch name and Ralph name",
-        "Generates PR body with summary of work done",
-        "Stores PR number and URL in config.json",
-        "Updates Ralph status to 'pr_created'",
-        "Supports --draft flag for work-in-progress PRs"
+        "Remove prd.json (this file) after migration",
+        "Remove progress.txt after migration",
+        "Remove any IDE config files if present",
+        "Verify only essential files remain"
       ]
     },
     {
       "id": "US-010",
-      "title": "List and check PR status",
-      "description": "Show all PRs created by Hive with their current status",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
+      "title": "Final verification",
+      "description": "Verify the simplified project works correctly",
+      "priority": 5,
+      "dependsOn": ["US-005", "US-006", "US-007", "US-008", "US-009"],
+      "status": "pending",
+      "passes": false,
       "acceptanceCriteria": [
-        "Command: `hive.sh prs`",
-        "Lists all Ralphs that have created PRs",
-        "Shows PR number, URL, state (open/merged/closed)",
-        "Shows CI check status (passing/failing/pending)",
-        "Shows review status (approved/changes requested/pending)",
-        "Uses `gh pr view` to fetch current status from GitHub"
-      ]
-    },
-    {
-      "id": "US-011",
-      "title": "Cleanup after PR merge",
-      "description": "Remove worktree and optionally branch after PR is merged",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
-      "acceptanceCriteria": [
-        "Command: `hive.sh cleanup <name>`",
-        "Checks if PR is merged (warns if not)",
-        "Removes git worktree",
-        "Deletes local branch",
-        "Deletes remote branch if PR was merged",
-        "Removes Ralph entry from config.json",
-        "Removes branch entry from config.json branches"
-      ]
-    },
-    {
-      "id": "US-012",
-      "title": "Clean worktree without PR (abandon)",
-      "description": "Remove a Ralph's worktree and branch without creating/merging PR",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
-      "acceptanceCriteria": [
-        "Command: `hive.sh clean <name>`",
-        "Stops Ralph if running",
-        "Removes git worktree forcefully",
-        "Deletes local and remote branch",
-        "Removes from config.json",
-        "Confirms before deletion if work was done (commits exist)"
-      ]
-    },
-    {
-      "id": "US-013",
-      "title": "Live dashboard with auto-refresh",
-      "description": "Continuous status display that updates automatically",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
-      "acceptanceCriteria": [
-        "Command: `hive.sh dashboard`",
-        "Clears screen and shows status",
-        "Refreshes every 5 seconds",
-        "Shows timestamp of last refresh",
-        "Ctrl+C exits cleanly",
-        "Shows aggregated progress across all Ralphs"
-      ]
-    },
-    {
-      "id": "US-014",
-      "title": "Handle shared branch coordination",
-      "description": "Prevent conflicts when multiple Ralphs work on same branch",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
-      "acceptanceCriteria": [
-        "Config tracks which Ralphs are attached to each branch",
-        "Status command shows branch sharing warnings",
-        "PR command warns if other Ralphs are still active on branch",
-        "Scope restrictions are passed to Ralph's prompt",
-        "Documentation explains parallel work best practices"
-      ]
-    },
-    {
-      "id": "US-015",
-      "title": "Help and usage documentation",
-      "description": "Built-in help for all commands",
-      "assignedTo": null,
-      "status": "completed",
-      "passes": true,
-      "acceptanceCriteria": [
-        "Running `hive.sh` or `hive.sh help` shows usage",
-        "Each command has --help flag showing detailed usage",
-        "Includes example workflows in main help",
-        "Shows version number"
+        "hive.sh --help works",
+        "hive.sh version works",
+        "make install works",
+        "All commands documented in README match actual implementation",
+        "Project structure is minimal and clean"
       ]
     }
-  ],
-  "technicalNotes": [
-    "Use jq for all JSON manipulation in bash",
-    "Use gh CLI for GitHub operations (assume installed)",
-    "Store script at scripts/hive.sh",
-    "Config file at .hive/config.json",
-    "Worktrees at .hive/worktrees/<name>/",
-    "Each worktree has ralph-output.log for Claude output",
-    "Use ANSI colors for terminal output (with NC reset)",
-    "All timestamps in ISO 8601 format",
-    "PIDs stored as integers, null when not running"
-  ],
-  "outOfScope": [
-    "Direct merge to protected branches (use PRs)",
-    "Web UI integration (pure CLI)",
-    "Hub API server",
-    "AgentAPI integration",
-    "Automatic PR approval/merge"
   ]
 }
