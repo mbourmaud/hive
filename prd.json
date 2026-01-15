@@ -59,8 +59,8 @@
       "title": "Start Ralph background process",
       "description": "Launch Claude Code in background on a spawned worktree",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh start <name> [prompt]`",
         "Changes to worktree directory before launching",
@@ -77,8 +77,8 @@
       "title": "Show Hive status dashboard",
       "description": "Display status of all Ralphs with progress and branch info",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh status`",
         "Shows table/list of all Ralphs with: name, status, branch, targetBranch, scope",

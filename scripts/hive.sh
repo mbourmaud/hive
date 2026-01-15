@@ -789,6 +789,323 @@ EOF
 }
 
 # ============================================================================
+# Status Command
+# ============================================================================
+
+show_status_usage() {
+    cat << EOF
+${CYAN}hive.sh status${NC} - Show status of all Ralphs
+
+${YELLOW}Usage:${NC}
+  hive.sh status
+
+${YELLOW}Options:${NC}
+  --help, -h  Show this help message
+
+${YELLOW}Output includes:${NC}
+  - Ralph name and status (color-coded)
+  - Branch and target branch
+  - Scope restrictions (if any)
+  - Branch sharing warnings
+  - PR status (if created)
+  - Last activity for running Ralphs
+
+${YELLOW}Status colors:${NC}
+  ${GREEN}●${NC} running/completed - Active or finished
+  ${YELLOW}●${NC} spawned/stopped   - Ready or paused
+  ${RED}●${NC} failed            - Error state
+EOF
+}
+
+cmd_status() {
+    check_git_repo
+    check_dependencies
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_status_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_status_usage
+                exit 1
+                ;;
+            *)
+                print_error "Unexpected argument: $1"
+                show_status_usage
+                exit 1
+                ;;
+        esac
+    done
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Get all ralphs from config
+    local ralph_count
+    ralph_count=$(jq '.ralphs | length' "$CONFIG_FILE")
+
+    if [[ "$ralph_count" -eq 0 ]]; then
+        echo ""
+        print_info "No Ralphs have been spawned yet."
+        echo ""
+        echo "Get started with:"
+        echo "  hive.sh spawn <name> --create <branch>"
+        echo ""
+        exit 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                         HIVE STATUS DASHBOARD                       ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Track which branches have multiple Ralphs for warning display
+    local branch_ralphs=()
+
+    # Iterate through all Ralphs
+    local i=0
+    while [[ $i -lt $ralph_count ]]; do
+        local ralph_json
+        ralph_json=$(jq --argjson i "$i" '.ralphs[$i]' "$CONFIG_FILE")
+
+        # Extract ralph fields
+        local name branch branch_mode status pid scope worktree_path pr_json target_branch started_at
+        name=$(echo "$ralph_json" | jq -r '.name')
+        branch=$(echo "$ralph_json" | jq -r '.branch')
+        branch_mode=$(echo "$ralph_json" | jq -r '.branchMode')
+        status=$(echo "$ralph_json" | jq -r '.status')
+        pid=$(echo "$ralph_json" | jq -r '.pid // empty')
+        scope=$(echo "$ralph_json" | jq -r '.scope // empty')
+        worktree_path=$(echo "$ralph_json" | jq -r '.worktreePath')
+        pr_json=$(echo "$ralph_json" | jq '.pr')
+        target_branch=$(echo "$ralph_json" | jq -r '.targetBranch')
+        started_at=$(echo "$ralph_json" | jq -r '.startedAt // empty')
+
+        # Verify PID liveness and update status if needed
+        local actual_status="$status"
+        local status_changed=false
+
+        if [[ "$status" == "running" ]] && [[ -n "$pid" ]]; then
+            if ! kill -0 "$pid" 2>/dev/null; then
+                # Process is dead, update status
+                actual_status="stopped"
+                status_changed=true
+
+                # Update config.json
+                local timestamp=$(get_timestamp)
+                local tmp_config=$(mktemp)
+                jq --arg name "$name" \
+                   --arg status "stopped" \
+                   --arg timestamp "$timestamp" \
+                   '(.ralphs[] | select(.name == $name)) |= . + {status: $status, pid: null} | .lastUpdate = $timestamp' \
+                   "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+            fi
+        fi
+
+        # Determine status color and symbol
+        local status_color status_symbol
+        case "$actual_status" in
+            running)
+                status_color="${GREEN}"
+                status_symbol="●"
+                ;;
+            completed|pr_created)
+                status_color="${GREEN}"
+                status_symbol="✓"
+                ;;
+            spawned|stopped)
+                status_color="${YELLOW}"
+                status_symbol="○"
+                ;;
+            failed)
+                status_color="${RED}"
+                status_symbol="✗"
+                ;;
+            *)
+                status_color="${NC}"
+                status_symbol="?"
+                ;;
+        esac
+
+        # Print Ralph header
+        echo -e "${status_color}${status_symbol}${NC} ${CYAN}${name}${NC}"
+        echo -e "  Status:   ${status_color}${actual_status}${NC}$(if [[ "$status_changed" == true ]]; then echo -e " ${YELLOW}(process died)${NC}"; fi)"
+        echo -e "  Branch:   ${branch} (${branch_mode}) → ${target_branch}"
+
+        # Show scope if set
+        if [[ -n "$scope" ]]; then
+            echo -e "  Scope:    ${YELLOW}${scope}${NC}"
+        fi
+
+        # Show worktree path
+        echo -e "  Worktree: ${worktree_path}"
+
+        # Show PID if running
+        if [[ "$actual_status" == "running" ]] && [[ -n "$pid" ]]; then
+            echo -e "  PID:      ${pid}"
+        fi
+
+        # Show started timestamp
+        if [[ -n "$started_at" ]]; then
+            echo -e "  Started:  ${started_at}"
+        fi
+
+        # Show PR status if exists
+        if [[ "$pr_json" != "null" ]] && [[ -n "$pr_json" ]]; then
+            local pr_number pr_url pr_state
+            pr_number=$(echo "$pr_json" | jq -r '.number // empty')
+            pr_url=$(echo "$pr_json" | jq -r '.url // empty')
+            pr_state=$(echo "$pr_json" | jq -r '.state // "unknown"')
+
+            if [[ -n "$pr_number" ]]; then
+                # Try to get current PR status from GitHub
+                local gh_pr_state=""
+                local gh_check_status=""
+                local gh_review_status=""
+
+                if command -v gh &> /dev/null; then
+                    # Get PR state
+                    gh_pr_state=$(gh pr view "$pr_number" --json state -q '.state' 2>/dev/null || echo "")
+
+                    if [[ -n "$gh_pr_state" ]]; then
+                        pr_state="$gh_pr_state"
+
+                        # Get CI check status
+                        gh_check_status=$(gh pr view "$pr_number" --json statusCheckRollup -q '.statusCheckRollup[0].conclusion // .statusCheckRollup[0].status // "pending"' 2>/dev/null || echo "")
+
+                        # Get review status
+                        gh_review_status=$(gh pr view "$pr_number" --json reviewDecision -q '.reviewDecision // "PENDING"' 2>/dev/null || echo "")
+                    fi
+                fi
+
+                # Color code PR state
+                local pr_state_color
+                case "$pr_state" in
+                    OPEN|open)
+                        pr_state_color="${GREEN}"
+                        ;;
+                    MERGED|merged)
+                        pr_state_color="${CYAN}"
+                        ;;
+                    CLOSED|closed)
+                        pr_state_color="${RED}"
+                        ;;
+                    *)
+                        pr_state_color="${NC}"
+                        ;;
+                esac
+
+                echo -e "  PR:       #${pr_number} ${pr_state_color}${pr_state}${NC}"
+
+                if [[ -n "$gh_check_status" ]]; then
+                    local check_color
+                    case "$gh_check_status" in
+                        SUCCESS|success)
+                            check_color="${GREEN}"
+                            ;;
+                        FAILURE|failure)
+                            check_color="${RED}"
+                            ;;
+                        PENDING|pending|IN_PROGRESS|in_progress)
+                            check_color="${YELLOW}"
+                            ;;
+                        *)
+                            check_color="${NC}"
+                            ;;
+                    esac
+                    echo -e "  CI:       ${check_color}${gh_check_status}${NC}"
+                fi
+
+                if [[ -n "$gh_review_status" ]] && [[ "$gh_review_status" != "null" ]]; then
+                    local review_color
+                    case "$gh_review_status" in
+                        APPROVED|approved)
+                            review_color="${GREEN}"
+                            ;;
+                        CHANGES_REQUESTED|changes_requested)
+                            review_color="${RED}"
+                            ;;
+                        *)
+                            review_color="${YELLOW}"
+                            ;;
+                    esac
+                    echo -e "  Review:   ${review_color}${gh_review_status}${NC}"
+                fi
+
+                if [[ -n "$pr_url" ]]; then
+                    echo -e "  PR URL:   ${pr_url}"
+                fi
+            fi
+        fi
+
+        # Show last line of log for running Ralphs
+        if [[ "$actual_status" == "running" ]]; then
+            local log_file="$worktree_path/ralph-output.log"
+            if [[ -f "$log_file" ]]; then
+                # Get last non-empty, non-header line
+                local last_line
+                last_line=$(grep -v '^#' "$log_file" | grep -v '^---' | grep -v '^$' | tail -1 2>/dev/null || echo "")
+                if [[ -n "$last_line" ]]; then
+                    # Truncate if too long
+                    if [[ ${#last_line} -gt 60 ]]; then
+                        last_line="${last_line:0:57}..."
+                    fi
+                    echo -e "  Activity: ${BLUE}${last_line}${NC}"
+                fi
+            fi
+        fi
+
+        echo ""
+        i=$((i + 1))
+    done
+
+    # Show branch relationships section
+    echo -e "${CYAN}───────────────────────────────────────────────────────────────────${NC}"
+    echo -e "${CYAN}BRANCH RELATIONSHIPS${NC}"
+    echo ""
+
+    # Get all branches with their Ralphs
+    local branches
+    branches=$(jq -r '.branches | to_entries[] | "\(.key)|\(.value.ralphs | join(","))"' "$CONFIG_FILE" 2>/dev/null || echo "")
+
+    if [[ -n "$branches" ]]; then
+        while IFS='|' read -r branch_name ralph_list; do
+            local ralph_array
+            IFS=',' read -ra ralph_array <<< "$ralph_list"
+            local ralph_count_on_branch=${#ralph_array[@]}
+
+            if [[ $ralph_count_on_branch -gt 1 ]]; then
+                echo -e "  ${YELLOW}⚠${NC}  ${branch_name}: ${ralph_list}"
+                echo -e "      ${YELLOW}Warning: Multiple Ralphs ($ralph_count_on_branch) sharing this branch${NC}"
+            else
+                echo -e "  ${GREEN}✓${NC}  ${branch_name}: ${ralph_list}"
+            fi
+        done <<< "$branches"
+    else
+        echo "  No branches tracked"
+    fi
+
+    echo ""
+    echo -e "${CYAN}───────────────────────────────────────────────────────────────────${NC}"
+    local running_count stopped_count pr_count
+    running_count=$(jq '[.ralphs[] | select(.status == "running")] | length' "$CONFIG_FILE")
+    stopped_count=$(jq '[.ralphs[] | select(.status == "spawned" or .status == "stopped")] | length' "$CONFIG_FILE")
+    pr_count=$(jq '[.ralphs[] | select(.pr != null)] | length' "$CONFIG_FILE")
+
+    echo -e "  Total: ${ralph_count} Ralph(s) | ${GREEN}Running: ${running_count}${NC} | ${YELLOW}Idle: ${stopped_count}${NC} | PRs: ${pr_count}"
+    echo -e "  Last update: $(jq -r '.lastUpdate' "$CONFIG_FILE")"
+    echo ""
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -844,7 +1161,10 @@ main() {
         start)
             cmd_start "$@"
             ;;
-        status|logs|stop|sync|pr|prs|cleanup|clean|dashboard)
+        status)
+            cmd_status "$@"
+            ;;
+        logs|stop|sync|pr|prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

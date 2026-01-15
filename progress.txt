@@ -16,6 +16,9 @@
 - All timestamps in ISO 8601 format
 - Git worktrees cannot have multiple checkouts of the same branch - detect with `git worktree list --porcelain` and awk
 - Multiple Ralphs on same branch share one worktree, differentiated by scope
+- Use `jq --arg` with `|| true` instead of `jq -e` when checking for entry existence (avoids `set -e` exit on no match)
+- Use nohup for background processes to survive terminal close
+- Check process liveness with `kill -0 $pid`
 
 ---
 
@@ -75,4 +78,53 @@
   - To detect existing worktree for a branch: `git worktree list --porcelain | awk -v branch="refs/heads/$branch" '/^worktree / { wt = substr($0, 10) } /^branch / { if (substr($0, 8) == branch) print wt }'`
   - Multiple Ralphs sharing a branch should use different worktree paths in config but point to the same actual worktree
   - Scope restrictions are recorded in config.json and will be passed to Ralph's prompt in US-004
+---
+
+## [Iteration 4] 2026-01-15T17:30:00Z - US-004
+- **What was implemented:** Start Ralph background process
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added cmd_start(), show_start_usage()
+  - prd.json (updated) - Marked US-004 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh start <name> [prompt]`
+  - Validates ralph exists and is not already running (checks PID liveness)
+  - Validates worktree directory exists
+  - Checks claude CLI is available in PATH
+  - Builds prompt: uses custom prompt if provided, otherwise default autonomous work prompt
+  - Adds scope restriction to prompt if --scope was set during spawn
+  - Creates ralph-output.log with header (ralph name, branch, timestamp, scope)
+  - Launches `claude --dangerously-skip-permissions -p <prompt>` in background using nohup
+  - Captures PID via temp file written in subshell
+  - Updates config.json: pid, status='running', startedAt timestamp
+  - Handles edge case: process was marked running but PID is dead
+- **Learnings for future iterations:**
+  - Use `jq --arg` instead of `jq -e --arg` when checking if entry exists, combined with `|| true` to avoid `set -e` exiting on no match
+  - Use nohup to keep process running after terminal closes
+  - Capture PID by writing to temp file in subshell, then reading it
+  - Use `kill -0 $pid` to check if process is running (doesn't send signal, just checks)
+  - Log file location: `$worktree_path/ralph-output.log`
+---
+
+## [Iteration 5] 2026-01-15T17:35:00Z - US-005
+- **What was implemented:** Show Hive status dashboard
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added cmd_status(), show_status_usage()
+  - prd.json (updated) - Marked US-005 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh status`
+  - Shows formatted dashboard with ANSI colors and box-drawing characters
+  - Displays each Ralph with: name, status (color-coded), branch (mode), target branch, scope, worktree path, PID (if running), started timestamp, PR status (if exists)
+  - Verifies PID liveness for "running" Ralphs using `kill -0 $pid` - automatically updates status to "stopped" if process is dead
+  - Shows "(process died)" indicator when a process was marked running but PID is no longer alive
+  - Uses `gh pr view` to fetch current PR state, CI check status, and review status from GitHub
+  - Shows last line of log file (filtered for non-header content) as activity indicator for running Ralphs
+  - Branch relationships section shows all branches with their attached Ralphs
+  - Warns when multiple Ralphs share a branch (with ⚠ indicator)
+  - Summary line shows totals: total count, running count, idle count, PRs count
+  - Color scheme: green=running/completed/approved, yellow=spawned/stopped/pending, red=failed/closed
+- **Learnings for future iterations:**
+  - Use `jq --argjson i "$i"` to iterate by index through JSON arrays
+  - PR status fetching with `gh pr view` is graceful - errors are suppressed with `|| echo ""`
+  - `grep -v` chains work well to filter out header lines from log files
+  - Status symbol mapping: ● for active, ✓ for completed, ○ for idle, ✗ for failed
 ---
