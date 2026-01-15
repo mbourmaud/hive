@@ -563,6 +563,232 @@ spawn_with_attach() {
 }
 
 # ============================================================================
+# Start Command
+# ============================================================================
+
+show_start_usage() {
+    cat << EOF
+${CYAN}hive.sh start${NC} - Start a Ralph background process
+
+${YELLOW}Usage:${NC}
+  hive.sh start <name> [prompt]
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph to start (must be spawned first)
+  prompt      Optional custom prompt for Ralph (default: autonomous work prompt)
+
+${YELLOW}Options:${NC}
+  --help, -h  Show this help message
+
+${YELLOW}Examples:${NC}
+  hive.sh start auth-feature
+  hive.sh start auth-feature "Implement user authentication with JWT"
+  hive.sh start fix-bug "Fix the login validation bug in src/auth/login.ts"
+EOF
+}
+
+cmd_start() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+    local prompt=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_start_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_start_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                elif [[ -z "$prompt" ]]; then
+                    prompt="$1"
+                else
+                    print_error "Too many arguments"
+                    show_start_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_start_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist. Spawn it first with 'hive.sh spawn'."
+        exit 1
+    fi
+
+    # Get ralph info
+    local worktree_path
+    local status
+    local scope
+    local branch
+    local existing_pid
+
+    worktree_path=$(echo "$ralph_entry" | jq -r '.worktreePath')
+    status=$(echo "$ralph_entry" | jq -r '.status')
+    scope=$(echo "$ralph_entry" | jq -r '.scope // empty')
+    branch=$(echo "$ralph_entry" | jq -r '.branch')
+    existing_pid=$(echo "$ralph_entry" | jq -r '.pid // empty')
+
+    # Check if already running
+    if [[ "$status" == "running" ]] && [[ -n "$existing_pid" ]]; then
+        # Verify PID is still running
+        if kill -0 "$existing_pid" 2>/dev/null; then
+            print_error "Ralph '$name' is already running (PID: $existing_pid)"
+            print_info "Use 'hive.sh stop $name' to stop it first, or 'hive.sh logs $name' to view output."
+            exit 1
+        else
+            print_warning "Ralph '$name' was marked as running but process (PID: $existing_pid) is dead."
+            print_info "Updating status and restarting..."
+        fi
+    fi
+
+    # Verify worktree exists
+    if [[ ! -d "$worktree_path" ]]; then
+        print_error "Worktree directory '$worktree_path' does not exist."
+        print_info "The worktree may have been removed. Consider cleaning up with 'hive.sh clean $name'."
+        exit 1
+    fi
+
+    # Check if claude CLI is available
+    if ! command -v claude &> /dev/null; then
+        print_error "claude CLI is not installed or not in PATH."
+        print_info "Please install Claude Code first: https://claude.ai/code"
+        exit 1
+    fi
+
+    print_info "Starting Ralph '$name' on branch '$branch'..."
+
+    # Build the prompt
+    local final_prompt=""
+    if [[ -n "$prompt" ]]; then
+        final_prompt="$prompt"
+    else
+        # Default autonomous work prompt
+        final_prompt="You are Ralph, an autonomous coding agent. Work on the tasks in this repository.
+
+Review the codebase, identify what needs to be done, and implement it. Commit your changes as you go.
+
+Work autonomously until the task is complete or you need human input."
+    fi
+
+    # Add scope restriction if set
+    if [[ -n "$scope" ]]; then
+        final_prompt="$final_prompt
+
+IMPORTANT: You are restricted to modifying only files matching the pattern: $scope
+Do not modify files outside this scope."
+    fi
+
+    # Create log file directory if needed (worktree should exist)
+    local log_file="$worktree_path/ralph-output.log"
+
+    # Initialize log file with header
+    cat > "$log_file" << EOF
+# Ralph Output Log
+# Ralph: $name
+# Branch: $branch
+# Started: $(get_timestamp)
+# Worktree: $worktree_path
+$(if [[ -n "$scope" ]]; then echo "# Scope: $scope"; fi)
+---
+
+EOF
+
+    # Launch claude in background
+    print_info "Launching Claude Code in background..."
+    print_info "Log file: $log_file"
+
+    # Create a PID file to capture the process ID
+    local pid_file="$worktree_path/.ralph-pid"
+
+    # Change to worktree directory and run claude in background
+    # Using nohup to keep it running after terminal closes
+    # The subshell writes the PID to a file for reliable capture
+    (
+        cd "$worktree_path"
+        nohup claude --dangerously-skip-permissions -p "$final_prompt" >> "$log_file" 2>&1 &
+        echo $! > "$pid_file"
+    )
+
+    # Give it a moment to start
+    sleep 1
+
+    # Read the PID from the file
+    local pid=""
+    if [[ -f "$pid_file" ]]; then
+        pid=$(cat "$pid_file" 2>/dev/null || true)
+        rm -f "$pid_file"
+    fi
+
+    # Update config.json with PID and status
+    local timestamp=$(get_timestamp)
+    local tmp_config=$(mktemp)
+
+    if [[ -n "$pid" ]]; then
+        jq --arg name "$name" \
+           --argjson pid "$pid" \
+           --arg status "running" \
+           --arg timestamp "$timestamp" \
+           '(.ralphs[] | select(.name == $name)) |= . + {pid: $pid, status: $status, startedAt: $timestamp} | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+        print_success "Ralph '$name' started successfully!"
+        echo ""
+        echo "PID: $pid"
+        echo "Branch: $branch"
+        echo "Log file: $log_file"
+        if [[ -n "$scope" ]]; then
+            echo "Scope: $scope"
+        fi
+    else
+        # Started but couldn't get PID - still update status
+        jq --arg name "$name" \
+           --arg status "running" \
+           --arg timestamp "$timestamp" \
+           '(.ralphs[] | select(.name == $name)) |= . + {pid: null, status: $status, startedAt: $timestamp} | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+        print_warning "Ralph '$name' started but could not capture PID."
+        print_info "The process may still be running. Check logs for activity."
+        echo ""
+        echo "Branch: $branch"
+        echo "Log file: $log_file"
+    fi
+
+    echo ""
+    echo "Next steps:"
+    echo "  1. Monitor progress: hive.sh logs $name"
+    echo "  2. Check status: hive.sh status"
+    echo "  3. Stop Ralph: hive.sh stop $name"
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -615,7 +841,10 @@ main() {
         spawn)
             cmd_spawn "$@"
             ;;
-        start|status|logs|stop|sync|pr|prs|cleanup|clean|dashboard)
+        start)
+            cmd_start "$@"
+            ;;
+        status|logs|stop|sync|pr|prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;
