@@ -128,3 +128,24 @@
   - `grep -v` chains work well to filter out header lines from log files
   - Status symbol mapping: ● for active, ✓ for completed, ○ for idle, ✗ for failed
 ---
+
+## [Iteration 6] 2026-01-15T18:45:00Z - US-006
+- **What was implemented:** View Ralph logs command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_logs_usage(), cmd_logs(), wired up in main router
+  - prd.json (updated) - Marked US-006 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh logs <name> [lines]`
+  - Argument parsing handles: name (required), lines (optional, default 50), --follow/-f flag
+  - Validates Ralph exists in config.json
+  - Checks log file exists at `$worktree_path/ralph-output.log`
+  - Shows helpful error messages when Ralph doesn't exist or log file is missing
+  - Displays Ralph status context along with log content
+  - Uses `tail -n $lines` for default mode, `tail -f` for follow mode
+  - Shows tip about `--follow` flag when Ralph is running
+  - Visual formatting with CYAN separator lines for log content
+- **Learnings for future iterations:**
+  - Regex validation for numeric args: `[[ "$1" =~ ^[0-9]+$ ]]`
+  - `tail -f` works well for live tailing, exits on Ctrl+C
+  - Log file path is stored in config as worktreePath, then append `/ralph-output.log`
+---

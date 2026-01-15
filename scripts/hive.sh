@@ -1106,6 +1106,135 @@ cmd_status() {
 }
 
 # ============================================================================
+# Logs Command
+# ============================================================================
+
+show_logs_usage() {
+    cat << EOF
+${CYAN}hive.sh logs${NC} - View Ralph's output log
+
+${YELLOW}Usage:${NC}
+  hive.sh logs <name> [lines]
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph whose logs to view
+  lines       Number of lines to show (default: 50)
+
+${YELLOW}Options:${NC}
+  --follow, -f  Follow the log output (live tailing)
+  --help, -h    Show this help message
+
+${YELLOW}Examples:${NC}
+  hive.sh logs auth-feature          # Show last 50 lines
+  hive.sh logs auth-feature 100      # Show last 100 lines
+  hive.sh logs auth-feature --follow # Live tail the log
+  hive.sh logs auth-feature -f       # Same as --follow
+EOF
+}
+
+cmd_logs() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+    local lines=50
+    local follow=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --follow|-f)
+                follow=true
+                shift
+                ;;
+            --help|-h)
+                show_logs_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_logs_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                elif [[ "$1" =~ ^[0-9]+$ ]]; then
+                    lines="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_logs_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_logs_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist."
+        exit 1
+    fi
+
+    # Get worktree path
+    local worktree_path
+    worktree_path=$(echo "$ralph_entry" | jq -r '.worktreePath')
+
+    # Build log file path
+    local log_file="$worktree_path/ralph-output.log"
+
+    # Check if log file exists
+    if [[ ! -f "$log_file" ]]; then
+        print_error "No log file found for Ralph '$name'."
+        print_info "The Ralph may not have been started yet."
+        print_info "Expected log file: $log_file"
+        exit 1
+    fi
+
+    # Get ralph status for context
+    local status
+    status=$(echo "$ralph_entry" | jq -r '.status')
+
+    if [[ "$follow" == true ]]; then
+        # Live tail mode
+        print_info "Following log for Ralph '$name' (status: $status)"
+        print_info "Press Ctrl+C to stop"
+        echo ""
+        tail -f "$log_file"
+    else
+        # Show last N lines
+        print_info "Showing last $lines lines for Ralph '$name' (status: $status)"
+        print_info "Log file: $log_file"
+        echo ""
+        echo -e "${CYAN}───────────────────────────────────────────────────────────────────${NC}"
+        tail -n "$lines" "$log_file"
+        echo -e "${CYAN}───────────────────────────────────────────────────────────────────${NC}"
+        echo ""
+
+        # Show hint about follow mode if Ralph is running
+        if [[ "$status" == "running" ]]; then
+            print_info "Tip: Use 'hive.sh logs $name --follow' for live tailing"
+        fi
+    fi
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -1164,7 +1293,10 @@ main() {
         status)
             cmd_status "$@"
             ;;
-        logs|stop|sync|pr|prs|cleanup|clean|dashboard)
+        logs)
+            cmd_logs "$@"
+            ;;
+        stop|sync|pr|prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

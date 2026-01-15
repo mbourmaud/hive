@@ -94,8 +94,8 @@
       "title": "View Ralph logs",
       "description": "Tail the output log of a specific Ralph",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh logs <name> [lines]`",
         "Tails last N lines (default 50) of ralph-output.log",
