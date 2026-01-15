@@ -67,6 +67,11 @@ get_timestamp() {
     date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+# Convert string to uppercase (bash 3.2 compatible)
+to_upper() {
+    echo "$1" | tr '[:lower:]' '[:upper:]'
+}
+
 # ============================================================================
 # Init Command
 # ============================================================================
@@ -2055,6 +2060,335 @@ $(git diff --stat "origin/$target_branch..$branch" 2>/dev/null | tail -20 || ech
 }
 
 # ============================================================================
+# PRs Command
+# ============================================================================
+
+show_prs_usage() {
+    cat << EOF
+${CYAN}hive.sh prs${NC} - List all PRs created by Hive
+
+${YELLOW}Usage:${NC}
+  hive.sh prs
+
+${YELLOW}Options:${NC}
+  --help, -h  Show this help message
+
+${YELLOW}Output includes:${NC}
+  - Ralph name and branch
+  - PR number and URL
+  - PR state (open/merged/closed)
+  - CI check status (passing/failing/pending)
+  - Review status (approved/changes requested/pending)
+
+${YELLOW}Status colors:${NC}
+  ${GREEN}●${NC} open/passing/approved   - Good state
+  ${YELLOW}●${NC} pending                 - Waiting
+  ${RED}●${NC} closed/failing/changes  - Needs attention
+  ${CYAN}●${NC} merged                  - Completed
+EOF
+}
+
+cmd_prs() {
+    check_git_repo
+    check_dependencies
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_prs_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_prs_usage
+                exit 1
+                ;;
+            *)
+                print_error "Unexpected argument: $1"
+                show_prs_usage
+                exit 1
+                ;;
+        esac
+    done
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if gh CLI is available
+    local gh_available=true
+    if ! command -v gh &> /dev/null; then
+        print_warning "GitHub CLI (gh) not installed. Showing cached PR info only."
+        gh_available=false
+    elif ! gh auth status &> /dev/null 2>&1; then
+        print_warning "GitHub CLI not authenticated. Showing cached PR info only."
+        gh_available=false
+    fi
+
+    # Get all ralphs with PRs
+    local ralphs_with_prs
+    ralphs_with_prs=$(jq '[.ralphs[] | select(.pr != null)]' "$CONFIG_FILE")
+    local pr_count
+    pr_count=$(echo "$ralphs_with_prs" | jq 'length')
+
+    if [[ "$pr_count" -eq 0 ]]; then
+        echo ""
+        print_info "No Pull Requests have been created yet."
+        echo ""
+        echo "Create a PR with:"
+        echo "  hive.sh pr <ralph-name>"
+        echo ""
+        exit 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                         HIVE PULL REQUESTS                         ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Track summary counts
+    local open_count=0
+    local merged_count=0
+    local closed_count=0
+    local checks_passing=0
+    local checks_failing=0
+    local checks_pending=0
+
+    # Iterate through all Ralphs with PRs
+    local i=0
+    while [[ $i -lt $pr_count ]]; do
+        local ralph_json
+        ralph_json=$(echo "$ralphs_with_prs" | jq --argjson i "$i" '.[$i]')
+
+        # Extract ralph fields
+        local name branch pr_json target_branch status
+        name=$(echo "$ralph_json" | jq -r '.name')
+        branch=$(echo "$ralph_json" | jq -r '.branch')
+        target_branch=$(echo "$ralph_json" | jq -r '.targetBranch')
+        status=$(echo "$ralph_json" | jq -r '.status')
+        pr_json=$(echo "$ralph_json" | jq '.pr')
+
+        # Extract cached PR info
+        local pr_number pr_url pr_state pr_draft pr_created_at
+        pr_number=$(echo "$pr_json" | jq -r '.number // empty')
+        pr_url=$(echo "$pr_json" | jq -r '.url // empty')
+        pr_state=$(echo "$pr_json" | jq -r '.state // "unknown"')
+        pr_draft=$(echo "$pr_json" | jq -r '.draft // false')
+        pr_created_at=$(echo "$pr_json" | jq -r '.createdAt // empty')
+
+        # Variables for live GitHub data
+        local gh_pr_state=""
+        local gh_check_status=""
+        local gh_review_status=""
+        local gh_mergeable=""
+        local gh_additions=""
+        local gh_deletions=""
+        local gh_changed_files=""
+
+        # Fetch live PR status from GitHub if available
+        if [[ "$gh_available" == true ]] && [[ -n "$pr_number" ]]; then
+            # Get comprehensive PR info in a single call
+            local gh_info
+            gh_info=$(gh pr view "$pr_number" --json state,statusCheckRollup,reviewDecision,mergeable,additions,deletions,changedFiles,isDraft 2>/dev/null || echo "")
+
+            if [[ -n "$gh_info" ]]; then
+                gh_pr_state=$(echo "$gh_info" | jq -r '.state // empty')
+                pr_draft=$(echo "$gh_info" | jq -r '.isDraft // false')
+                gh_mergeable=$(echo "$gh_info" | jq -r '.mergeable // empty')
+                gh_additions=$(echo "$gh_info" | jq -r '.additions // empty')
+                gh_deletions=$(echo "$gh_info" | jq -r '.deletions // empty')
+                gh_changed_files=$(echo "$gh_info" | jq -r '.changedFiles // empty')
+
+                # Get overall check status (first check's conclusion or status)
+                gh_check_status=$(echo "$gh_info" | jq -r '
+                    if (.statusCheckRollup | length) > 0 then
+                        if (.statusCheckRollup | map(select(.conclusion == "FAILURE" or .conclusion == "failure")) | length) > 0 then "FAILURE"
+                        elif (.statusCheckRollup | map(select(.conclusion == "SUCCESS" or .conclusion == "success")) | length) == (.statusCheckRollup | length) then "SUCCESS"
+                        elif (.statusCheckRollup | map(select(.status == "IN_PROGRESS" or .status == "in_progress" or .status == "PENDING" or .status == "pending" or .status == "QUEUED" or .status == "queued")) | length) > 0 then "PENDING"
+                        else "PENDING"
+                        end
+                    else "NO_CHECKS"
+                    end
+                ' 2>/dev/null || echo "")
+
+                # Get review decision
+                gh_review_status=$(echo "$gh_info" | jq -r '.reviewDecision // empty')
+
+                # Update state from GitHub
+                if [[ -n "$gh_pr_state" ]]; then
+                    pr_state="$gh_pr_state"
+                fi
+            fi
+        fi
+
+        # Normalize state values to uppercase for comparison
+        local pr_state_upper
+        pr_state_upper=$(to_upper "$pr_state")
+        local gh_check_status_upper
+        gh_check_status_upper=$(to_upper "$gh_check_status")
+
+        # Update summary counts based on state
+        case "$pr_state_upper" in
+            OPEN)
+                open_count=$((open_count + 1))
+                ;;
+            MERGED)
+                merged_count=$((merged_count + 1))
+                ;;
+            CLOSED)
+                closed_count=$((closed_count + 1))
+                ;;
+        esac
+
+        # Update check counts
+        case "$gh_check_status_upper" in
+            SUCCESS)
+                checks_passing=$((checks_passing + 1))
+                ;;
+            FAILURE)
+                checks_failing=$((checks_failing + 1))
+                ;;
+            PENDING|IN_PROGRESS|QUEUED)
+                checks_pending=$((checks_pending + 1))
+                ;;
+        esac
+
+        # Determine PR state color and symbol
+        local state_color state_symbol
+        case "$pr_state_upper" in
+            OPEN)
+                state_color="${GREEN}"
+                state_symbol="●"
+                ;;
+            MERGED)
+                state_color="${CYAN}"
+                state_symbol="✓"
+                ;;
+            CLOSED)
+                state_color="${RED}"
+                state_symbol="✗"
+                ;;
+            *)
+                state_color="${NC}"
+                state_symbol="?"
+                ;;
+        esac
+
+        # Print Ralph/PR header
+        echo -e "${state_color}${state_symbol}${NC} ${CYAN}${name}${NC} → ${branch}"
+        echo -e "  PR:       #${pr_number:-unknown} ${state_color}${pr_state}${NC}$(if [[ "$pr_draft" == "true" ]]; then echo -e " ${YELLOW}(draft)${NC}"; fi)"
+        echo -e "  Target:   ${target_branch}"
+
+        # Show URL
+        if [[ -n "$pr_url" ]]; then
+            echo -e "  URL:      ${pr_url}"
+        fi
+
+        # Show CI check status
+        if [[ -n "$gh_check_status" ]] && [[ "$gh_check_status" != "NO_CHECKS" ]]; then
+            local check_color check_symbol
+            case "$gh_check_status_upper" in
+                SUCCESS)
+                    check_color="${GREEN}"
+                    check_symbol="✓"
+                    ;;
+                FAILURE)
+                    check_color="${RED}"
+                    check_symbol="✗"
+                    ;;
+                PENDING|IN_PROGRESS|QUEUED)
+                    check_color="${YELLOW}"
+                    check_symbol="○"
+                    ;;
+                *)
+                    check_color="${NC}"
+                    check_symbol="?"
+                    ;;
+            esac
+            echo -e "  CI:       ${check_color}${check_symbol} ${gh_check_status}${NC}"
+        elif [[ "$gh_check_status" == "NO_CHECKS" ]]; then
+            echo -e "  CI:       ${YELLOW}No checks configured${NC}"
+        fi
+
+        # Show review status
+        if [[ -n "$gh_review_status" ]] && [[ "$gh_review_status" != "null" ]]; then
+            local review_color review_symbol
+            local gh_review_status_upper
+            gh_review_status_upper=$(to_upper "$gh_review_status")
+            case "$gh_review_status_upper" in
+                APPROVED)
+                    review_color="${GREEN}"
+                    review_symbol="✓"
+                    ;;
+                CHANGES_REQUESTED)
+                    review_color="${RED}"
+                    review_symbol="✗"
+                    ;;
+                REVIEW_REQUIRED)
+                    review_color="${YELLOW}"
+                    review_symbol="○"
+                    ;;
+                *)
+                    review_color="${YELLOW}"
+                    review_symbol="○"
+                    ;;
+            esac
+            echo -e "  Review:   ${review_color}${review_symbol} ${gh_review_status}${NC}"
+        fi
+
+        # Show mergeable status for open PRs
+        if [[ "$pr_state_upper" == "OPEN" ]] && [[ -n "$gh_mergeable" ]] && [[ "$gh_mergeable" != "null" ]]; then
+            local merge_color
+            local gh_mergeable_upper
+            gh_mergeable_upper=$(to_upper "$gh_mergeable")
+            case "$gh_mergeable_upper" in
+                MERGEABLE)
+                    merge_color="${GREEN}"
+                    ;;
+                CONFLICTING)
+                    merge_color="${RED}"
+                    ;;
+                *)
+                    merge_color="${YELLOW}"
+                    ;;
+            esac
+            echo -e "  Merge:    ${merge_color}${gh_mergeable}${NC}"
+        fi
+
+        # Show stats if available
+        if [[ -n "$gh_additions" ]] && [[ -n "$gh_deletions" ]] && [[ -n "$gh_changed_files" ]]; then
+            echo -e "  Changes:  ${GREEN}+${gh_additions}${NC} ${RED}-${gh_deletions}${NC} in ${gh_changed_files} file(s)"
+        fi
+
+        # Show created timestamp
+        if [[ -n "$pr_created_at" ]]; then
+            echo -e "  Created:  ${pr_created_at}"
+        fi
+
+        echo ""
+        i=$((i + 1))
+    done
+
+    # Show summary
+    echo -e "${CYAN}───────────────────────────────────────────────────────────────────${NC}"
+    echo -e "  Total PRs: ${pr_count}"
+    echo -e "  State:   ${GREEN}Open: ${open_count}${NC} | ${CYAN}Merged: ${merged_count}${NC} | ${RED}Closed: ${closed_count}${NC}"
+
+    if [[ "$gh_available" == true ]]; then
+        local checks_total=$((checks_passing + checks_failing + checks_pending))
+        if [[ $checks_total -gt 0 ]]; then
+            echo -e "  CI:      ${GREEN}Passing: ${checks_passing}${NC} | ${RED}Failing: ${checks_failing}${NC} | ${YELLOW}Pending: ${checks_pending}${NC}"
+        fi
+    fi
+
+    echo ""
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -2125,7 +2459,10 @@ main() {
         pr)
             cmd_pr "$@"
             ;;
-        prs|cleanup|clean|dashboard)
+        prs)
+            cmd_prs "$@"
+            ;;
+        cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

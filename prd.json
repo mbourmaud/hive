@@ -159,8 +159,8 @@
       "title": "List and check PR status",
       "description": "Show all PRs created by Hive with their current status",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh prs`",
         "Lists all Ralphs that have created PRs",

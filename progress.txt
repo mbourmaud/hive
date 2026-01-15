@@ -20,6 +20,7 @@
 - Use nohup for background processes to survive terminal close
 - Check process liveness with `kill -0 $pid`
 - Use `kill -STOP $pid` and `kill -CONT $pid` to pause/resume processes without terminating
+- For bash 3.2 compatibility (macOS), use `tr '[:lower:]' '[:upper:]'` instead of ${var^^} for uppercase conversion
 
 ---
 
@@ -232,4 +233,31 @@
   - Use `git diff --stat "origin/$target..$branch"` to get file change summary
   - PR URL is output by `gh pr create` on success, can extract PR number from URL
   - Use `gh pr view $branch --json number,url` to get existing PR info by branch name
+---
+
+## [Iteration 10] 2026-01-15T19:45:00Z - US-010
+- **What was implemented:** List and check PR status command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_prs_usage(), cmd_prs(), to_upper() helper, wired up in main router
+  - prd.json (updated) - Marked US-010 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh prs`
+  - Lists all Ralphs that have created PRs with color-coded output
+  - Shows PR number, URL, state (open/merged/closed), draft indicator
+  - Uses `gh pr view` to fetch live status from GitHub when available
+  - Gets comprehensive PR info in single API call: state, statusCheckRollup, reviewDecision, mergeable, additions, deletions, changedFiles, isDraft
+  - Calculates overall CI check status from statusCheckRollup array (FAILURE > SUCCESS > PENDING)
+  - Shows review status (approved/changes_requested/review_required/pending)
+  - Shows mergeable status for open PRs (mergeable/conflicting)
+  - Shows diff stats (additions, deletions, changed files count)
+  - Gracefully handles gh CLI not available or not authenticated (shows cached data only)
+  - Summary section shows total counts by state (open/merged/closed) and CI status (passing/failing/pending)
+  - Color scheme: green=open/passing/approved, cyan=merged, red=closed/failing/changes_requested, yellow=pending
+- **Learnings for future iterations:**
+  - Bash 3.2 on macOS doesn't support ${var^^} for uppercase - use `tr '[:lower:]' '[:upper:]'` instead
+  - Added to_upper() helper function for bash 3.2 compatibility
+  - Use `gh pr view $pr_number --json field1,field2,...` to get multiple fields in one API call
+  - statusCheckRollup is an array; need jq logic to derive overall status (any failure = FAILURE, all success = SUCCESS, otherwise PENDING)
+  - reviewDecision can be APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or null/empty
+  - mergeable can be MERGEABLE, CONFLICTING, or UNKNOWN
 ---
