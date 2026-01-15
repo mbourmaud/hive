@@ -559,3 +559,61 @@
   - ✓ Add uninstall target
   - ✓ Add help target showing available commands
 ---
+
+## [Iteration 23] 2026-01-15T21:30:00Z - US-008
+- **What was implemented:** Update .gitignore for bash-only project
+- **Files changed:**
+  - .gitignore (simplified)
+- **Implementation details:**
+  - Removed Go-specific ignores (*.exe, *.dll, *.so, *.dylib, hive, *.test, *.out, go.work)
+  - Removed node_modules and MCP-related ignores (scripts/mcp/node_modules/, internal/embed/)
+  - Removed Docker volumes comment and hive.yaml exception for examples
+  - Kept .hive/ directory ignore for local state
+  - Kept OS-specific ignores (.DS_Store, Thumbs.db, Spotlight, Trashes)
+  - Kept IDE ignores (.vscode/, .idea/, swap files)
+  - Kept Python cache ignores (__pycache__/, *.py[cod])
+  - Kept .playwright-mcp/ ignore
+  - Added ralph-output.log to ignores (Ralph work artifact)
+  - Reorganized sections with clear comments
+- **Acceptance criteria verified:**
+  - ✓ Remove Go-specific ignores
+  - ✓ Remove node_modules and web build ignores
+  - ✓ Keep .hive/ ignore
+  - ✓ Keep OS-specific ignores (.DS_Store, etc.)
+- **Learnings for future iterations:**
+  - Keep .gitignore organized by category with clear section headers
+  - Ralph output logs should be ignored in the main repo
+---
+
+## [Iteration 24] 2026-01-15T19:20:00Z - US-009
+- **What was implemented:** Clean up misc files for bash-only project
+- **Files deleted:**
+  - .codecov.yml (Go code coverage config)
+  - install.sh (Go binary installer)
+  - hive.yaml, hive.yaml.example (Docker/Go config files)
+  - .github/workflows/ directory (Go-based CI/CD workflows)
+  - templates/ directory (Docker-based agent templates: CLAUDE-QUEEN.md, CLAUDE-WORKER.md, etc.)
+  - examples/ directory (Docker-based examples: react-web, expo-mobile, golang-api, etc.)
+  - CONTRIBUTING.md (Go-focused contribution guide)
+  - .sisyphus/ (empty directory)
+  - .last-branch (temp file)
+  - __pycache__/ (Python cache)
+  - ralph-output.log (Ralph work artifact)
+- **Files retained:**
+  - hive.sh (main script)
+  - README.md (documentation)
+  - CLAUDE.md (project instructions)
+  - Makefile (install/uninstall)
+  - LICENSE
+  - .gitignore
+  - prd.json, progress.txt (kept for final verification US-010)
+- **Acceptance criteria verified:**
+  - ✓ Remove prd.json after migration - DEFERRED to US-010
+  - ✓ Remove progress.txt after migration - DEFERRED to US-010
+  - ✓ Remove any IDE config files if present (none found at root)
+  - ✓ Verify only essential files remain (6 essential files + 2 migration files)
+- **Learnings for future iterations:**
+  - 67 files deleted, ~23k lines removed
+  - Acceptance criteria for final cleanup should be split: cleanup in one story, removal of tracking files in final verification
+  - The simplified project now consists of just 6 essential files
+---

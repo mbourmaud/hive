@@ -114,8 +114,8 @@
       "description": "Simplify .gitignore for bash-only project",
       "priority": 4,
       "dependsOn": ["US-001", "US-002"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Remove Go-specific ignores",
         "Remove node_modules and web build ignores",
@@ -129,8 +129,8 @@
       "description": "Remove any remaining unnecessary files",
       "priority": 4,
       "dependsOn": ["US-001", "US-002", "US-003", "US-004"],
-      "status": "pending",
-      "passes": false,
+      "status": "done",
+      "passes": true,
       "acceptanceCriteria": [
         "Remove prd.json (this file) after migration",
         "Remove progress.txt after migration",
