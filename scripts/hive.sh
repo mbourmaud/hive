@@ -137,6 +137,266 @@ EOF
 }
 
 # ============================================================================
+# Spawn Command
+# ============================================================================
+
+show_spawn_usage() {
+    cat << EOF
+${CYAN}hive.sh spawn${NC} - Create a new Ralph with git worktree
+
+${YELLOW}Usage:${NC}
+  hive.sh spawn <name> --create <branch> [--from <base>]
+  hive.sh spawn <name> --attach <branch> [--scope <glob>]
+
+${YELLOW}Options:${NC}
+  --create <branch>   Create a new branch for this Ralph
+  --attach <branch>   Attach to an existing branch
+  --from <base>       Base branch to create from (default: main)
+  --scope <glob>      Restrict files this Ralph can modify
+
+${YELLOW}Examples:${NC}
+  hive.sh spawn auth-feature --create feature/auth
+  hive.sh spawn auth-feature --create feature/auth --from develop
+  hive.sh spawn fix-bug --attach feature/auth --scope "src/auth/*"
+EOF
+}
+
+cmd_spawn() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+    local create_branch=""
+    local attach_branch=""
+    local from_base="main"
+    local scope=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --create)
+                if [[ -z "${2:-}" ]]; then
+                    print_error "--create requires a branch name"
+                    exit 1
+                fi
+                create_branch="$2"
+                shift 2
+                ;;
+            --attach)
+                if [[ -z "${2:-}" ]]; then
+                    print_error "--attach requires a branch name"
+                    exit 1
+                fi
+                attach_branch="$2"
+                shift 2
+                ;;
+            --from)
+                if [[ -z "${2:-}" ]]; then
+                    print_error "--from requires a branch name"
+                    exit 1
+                fi
+                from_base="$2"
+                shift 2
+                ;;
+            --scope)
+                if [[ -z "${2:-}" ]]; then
+                    print_error "--scope requires a glob pattern"
+                    exit 1
+                fi
+                scope="$2"
+                shift 2
+                ;;
+            --help|-h)
+                show_spawn_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_spawn_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_spawn_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_spawn_usage
+        exit 1
+    fi
+
+    if [[ -z "$create_branch" && -z "$attach_branch" ]]; then
+        print_error "Either --create or --attach is required"
+        show_spawn_usage
+        exit 1
+    fi
+
+    if [[ -n "$create_branch" && -n "$attach_branch" ]]; then
+        print_error "Cannot use both --create and --attach"
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph with this name already exists
+    if jq -e --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" > /dev/null 2>&1; then
+        print_error "Ralph '$name' already exists. Use a different name or clean up first."
+        exit 1
+    fi
+
+    local worktree_path="$WORKTREES_DIR/$name"
+
+    # Check if worktree directory already exists
+    if [[ -d "$worktree_path" ]]; then
+        print_error "Worktree directory '$worktree_path' already exists."
+        exit 1
+    fi
+
+    if [[ -n "$create_branch" ]]; then
+        spawn_with_create "$name" "$create_branch" "$from_base" "$scope"
+    else
+        spawn_with_attach "$name" "$attach_branch" "$scope"
+    fi
+}
+
+# Spawn with --create: Create a new branch
+spawn_with_create() {
+    local name="$1"
+    local branch="$2"
+    local from_base="$3"
+    local scope="$4"
+    local worktree_path="$WORKTREES_DIR/$name"
+
+    print_info "Creating Ralph '$name' with new branch '$branch' from '$from_base'..."
+
+    # Fetch latest from origin to ensure up-to-date base
+    print_info "Fetching latest from origin..."
+    if ! git fetch origin 2>/dev/null; then
+        print_warning "Could not fetch from origin (offline or no remote?). Proceeding with local state."
+    fi
+
+    # Check if the base branch exists (locally or remote)
+    local base_ref=""
+    if git show-ref --verify --quiet "refs/heads/$from_base"; then
+        base_ref="$from_base"
+        print_info "Using local branch '$from_base' as base"
+    elif git show-ref --verify --quiet "refs/remotes/origin/$from_base"; then
+        base_ref="origin/$from_base"
+        print_info "Using remote branch 'origin/$from_base' as base"
+    else
+        print_error "Base branch '$from_base' does not exist locally or on remote."
+        exit 1
+    fi
+
+    # Check if the new branch already exists
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+        print_error "Branch '$branch' already exists locally. Use --attach to use existing branch, or delete it first."
+        exit 1
+    fi
+
+    if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        print_error "Branch '$branch' already exists on remote. Use --attach to use existing branch."
+        exit 1
+    fi
+
+    # Create the worktree with a new branch
+    print_info "Creating git worktree at '$worktree_path'..."
+    if ! git worktree add -b "$branch" "$worktree_path" "$base_ref" 2>&1; then
+        print_error "Failed to create worktree"
+        exit 1
+    fi
+    print_success "Created worktree at '$worktree_path'"
+
+    # Update config.json
+    local timestamp=$(get_timestamp)
+    local ralph_entry=$(jq -n \
+        --arg name "$name" \
+        --arg branch "$branch" \
+        --arg baseBranch "$from_base" \
+        --arg targetBranch "$from_base" \
+        --arg scope "$scope" \
+        --arg worktreePath "$worktree_path" \
+        --arg createdAt "$timestamp" \
+        '{
+            name: $name,
+            branch: $branch,
+            branchMode: "created",
+            baseBranch: $baseBranch,
+            targetBranch: $targetBranch,
+            scope: (if $scope == "" then null else $scope end),
+            worktreePath: $worktreePath,
+            status: "spawned",
+            pid: null,
+            pr: null,
+            createdAt: $createdAt,
+            startedAt: null
+        }')
+
+    # Add ralph entry to config
+    local tmp_config=$(mktemp)
+    jq --argjson ralph "$ralph_entry" \
+       --arg timestamp "$timestamp" \
+       '.ralphs += [$ralph] | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    # Update branches section in config
+    local branch_entry=$(jq -n \
+        --arg branch "$branch" \
+        --arg baseBranch "$from_base" \
+        --arg createdBy "$name" \
+        --arg createdAt "$timestamp" \
+        '{
+            baseBranch: $baseBranch,
+            createdBy: $createdBy,
+            createdAt: $createdAt,
+            ralphs: [$createdBy]
+        }')
+
+    tmp_config=$(mktemp)
+    jq --arg branch "$branch" \
+       --argjson entry "$branch_entry" \
+       --arg timestamp "$timestamp" \
+       '.branches[$branch] = $entry | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    print_success "Ralph '$name' spawned successfully!"
+    echo ""
+    echo "Branch: $branch (from $from_base)"
+    echo "Worktree: $worktree_path"
+    if [[ -n "$scope" ]]; then
+        echo "Scope: $scope"
+    fi
+    echo ""
+    echo "Next steps:"
+    echo "  1. Start the Ralph: hive.sh start $name [prompt]"
+    echo "  2. Check status: hive.sh status"
+}
+
+# Spawn with --attach: Attach to existing branch (placeholder for US-003)
+spawn_with_attach() {
+    local name="$1"
+    local branch="$2"
+    local scope="$3"
+
+    print_error "The --attach option is not yet implemented (see US-003)"
+    exit 1
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -186,7 +446,10 @@ main() {
         init)
             cmd_init "$@"
             ;;
-        spawn|start|status|logs|stop|sync|pr|prs|cleanup|clean|dashboard)
+        spawn)
+            cmd_spawn "$@"
+            ;;
+        start|status|logs|stop|sync|pr|prs|cleanup|clean|dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;
