@@ -2656,6 +2656,287 @@ cmd_cleanup() {
 }
 
 # ============================================================================
+# Clean Command (Abandon without PR)
+# ============================================================================
+
+show_clean_usage() {
+    cat << EOF
+${CYAN}hive.sh clean${NC} - Remove worktree without PR (abandon)
+
+${YELLOW}Usage:${NC}
+  hive.sh clean <name>
+
+${YELLOW}Arguments:${NC}
+  name        Name of the Ralph to abandon
+
+${YELLOW}Options:${NC}
+  --force     Skip confirmation prompts
+  --help, -h  Show this help message
+
+${YELLOW}Behavior:${NC}
+  - Stops Ralph if still running
+  - Removes git worktree forcefully
+  - Deletes local and remote branch
+  - Removes Ralph entry from config.json
+  - Removes branch entry from config.json (if no other Ralphs use it)
+  - Prompts for confirmation if commits exist that haven't been merged
+
+${YELLOW}Examples:${NC}
+  hive.sh clean abandoned-feature     # Abandon work, confirm if commits exist
+  hive.sh clean experiment --force    # Force abandon without prompts
+EOF
+}
+
+cmd_clean() {
+    check_git_repo
+    check_dependencies
+
+    local name=""
+    local force=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force)
+                force=true
+                shift
+                ;;
+            --help|-h)
+                show_clean_usage
+                exit 0
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_clean_usage
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    print_error "Unexpected argument: $1"
+                    show_clean_usage
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate arguments
+    if [[ -z "$name" ]]; then
+        print_error "Ralph name is required"
+        show_clean_usage
+        exit 1
+    fi
+
+    # Ensure hive is initialized
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        print_error "Hive not initialized. Run 'hive.sh init' first."
+        exit 1
+    fi
+
+    # Check if ralph exists
+    local ralph_entry
+    ralph_entry=$(jq --arg name "$name" '.ralphs[] | select(.name == $name)' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -z "$ralph_entry" ]]; then
+        print_error "Ralph '$name' does not exist."
+        exit 1
+    fi
+
+    # Get ralph info
+    local worktree_path branch status pid target_branch
+    worktree_path=$(echo "$ralph_entry" | jq -r '.worktreePath')
+    branch=$(echo "$ralph_entry" | jq -r '.branch')
+    status=$(echo "$ralph_entry" | jq -r '.status')
+    pid=$(echo "$ralph_entry" | jq -r '.pid // empty')
+    target_branch=$(echo "$ralph_entry" | jq -r '.targetBranch // "main"')
+
+    print_info "Abandoning Ralph '$name'..."
+    print_info "  Branch: $branch"
+    print_info "  Worktree: $worktree_path"
+
+    # Check if there are commits that haven't been merged
+    local commit_count=0
+    local has_unpushed=false
+
+    if [[ -d "$worktree_path" ]]; then
+        # Fetch latest to compare properly
+        git fetch origin 2>/dev/null || true
+
+        # Count commits on this branch that aren't on target branch
+        if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null || \
+           git show-ref --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null; then
+            commit_count=$(cd "$worktree_path" && git rev-list --count "origin/$target_branch..$branch" 2>/dev/null || echo "0")
+        fi
+
+        # Check for unpushed commits (local commits not on remote)
+        if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+            if git show-ref --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null; then
+                local unpushed
+                unpushed=$(cd "$worktree_path" && git rev-list --count "origin/$branch..$branch" 2>/dev/null || echo "0")
+                if [[ "$unpushed" -gt 0 ]]; then
+                    has_unpushed=true
+                fi
+            else
+                # Remote branch doesn't exist, so all local commits are unpushed
+                has_unpushed=true
+            fi
+        fi
+    fi
+
+    # Warn and confirm if work exists (unless --force)
+    if [[ "$force" == false ]] && [[ "$commit_count" -gt 0 ]]; then
+        echo ""
+        print_warning "Branch '$branch' has $commit_count commit(s) that will be lost!"
+        if [[ "$has_unpushed" == true ]]; then
+            print_warning "Some commits have NOT been pushed to remote."
+        fi
+
+        # Show the commits that will be lost
+        if [[ -d "$worktree_path" ]]; then
+            echo ""
+            echo -e "${CYAN}Commits that will be abandoned:${NC}"
+            (cd "$worktree_path" && git log --oneline "origin/$target_branch..$branch" 2>/dev/null | head -10) || true
+            if [[ "$commit_count" -gt 10 ]]; then
+                echo "  ... and $((commit_count - 10)) more"
+            fi
+        fi
+
+        echo ""
+        print_warning "This action is IRREVERSIBLE. The work will be permanently lost."
+        echo ""
+        read -p "Are you sure you want to abandon this work? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Aborted. Work preserved."
+            echo ""
+            echo "Alternatives:"
+            echo "  - Create a PR first: hive.sh pr $name"
+            echo "  - Clean up after PR merge: hive.sh cleanup $name"
+            exit 0
+        fi
+    fi
+
+    # Stop Ralph if running
+    if [[ "$status" == "running" ]] && [[ -n "$pid" ]]; then
+        if kill -0 "$pid" 2>/dev/null; then
+            print_info "Stopping Ralph process (PID: $pid)..."
+            kill -TERM "$pid" 2>/dev/null || true
+
+            # Wait up to 5 seconds for graceful shutdown
+            local wait_count=0
+            while kill -0 "$pid" 2>/dev/null && [[ $wait_count -lt 5 ]]; do
+                sleep 1
+                wait_count=$((wait_count + 1))
+            done
+
+            # Force kill if still running
+            if kill -0 "$pid" 2>/dev/null; then
+                print_warning "Process did not stop gracefully. Force killing..."
+                kill -KILL "$pid" 2>/dev/null || true
+            fi
+
+            print_success "Ralph process stopped."
+        fi
+    fi
+
+    # Remove git worktree
+    if [[ -d "$worktree_path" ]]; then
+        print_info "Removing git worktree at '$worktree_path'..."
+
+        # First, try to remove the worktree properly
+        if git worktree remove "$worktree_path" --force 2>/dev/null; then
+            print_success "Worktree removed."
+        else
+            # If that fails, try to remove the directory and prune
+            print_warning "Standard worktree removal failed. Attempting force removal..."
+            rm -rf "$worktree_path" 2>/dev/null || true
+            git worktree prune 2>/dev/null || true
+            print_success "Worktree directory removed and pruned."
+        fi
+    else
+        print_info "Worktree directory does not exist (already removed?)."
+        git worktree prune 2>/dev/null || true
+    fi
+
+    # Delete local branch
+    print_info "Deleting local branch '$branch'..."
+    if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+        if git branch -D "$branch" 2>/dev/null; then
+            print_success "Local branch deleted."
+        else
+            print_warning "Could not delete local branch (may be checked out elsewhere)."
+        fi
+    else
+        print_info "Local branch does not exist (already deleted?)."
+    fi
+
+    # Delete remote branch (always, since we're abandoning)
+    print_info "Deleting remote branch 'origin/$branch'..."
+    if git push origin --delete "$branch" 2>/dev/null; then
+        print_success "Remote branch deleted."
+    else
+        print_info "Remote branch may not exist or already deleted."
+    fi
+
+    # Remove Ralph entry from config.json
+    print_info "Updating config.json..."
+    local timestamp=$(get_timestamp)
+    local tmp_config=$(mktemp)
+
+    jq --arg name "$name" \
+       --arg timestamp "$timestamp" \
+       '.ralphs = [.ralphs[] | select(.name != $name)] | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    print_success "Ralph '$name' removed from config."
+
+    # Remove Ralph from branch entry and clean up if no more Ralphs use this branch
+    local branch_ralphs_count
+    branch_ralphs_count=$(jq --arg branch "$branch" '.branches[$branch].ralphs | length // 0' "$CONFIG_FILE" 2>/dev/null || echo "0")
+
+    if [[ "$branch_ralphs_count" -gt 0 ]]; then
+        # Remove this Ralph from the branch's ralphs array
+        tmp_config=$(mktemp)
+        jq --arg branch "$branch" \
+           --arg name "$name" \
+           --arg timestamp "$timestamp" \
+           '.branches[$branch].ralphs = [.branches[$branch].ralphs[] | select(. != $name)] | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+        # Check if any Ralphs remain on this branch
+        local remaining_ralphs
+        remaining_ralphs=$(jq --arg branch "$branch" '.branches[$branch].ralphs | length // 0' "$CONFIG_FILE" 2>/dev/null || echo "0")
+
+        if [[ "$remaining_ralphs" -eq 0 ]]; then
+            # Remove the branch entry entirely
+            tmp_config=$(mktemp)
+            jq --arg branch "$branch" \
+               --arg timestamp "$timestamp" \
+               'del(.branches[$branch]) | .lastUpdate = $timestamp' \
+               "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+            print_success "Branch '$branch' removed from config (no more Ralphs)."
+        else
+            print_info "Branch '$branch' still has $remaining_ralphs other Ralph(s) attached."
+        fi
+    fi
+
+    print_success "Ralph '$name' has been abandoned!"
+    echo ""
+    echo "Summary:"
+    echo "  - Worktree removed: $worktree_path"
+    echo "  - Local branch deleted: $branch"
+    echo "  - Remote branch deleted: origin/$branch"
+    echo "  - Config entries removed"
+    if [[ "$commit_count" -gt 0 ]]; then
+        echo "  - $commit_count commit(s) abandoned"
+    fi
+    echo ""
+    echo "Run 'hive.sh status' to see remaining Ralphs."
+}
+
+# ============================================================================
 # Main Command Router
 # ============================================================================
 
@@ -2732,7 +3013,10 @@ main() {
         cleanup)
             cmd_cleanup "$@"
             ;;
-        clean|dashboard)
+        clean)
+            cmd_clean "$@"
+            ;;
+        dashboard)
             print_error "Command '$command' not yet implemented"
             exit 1
             ;;

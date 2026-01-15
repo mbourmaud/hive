@@ -289,3 +289,31 @@
   - When multiple Ralphs share a branch, need to track and clean up branch metadata carefully
   - Always check `gh pr view` to get current state from GitHub rather than relying on cached config state
 ---
+
+## [Iteration 12] 2026-01-15T20:15:00Z - US-012
+- **What was implemented:** Clean worktree without PR (abandon) command
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added show_clean_usage(), cmd_clean(), wired up in main router
+  - prd.json (updated) - Marked US-012 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh clean <name>`
+  - Supports `--force` flag to skip confirmation prompts
+  - Checks for uncommitted work by counting commits on branch vs target branch
+  - Detects unpushed commits by comparing local branch to remote branch
+  - Shows list of commits that will be abandoned (up to 10, with count for rest)
+  - Prompts for confirmation if commits exist (unless --force)
+  - Suggests alternatives (pr, cleanup) when user aborts
+  - Stops Ralph if running (SIGTERM, wait 5s, then SIGKILL if needed)
+  - Removes git worktree using `git worktree remove --force` with fallback to rm -rf + prune
+  - Deletes local branch using `git branch -D`
+  - Deletes remote branch using `git push origin --delete` (always, since we're abandoning)
+  - Removes Ralph entry from config.json
+  - Removes Ralph from branch's ralphs array
+  - Deletes branch entry from config.json if no other Ralphs use it
+  - Shows summary of what was cleaned up including commit count abandoned
+- **Learnings for future iterations:**
+  - Use `git rev-list --count "origin/$target..$branch"` to count commits between branches
+  - To check for unpushed commits: compare local branch to origin branch with rev-list
+  - The `read -p` with `-n 1 -r` pattern works well for y/N prompts
+  - Difference from cleanup: clean always deletes remote branch, doesn't check PR status
+---

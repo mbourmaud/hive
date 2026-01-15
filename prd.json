@@ -192,8 +192,8 @@
       "title": "Clean worktree without PR (abandon)",
       "description": "Remove a Ralph's worktree and branch without creating/merging PR",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh clean <name>`",
         "Stops Ralph if running",
