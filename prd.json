@@ -25,8 +25,8 @@
       "title": "Spawn Ralph with branch creation (--create)",
       "description": "Create a new git worktree and feature branch for a Ralph to work in",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh spawn <name> --create <branch> [--from <base>]`",
         "Creates git worktree at `.hive/worktrees/<name>/`",
@@ -42,8 +42,8 @@
       "title": "Spawn Ralph with branch attachment (--attach)",
       "description": "Create a worktree attached to an existing branch for continuation or parallel work",
       "assignedTo": null,
-      "status": "pending",
-      "passes": false,
+      "status": "completed",
+      "passes": true,
       "acceptanceCriteria": [
         "Command: `hive.sh spawn <name> --attach <branch> [--scope <glob>]`",
         "Creates git worktree at `.hive/worktrees/<name>/` using existing branch",

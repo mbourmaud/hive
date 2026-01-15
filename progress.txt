@@ -1,0 +1,78 @@
+# Ralph Progress Log
+# Project: Hive-lite: Multi-Ralph Orchestration via Bash
+# Location: /Users/fr162241/Projects/hive
+# Started: Thu Jan 15 18:15:09 CET 2026
+#
+# This file is generated and maintained by Ralph.
+# See: https://github.com/thecgaigroup/ralph-cc-loop
+---
+
+## Codebase Patterns
+- Use jq for all JSON manipulation in bash scripts
+- Store script at scripts/hive.sh
+- Config file at .hive/config.json
+- Worktrees at .hive/worktrees/<name>/
+- Use ANSI colors for terminal output (RED, GREEN, YELLOW, BLUE, CYAN, NC for reset)
+- All timestamps in ISO 8601 format
+- Git worktrees cannot have multiple checkouts of the same branch - detect with `git worktree list --porcelain` and awk
+- Multiple Ralphs on same branch share one worktree, differentiated by scope
+
+---
+
+## [Iteration 1] 2026-01-15T17:20:00Z - US-001
+- **What was implemented:** Initialize Hive directory structure
+- **Files changed:**
+  - scripts/hive.sh (new) - Main hive script with init command
+  - prd.json (updated) - Marked US-001 as passes: true
+- **Learnings for future iterations:**
+  - The script uses `set -e` for fail-fast behavior
+  - Helper functions: print_info, print_success, print_warning, print_error for consistent colored output
+  - check_git_repo() verifies we're in a git repository before operations
+  - check_dependencies() ensures jq is installed
+  - Config validation uses jq -e to check for required fields
+  - Idempotency achieved by checking existence before creating files/directories
+---
+
+## [Iteration 2] 2026-01-15T17:21:00Z - US-002
+- **What was implemented:** Spawn Ralph with branch creation (--create)
+- **Files changed:**
+  - scripts/hive.sh (modified) - Added cmd_spawn(), show_spawn_usage(), spawn_with_create(), spawn_with_attach() (placeholder)
+  - prd.json (updated) - Marked US-002 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh spawn <name> --create <branch> [--from <base>]`
+  - Argument parsing uses while loop with case statement for --create, --attach, --from, --scope flags
+  - Validates: ralph name exists, branch doesn't exist (local or remote), hive is initialized
+  - Creates worktree using `git worktree add -b <branch> <path> <base_ref>`
+  - Updates config.json with ralph entry containing branchMode:'created', baseBranch, targetBranch
+  - Updates config.json branches section with branch metadata and ralphs array
+  - Uses `mktemp` for safe JSON file updates
+- **Learnings for future iterations:**
+  - Use `git show-ref --verify --quiet "refs/heads/$branch"` to check if local branch exists
+  - Use `git show-ref --verify --quiet "refs/remotes/origin/$branch"` to check if remote branch exists
+  - The spawn_with_attach() is a placeholder for US-003
+  - Config structure for a ralph: {name, branch, branchMode, baseBranch, targetBranch, scope, worktreePath, status, pid, pr, createdAt, startedAt}
+  - Config structure for a branch: {baseBranch, createdBy, createdAt, ralphs:[]}
+---
+
+## [Iteration 3] 2026-01-15T17:26:00Z - US-003
+- **What was implemented:** Spawn Ralph with branch attachment (--attach)
+- **Files changed:**
+  - scripts/hive.sh (modified) - Implemented spawn_with_attach() function
+  - prd.json (updated) - Marked US-003 as passes: true
+- **Implementation details:**
+  - Command: `hive.sh spawn <name> --attach <branch> [--scope <glob>]`
+  - Checks if branch exists locally or on remote (errors if neither)
+  - Detects if branch is already checked out in another worktree using `git worktree list --porcelain` and awk
+  - If branch already in use, shares existing worktree instead of failing
+  - Creates worktree using `git worktree add <path> <branch>` for local branches
+  - Creates worktree using `git worktree add --track -b <branch> <path> origin/<branch>` for remote-only branches
+  - Updates config.json with branchMode:'attached'
+  - For new branches, creates branch entry with createdBy:'external'
+  - For existing branch entries, appends ralph to ralphs array and dedupes with `unique`
+  - Shows warning when multiple Ralphs attach to same branch
+- **Learnings for future iterations:**
+  - Git worktrees cannot have multiple checkouts of the same branch
+  - To detect existing worktree for a branch: `git worktree list --porcelain | awk -v branch="refs/heads/$branch" '/^worktree / { wt = substr($0, 10) } /^branch / { if (substr($0, 8) == branch) print wt }'`
+  - Multiple Ralphs sharing a branch should use different worktree paths in config but point to the same actual worktree
+  - Scope restrictions are recorded in config.json and will be passed to Ralph's prompt in US-004
+---

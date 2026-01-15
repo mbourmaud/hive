@@ -386,14 +386,180 @@ spawn_with_create() {
     echo "  2. Check status: hive.sh status"
 }
 
-# Spawn with --attach: Attach to existing branch (placeholder for US-003)
+# Spawn with --attach: Attach to existing branch
 spawn_with_attach() {
     local name="$1"
     local branch="$2"
     local scope="$3"
+    local worktree_path="$WORKTREES_DIR/$name"
 
-    print_error "The --attach option is not yet implemented (see US-003)"
-    exit 1
+    print_info "Creating Ralph '$name' attached to existing branch '$branch'..."
+
+    # Fetch latest from origin
+    print_info "Fetching latest from origin..."
+    if ! git fetch origin 2>/dev/null; then
+        print_warning "Could not fetch from origin (offline or no remote?). Proceeding with local state."
+    fi
+
+    # Check if branch exists (locally or remote)
+    local branch_ref=""
+    local branch_exists_locally=false
+    local branch_exists_remote=false
+
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+        branch_exists_locally=true
+    fi
+
+    if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        branch_exists_remote=true
+    fi
+
+    if [[ "$branch_exists_locally" == "false" && "$branch_exists_remote" == "false" ]]; then
+        print_error "Branch '$branch' does not exist locally or on remote. Use --create to create a new branch."
+        exit 1
+    fi
+
+    # Determine the base branch for this existing branch (try to detect from remote tracking)
+    local base_branch="main"
+    if [[ "$branch_exists_remote" == "true" ]]; then
+        # Try to detect base branch from merge-base with main/master
+        for candidate in main master develop; do
+            if git show-ref --verify --quiet "refs/remotes/origin/$candidate" 2>/dev/null; then
+                base_branch="$candidate"
+                break
+            fi
+        done
+    fi
+
+    # Check if this branch is already checked out in another worktree
+    local existing_worktree=""
+    existing_worktree=$(git worktree list --porcelain | awk -v branch="refs/heads/$branch" '
+        /^worktree / { wt = substr($0, 10) }
+        /^branch / { if (substr($0, 8) == branch) print wt }
+    ')
+
+    if [[ -n "$existing_worktree" ]]; then
+        # Branch is already checked out - share the existing worktree
+        print_warning "Branch '$branch' is already checked out at '$existing_worktree'"
+        print_info "Creating Ralph '$name' to share existing worktree..."
+        worktree_path="$existing_worktree"
+
+        # Pull latest changes in the existing worktree
+        print_info "Pulling latest changes for branch '$branch'..."
+        if ! (cd "$worktree_path" && git pull origin "$branch" 2>/dev/null); then
+            print_warning "Could not pull from origin (offline or no remote tracking?). Using local state."
+        fi
+    else
+        # Create worktree
+        print_info "Creating git worktree at '$worktree_path'..."
+
+        if [[ "$branch_exists_locally" == "true" ]]; then
+            # Branch exists locally, use it directly
+            if ! git worktree add "$worktree_path" "$branch" 2>&1; then
+                print_error "Failed to create worktree"
+                exit 1
+            fi
+        else
+            # Branch only exists on remote, track it
+            if ! git worktree add --track -b "$branch" "$worktree_path" "origin/$branch" 2>&1; then
+                print_error "Failed to create worktree"
+                exit 1
+            fi
+        fi
+        print_success "Created worktree at '$worktree_path'"
+
+        # Pull latest changes in the worktree
+        print_info "Pulling latest changes for branch '$branch'..."
+        if ! (cd "$worktree_path" && git pull origin "$branch" 2>/dev/null); then
+            print_warning "Could not pull from origin (offline or no remote tracking?). Using local state."
+        fi
+    fi
+
+    # Update config.json
+    local timestamp=$(get_timestamp)
+    local ralph_entry=$(jq -n \
+        --arg name "$name" \
+        --arg branch "$branch" \
+        --arg baseBranch "$base_branch" \
+        --arg targetBranch "$base_branch" \
+        --arg scope "$scope" \
+        --arg worktreePath "$worktree_path" \
+        --arg createdAt "$timestamp" \
+        '{
+            name: $name,
+            branch: $branch,
+            branchMode: "attached",
+            baseBranch: $baseBranch,
+            targetBranch: $targetBranch,
+            scope: (if $scope == "" then null else $scope end),
+            worktreePath: $worktreePath,
+            status: "spawned",
+            pid: null,
+            pr: null,
+            createdAt: $createdAt,
+            startedAt: null
+        }')
+
+    # Add ralph entry to config
+    local tmp_config=$(mktemp)
+    jq --argjson ralph "$ralph_entry" \
+       --arg timestamp "$timestamp" \
+       '.ralphs += [$ralph] | .lastUpdate = $timestamp' \
+       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+
+    # Update or create branches section in config
+    # Check if branch entry exists
+    if jq -e --arg branch "$branch" '.branches[$branch]' "$CONFIG_FILE" > /dev/null 2>&1; then
+        # Branch entry exists, add this Ralph to the ralphs array
+        tmp_config=$(mktemp)
+        jq --arg branch "$branch" \
+           --arg name "$name" \
+           --arg timestamp "$timestamp" \
+           '.branches[$branch].ralphs += [$name] | .branches[$branch].ralphs |= unique | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+    else
+        # Create new branch entry (for externally created branches)
+        local branch_entry=$(jq -n \
+            --arg branch "$branch" \
+            --arg baseBranch "$base_branch" \
+            --arg createdBy "external" \
+            --arg createdAt "$timestamp" \
+            --arg name "$name" \
+            '{
+                baseBranch: $baseBranch,
+                createdBy: $createdBy,
+                createdAt: $createdAt,
+                ralphs: [$name]
+            }')
+
+        tmp_config=$(mktemp)
+        jq --arg branch "$branch" \
+           --argjson entry "$branch_entry" \
+           --arg timestamp "$timestamp" \
+           '.branches[$branch] = $entry | .lastUpdate = $timestamp' \
+           "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+    fi
+
+    print_success "Ralph '$name' spawned successfully!"
+    echo ""
+    echo "Branch: $branch (attached)"
+    echo "Worktree: $worktree_path"
+    if [[ -n "$scope" ]]; then
+        echo "Scope: $scope"
+    fi
+
+    # Show warning if other Ralphs are already on this branch
+    local ralph_count=$(jq --arg branch "$branch" '.branches[$branch].ralphs | length' "$CONFIG_FILE")
+    if [[ "$ralph_count" -gt 1 ]]; then
+        echo ""
+        print_warning "Multiple Ralphs ($ralph_count) are now attached to branch '$branch'."
+        print_warning "Consider using --scope to partition work and avoid conflicts."
+    fi
+
+    echo ""
+    echo "Next steps:"
+    echo "  1. Start the Ralph: hive.sh start $name [prompt]"
+    echo "  2. Check status: hive.sh status"
 }
 
 # ============================================================================
