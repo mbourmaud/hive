@@ -23,6 +23,7 @@ VERSION="0.2.0"
 # Configuration
 HIVE_DIR=".hive"
 CONFIG_FILE="$HIVE_DIR/config.json"
+PRDS_DIR="$HIVE_DIR/prds"
 DRONES_DIR="$HIVE_DIR/drones"
 
 # ============================================================================
@@ -74,14 +75,13 @@ cmd_init() {
 
     print_info "Initializing Hive..."
 
-    mkdir -p "$HIVE_DIR" "$DRONES_DIR"
+    mkdir -p "$HIVE_DIR" "$PRDS_DIR" "$DRONES_DIR"
 
     if [ ! -f "$CONFIG_FILE" ]; then
         cat > "$CONFIG_FILE" << EOF
 {
   "version": "$VERSION",
   "project": "$(get_project_name)",
-  "drones": [],
   "created": "$(get_timestamp)"
 }
 EOF
@@ -95,6 +95,11 @@ EOF
     fi
 
     print_success "Hive initialized in $(get_project_name)"
+    print_info "Structure created:"
+    print_info "  .hive/"
+    print_info "  ├── config.json"
+    print_info "  ├── prds/        <- Put your PRD files here"
+    print_info "  └── drones/      <- Drone status files"
 }
 
 # ============================================================================
@@ -178,23 +183,24 @@ cmd_run() {
     local project_root=$(get_project_root)
     local project_name=$(get_project_name)
     local branch_name="hive/$drone_name"
-    local worktree_path="$project_root/$DRONES_DIR/$drone_name"
     local external_worktree="/Users/fr162241/Projects/${project_name}-${drone_name}"
+    local drone_status_dir="$HIVE_DIR/drones/$drone_name"
+    local drone_status_file="$drone_status_dir/status.json"
 
     print_drone "Launching drone: $drone_name"
     print_info "PRD: $prd_file"
     print_info "Branch: $branch_name (from $base_branch)"
 
     # Check if drone already exists
-    if [ -d "$worktree_path" ] || [ -d "$external_worktree" ]; then
+    if [ -d "$external_worktree" ]; then
         print_warning "Drone $drone_name already exists"
         read -p "Remove and recreate? [y/N] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             cmd_kill "$drone_name" 2>/dev/null || true
-            git worktree remove "$worktree_path" --force 2>/dev/null || true
             git worktree remove "$external_worktree" --force 2>/dev/null || true
             git branch -D "$branch_name" 2>/dev/null || true
+            rm -rf "$drone_status_dir" 2>/dev/null || true
         else
             exit 1
         fi
@@ -211,16 +217,26 @@ cmd_run() {
     mkdir -p "$(dirname "$external_worktree")"
     git worktree add "$external_worktree" "$branch_name"
 
-    # Copy PRD
-    cp "$prd_file" "$external_worktree/prd.json"
+    # Create symlink to .hive in worktree (shared state!)
+    print_info "Linking .hive to worktree (shared state)..."
+    ln -sf "$project_root/$HIVE_DIR" "$external_worktree/.hive"
 
-    # Create initial status file
+    # Copy PRD to .hive/prds/ if not already there
+    local prd_basename=$(basename "$prd_file")
+    if [ ! -f "$PRDS_DIR/$prd_basename" ]; then
+        cp "$prd_file" "$PRDS_DIR/$prd_basename"
+        print_info "PRD copied to .hive/prds/$prd_basename"
+    fi
+
+    # Create drone status directory and file (in shared .hive)
+    mkdir -p "$drone_status_dir"
     local total_stories=$(jq '.stories | length' "$prd_file")
-    cat > "$external_worktree/drone-status.json" << EOF
+    cat > "$drone_status_file" << EOF
 {
   "drone": "$drone_name",
-  "prd": "$(basename "$prd_file")",
+  "prd": "$prd_basename",
   "branch": "$branch_name",
+  "worktree": "$external_worktree",
   "status": "starting",
   "current_story": null,
   "completed": [],
@@ -230,34 +246,30 @@ cmd_run() {
 }
 EOF
 
-    # Register drone in config
-    local tmp_config=$(mktemp)
-    jq --arg name "$drone_name" \
-       --arg path "$external_worktree" \
-       --arg branch "$branch_name" \
-       --arg prd "$(basename "$prd_file")" \
-       '.drones += [{"name": $name, "path": $path, "branch": $branch, "prd": $prd, "started": now | strftime("%Y-%m-%dT%H:%M:%SZ")}]' \
-       "$CONFIG_FILE" > "$tmp_config" && mv "$tmp_config" "$CONFIG_FILE"
+    # Also create a symlink in worktree for backwards compatibility
+    ln -sf "$project_root/$drone_status_file" "$external_worktree/drone-status.json"
 
     print_success "Drone $drone_name ready!"
     print_info "Worktree: $external_worktree"
+    print_info "Shared .hive linked (queen can monitor)"
 
     # Build the drone prompt
     local drone_prompt="Tu es un drone Hive, un agent autonome qui exécute des PRDs.
 
 **WORKING DIRECTORY**: $external_worktree
-**PRD FILE**: $external_worktree/prd.json
+**PRD FILE**: $external_worktree/.hive/prds/$prd_basename
+**STATUS FILE**: $external_worktree/.hive/drones/$drone_name/status.json
 **BRANCH**: $branch_name
 
 IMPORTANT: Toutes tes opérations doivent être dans le répertoire $external_worktree
 
 ## Ta mission
 
-1. Lis le fichier prd.json pour comprendre les stories à implémenter
+1. Lis le fichier PRD pour comprendre les stories à implémenter
 2. Pour chaque story:
    - Implémente les changements demandés
    - Commit avec le message \"feat(<STORY-ID>): <description>\"
-3. Après chaque story complétée, mets à jour drone-status.json:
+3. Après chaque story complétée, mets à jour le fichier status.json:
    {
      \"drone\": \"$drone_name\",
      \"status\": \"in_progress\",
@@ -280,7 +292,7 @@ Lis le PRD et implémente story par story. Sois autonome et méthodique."
     echo "$drone_prompt" > "$prompt_file"
 
     # Launch in background with nohup
-    local log_file="$external_worktree/drone.log"
+    local log_file="$drone_status_dir/drone.log"
     nohup claude --print -p "$(cat "$prompt_file")" \
         --model "$model" \
         --max-turns "$iterations" \
@@ -288,12 +300,12 @@ Lis le PRD et implémente story par story. Sois autonome et méthodique."
         > "$log_file" 2>&1 &
 
     local pid=$!
-    echo "$pid" > "$external_worktree/.drone.pid"
+    echo "$pid" > "$drone_status_dir/.pid"
     rm "$prompt_file"
 
     print_success "Drone $drone_name launched! (PID: $pid)"
     print_info "Log: $log_file"
-    print_info "Status: $external_worktree/drone-status.json"
+    print_info "Status: $drone_status_file"
     echo ""
     print_info "Monitor with: hive status"
     print_info "View logs: hive logs $drone_name"
@@ -311,60 +323,62 @@ cmd_status() {
 
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}                    ${YELLOW}🐝 HIVE STATUS${NC}                            ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                    ${YELLOW}👑 HIVE STATUS${NC}                            ${CYAN}║${NC}"
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
 
     local found_drones=0
 
-    # Scan for drone directories
-    for drone_dir in /Users/fr162241/Projects/${project_name}-*/; do
-        [ -d "$drone_dir" ] || continue
+    # Scan for drones in .hive/drones/
+    if [ -d "$DRONES_DIR" ]; then
+        for drone_dir in "$DRONES_DIR"/*/; do
+            [ -d "$drone_dir" ] || continue
 
-        local status_file="$drone_dir/drone-status.json"
-        [ -f "$status_file" ] || continue
+            local status_file="$drone_dir/status.json"
+            [ -f "$status_file" ] || continue
 
-        found_drones=$((found_drones + 1))
+            found_drones=$((found_drones + 1))
 
-        local drone_name=$(basename "$drone_dir" | sed "s/${project_name}-//")
-        local status=$(jq -r '.status // "unknown"' "$status_file")
-        local current=$(jq -r '.current_story // "n/a"' "$status_file")
-        local completed=$(jq -r '.completed | length // 0' "$status_file")
-        local total=$(jq -r '.total // "?"' "$status_file")
-        local updated=$(jq -r '.updated // ""' "$status_file")
-        local pid_file="$drone_dir/.drone.pid"
-        local running="no"
+            local drone_name=$(basename "$drone_dir")
+            local status=$(jq -r '.status // "unknown"' "$status_file")
+            local current=$(jq -r '.current_story // "n/a"' "$status_file")
+            local completed=$(jq -r '.completed | length // 0' "$status_file")
+            local total=$(jq -r '.total // "?"' "$status_file")
+            local worktree=$(jq -r '.worktree // ""' "$status_file")
+            local pid_file="$drone_dir/.pid"
+            local running="no"
 
-        if [ -f "$pid_file" ]; then
-            local pid=$(cat "$pid_file")
-            if ps -p "$pid" > /dev/null 2>&1; then
-                running="yes"
-            fi
-        fi
-
-        # Status icon
-        local icon="⏸️"
-        local color="$NC"
-        case "$status" in
-            "in_progress"|"starting")
-                if [ "$running" = "yes" ]; then
-                    icon="🔄"
-                    color="$CYAN"
-                else
-                    icon="⏸️"
-                    color="$YELLOW"
+            if [ -f "$pid_file" ]; then
+                local pid=$(cat "$pid_file")
+                if ps -p "$pid" > /dev/null 2>&1; then
+                    running="yes"
                 fi
-                ;;
-            "completed") icon="✅"; color="$GREEN" ;;
-            "error") icon="❌"; color="$RED" ;;
-        esac
+            fi
 
-        echo -e "${CYAN}║${NC}  ${color}$icon $drone_name${NC}"
-        echo -e "${CYAN}║${NC}     Progress: ${GREEN}$completed${NC}/${total} stories"
-        echo -e "${CYAN}║${NC}     Current:  $current"
-        echo -e "${CYAN}║${NC}     Status:   $status (running: $running)"
-        echo -e "${CYAN}║${NC}     Path:     $drone_dir"
-        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
-    done
+            # Status icon
+            local icon="⏸️"
+            local color="$NC"
+            case "$status" in
+                "in_progress"|"starting")
+                    if [ "$running" = "yes" ]; then
+                        icon="🔄"
+                        color="$CYAN"
+                    else
+                        icon="⏸️"
+                        color="$YELLOW"
+                    fi
+                    ;;
+                "completed") icon="✅"; color="$GREEN" ;;
+                "error") icon="❌"; color="$RED" ;;
+            esac
+
+            echo -e "${CYAN}║${NC}  ${color}$icon 🐝 $drone_name${NC}"
+            echo -e "${CYAN}║${NC}     Progress: ${GREEN}$completed${NC}/${total} stories"
+            echo -e "${CYAN}║${NC}     Current:  $current"
+            echo -e "${CYAN}║${NC}     Status:   $status (running: $running)"
+            echo -e "${CYAN}║${NC}     Worktree: $worktree"
+            echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
+        done
+    fi
 
     if [ $found_drones -eq 0 ]; then
         echo -e "${CYAN}║${NC}  No active drones found"
@@ -397,8 +411,7 @@ cmd_logs() {
         exit 1
     fi
 
-    local project_name=$(get_project_name)
-    local log_file="/Users/fr162241/Projects/${project_name}-${drone_name}/drone.log"
+    local log_file="$DRONES_DIR/$drone_name/drone.log"
 
     if [ ! -f "$log_file" ]; then
         print_error "Log file not found: $log_file"
@@ -425,9 +438,7 @@ cmd_kill() {
         exit 1
     fi
 
-    local project_name=$(get_project_name)
-    local drone_dir="/Users/fr162241/Projects/${project_name}-${drone_name}"
-    local pid_file="$drone_dir/.drone.pid"
+    local pid_file="$DRONES_DIR/$drone_name/.pid"
 
     if [ -f "$pid_file" ]; then
         local pid=$(cat "$pid_file")
@@ -463,8 +474,17 @@ cmd_clean() {
     check_git_repo
 
     local project_name=$(get_project_name)
-    local drone_dir="/Users/fr162241/Projects/${project_name}-${drone_name}"
+    local drone_status_dir="$DRONES_DIR/$drone_name"
+    local worktree_path=""
     local branch_name="hive/$drone_name"
+
+    # Get worktree path from status file if exists
+    if [ -f "$drone_status_dir/status.json" ]; then
+        worktree_path=$(jq -r '.worktree // ""' "$drone_status_dir/status.json")
+    fi
+
+    # Fallback to default path
+    [ -z "$worktree_path" ] && worktree_path="/Users/fr162241/Projects/${project_name}-${drone_name}"
 
     if [ "$force" = false ]; then
         read -p "Remove drone $drone_name and its worktree? [y/N] " -n 1 -r
@@ -476,21 +496,21 @@ cmd_clean() {
     cmd_kill "$drone_name" 2>/dev/null || true
 
     # Remove worktree
-    if [ -d "$drone_dir" ]; then
-        git worktree remove "$drone_dir" --force 2>/dev/null || {
+    if [ -d "$worktree_path" ]; then
+        git worktree remove "$worktree_path" --force 2>/dev/null || {
             print_warning "Could not remove worktree, deleting directory..."
-            rm -rf "$drone_dir"
+            rm -rf "$worktree_path"
         }
-        print_success "Removed worktree: $drone_dir"
+        print_success "Removed worktree: $worktree_path"
     fi
 
     # Remove branch
     git branch -D "$branch_name" 2>/dev/null && print_success "Removed branch: $branch_name"
 
-    # Update config
-    if [ -f "$CONFIG_FILE" ]; then
-        local tmp=$(mktemp)
-        jq --arg name "$drone_name" '.drones = [.drones[] | select(.name != $name)]' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    # Remove drone status directory
+    if [ -d "$drone_status_dir" ]; then
+        rm -rf "$drone_status_dir"
+        print_success "Removed drone status: $drone_status_dir"
     fi
 
     print_success "Drone $drone_name cleaned up"
@@ -504,22 +524,31 @@ cmd_list() {
     check_git_repo
     local project_name=$(get_project_name)
 
-    echo -e "${YELLOW}Active drones for $project_name:${NC}"
+    echo -e "${YELLOW}👑 Active drones for $project_name:${NC}"
     echo ""
 
     local count=0
-    for drone_dir in /Users/fr162241/Projects/${project_name}-*/; do
-        [ -d "$drone_dir" ] || continue
-        [ -f "$drone_dir/drone-status.json" ] || continue
+    if [ -d "$DRONES_DIR" ]; then
+        for drone_dir in "$DRONES_DIR"/*/; do
+            [ -d "$drone_dir" ] || continue
+            [ -f "$drone_dir/status.json" ] || continue
 
-        local name=$(basename "$drone_dir" | sed "s/${project_name}-//")
-        local status=$(jq -r '.status // "unknown"' "$drone_dir/drone-status.json")
-        local completed=$(jq -r '.completed | length // 0' "$drone_dir/drone-status.json")
-        local total=$(jq -r '.total // "?"' "$drone_dir/drone-status.json")
+            local name=$(basename "$drone_dir")
+            local status=$(jq -r '.status // "unknown"' "$drone_dir/status.json")
+            local completed=$(jq -r '.completed | length // 0' "$drone_dir/status.json")
+            local total=$(jq -r '.total // "?"' "$drone_dir/status.json")
 
-        echo -e "  🐝 ${CYAN}$name${NC} - $status ($completed/$total)"
-        count=$((count + 1))
-    done
+            local status_icon=""
+            case "$status" in
+                "completed") status_icon="✓" ;;
+                "error") status_icon="✗" ;;
+                *) status_icon="" ;;
+            esac
+
+            echo -e "  🐝 ${CYAN}$name${NC} $status_icon ($completed/$total)"
+            count=$((count + 1))
+        done
+    fi
 
     [ $count -eq 0 ] && echo "  No active drones"
     echo ""
