@@ -21,7 +21,7 @@ else
 fi
 
 REPO_URL="https://raw.githubusercontent.com/mbourmaud/hive/main"
-VERSION="1.1.1"
+VERSION="1.2.0"
 
 echo ""
 echo -e "${YELLOW}👑 Hive${RESET} v$VERSION - Drone Orchestration for Claude Code"
@@ -47,6 +47,11 @@ fi
 curl -sL -o "$INSTALL_DIR/hive" "$REPO_URL/hive.sh"
 chmod +x "$INSTALL_DIR/hive"
 echo -e "${GREEN}✓${RESET} CLI installed to $INSTALL_DIR/hive"
+
+# Download hive-hook (for PostToolUse notifications)
+curl -sL -o "$INSTALL_DIR/hive-hook" "$REPO_URL/hive-hook.sh"
+chmod +x "$INSTALL_DIR/hive-hook"
+echo -e "${GREEN}✓${RESET} Hook installed to $INSTALL_DIR/hive-hook"
 
 # Check if install dir is in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -91,6 +96,38 @@ for skill in "${SKILLS[@]}"; do
 done
 
 echo -e "${GREEN}✓${RESET} ${#SKILLS[@]} skills installed to ~/.claude/commands/"
+
+# ============================================================================
+# Configure PostToolUse Hook (optional)
+# ============================================================================
+
+echo ""
+echo -e "${CYAN}Configuring notifications hook...${RESET}"
+
+# Check if hooks are already configured
+if grep -q "hive-hook" "$HOME/.claude/settings.json" 2>/dev/null; then
+  echo -e "${GREEN}✓${RESET} Hook already configured in settings.json"
+else
+  # Try to add hook to settings.json
+  if [ -f "$HOME/.claude/settings.json" ]; then
+    # Check if hooks section exists
+    if jq -e '.hooks' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
+      # Add to existing hooks
+      jq '.hooks.PostToolUse = [{"matcher": "Bash", "hooks": [{"type": "command", "command": "hive-hook"}]}]' \
+        "$HOME/.claude/settings.json" > /tmp/settings.tmp && mv /tmp/settings.tmp "$HOME/.claude/settings.json"
+      echo -e "${GREEN}✓${RESET} Hook added to existing settings.json"
+    else
+      # Add hooks section
+      jq '. + {"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "hive-hook"}]}]}}' \
+        "$HOME/.claude/settings.json" > /tmp/settings.tmp && mv /tmp/settings.tmp "$HOME/.claude/settings.json"
+      echo -e "${GREEN}✓${RESET} Hook added to settings.json"
+    fi
+  else
+    echo -e "${YELLOW}⚠${RESET} settings.json not found, hook not configured"
+    echo "  Add manually to ~/.claude/settings.json:"
+    echo '  "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "hive-hook"}]}]}'
+  fi
+fi
 
 # ============================================================================
 # Install Icon for Notifications
