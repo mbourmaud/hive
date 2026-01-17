@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Configuration
 HIVE_DIR=".hive"
@@ -43,6 +43,68 @@ print_error() { echo -e "${RED}✗${NC} $1" >&2; }
 print_drone() { echo -e "${CYAN}🐝${NC} $1"; }
 
 get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+
+# ============================================================================
+# Notification Functions (cross-platform)
+# ============================================================================
+
+# Send a desktop notification (works on macOS, Linux, and Windows/WSL)
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local sound="${3:-true}"  # Play sound by default
+
+    # macOS
+    if command -v osascript &>/dev/null; then
+        local sound_param=""
+        [ "$sound" = "true" ] && sound_param='sound name "Glass"'
+        osascript -e "display notification \"$message\" with title \"$title\" $sound_param" 2>/dev/null || true
+        return
+    fi
+
+    # Linux with notify-send (GNOME, KDE, etc.)
+    if command -v notify-send &>/dev/null; then
+        notify-send "$title" "$message" --icon=dialog-information 2>/dev/null || true
+        # Play sound on Linux if paplay available
+        if [ "$sound" = "true" ] && command -v paplay &>/dev/null; then
+            paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null &
+        fi
+        return
+    fi
+
+    # Windows (WSL) using PowerShell
+    if command -v powershell.exe &>/dev/null; then
+        powershell.exe -Command "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; \$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); \$template.SelectSingleNode('//text[@id=\"1\"]').InnerText = '$title'; \$template.SelectSingleNode('//text[@id=\"2\"]').InnerText = '$message'; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Hive').Show([Windows.UI.Notifications.ToastNotification]::new(\$template))" 2>/dev/null || true
+        return
+    fi
+
+    # Fallback: terminal bell
+    if [ "$sound" = "true" ]; then
+        printf '\a'
+    fi
+}
+
+# Notify drone started
+notify_drone_started() {
+    local drone_name="$1"
+    local total_stories="$2"
+    send_notification "🐝 Hive - Drone Started" "$drone_name: $total_stories stories to implement"
+}
+
+# Notify drone completed
+notify_drone_completed() {
+    local drone_name="$1"
+    local completed="$2"
+    local total="$3"
+    send_notification "🎉 Hive - Drone Completed" "$drone_name: $completed/$total stories done!"
+}
+
+# Notify drone error
+notify_drone_error() {
+    local drone_name="$1"
+    local error_msg="$2"
+    send_notification "❌ Hive - Drone Error" "$drone_name: $error_msg"
+}
 
 check_git_repo() {
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
@@ -428,8 +490,53 @@ LOG_FILE="$DRONE_DIR/drone.log"
 STATUS_FILE="$DRONE_DIR/status.json"
 ACTIVITY_LOG="$DRONE_DIR/activity.log"
 
+# ============================================================================
+# Notification function (embedded in launcher for independence)
+# ============================================================================
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local sound="${3:-true}"
+
+    # macOS
+    if command -v osascript &>/dev/null; then
+        local sound_param=""
+        [ "$sound" = "true" ] && sound_param='sound name "Glass"'
+        osascript -e "display notification \"$message\" with title \"$title\" $sound_param" 2>/dev/null || true
+        return
+    fi
+
+    # Linux with notify-send
+    if command -v notify-send &>/dev/null; then
+        notify-send "$title" "$message" --icon=dialog-information 2>/dev/null || true
+        if [ "$sound" = "true" ] && command -v paplay &>/dev/null; then
+            paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null &
+        fi
+        return
+    fi
+
+    # Windows (WSL)
+    if command -v powershell.exe &>/dev/null; then
+        powershell.exe -Command "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; \$t = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); \$t.SelectSingleNode('//text[@id=\"1\"]').InnerText = '$title'; \$t.SelectSingleNode('//text[@id=\"2\"]').InnerText = '$message'; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Hive').Show([Windows.UI.Notifications.ToastNotification]::new(\$t))" 2>/dev/null || true
+        return
+    fi
+
+    # Fallback: terminal bell
+    [ "$sound" = "true" ] && printf '\a'
+}
+
+# ============================================================================
+# Drone Loop
+# ============================================================================
+
 echo "Starting drone loop: $MAX_ITERATIONS iterations max" >> "$LOG_FILE"
 echo "Working directory: $WORKTREE" >> "$LOG_FILE"
+
+# Get total stories for notification
+TOTAL=$(jq -r '.total // 0' "$STATUS_FILE" 2>/dev/null)
+
+# 🔔 Notification: Drone started
+send_notification "🐝 Hive - Drone Started" "$DRONE_NAME: $TOTAL stories"
 
 for i in $(seq 1 "$MAX_ITERATIONS"); do
     echo "" >> "$LOG_FILE"
@@ -443,6 +550,9 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         if [ "$STATUS" = "completed" ]; then
             echo "" >> "$LOG_FILE"
             echo "🎉 All stories completed! Drone finished at iteration $i." >> "$LOG_FILE"
+            # 🔔 Notification: Drone completed
+            COMPLETED=$(jq -r '.completed | length // 0' "$STATUS_FILE" 2>/dev/null)
+            send_notification "🎉 Hive - Drone Completed!" "$DRONE_NAME: $COMPLETED/$TOTAL stories done"
             exit 0
         fi
 
@@ -453,6 +563,8 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
             jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.status = "completed" | .current_story = null | .updated = $ts' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
             echo "" >> "$LOG_FILE"
             echo "🎉 All $TOTAL stories completed! Drone finished at iteration $i." >> "$LOG_FILE"
+            # 🔔 Notification: Drone completed
+            send_notification "🎉 Hive - Drone Completed!" "$DRONE_NAME: $COMPLETED/$TOTAL stories done"
             exit 0
         fi
     fi
@@ -472,6 +584,10 @@ echo "" >> "$LOG_FILE"
 echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
 echo "  Drone reached max iterations ($MAX_ITERATIONS)" >> "$LOG_FILE"
 echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
+
+# 🔔 Notification: Drone paused (reached max iterations)
+COMPLETED=$(jq -r '.completed | length // 0' "$STATUS_FILE" 2>/dev/null)
+send_notification "⏸️ Hive - Drone Paused" "$DRONE_NAME: $COMPLETED/$TOTAL (max iterations reached)"
 
 # Mark as paused, not error
 jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.updated = $ts' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
