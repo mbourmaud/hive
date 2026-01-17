@@ -1,4 +1,4 @@
-# 🐝 Hive
+# 👑 Hive
 
 **Drone Orchestration for Claude Code**
 
@@ -14,8 +14,11 @@ Launch autonomous Claude agents (drones) on PRD files. Each drone works in its o
 # Install
 make install
 
+# Initialize Hive in your project
+hive init
+
 # Launch a drone on a PRD
-hive run --prd prd-security.json
+hive start --prd .hive/prds/prd-security.json
 
 # Monitor progress
 hive status
@@ -33,14 +36,17 @@ hive clean security
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Your terminal (main branch)                                │
+│  👑 Queen (main branch)                                     │
 │  You + Claude working on features                           │
+│  .hive/ folder with shared state                            │
 ├─────────────────────────────────────────────────────────────┤
 │  🐝 Drone: security (hive/security branch)                  │
 │  Autonomously implementing SEC-001 → SEC-010                │
+│  .hive/ symlinked from queen                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🐝 Drone: feature-x (hive/feature-x branch)                │
 │  Autonomously implementing FEAT-001 → FEAT-005              │
+│  .hive/ symlinked from queen                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -56,7 +62,7 @@ hive clean security
 
 | Command | Description |
 |---------|-------------|
-| `hive run --prd <file>` | Launch a drone on a PRD |
+| `hive start --prd <file>` | Launch a drone on a PRD |
 | `hive status` | Show status of all drones |
 | `hive list` | List active drones |
 | `hive logs <name>` | View drone logs |
@@ -70,10 +76,10 @@ Run `hive <command> --help` for detailed options.
 
 ---
 
-## Run Options
+## Start Options
 
 ```bash
-hive run --prd <file> [options]
+hive start --prd <file> [options]
 
 Options:
   --prd <file>        PRD JSON file (required)
@@ -87,21 +93,23 @@ Options:
 
 ```bash
 # Simple - uses PRD id as drone name
-hive run --prd prd-security.json
+hive start --prd .hive/prds/prd-security.json
 
 # Custom name and base branch
-hive run --prd feature.json --name auth-feature --base develop
+hive start --prd feature.json --name auth-feature --base develop
 
 # More iterations for complex PRDs
-hive run --prd big-refactor.json --iterations 100
+hive start --prd big-refactor.json --iterations 100
 
 # Use faster model
-hive run --prd small-task.json --model sonnet
+hive start --prd small-task.json --model sonnet
 ```
 
 ---
 
 ## PRD Format
+
+PRDs are stored in `.hive/prds/`:
 
 ```json
 {
@@ -134,50 +142,67 @@ hive run --prd small-task.json --model sonnet
 
 ---
 
-## Statusline Integration
+## Claude Code Integration
 
-Add drone tracking to your Claude Code statusline:
+Use these skills in Claude Code:
+
+| Skill | Description |
+|-------|-------------|
+| `/hive:start` | Interactive drone launch wizard |
+| `/hive:prd` | Generate a PRD from feature description |
+| `/hive:statusline` | Configure statusline with drone tracking |
+
+### Statusline
+
+After running `/hive:statusline`, your statusline shows:
 
 ```
-/hive-statusline
-```
-
-This displays active drones in your statusline:
-
-```
-project │ main │ Opus │ 🐝 security (4/10) │ 🐝 feature (2/5)
+project │ main │ Opus 4.5 │ 45% │ ⬢ 22
+👑 Hive v0.2.0 | 🐝 security (4/10) | 🐝 feature ✓ (5/5)
 ```
 
 ---
 
 ## How it works
 
-1. **Branch Creation**: Creates `hive/<drone-name>` from base branch
-2. **Worktree**: Creates isolated worktree at `~/Projects/{project}-{drone}/`
-3. **PRD Copy**: Copies PRD to worktree as `prd.json`
-4. **Claude Launch**: Starts Claude agent in background with PRD instructions
-5. **Status Tracking**: Drone updates `drone-status.json` as it completes stories
-6. **Commits**: Each story = one commit with `feat(<STORY-ID>): description`
+1. **Init**: `hive init` creates `.hive/` folder (gitignored)
+2. **PRD**: Store PRDs in `.hive/prds/`
+3. **Branch**: Creates `hive/<drone-name>` from base branch
+4. **Worktree**: Creates `~/Projects/{project}-{drone}/`
+5. **Symlink**: Links `.hive/` to worktree (shared state!)
+6. **Launch**: Starts Claude agent in background
+7. **Track**: Drone updates `.hive/drones/<name>/status.json`
+8. **Commits**: Each story = one commit with `feat(<STORY-ID>): description`
 
 ---
 
 ## File Structure
 
 ```
-your-project/
-├── .hive/
-│   └── config.json      # Hive configuration
-└── prd-*.json           # Your PRD files
+your-project/                      # 👑 Queen (main repo)
+├── .hive/                         # Shared state (gitignored)
+│   ├── config.json
+│   ├── prds/                      # PRD files here
+│   │   └── prd-security.json
+│   └── drones/                    # Drone state
+│       └── security/
+│           ├── status.json        # Progress tracking
+│           ├── drone.log          # Output log
+│           └── .pid               # Process ID
 
 ~/Projects/
-├── your-project/            # Main repo (you work here)
-├── your-project-security/   # Drone worktree
-│   ├── prd.json
-│   ├── drone-status.json
-│   ├── drone.log
-│   └── .drone.pid
-└── your-project-feature/    # Another drone
+├── your-project/                  # Queen
+├── your-project-security/         # 🐝 Drone worktree
+│   ├── .hive -> ../your-project/.hive  # Symlink!
+│   └── (project files)
+└── your-project-feature/          # 🐝 Another drone
+    └── .hive -> ../your-project/.hive
 ```
+
+The `.hive/` symlink enables **queen ↔ drone communication**:
+- Queen can monitor drone progress in real-time
+- Drones share PRDs from the same source
+- Status updates are immediately visible
 
 ---
 
@@ -221,7 +246,7 @@ Make sure you're in a git repository before running hive commands.
 Install jq: `brew install jq` (macOS) or `apt install jq` (Ubuntu).
 
 ### Drone process died
-Check logs with `hive logs <name>`. Restart with `hive run --prd ...`.
+Check logs with `hive logs <name>`. Restart with `hive start --prd ...`.
 
 ### Worktree conflicts
 Use `hive clean -f <name>` to force cleanup, then retry.
@@ -234,4 +259,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-Made with 🐝 by [@mbourmaud](https://github.com/mbourmaud)
+Made with 👑 by [@mbourmaud](https://github.com/mbourmaud)

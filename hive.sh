@@ -103,15 +103,15 @@ EOF
 }
 
 # ============================================================================
-# Run Command - Launch a drone on a PRD
+# Start Command - Launch a drone on a PRD
 # ============================================================================
 
-show_run_usage() {
+show_start_usage() {
     cat << EOF
-${CYAN}hive run${NC} - Launch a drone on a PRD file
+${CYAN}hive start${NC} - Launch a drone on a PRD file
 
 ${YELLOW}Usage:${NC}
-  hive run --prd <file> [options]
+  hive start --prd <file> [options]
 
 ${YELLOW}Required:${NC}
   --prd <file>        PRD JSON file to execute
@@ -124,16 +124,16 @@ ${YELLOW}Options:${NC}
   --help, -h          Show this help
 
 ${YELLOW}Examples:${NC}
-  hive run --prd prd-security.json
-  hive run --prd feature.json --name feature-auth --base develop
-  hive run --prd prd.json --iterations 100 --model sonnet
+  hive start --prd prd-security.json
+  hive start --prd .hive/prds/feature.json --name feature-auth
+  hive start --prd prd.json --iterations 100 --model sonnet
 
 ${YELLOW}What it does:${NC}
   1. Creates branch hive/<name> from base
-  2. Creates worktree in .hive/drones/<name>/
-  3. Copies PRD to worktree
+  2. Creates worktree at ~/Projects/{project}-{drone}/
+  3. Symlinks .hive/ to worktree (shared state)
   4. Launches Claude agent in background
-  5. Updates drone-status.json for tracking
+  5. Updates .hive/drones/<name>/status.json for tracking
 EOF
 }
 
@@ -152,8 +152,8 @@ cmd_run() {
             --base) base_branch="$2"; shift 2 ;;
             --iterations) iterations="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
-            --help|-h) show_run_usage; exit 0 ;;
-            *) print_error "Unknown option: $1"; show_run_usage; exit 1 ;;
+            --help|-h) show_start_usage; exit 0 ;;
+            *) print_error "Unknown option: $1"; show_start_usage; exit 1 ;;
         esac
     done
 
@@ -576,7 +576,7 @@ ${CYAN}Usage:${NC}
   hive <command> [options]
 
 ${CYAN}Commands:${NC}
-  ${GREEN}run${NC}      Launch a drone on a PRD file
+  ${GREEN}start${NC}    Launch a drone on a PRD file
   ${GREEN}status${NC}   Show status of all drones
   ${GREEN}list${NC}     List active drones
   ${GREEN}logs${NC}     View drone logs
@@ -587,14 +587,14 @@ ${CYAN}Commands:${NC}
   ${GREEN}help${NC}     Show this help
 
 ${CYAN}Quick Start:${NC}
-  hive run --prd prd-feature.json
+  hive start --prd prd-feature.json
   hive status
   hive logs my-feature
   hive kill my-feature
 
 ${CYAN}Examples:${NC}
   # Launch a drone on a PRD
-  hive run --prd security.json --name security --base main
+  hive start --prd .hive/prds/security.json --name security
 
   # Monitor progress
   hive status
@@ -619,7 +619,8 @@ main() {
     shift || true
 
     case "$command" in
-        run)     cmd_run "$@" ;;
+        start)   cmd_run "$@" ;;
+        run)     cmd_run "$@" ;;  # alias for backwards compat
         status)  cmd_status "$@" ;;
         list)    cmd_list "$@" ;;
         logs)    cmd_logs "$@" ;;
