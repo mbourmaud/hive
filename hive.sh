@@ -259,6 +259,7 @@ EOF
 **WORKING DIRECTORY**: $external_worktree
 **PRD FILE**: $external_worktree/.hive/prds/$prd_basename
 **STATUS FILE**: $external_worktree/.hive/drones/$drone_name/status.json
+**ACTIVITY LOG**: $external_worktree/.hive/drones/$drone_name/activity.log
 **BRANCH**: $branch_name
 
 IMPORTANT: Toutes tes opérations doivent être dans le répertoire $external_worktree
@@ -269,20 +270,62 @@ IMPORTANT: Toutes tes opérations doivent être dans le répertoire $external_wo
 2. Pour chaque story:
    - Implémente les changements demandés
    - Commit avec le message \"feat(<STORY-ID>): <description>\"
-3. Après chaque story complétée, mets à jour le fichier status.json:
-   {
-     \"drone\": \"$drone_name\",
-     \"status\": \"in_progress\",
-     \"current_story\": \"<STORY-ID>\",
-     \"completed\": [\"STORY-001\", ...],
-     \"total\": $total_stories,
-     \"updated\": \"<ISO timestamp>\"
-   }
-4. Quand toutes les stories sont terminées, mets status à \"completed\"
+3. Mets à jour status.json ET activity.log après chaque action importante
+
+## Logging (TRÈS IMPORTANT)
+
+### Activity Log (activity.log)
+Après CHAQUE action importante, ajoute une ligne au fichier activity.log avec ce format:
+\`[HH:MM:SS] <emoji> <message>\`
+
+Emojis à utiliser:
+- 🚀 Démarrage du drone
+- 📖 Lecture du PRD
+- 🔨 Début d'une story
+- 📝 Modification d'un fichier
+- ✅ Story complétée
+- 💾 Commit effectué
+- ⚠️ Problème rencontré
+- 🎉 Toutes les stories terminées
+
+Exemple de activity.log:
+\`\`\`
+[10:30:15] 🚀 Drone démarré
+[10:30:20] 📖 PRD chargé: 10 stories à implémenter
+[10:32:00] 🔨 Début SEC-001: Protect /api/accounts
+[10:33:15] 📝 Modification: src/app/api/accounts/route.ts
+[10:34:00] 📝 Modification: src/lib/auth.ts
+[10:35:22] 💾 Commit: feat(SEC-001): Add auth to accounts API
+[10:35:22] ✅ SEC-001 terminée
+[10:35:30] 🔨 Début SEC-002: Protect /api/users
+\`\`\`
+
+### Status JSON (status.json)
+Mets à jour après chaque story:
+{
+  \"drone\": \"$drone_name\",
+  \"status\": \"in_progress\",
+  \"current_story\": \"<STORY-ID>\",
+  \"completed\": [\"STORY-001\", ...],
+  \"total\": $total_stories,
+  \"updated\": \"<ISO timestamp>\",
+  \"logs\": [
+    {\"time\": \"HH:MM:SS\", \"event\": \"story_start\", \"story\": \"SEC-001\", \"message\": \"Protect /api/accounts\"},
+    {\"time\": \"HH:MM:SS\", \"event\": \"file_edit\", \"story\": \"SEC-001\", \"message\": \"src/app/api/accounts/route.ts\"},
+    {\"time\": \"HH:MM:SS\", \"event\": \"story_complete\", \"story\": \"SEC-001\", \"message\": \"Committed\"}
+  ]
+}
+
+Events possibles: started, prd_loaded, story_start, file_edit, file_create, commit, story_complete, error, completed
 
 ## Commence maintenant
 
-Lis le PRD et implémente story par story. Sois autonome et méthodique."
+1. Écris dans activity.log: \"[HH:MM:SS] 🚀 Drone démarré\"
+2. Lis le PRD
+3. Écris dans activity.log: \"[HH:MM:SS] 📖 PRD chargé: X stories à implémenter\"
+4. Implémente story par story, en loggant chaque action
+
+Sois autonome et méthodique."
 
     # Launch Claude in background
     print_info "Launching Claude agent..."
@@ -397,31 +440,67 @@ cmd_status() {
 # ============================================================================
 
 cmd_logs() {
-    local drone_name="$1"
+    local drone_name=""
     local follow=false
+    local raw=false
 
-    if [ "$drone_name" = "-f" ]; then
-        follow=true
-        drone_name="$2"
-    fi
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--follow) follow=true; shift ;;
+            --raw) raw=true; shift ;;
+            *) drone_name="$1"; shift ;;
+        esac
+    done
 
     if [ -z "$drone_name" ]; then
         print_error "Drone name required"
-        echo "Usage: hive logs [-f] <drone-name>"
+        echo "Usage: hive logs [-f] [--raw] <drone-name>"
+        echo ""
+        echo "Options:"
+        echo "  -f, --follow    Follow log output"
+        echo "  --raw           Show raw drone.log instead of activity.log"
         exit 1
     fi
 
-    local log_file="$DRONES_DIR/$drone_name/drone.log"
+    local drone_dir="$DRONES_DIR/$drone_name"
+    local activity_log="$drone_dir/activity.log"
+    local raw_log="$drone_dir/drone.log"
+    local status_file="$drone_dir/status.json"
+
+    # Choose which log to show
+    local log_file="$activity_log"
+    if [ "$raw" = true ] || [ ! -f "$activity_log" ]; then
+        log_file="$raw_log"
+    fi
 
     if [ ! -f "$log_file" ]; then
         print_error "Log file not found: $log_file"
         exit 1
     fi
 
+    # Show header
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}  ${YELLOW}🐝 Drone: $drone_name${NC}"
+
+    # Show status if available
+    if [ -f "$status_file" ]; then
+        local status=$(jq -r '.status // "unknown"' "$status_file")
+        local completed=$(jq -r '.completed | length // 0' "$status_file")
+        local total=$(jq -r '.total // "?"' "$status_file")
+        local current=$(jq -r '.current_story // "none"' "$status_file")
+        echo -e "${CYAN}║${NC}  Status: $status | Progress: ${GREEN}$completed${NC}/$total | Current: $current"
+    fi
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    # Show logs
     if [ "$follow" = true ]; then
+        echo -e "${BLUE}Following $log_file (Ctrl+C to stop)${NC}"
+        echo ""
         tail -f "$log_file"
     else
-        tail -100 "$log_file"
+        cat "$log_file"
     fi
 }
 
