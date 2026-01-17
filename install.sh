@@ -22,18 +22,16 @@ fi
 
 REPO_URL="https://raw.githubusercontent.com/mbourmaud/hive/main"
 VERSION="0.2.1"
-INSTALLED_CLI=0
-INSTALLED_SKILLS=0
 
 echo ""
-echo "${YELLOW}👑 Hive${RESET} v$VERSION - Drone Orchestration for Claude Code"
+echo -e "${YELLOW}👑 Hive${RESET} v$VERSION - Drone Orchestration for Claude Code"
 echo ""
 
 # ============================================================================
 # Install CLI
 # ============================================================================
 
-echo "${CYAN}Installing CLI...${RESET}"
+echo -e "${CYAN}Installing CLI...${RESET}"
 
 # Determine install directory
 if [ -d "$HOME/.local/bin" ]; then
@@ -48,23 +46,33 @@ fi
 # Download hive CLI
 curl -sL -o "$INSTALL_DIR/hive" "$REPO_URL/hive.sh"
 chmod +x "$INSTALL_DIR/hive"
-printf "${GREEN}✓${RESET} CLI installed to $INSTALL_DIR/hive\n"
-INSTALLED_CLI=1
+echo -e "${GREEN}✓${RESET} CLI installed to $INSTALL_DIR/hive"
 
 # Check if install dir is in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
   echo ""
-  printf "${YELLOW}⚠${RESET} Add $INSTALL_DIR to your PATH:\n"
+  echo -e "${YELLOW}⚠${RESET} Add $INSTALL_DIR to your PATH:"
   echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
   echo ""
 fi
 
 # ============================================================================
-# Install Skills (Claude Code, Cursor, etc.)
+# Install Skills for Claude Code
 # ============================================================================
 
 echo ""
-echo "${CYAN}Installing skills...${RESET}"
+echo -e "${CYAN}Installing Claude Code skills...${RESET}"
+
+# Check if Claude Code is installed
+if [ ! -d "$HOME/.claude" ]; then
+  echo -e "${YELLOW}⚠${RESET} Claude Code not detected (~/.claude not found)"
+  echo "  Install Claude Code first: https://claude.ai/code"
+  echo ""
+  echo -e "${GREEN}✓${RESET} CLI installed. Skills skipped."
+  exit 0
+fi
+
+mkdir -p "$HOME/.claude/commands"
 
 SKILLS=(
   "hive:init"
@@ -78,89 +86,30 @@ SKILLS=(
   "hive:statusline"
 )
 
-# Claude Code
-if [ -d "$HOME/.claude" ]; then
-  mkdir -p "$HOME/.claude/commands"
-  for skill in "${SKILLS[@]}"; do
-    curl -sL -o "$HOME/.claude/commands/$skill.md" "$REPO_URL/commands/$skill.md"
-  done
-  printf "${GREEN}✓${RESET} Claude Code (${#SKILLS[@]} skills)\n"
-  INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-fi
+for skill in "${SKILLS[@]}"; do
+  curl -sL -o "$HOME/.claude/commands/$skill.md" "$REPO_URL/commands/$skill.md"
+done
 
-# Cursor (1.6+)
-if [ -d "$HOME/.cursor" ]; then
-  mkdir -p "$HOME/.cursor/commands"
-  for skill in "${SKILLS[@]}"; do
-    curl -sL -o "$HOME/.cursor/commands/$skill.md" "$REPO_URL/commands/$skill.md"
-  done
-  printf "${GREEN}✓${RESET} Cursor (${#SKILLS[@]} commands)\n"
-  INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-fi
-
-# Amp Code
-if [ -d "$HOME/.amp" ]; then
-  mkdir -p "$HOME/.config/amp/commands"
-  for skill in "${SKILLS[@]}"; do
-    curl -sL -o "$HOME/.config/amp/commands/$skill.md" "$REPO_URL/commands/$skill.md"
-  done
-  printf "${GREEN}✓${RESET} Amp Code (${#SKILLS[@]} skills)\n"
-  INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-fi
-
-# OpenCode
-if command -v opencode &> /dev/null || [ -d "$HOME/.config/opencode" ]; then
-  mkdir -p "$HOME/.config/opencode/command"
-  for skill in "${SKILLS[@]}"; do
-    curl -sL -o "$HOME/.config/opencode/command/$skill.md" "$REPO_URL/commands/$skill.md"
-  done
-  printf "${GREEN}✓${RESET} OpenCode (${#SKILLS[@]} commands)\n"
-  INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-fi
-
-# Gemini CLI
-if command -v gemini &> /dev/null || [ -d "$HOME/.gemini" ]; then
-  mkdir -p "$HOME/.gemini/commands"
-  # For Gemini, we only install the main commands as TOML
-  # (prd and statusline are Claude-specific)
-  for skill in "hive:init" "hive:start" "hive:status" "hive:list" "hive:logs" "hive:kill" "hive:clean"; do
-    TOML_FILE="$HOME/.gemini/commands/$skill.toml"
-    CONTENT=$(curl -sL "$REPO_URL/commands/$skill.md" | sed '1,/^---$/d' | sed '1,/^---$/d')
-    cat > "$TOML_FILE" << TOMLEOF
-description = "Hive: $skill"
-prompt = """
-$CONTENT
-"""
-TOMLEOF
-  done
-  printf "${GREEN}✓${RESET} Gemini CLI (7 commands)\n"
-  INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-fi
+echo -e "${GREEN}✓${RESET} ${#SKILLS[@]} skills installed to ~/.claude/commands/"
 
 # ============================================================================
 # Summary
 # ============================================================================
 
 echo ""
-
-if [ $INSTALLED_CLI -eq 0 ] && [ $INSTALLED_SKILLS -eq 0 ]; then
-  echo "Installation failed."
-  exit 1
-fi
-
-echo "${GREEN}Done!${RESET}"
+echo -e "${GREEN}Done!${RESET}"
 echo ""
 echo "Quick start:"
-echo "  ${DIM}# Initialize Hive in your project${RESET}"
+echo -e "  ${DIM}# Initialize Hive in your project${RESET}"
 echo "  hive init"
 echo ""
-echo "  ${DIM}# Create a PRD (in Claude Code)${RESET}"
+echo -e "  ${DIM}# Create a PRD (in Claude Code)${RESET}"
 echo "  /hive:prd"
 echo ""
-echo "  ${DIM}# Launch a drone${RESET}"
+echo -e "  ${DIM}# Launch a drone${RESET}"
 echo "  hive start --prd .hive/prds/my-feature.json"
 echo ""
-echo "  ${DIM}# Monitor${RESET}"
+echo -e "  ${DIM}# Monitor${RESET}"
 echo "  hive status"
 echo ""
 echo "Documentation: https://github.com/mbourmaud/hive"

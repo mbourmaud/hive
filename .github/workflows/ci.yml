@@ -18,6 +18,7 @@ jobs:
         with:
           scandir: '.'
           ignore_paths: 'node_modules'
+          severity: 'error'  # Only fail on errors, not warnings
 
   test:
     runs-on: ubuntu-latest

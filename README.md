@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | ba
 
 Installs:
 - **CLI**: `hive` command to `~/.local/bin/`
-- **Skills**: `/hive:*` commands for Claude Code, Cursor, Amp Code, OpenCode & Gemini CLI
+- **Skills**: `/hive:*` commands for Claude Code
 
 ---
 
