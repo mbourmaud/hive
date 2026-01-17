@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify version matches hive.sh
+        run: |
+          SCRIPT_VERSION=$(grep '^VERSION=' hive.sh | cut -d'"' -f2)
+          TAG_VERSION=${{ steps.version.outputs.VERSION }}
+          if [ "$SCRIPT_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Tag version ($TAG_VERSION) doesn't match hive.sh version ($SCRIPT_VERSION)"
+            exit 1
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Hive v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Installation
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
+            ```
+
+            ## What's Changed
+
+            See [CHANGELOG.md](https://github.com/mbourmaud/hive/blob/main/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+          files: |
+            hive.sh
+            install.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

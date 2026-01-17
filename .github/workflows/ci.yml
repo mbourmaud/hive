@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint shell scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          ignore_paths: 'node_modules'
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Test hive.sh is executable
+        run: |
+          chmod +x hive.sh
+          ./hive.sh --version
+
+      - name: Test hive.sh help
+        run: ./hive.sh help
+
+      - name: Test install script syntax
+        run: bash -n install.sh
+
+      - name: Verify skills exist
+        run: |
+          EXPECTED_SKILLS=(
+            "hive:init"
+            "hive:start"
+            "hive:status"
+            "hive:list"
+            "hive:logs"
+            "hive:kill"
+            "hive:clean"
+            "hive:prd"
+            "hive:statusline"
+          )
+          for skill in "${EXPECTED_SKILLS[@]}"; do
+            if [ ! -f "commands/$skill.md" ]; then
+              echo "Missing skill: $skill"
+              exit 1
+            fi
+          done
+          echo "All skills present!"
