@@ -8,16 +8,28 @@ Launch autonomous Claude agents (drones) on PRD files. Each drone works in its o
 
 ---
 
+## Installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
+```
+
+Installs:
+- **CLI**: `hive` command to `~/.local/bin/`
+- **Skills**: `/hive:*` commands for Claude Code, Cursor, Amp Code, OpenCode & Gemini CLI
+
+---
+
 ## Quick Start
 
 ```bash
-# Install
-make install
-
 # Initialize Hive in your project
 hive init
 
-# Launch a drone on a PRD
+# Create a PRD (in Claude Code)
+/hive:prd
+
+# Launch a drone on the PRD
 hive start --prd .hive/prds/prd-security.json
 
 # Monitor progress
@@ -60,17 +72,17 @@ hive clean security
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `hive start --prd <file>` | Launch a drone on a PRD |
-| `hive status` | Show status of all drones |
-| `hive list` | List active drones |
-| `hive logs <name>` | View drone logs |
-| `hive logs -f <name>` | Follow drone logs |
-| `hive kill <name>` | Stop a running drone |
-| `hive clean <name>` | Remove drone and worktree |
-| `hive init` | Initialize Hive in repo |
-| `hive help` | Show help |
+| CLI | Skill | Description |
+|-----|-------|-------------|
+| `hive init` | `/hive:init` | Initialize Hive in repo |
+| `hive start --prd <file>` | `/hive:start` | Launch a drone on a PRD |
+| `hive status` | `/hive:status` | Show status of all drones |
+| `hive list` | `/hive:list` | List active drones |
+| `hive logs <name>` | `/hive:logs` | View drone logs |
+| `hive kill <name>` | `/hive:kill` | Stop a running drone |
+| `hive clean <name>` | `/hive:clean` | Remove drone and worktree |
+| - | `/hive:prd` | Generate a PRD from feature description |
+| - | `/hive:statusline` | Configure statusline with drone tracking |
 
 Run `hive <command> --help` for detailed options.
 
@@ -142,19 +154,9 @@ PRDs are stored in `.hive/prds/`:
 
 ---
 
-## Claude Code Integration
+## Statusline
 
-Use these skills in Claude Code:
-
-| Skill | Description |
-|-------|-------------|
-| `/hive:start` | Interactive drone launch wizard |
-| `/hive:prd` | Generate a PRD from feature description |
-| `/hive:statusline` | Configure statusline with drone tracking |
-
-### Statusline
-
-After running `/hive:statusline`, your statusline shows:
+After running `/hive:statusline`, your Claude Code statusline shows:
 
 ```
 project │ main │ Opus 4.5 │ 45% │ ⬢ 22
@@ -187,7 +189,8 @@ your-project/                      # 👑 Queen (main repo)
 │   └── drones/                    # Drone state
 │       └── security/
 │           ├── status.json        # Progress tracking
-│           ├── drone.log          # Output log
+│           ├── activity.log       # Human-readable log
+│           ├── drone.log          # Raw Claude output
 │           └── .pid               # Process ID
 
 ~/Projects/
@@ -215,25 +218,24 @@ The `.hive/` symlink enables **queen ↔ drone communication**:
 
 ---
 
-## Installation
+## Manual Installation
+
+If you prefer not to use the install script:
 
 ```bash
 # Clone
 git clone https://github.com/mbourmaud/hive.git
 cd hive
 
-# Install to ~/.local/bin
-make install
+# Install CLI
+cp hive.sh ~/.local/bin/hive
+chmod +x ~/.local/bin/hive
+
+# Install skills (Claude Code)
+cp commands/*.md ~/.claude/commands/
 ```
 
 Make sure `~/.local/bin` is in your PATH.
-
-### Manual Installation
-
-```bash
-cp hive.sh ~/.local/bin/hive
-chmod +x ~/.local/bin/hive
-```
 
 ---
 
