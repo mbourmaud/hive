@@ -111,33 +111,148 @@
       background: var(--green);
     }
 
-    /* Diagram */
-    .diagram {
-      margin: 80px 0;
+    /* Timeline Section */
+    .timeline-section {
+      margin: 100px 0;
+      position: relative;
     }
 
-    .diagram pre {
+    .timeline-section h2 {
+      font-size: 32px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .timeline-wrapper {
+      display: flex;
+      gap: 40px;
+      position: relative;
+    }
+
+    /* Bee Track */
+    .bee-track {
+      position: relative;
+      width: 60px;
+      flex-shrink: 0;
+    }
+
+    .track-line {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+      transform: translateX(-50%);
+    }
+
+    .track-progress {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 0%;
+      background: linear-gradient(to bottom, var(--accent), var(--cyan));
+      transform: translateX(-50%);
+      transition: height 0.1s ease-out;
+    }
+
+    .bee {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      z-index: 10;
+      filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.5));
+      transition: top 0.1s ease-out;
+    }
+
+    .bee svg {
+      width: 40px;
+      height: 40px;
+      animation: buzz 0.15s ease-in-out infinite alternate;
+    }
+
+    @keyframes buzz {
+      0% { transform: rotate(-5deg) translateY(0); }
+      100% { transform: rotate(5deg) translateY(-2px); }
+    }
+
+    /* Timeline Steps */
+    .timeline-steps {
+      flex: 1;
+    }
+
+    .timeline-step {
+      padding: 30px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 13px;
-      line-height: 1.5;
-      overflow-x: auto;
-      color: var(--text-muted);
+      border-radius: 16px;
+      margin-bottom: 30px;
+      opacity: 0.4;
+      transform: translateX(20px);
+      transition: all 0.4s ease-out;
     }
 
-    .diagram .queen { color: var(--accent); }
-    .diagram .drone { color: var(--cyan); }
-    .diagram .check { color: var(--green); }
+    .timeline-step.active {
+      opacity: 1;
+      transform: translateX(0);
+      border-color: var(--accent);
+      box-shadow: 0 0 30px rgba(251, 191, 36, 0.1);
+    }
+
+    .timeline-step.completed {
+      opacity: 0.7;
+      transform: translateX(0);
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      color: var(--bg);
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 12px;
+    }
+
+    .timeline-step h3 {
+      display: inline;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .timeline-step p {
+      color: var(--text-muted);
+      margin-top: 12px;
+      font-size: 15px;
+    }
+
+    .timeline-step code {
+      display: block;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      color: var(--cyan);
+      overflow-x: auto;
+    }
 
     /* Features */
     .features {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 24px;
-      margin: 60px 0;
+      margin: 80px 0;
     }
 
     .feature {
@@ -274,6 +389,20 @@
       .install code {
         font-size: 12px;
       }
+
+      .timeline-wrapper {
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .bee-track {
+        display: none;
+      }
+
+      .timeline-step {
+        opacity: 1;
+        transform: none;
+      }
     }
   </style>
 </head>
@@ -290,20 +419,78 @@
       </div>
     </header>
 
-    <section class="diagram">
-      <pre><span class="queen">┌─────────────────────────────────────────────────────────────┐
-│  👑 Queen (main branch)                                     │
-│  You + Claude working on features                           │
-│  .hive/ folder with shared state                            │
-├─────────────────────────────────────────────────────────────┤</span>
-<span class="drone">│  🐝 Drone: security (hive/security branch)                  │
-│  Autonomously implementing SEC-001 → SEC-010                │
-│  .hive/ symlinked from queen                                │
-├─────────────────────────────────────────────────────────────┤
-│  🐝 Drone: feature-x (hive/feature-x branch)                │
-│  Autonomously implementing FEAT-001 → FEAT-005              │
-│  .hive/ symlinked from queen                                │
-└─────────────────────────────────────────────────────────────┘</span></pre>
+    <section class="timeline-section">
+      <h2>Get Started in 5 Steps</h2>
+
+      <div class="timeline-wrapper">
+        <div class="bee-track">
+          <div class="track-line"></div>
+          <div class="track-progress" id="track-progress"></div>
+          <div class="bee" id="bee">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Wings -->
+              <ellipse cx="20" cy="24" rx="12" ry="8" fill="#22d3ee" fill-opacity="0.6">
+                <animate attributeName="ry" values="8;6;8" dur="0.1s" repeatCount="indefinite"/>
+              </ellipse>
+              <ellipse cx="44" cy="24" rx="12" ry="8" fill="#22d3ee" fill-opacity="0.6">
+                <animate attributeName="ry" values="8;6;8" dur="0.1s" repeatCount="indefinite"/>
+              </ellipse>
+              <!-- Body -->
+              <ellipse cx="32" cy="36" rx="16" ry="20" fill="#fbbf24"/>
+              <!-- Stripes -->
+              <rect x="16" y="30" width="32" height="4" fill="#0a0a0a"/>
+              <rect x="16" y="38" width="32" height="4" fill="#0a0a0a"/>
+              <rect x="16" y="46" width="32" height="4" fill="#0a0a0a"/>
+              <!-- Face -->
+              <circle cx="26" cy="26" r="3" fill="#0a0a0a"/>
+              <circle cx="38" cy="26" r="3" fill="#0a0a0a"/>
+              <path d="M28 32 Q32 36 36 32" stroke="#0a0a0a" stroke-width="2" fill="none"/>
+              <!-- Antennae -->
+              <path d="M26 18 Q24 12 20 10" stroke="#0a0a0a" stroke-width="2" fill="none"/>
+              <path d="M38 18 Q40 12 44 10" stroke="#0a0a0a" stroke-width="2" fill="none"/>
+              <circle cx="20" cy="10" r="2" fill="#0a0a0a"/>
+              <circle cx="44" cy="10" r="2" fill="#0a0a0a"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="timeline-steps" id="timeline-steps">
+          <div class="timeline-step" data-step="1">
+            <span class="step-number">1</span>
+            <h3>Install</h3>
+            <p>One command installs the CLI and Claude Code skills.</p>
+            <code>curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</code>
+          </div>
+
+          <div class="timeline-step" data-step="2">
+            <span class="step-number">2</span>
+            <h3>Init</h3>
+            <p>Creates the .hive/ folder structure in your project.</p>
+            <code>hive init</code>
+          </div>
+
+          <div class="timeline-step" data-step="3">
+            <span class="step-number">3</span>
+            <h3>PRD</h3>
+            <p>Generate a PRD with stories using Claude Code.</p>
+            <code>/hive:prd</code>
+          </div>
+
+          <div class="timeline-step" data-step="4">
+            <span class="step-number">4</span>
+            <h3>Start</h3>
+            <p>Launch a drone on your PRD. It works autonomously.</p>
+            <code>hive start --prd .hive/prds/my-feature.json</code>
+          </div>
+
+          <div class="timeline-step" data-step="5">
+            <span class="step-number">5</span>
+            <h3>Monitor</h3>
+            <p>Watch your drones work. Check status and logs anytime.</p>
+            <code>hive status && hive logs my-feature</code>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="features">
@@ -330,7 +517,7 @@
     </section>
 
     <section class="commands">
-      <h2>Commands</h2>
+      <h2>All Commands</h2>
       <div class="command-grid">
         <div class="command">
           <div class="cli">hive init</div>
@@ -400,6 +587,67 @@
         btn.classList.remove('copied');
       }, 2000);
     }
+
+    // Timeline scroll animation
+    const steps = document.querySelectorAll('.timeline-step');
+    const bee = document.getElementById('bee');
+    const trackProgress = document.getElementById('track-progress');
+    const timelineSection = document.querySelector('.timeline-section');
+
+    function updateTimeline() {
+      const sectionRect = timelineSection.getBoundingClientRect();
+      const sectionTop = sectionRect.top;
+      const sectionHeight = sectionRect.height;
+      const windowHeight = window.innerHeight;
+
+      // Calculate progress through the timeline section
+      const startOffset = windowHeight * 0.6;
+      const endOffset = windowHeight * 0.3;
+      const scrollProgress = Math.max(0, Math.min(1,
+        (startOffset - sectionTop) / (sectionHeight - endOffset)
+      ));
+
+      // Get steps container bounds
+      const stepsContainer = document.getElementById('timeline-steps');
+      const stepsRect = stepsContainer.getBoundingClientRect();
+      const firstStep = steps[0];
+      const lastStep = steps[steps.length - 1];
+
+      if (!firstStep || !lastStep) return;
+
+      const firstStepRect = firstStep.getBoundingClientRect();
+      const lastStepRect = lastStep.getBoundingClientRect();
+
+      // Calculate bee position relative to steps
+      const trackStart = firstStepRect.top - sectionRect.top + firstStepRect.height / 2;
+      const trackEnd = lastStepRect.top - sectionRect.top + lastStepRect.height / 2;
+      const trackLength = trackEnd - trackStart;
+
+      const beePosition = trackStart + (scrollProgress * trackLength);
+
+      bee.style.top = beePosition + 'px';
+      trackProgress.style.height = (beePosition - trackStart + 20) + 'px';
+      trackProgress.style.top = (trackStart - 20) + 'px';
+
+      // Update step states
+      steps.forEach((step, index) => {
+        const stepProgress = (index + 0.5) / steps.length;
+
+        if (scrollProgress >= stepProgress) {
+          step.classList.add('completed');
+          step.classList.remove('active');
+        } else if (scrollProgress >= stepProgress - 0.2) {
+          step.classList.add('active');
+          step.classList.remove('completed');
+        } else {
+          step.classList.remove('active', 'completed');
+        }
+      });
+    }
+
+    window.addEventListener('scroll', updateTimeline);
+    window.addEventListener('resize', updateTimeline);
+    updateTimeline();
   </script>
 </body>
 </html>
