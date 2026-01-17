@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hive - Drone Orchestration for Claude Code</title>
   <meta name="description" content="Launch autonomous Claude agents on PRD files. Each drone works in its own git worktree while you continue working.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👑</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg viewBox='0 0 80 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='40' y1='40' x2='40' y2='88' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%23fcd34d'/%3E%3Cstop offset='100%25' stop-color='%23f59e0b'/%3E%3C/linearGradient%3E%3ClinearGradient id='hg' x1='40' y1='28' x2='40' y2='56' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%23fde68a'/%3E%3Cstop offset='100%25' stop-color='%23fbbf24'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='22' cy='48' rx='14' ry='10' fill='%23bfdbfe' stroke='%2393c5fd'/%3E%3Cellipse cx='58' cy='48' rx='14' ry='10' fill='%23bfdbfe' stroke='%2393c5fd'/%3E%3Cellipse cx='40' cy='64' rx='18' ry='24' fill='url(%23bg)'/%3E%3Cpath d='M22 58 Q40 56 58 58' stroke='%2318181b' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M22 68 Q40 66 58 68' stroke='%2318181b' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M24 78 Q40 76 56 78' stroke='%2318181b' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='40' cy='42' r='14' fill='url(%23hg)'/%3E%3Cpath d='M34 30 Q32 20 28 12' stroke='%2318181b' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M46 30 Q48 20 52 12' stroke='%2318181b' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='12' r='3' fill='%2318181b'/%3E%3Ccircle cx='52' cy='12' r='3' fill='%2318181b'/%3E%3Cpath d='M26 32 L30 22 L40 28 L50 22 L54 32 Z' fill='%23fbbf24' stroke='%23f59e0b' stroke-width='1'/%3E%3Ccircle cx='30' cy='22' r='2.5' fill='%23ef4444'/%3E%3Ccircle cx='40' cy='26' r='2.5' fill='%2322c55e'/%3E%3Ccircle cx='50' cy='22' r='2.5' fill='%233b82f6'/%3E%3Cellipse cx='34' cy='42' rx='4' ry='5' fill='%2318181b'/%3E%3Cellipse cx='46' cy='42' rx='4' ry='5' fill='%2318181b'/%3E%3Ccircle cx='35' cy='40' r='1.5' fill='white'/%3E%3Ccircle cx='47' cy='40' r='1.5' fill='white'/%3E%3Cpath d='M35 48 Q40 52 45 48' stroke='%2318181b' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='44' r='3' fill='%23fcd34d' opacity='0.6'/%3E%3Ccircle cx='52' cy='44' r='3' fill='%23fcd34d' opacity='0.6'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -14,23 +17,23 @@
     }
 
     :root {
-      --bg: #0a0a0a;
-      --surface: #141414;
-      --border: #262626;
-      --text: #fafafa;
-      --text-muted: #a1a1aa;
-      --accent: #fbbf24;
-      --accent-dim: #92711c;
-      --cyan: #22d3ee;
-      --green: #4ade80;
+      --bg: #ffffff;
+      --text: #09090b;
+      --text-secondary: #52525b;
+      --border: #e4e4e7;
+      --accent: #18181b;
+      --surface: #f4f4f5;
+      --amber: #f59e0b;
+      --amber-light: #fef3c7;
+      --green: #22c55e;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
     .container {
@@ -41,367 +44,397 @@
 
     /* Header */
     header {
-      padding: 80px 0 60px;
+      padding: 50px 0 0;
       text-align: center;
-    }
-
-    .logo {
-      font-size: 64px;
-      margin-bottom: 16px;
     }
 
     h1 {
-      font-size: 48px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 16px;
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 20px;
+      line-height: 1;
     }
 
-    h1 span {
-      color: var(--accent);
+    h1 {
+      position: relative;
+      display: inline-block;
+    }
+
+    h1 .logo {
+      position: absolute;
+      right: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 72px;
+      height: 80px;
+      margin-right: 8px;
+      animation: float 2s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(-50%); }
+      50% { transform: translateY(calc(-50% - 6px)); }
     }
 
     .tagline {
-      font-size: 20px;
-      color: var(--text-muted);
-      max-width: 500px;
-      margin: 0 auto 40px;
+      font-size: 22px;
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0 auto 0;
+      line-height: 1.5;
     }
 
-    /* Install */
-    .install {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px 24px;
+    /* Timeline */
+    .timeline {
+      margin: 30px 0 80px;
+    }
+
+    .steps {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
       gap: 16px;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    .install code {
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-      font-size: 14px;
-      color: var(--cyan);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .install button {
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      flex-shrink: 0;
-    }
-
-    .install button:hover {
-      opacity: 0.9;
-    }
-
-    .install button.copied {
-      background: var(--green);
-    }
-
-    /* Timeline Section */
-    .timeline-section {
-      margin: 100px 0;
       position: relative;
+      padding-left: 80px;
     }
 
-    .timeline-section h2 {
-      font-size: 32px;
-      font-weight: 700;
-      text-align: center;
-      margin-bottom: 60px;
-    }
-
-    .timeline-wrapper {
-      display: flex;
-      gap: 40px;
-      position: relative;
-    }
-
-    /* Bee Track */
+    /* Bee track - spans full height of steps container */
     .bee-track {
-      position: relative;
-      width: 60px;
-      flex-shrink: 0;
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 64px;
+      pointer-events: none;
     }
 
+    /* Track line and progress are positioned by JS */
     .track-line {
       position: absolute;
       left: 50%;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: var(--border);
+      width: 4px;
+      background: var(--surface);
       transform: translateX(-50%);
+      border-radius: 2px;
     }
 
     .track-progress {
       position: absolute;
       left: 50%;
-      top: 0;
-      width: 2px;
-      height: 0%;
-      background: linear-gradient(to bottom, var(--accent), var(--cyan));
+      width: 4px;
+      background: var(--amber);
       transform: translateX(-50%);
-      transition: height 0.1s ease-out;
+      border-radius: 2px;
+      transition: height 0.15s ease-out;
     }
 
     .bee {
       position: absolute;
       left: 50%;
-      top: 0;
       transform: translate(-50%, -50%);
-      font-size: 32px;
       z-index: 10;
-      filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.5));
-      transition: top 0.1s ease-out;
+      transition: top 0.15s ease-out;
     }
 
     .bee svg {
-      width: 40px;
-      height: 40px;
-      animation: buzz 0.15s ease-in-out infinite alternate;
+      width: 52px;
+      height: 52px;
+      filter: drop-shadow(0 4px 8px rgba(245, 158, 11, 0.3));
+      display: block;
     }
 
-    @keyframes buzz {
-      0% { transform: rotate(-5deg) translateY(0); }
-      100% { transform: rotate(5deg) translateY(-2px); }
-    }
-
-    /* Timeline Steps */
-    .timeline-steps {
-      flex: 1;
-    }
-
-    .timeline-step {
-      padding: 30px;
+    .step {
+      padding: 28px 32px;
       background: var(--surface);
-      border: 1px solid var(--border);
       border-radius: 16px;
-      margin-bottom: 30px;
-      opacity: 0.4;
-      transform: translateX(20px);
-      transition: all 0.4s ease-out;
+      opacity: 0.5;
+      transform: translateX(12px);
+      transition: all 0.3s ease;
     }
 
-    .timeline-step.active {
+    .step.active {
       opacity: 1;
       transform: translateX(0);
-      border-color: var(--accent);
-      box-shadow: 0 0 30px rgba(251, 191, 36, 0.1);
+      background: var(--amber-light);
     }
 
-    .timeline-step.completed {
-      opacity: 0.7;
+    .step.completed {
+      opacity: 1;
       transform: translateX(0);
     }
 
-    .step-number {
-      display: inline-flex;
+    .step-header {
+      display: flex;
       align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      background: var(--accent);
-      color: var(--bg);
-      border-radius: 50%;
-      font-weight: 700;
-      font-size: 14px;
-      margin-right: 12px;
-    }
-
-    .timeline-step h3 {
-      display: inline;
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .timeline-step p {
-      color: var(--text-muted);
-      margin-top: 12px;
-      font-size: 15px;
-    }
-
-    .timeline-step code {
-      display: block;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 16px;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 13px;
-      color: var(--cyan);
-      overflow-x: auto;
-    }
-
-    /* Features */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 24px;
-      margin: 80px 0;
-    }
-
-    .feature {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-    }
-
-    .feature-icon {
-      font-size: 28px;
+      gap: 16px;
       margin-bottom: 12px;
     }
 
-    .feature h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
+    .step-num {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
     }
 
-    .feature p {
+    .step.active .step-num {
+      background: var(--amber);
+      color: white;
+    }
+
+    .step.completed .step-num {
+      background: var(--text);
+      color: white;
+    }
+
+    .step-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .step-badge {
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 600;
+      color: white;
+      background: var(--accent);
+      padding: 5px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .step-desc {
+      color: var(--text-secondary);
+      font-size: 17px;
+      margin-bottom: 16px;
+    }
+
+    .step-code-wrapper {
+      display: flex;
+      align-items: center;
+      background: #f4f4f5;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .step-code {
+      flex: 1;
+      font-family: 'SF Mono', Monaco, monospace;
       font-size: 14px;
-      color: var(--text-muted);
+      font-weight: 600;
+      color: var(--text);
+      padding: 14px 18px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .copy-btn {
+      background: #e4e4e7;
+      color: var(--text-secondary);
+      border: none;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .copy-btn:hover {
+      background: #d4d4d8;
+      color: var(--text);
+    }
+
+    .copy-btn.copied {
+      color: var(--green);
+    }
+
+    .copy-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Simple step code (no copy button) */
+    .step .step-code:not(.step-code-wrapper .step-code) {
+      background: #fef9e7;
+      color: var(--text);
+      padding: 14px 18px;
+      border-radius: 10px;
+      border: 1px solid #fde68a;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .step-hint {
+      margin-top: 12px;
+      font-size: 15px;
+      color: var(--text-secondary);
     }
 
     /* Commands */
     .commands {
-      margin: 60px 0;
+      margin: 80px 0;
     }
 
     .commands h2 {
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 24px;
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 32px;
       text-align: center;
     }
 
-    .command-grid {
+    .commands-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
     }
 
     .command {
+      padding: 24px;
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
+      border-radius: 16px;
+    }
+
+    .command-name {
       font-family: 'SF Mono', Monaco, monospace;
-      font-size: 13px;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
     }
 
-    .command .cli {
-      color: var(--cyan);
-      margin-bottom: 4px;
+    .command-skill {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+      color: var(--amber);
+      margin-bottom: 10px;
     }
 
-    .command .skill {
-      color: var(--accent);
-      font-size: 12px;
-    }
-
-    .command .desc {
-      color: var(--text-muted);
-      font-size: 12px;
-      margin-top: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    .command-desc {
+      font-size: 15px;
+      color: var(--text-secondary);
     }
 
     /* Footer */
     footer {
       padding: 60px 0;
       text-align: center;
-      border-top: 1px solid var(--border);
-      margin-top: 60px;
+      border-top: 2px solid var(--surface);
+      margin-top: 40px;
     }
 
-    footer a {
-      color: var(--text-muted);
-      text-decoration: none;
-      margin: 0 16px;
-      transition: color 0.2s;
-    }
-
-    footer a:hover {
-      color: var(--text);
-    }
-
-    .github-btn {
+    .github-link {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 12px 24px;
-      border-radius: 8px;
-      color: var(--text);
+      gap: 10px;
+      padding: 14px 28px;
+      background: var(--accent);
+      color: white;
       text-decoration: none;
-      font-weight: 500;
-      margin-bottom: 24px;
-      transition: border-color 0.2s;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 0.15s, box-shadow 0.15s;
+      margin-bottom: 28px;
     }
 
-    .github-btn:hover {
-      border-color: var(--text-muted);
-      color: var(--text);
+    .github-link:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
 
-    .github-btn svg {
-      width: 20px;
-      height: 20px;
+    .github-link svg {
+      width: 22px;
+      height: 22px;
       fill: currentColor;
     }
 
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+    }
+
+    .footer-links a {
+      font-size: 16px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
     /* Mobile */
-    @media (max-width: 600px) {
+    @media (max-width: 640px) {
       header {
-        padding: 60px 0 40px;
+        padding: 30px 0 0;
       }
 
       h1 {
-        font-size: 36px;
+        font-size: 42px;
       }
 
       .tagline {
         font-size: 18px;
       }
 
-      .install {
-        flex-direction: column;
-        text-align: center;
-      }
-
-      .install code {
-        font-size: 12px;
-      }
-
-      .timeline-wrapper {
-        flex-direction: column;
-        gap: 0;
+      .steps {
+        padding-left: 0;
       }
 
       .bee-track {
         display: none;
       }
 
-      .timeline-step {
+      .step {
         opacity: 1;
         transform: none;
+      }
+
+      .step-title {
+        font-size: 18px;
+      }
+
+      .step-desc {
+        font-size: 15px;
+      }
+
+      .step-code-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .step-code-wrapper .step-code {
+        font-size: 12px;
+        word-break: break-all;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        padding: 12px 14px;
+      }
+
+      .step-code-wrapper .copy-btn {
+        width: 100%;
+      }
+
+      .commands h2 {
+        font-size: 24px;
+      }
+
+      .commands-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -409,165 +442,281 @@
 <body>
   <div class="container">
     <header>
-      <div class="logo">👑</div>
-      <h1><span>Hive</span></h1>
-      <p class="tagline">Drone orchestration for Claude Code. Launch autonomous agents on PRD files while you keep working.</p>
-
-      <div class="install">
-        <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</code>
-        <button onclick="copyInstall()">Copy</button>
-      </div>
+      <h1><svg class="logo" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Wings (with animation) -->
+        <ellipse cx="22" cy="48" rx="14" ry="10" fill="#bfdbfe" stroke="#93c5fd">
+          <animate attributeName="ry" values="10;6;10" dur="0.08s" repeatCount="indefinite"/>
+          <animate attributeName="rx" values="14;12;14" dur="0.08s" repeatCount="indefinite"/>
+        </ellipse>
+        <ellipse cx="58" cy="48" rx="14" ry="10" fill="#bfdbfe" stroke="#93c5fd">
+          <animate attributeName="ry" values="10;6;10" dur="0.08s" repeatCount="indefinite"/>
+          <animate attributeName="rx" values="14;12;14" dur="0.08s" repeatCount="indefinite"/>
+        </ellipse>
+        <!-- Body -->
+        <ellipse cx="40" cy="64" rx="18" ry="24" fill="url(#logoBodyGradient)"/>
+        <!-- Stripes -->
+        <path d="M22 58 Q40 56 58 58" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M22 68 Q40 66 58 68" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M24 78 Q40 76 56 78" stroke="#18181b" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <!-- Head -->
+        <circle cx="40" cy="42" r="14" fill="url(#logoHeadGradient)"/>
+        <!-- Antennae (behind crown, same style as scrollbar bee) -->
+        <path d="M34 30 Q32 20 28 12" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <path d="M46 30 Q48 20 52 12" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <circle cx="28" cy="12" r="3" fill="#18181b"/>
+        <circle cx="52" cy="12" r="3" fill="#18181b"/>
+        <!-- Crown (on head, in front of antennae) -->
+        <path d="M26 32 L30 22 L40 28 L50 22 L54 32 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+        <circle cx="30" cy="22" r="2.5" fill="#ef4444"/>
+        <circle cx="40" cy="26" r="2.5" fill="#22c55e"/>
+        <circle cx="50" cy="22" r="2.5" fill="#3b82f6"/>
+        <!-- Eyes -->
+        <ellipse cx="34" cy="42" rx="4" ry="5" fill="#18181b"/>
+        <ellipse cx="46" cy="42" rx="4" ry="5" fill="#18181b"/>
+        <circle cx="35" cy="40" r="1.5" fill="white"/>
+        <circle cx="47" cy="40" r="1.5" fill="white"/>
+        <!-- Smile -->
+        <path d="M35 48 Q40 52 45 48" stroke="#18181b" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- Cheeks -->
+        <circle cx="28" cy="44" r="3" fill="#fcd34d" opacity="0.6"/>
+        <circle cx="52" cy="44" r="3" fill="#fcd34d" opacity="0.6"/>
+        <!-- Gradients -->
+        <defs>
+          <linearGradient id="logoBodyGradient" x1="40" y1="40" x2="40" y2="88" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#fcd34d"/>
+            <stop offset="100%" stop-color="#f59e0b"/>
+          </linearGradient>
+          <linearGradient id="logoHeadGradient" x1="40" y1="28" x2="40" y2="56" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#fde68a"/>
+            <stop offset="100%" stop-color="#fbbf24"/>
+          </linearGradient>
+        </defs>
+      </svg>Hive</h1>
+      <p class="tagline">You're The Queen. They're The Drones.<br>Put Them To Work.</p>
     </header>
 
-    <section class="timeline-section">
-      <h2>Get Started in 5 Steps</h2>
-
-      <div class="timeline-wrapper">
+    <section class="timeline">
+      <div class="steps" id="steps">
         <div class="bee-track">
           <div class="track-line"></div>
           <div class="track-progress" id="track-progress"></div>
           <div class="bee" id="bee">
-            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Wings -->
-              <ellipse cx="20" cy="24" rx="12" ry="8" fill="#22d3ee" fill-opacity="0.6">
-                <animate attributeName="ry" values="8;6;8" dur="0.1s" repeatCount="indefinite"/>
-              </ellipse>
-              <ellipse cx="44" cy="24" rx="12" ry="8" fill="#22d3ee" fill-opacity="0.6">
-                <animate attributeName="ry" values="8;6;8" dur="0.1s" repeatCount="indefinite"/>
-              </ellipse>
-              <!-- Body -->
-              <ellipse cx="32" cy="36" rx="16" ry="20" fill="#fbbf24"/>
-              <!-- Stripes -->
-              <rect x="16" y="30" width="32" height="4" fill="#0a0a0a"/>
-              <rect x="16" y="38" width="32" height="4" fill="#0a0a0a"/>
-              <rect x="16" y="46" width="32" height="4" fill="#0a0a0a"/>
-              <!-- Face -->
-              <circle cx="26" cy="26" r="3" fill="#0a0a0a"/>
-              <circle cx="38" cy="26" r="3" fill="#0a0a0a"/>
-              <path d="M28 32 Q32 36 36 32" stroke="#0a0a0a" stroke-width="2" fill="none"/>
-              <!-- Antennae -->
-              <path d="M26 18 Q24 12 20 10" stroke="#0a0a0a" stroke-width="2" fill="none"/>
-              <path d="M38 18 Q40 12 44 10" stroke="#0a0a0a" stroke-width="2" fill="none"/>
-              <circle cx="20" cy="10" r="2" fill="#0a0a0a"/>
-              <circle cx="44" cy="10" r="2" fill="#0a0a0a"/>
-            </svg>
+              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Shadow -->
+                <ellipse cx="40" cy="72" rx="16" ry="4" fill="#00000015"/>
+                <!-- Left Wing -->
+                <ellipse cx="22" cy="28" rx="16" ry="12" fill="#bfdbfe" stroke="#93c5fd" stroke-width="1">
+                  <animate attributeName="ry" values="12;7;12" dur="0.06s" repeatCount="indefinite"/>
+                  <animate attributeName="rx" values="16;14;16" dur="0.06s" repeatCount="indefinite"/>
+                </ellipse>
+                <!-- Right Wing -->
+                <ellipse cx="58" cy="28" rx="16" ry="12" fill="#bfdbfe" stroke="#93c5fd" stroke-width="1">
+                  <animate attributeName="ry" values="12;7;12" dur="0.06s" repeatCount="indefinite"/>
+                  <animate attributeName="rx" values="16;14;16" dur="0.06s" repeatCount="indefinite"/>
+                </ellipse>
+                <!-- Body -->
+                <ellipse cx="40" cy="44" rx="18" ry="24" fill="url(#bodyGradient)"/>
+                <!-- Stripes -->
+                <path d="M22 38 Q40 36 58 38" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M22 48 Q40 46 58 48" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M24 58 Q40 56 56 58" stroke="#18181b" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <!-- Head -->
+                <circle cx="40" cy="22" r="14" fill="url(#headGradient)"/>
+                <!-- Eyes -->
+                <ellipse cx="34" cy="20" rx="4" ry="5" fill="#18181b"/>
+                <ellipse cx="46" cy="20" rx="4" ry="5" fill="#18181b"/>
+                <circle cx="35" cy="18" r="1.5" fill="white"/>
+                <circle cx="47" cy="18" r="1.5" fill="white"/>
+                <!-- Smile -->
+                <path d="M35 26 Q40 30 45 26" stroke="#18181b" stroke-width="2" fill="none" stroke-linecap="round"/>
+                <!-- Antennae -->
+                <path d="M34 10 Q32 4 28 2" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <path d="M46 10 Q48 4 52 2" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <circle cx="28" cy="2" r="3" fill="#18181b"/>
+                <circle cx="52" cy="2" r="3" fill="#18181b"/>
+                <!-- Cheeks -->
+                <circle cx="28" cy="24" r="3" fill="#fcd34d" opacity="0.6"/>
+                <circle cx="52" cy="24" r="3" fill="#fcd34d" opacity="0.6"/>
+                <!-- Gradients -->
+                <defs>
+                  <linearGradient id="bodyGradient" x1="40" y1="20" x2="40" y2="68" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#fcd34d"/>
+                    <stop offset="100%" stop-color="#f59e0b"/>
+                  </linearGradient>
+                  <linearGradient id="headGradient" x1="40" y1="8" x2="40" y2="36" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#fde68a"/>
+                    <stop offset="100%" stop-color="#fbbf24"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
           </div>
+          <div class="step active" data-step="1">
+            <div class="step-header">
+              <div class="step-num">1</div>
+              <div class="step-title">Install</div>
+            </div>
+            <div class="step-desc">One command installs the CLI and all Claude Code skills.</div>
+            <div class="step-code-wrapper">
+              <code class="step-code" id="install-cmd">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</code>
+              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="step" data-step="2">
+            <div class="step-header">
+              <div class="step-num">2</div>
+              <div class="step-title">Initialize</div>
+            </div>
+            <div class="step-desc">Creates the .hive/ folder in your project to store PRDs and drone state.</div>
+            <div class="step-code-wrapper">
+              <code class="step-code">hive init</code>
+              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="step" data-step="3">
+            <div class="step-header">
+              <div class="step-num">3</div>
+              <div class="step-title">Create a PRD</div>
+              <div class="step-badge">Within Claude Code</div>
+            </div>
+            <div class="step-desc">Generate a PRD with stories from your feature description.</div>
+            <div class="step-code-wrapper">
+              <code class="step-code">/hive:prd</code>
+              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="step" data-step="4">
+            <div class="step-header">
+              <div class="step-num">4</div>
+              <div class="step-title">Launch a Drone</div>
+              <div class="step-badge">Within Claude Code</div>
+            </div>
+            <div class="step-desc">Start an autonomous Claude agent on your PRD. It creates a git worktree and works independently.</div>
+            <div class="step-code-wrapper">
+              <code class="step-code">/hive:start</code>
+              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="step" data-step="5">
+            <div class="step-header">
+              <div class="step-num">5</div>
+              <div class="step-title">Monitor</div>
+              <div class="step-badge">Within Claude Code</div>
+            </div>
+            <div class="step-desc">Check on your drones anytime. View status and logs in real-time.</div>
+            <div class="step-code-wrapper">
+              <code class="step-code">/hive:status</code>
+              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="step" data-step="6">
+            <div class="step-header">
+              <div class="step-num">6</div>
+              <div class="step-title">Setup Statusline</div>
+              <div class="step-badge">Within Claude Code</div>
+            </div>
+            <div class="step-desc">Track all drone progress directly in your statusline.</div>
+            <div class="step-code-wrapper">
+              <code class="step-code">/hive:statusline</code>
+              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="step-hint">Optional — see drone progress without leaving your editor</div>
         </div>
-
-        <div class="timeline-steps" id="timeline-steps">
-          <div class="timeline-step" data-step="1">
-            <span class="step-number">1</span>
-            <h3>Install</h3>
-            <p>One command installs the CLI and Claude Code skills.</p>
-            <code>curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</code>
-          </div>
-
-          <div class="timeline-step" data-step="2">
-            <span class="step-number">2</span>
-            <h3>Init</h3>
-            <p>Creates the .hive/ folder structure in your project.</p>
-            <code>hive init</code>
-          </div>
-
-          <div class="timeline-step" data-step="3">
-            <span class="step-number">3</span>
-            <h3>PRD</h3>
-            <p>Generate a PRD with stories using Claude Code.</p>
-            <code>/hive:prd</code>
-          </div>
-
-          <div class="timeline-step" data-step="4">
-            <span class="step-number">4</span>
-            <h3>Start</h3>
-            <p>Launch a drone on your PRD. It works autonomously.</p>
-            <code>hive start --prd .hive/prds/my-feature.json</code>
-          </div>
-
-          <div class="timeline-step" data-step="5">
-            <span class="step-number">5</span>
-            <h3>Monitor</h3>
-            <p>Watch your drones work. Check status and logs anytime.</p>
-            <code>hive status && hive logs my-feature</code>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="features">
-      <div class="feature">
-        <div class="feature-icon">🚀</div>
-        <h3>PRD-Driven</h3>
-        <p>Define stories in JSON, let drones execute them autonomously.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🔀</div>
-        <h3>Git Worktrees</h3>
-        <p>Each drone works in isolation. No conflicts with your work.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">📡</div>
-        <h3>Real-time Status</h3>
-        <p>Monitor progress from your terminal. Shared state via symlinks.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">⚡</div>
-        <h3>One Command</h3>
-        <p>Install with curl, init with hive init, launch with hive start.</p>
       </div>
     </section>
 
     <section class="commands">
       <h2>All Commands</h2>
-      <div class="command-grid">
+      <div class="commands-grid">
         <div class="command">
-          <div class="cli">hive init</div>
-          <div class="skill">/hive:init</div>
-          <div class="desc">Initialize Hive</div>
+          <div class="command-name">hive init</div>
+          <div class="command-skill">/hive:init</div>
+          <div class="command-desc">Initialize Hive</div>
         </div>
         <div class="command">
-          <div class="cli">hive start</div>
-          <div class="skill">/hive:start</div>
-          <div class="desc">Launch a drone</div>
+          <div class="command-name">hive start</div>
+          <div class="command-skill">/hive:start</div>
+          <div class="command-desc">Launch drone</div>
         </div>
         <div class="command">
-          <div class="cli">hive status</div>
-          <div class="skill">/hive:status</div>
-          <div class="desc">View all drones</div>
+          <div class="command-name">hive status</div>
+          <div class="command-skill">/hive:status</div>
+          <div class="command-desc">View all drones</div>
         </div>
         <div class="command">
-          <div class="cli">hive logs</div>
-          <div class="skill">/hive:logs</div>
-          <div class="desc">View drone logs</div>
+          <div class="command-name">hive logs</div>
+          <div class="command-skill">/hive:logs</div>
+          <div class="command-desc">View logs</div>
         </div>
         <div class="command">
-          <div class="cli">hive kill</div>
-          <div class="skill">/hive:kill</div>
-          <div class="desc">Stop a drone</div>
+          <div class="command-name">hive kill</div>
+          <div class="command-skill">/hive:kill</div>
+          <div class="command-desc">Stop drone</div>
         </div>
         <div class="command">
-          <div class="cli">hive clean</div>
-          <div class="skill">/hive:clean</div>
-          <div class="desc">Remove drone</div>
+          <div class="command-name">hive clean</div>
+          <div class="command-skill">/hive:clean</div>
+          <div class="command-desc">Remove drone</div>
         </div>
         <div class="command">
-          <div class="cli">hive update</div>
-          <div class="skill">—</div>
-          <div class="desc">Self-update</div>
+          <div class="command-name">hive update</div>
+          <div class="command-skill">—</div>
+          <div class="command-desc">Self-update</div>
         </div>
         <div class="command">
-          <div class="cli">—</div>
-          <div class="skill">/hive:prd</div>
-          <div class="desc">Generate PRD</div>
+          <div class="command-name">—</div>
+          <div class="command-skill">/hive:prd</div>
+          <div class="command-desc">Generate PRD</div>
+        </div>
+        <div class="command">
+          <div class="command-name">—</div>
+          <div class="command-skill">/hive:statusline</div>
+          <div class="command-desc">Setup statusline</div>
         </div>
       </div>
     </section>
 
     <footer>
-      <a href="https://github.com/mbourmaud/hive" class="github-btn">
+      <a href="https://github.com/mbourmaud/hive" class="github-link">
         <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
         View on GitHub
       </a>
-      <div>
+      <div class="footer-links">
         <a href="https://github.com/mbourmaud/hive/blob/main/README.md">Docs</a>
         <a href="https://github.com/mbourmaud/hive/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/mbourmaud/hive/issues">Issues</a>
@@ -576,78 +725,87 @@
   </div>
 
   <script>
-    function copyInstall() {
-      const cmd = document.getElementById('install-cmd').textContent;
-      navigator.clipboard.writeText(cmd);
-      const btn = document.querySelector('.install button');
-      btn.textContent = 'Copied!';
+    function copyCmd(btn) {
+      const code = btn.parentElement.querySelector('.step-code');
+      navigator.clipboard.writeText(code.textContent);
+      const originalSvg = btn.innerHTML;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
       btn.classList.add('copied');
       setTimeout(() => {
-        btn.textContent = 'Copy';
+        btn.innerHTML = originalSvg;
         btn.classList.remove('copied');
       }, 2000);
     }
 
     // Timeline scroll animation
-    const steps = document.querySelectorAll('.timeline-step');
+    const steps = document.querySelectorAll('.step');
     const bee = document.getElementById('bee');
+    const beeTrack = document.querySelector('.bee-track');
+    const trackLine = document.querySelector('.track-line');
     const trackProgress = document.getElementById('track-progress');
-    const timelineSection = document.querySelector('.timeline-section');
 
     function updateTimeline() {
-      const sectionRect = timelineSection.getBoundingClientRect();
-      const sectionTop = sectionRect.top;
-      const sectionHeight = sectionRect.height;
-      const windowHeight = window.innerHeight;
+      if (steps.length === 0 || !beeTrack) return;
 
-      // Calculate progress through the timeline section
-      const startOffset = windowHeight * 0.6;
-      const endOffset = windowHeight * 0.3;
-      const scrollProgress = Math.max(0, Math.min(1,
-        (startOffset - sectionTop) / (sectionHeight - endOffset)
-      ));
+      const trackRect = beeTrack.getBoundingClientRect();
 
-      // Get steps container bounds
-      const stepsContainer = document.getElementById('timeline-steps');
-      const stepsRect = stepsContainer.getBoundingClientRect();
-      const firstStep = steps[0];
-      const lastStep = steps[steps.length - 1];
+      // Calculate center Y of each step relative to bee-track
+      const stepCenters = Array.from(steps).map(step => {
+        const rect = step.getBoundingClientRect();
+        const centerY = rect.top + rect.height / 2;
+        return centerY - trackRect.top;
+      });
 
-      if (!firstStep || !lastStep) return;
+      const firstCenter = stepCenters[0];
+      const lastCenter = stepCenters[stepCenters.length - 1];
 
-      const firstStepRect = firstStep.getBoundingClientRect();
-      const lastStepRect = lastStep.getBoundingClientRect();
+      // Position track-line from first to last step center
+      trackLine.style.top = firstCenter + 'px';
+      trackLine.style.height = (lastCenter - firstCenter) + 'px';
 
-      // Calculate bee position relative to steps
-      const trackStart = firstStepRect.top - sectionRect.top + firstStepRect.height / 2;
-      const trackEnd = lastStepRect.top - sectionRect.top + lastStepRect.height / 2;
-      const trackLength = trackEnd - trackStart;
+      // Progress bar starts at first step center
+      trackProgress.style.top = firstCenter + 'px';
 
-      const beePosition = trackStart + (scrollProgress * trackLength);
-
-      bee.style.top = beePosition + 'px';
-      trackProgress.style.height = (beePosition - trackStart + 20) + 'px';
-      trackProgress.style.top = (trackStart - 20) + 'px';
-
-      // Update step states
-      steps.forEach((step, index) => {
-        const stepProgress = (index + 0.5) / steps.length;
-
-        if (scrollProgress >= stepProgress) {
-          step.classList.add('completed');
-          step.classList.remove('active');
-        } else if (scrollProgress >= stepProgress - 0.2) {
-          step.classList.add('active');
-          step.classList.remove('completed');
-        } else {
-          step.classList.remove('active', 'completed');
+      // Determine active step (when its top crosses 40% of viewport)
+      const activationY = window.innerHeight * 0.4;
+      let activeIndex = 0;
+      for (let i = 0; i < steps.length; i++) {
+        if (steps[i].getBoundingClientRect().top <= activationY) {
+          activeIndex = i;
         }
+      }
+
+      // Calculate bee Y position
+      let beeY = stepCenters[activeIndex];
+
+      // Interpolate between steps when scrolling
+      if (activeIndex < steps.length - 1) {
+        const currentTop = steps[activeIndex].getBoundingClientRect().top;
+        const nextTop = steps[activeIndex + 1].getBoundingClientRect().top;
+        const distancePast = activationY - currentTop;
+
+        if (distancePast > 0) {
+          const t = Math.min(1, distancePast / (nextTop - currentTop));
+          beeY = stepCenters[activeIndex] + t * (stepCenters[activeIndex + 1] - stepCenters[activeIndex]);
+        }
+      }
+
+      // Apply positions
+      bee.style.top = beeY + 'px';
+      trackProgress.style.height = Math.max(0, beeY - firstCenter) + 'px';
+
+      // Update step visual states
+      steps.forEach((step, i) => {
+        step.classList.toggle('completed', i < activeIndex);
+        step.classList.toggle('active', i === activeIndex);
       });
     }
 
-    window.addEventListener('scroll', updateTimeline);
+    window.addEventListener('scroll', updateTimeline, { passive: true });
     window.addEventListener('resize', updateTimeline);
+    window.addEventListener('load', updateTimeline);
     updateTimeline();
+    setTimeout(updateTimeline, 100);
   </script>
 </body>
 </html>
