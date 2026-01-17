@@ -18,9 +18,10 @@ imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
 
 ## Drone Status Icons
 
-- `🐝 name (5/10)` - In progress (cyan)
-- `🐝 name ✓ (10/10)` - Completed (check vert)
-- `🐝 name ✗ (5/10)` - Error (croix rouge)
+- `🐝 name (5/10)` - In progress, running (yellow)
+- `🐝 name ⏸ (5/10)` - In progress, paused (light gray) - process not running
+- `🐝 name ✓ (10/10)` - Completed (yellow + green check)
+- `🐝 name ✗ (5/10)` - Error (yellow + red cross)
 
 ## Instructions
 
@@ -56,16 +57,29 @@ The drone line logic should:
 
 Key code for drone display:
 ```bash
+# Check if process is running
+pid_file="${drone_dir}.pid"
+is_running="no"
+if [ -f "$pid_file" ]; then
+  pid=$(cat "$pid_file" 2>/dev/null)
+  ps -p "$pid" >/dev/null 2>&1 && is_running="yes"
+fi
+
 # For each drone, format based on status:
 if [ "$d_status" = "in_progress" ] || [ "$d_status" = "starting" ]; then
-  # 🐝 name (done/total) - cyan
-  drone_line="${drone_line}$(printf \"\\033[96m🐝 %s (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+  if [ "$is_running" = "yes" ]; then
+    # 🐝 name (done/total) - yellow (running)
+    drone_line="${drone_line}$(printf \"\\033[33m🐝 %s (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+  else
+    # 🐝 name ⏸ (done/total) - light gray (paused)
+    drone_line="${drone_line}$(printf \"\\033[37m🐝 %s ⏸ (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+  fi
 elif [ "$d_status" = "completed" ]; then
-  # 🐝 name ✓ (done/total) - with green check
-  drone_line="${drone_line}$(printf \"\\033[96m🐝 %s \\033[92m✓\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+  # 🐝 name ✓ (done/total) - yellow with green check
+  drone_line="${drone_line}$(printf \"\\033[33m🐝 %s \\033[92m✓\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
 elif [ "$d_status" = "error" ]; then
-  # 🐝 name ✗ (done/total) - with red cross
-  drone_line="${drone_line}$(printf \"\\033[96m🐝 %s \\033[91m✗\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+  # 🐝 name ✗ (done/total) - yellow with red cross
+  drone_line="${drone_line}$(printf \"\\033[33m🐝 %s \\033[91m✗\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
 fi
 ```
 
@@ -84,7 +98,7 @@ After editing, save the file and tell the user to restart Claude Code or open a 
 
 ```
 imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
-👑 Hive v0.2.0 | 🐝 security ✓ (10/10) | 🐝 feature (5/10) | 🐝 refactor ✗ (3/8)
+👑 Hive v0.3.0 | 🐝 security ✓ (10/10) | 🐝 feature (5/10) | 🐝 refactor ⏸ (3/8)
 ```
 
 ## Notes

@@ -17,7 +17,7 @@ Parse arguments from the command if provided:
 | `--prd <file>` | PRD JSON file | (ask user) |
 | `--name <name>` | Drone name | (from PRD id) |
 | `--base <branch>` | Base branch | main |
-| `--iterations <n>` | Max API turns | 50 |
+| `--iterations <n>` | Max iterations (each = full Claude session) | 15 |
 | `--model <model>` | Claude model (opus/sonnet) | opus |
 
 **Examples:**
@@ -92,9 +92,9 @@ If `--iterations` not provided, ask:
 **"How many iterations?"**
 
 Options:
-- **50 (Recommended)** - 5-10 stories
-- **25** - Small PRDs
-- **100** - Large PRDs
+- **15 (Recommended)** - Standard PRDs (each iteration = full Claude session)
+- **10** - Small PRDs (< 5 stories)
+- **25** - Large PRDs (> 15 stories)
 - **Unlimited** - Sets to 999
 
 ### Step 7: Model (if not provided)

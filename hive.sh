@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="0.2.1"
+VERSION="0.3.0"
 
 # Configuration
 HIVE_DIR=".hive"
@@ -184,7 +184,7 @@ ${YELLOW}Required:${NC}
 ${YELLOW}Options:${NC}
   --name <name>       Drone name (default: derived from PRD id)
   --base <branch>     Base branch (default: main)
-  --iterations <n>    Max iterations (default: 50)
+  --iterations <n>    Max iterations (default: 15, each = full Claude session)
   --model <model>     Claude model (default: opus)
   --help, -h          Show this help
 
@@ -206,7 +206,7 @@ cmd_run() {
     local prd_file=""
     local drone_name=""
     local base_branch="main"
-    local iterations=50
+    local iterations=15
     local model="opus"
 
     # Parse arguments
@@ -335,15 +335,41 @@ IMPORTANT: Toutes tes opérations doivent être dans le répertoire $external_wo
 2. Pour chaque story:
    - Implémente les changements demandés
    - Commit avec le message \"feat(<STORY-ID>): <description>\"
-3. Mets à jour status.json ET activity.log après chaque action importante
+   - **OBLIGATOIRE**: Mets à jour status.json IMMÉDIATEMENT après chaque story
+3. Log chaque action dans activity.log
 
-## Logging (TRÈS IMPORTANT)
+## ⚠️ MISE À JOUR status.json - OBLIGATOIRE
 
-### Activity Log (activity.log)
-Après CHAQUE action importante, ajoute une ligne au fichier activity.log avec ce format:
-\`[HH:MM:SS] <emoji> <message>\`
+Tu DOIS mettre à jour status.json à ces moments précis:
 
-Emojis à utiliser:
+### 1. Au démarrage (après lecture du PRD)
+\`\`\`bash
+jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"in_progress\" | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+\`\`\`
+
+### 2. Quand tu COMMENCES une story
+\`\`\`bash
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+\`\`\`
+
+### 3. Quand tu TERMINES une story (TRÈS IMPORTANT!)
+\`\`\`bash
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+\`\`\`
+
+### 4. Quand TOUTES les stories sont terminées
+\`\`\`bash
+jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .current_story = null | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+\`\`\`
+
+## Activity Log (activity.log)
+
+Après CHAQUE action importante, ajoute une ligne:
+\`\`\`bash
+echo \"[\$(date +%H:%M:%S)] <emoji> <message>\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+\`\`\`
+
+Emojis:
 - 🚀 Démarrage du drone
 - 📖 Lecture du PRD
 - 🔨 Début d'une story
@@ -353,67 +379,116 @@ Emojis à utiliser:
 - ⚠️ Problème rencontré
 - 🎉 Toutes les stories terminées
 
-Exemple de activity.log:
-\`\`\`
-[10:30:15] 🚀 Drone démarré
-[10:30:20] 📖 PRD chargé: 10 stories à implémenter
-[10:32:00] 🔨 Début SEC-001: Protect /api/accounts
-[10:33:15] 📝 Modification: src/app/api/accounts/route.ts
-[10:34:00] 📝 Modification: src/lib/auth.ts
-[10:35:22] 💾 Commit: feat(SEC-001): Add auth to accounts API
-[10:35:22] ✅ SEC-001 terminée
-[10:35:30] 🔨 Début SEC-002: Protect /api/users
-\`\`\`
+## Workflow pour chaque story
 
-### Status JSON (status.json)
-Mets à jour après chaque story:
-{
-  \"drone\": \"$drone_name\",
-  \"status\": \"in_progress\",
-  \"current_story\": \"<STORY-ID>\",
-  \"completed\": [\"STORY-001\", ...],
-  \"total\": $total_stories,
-  \"updated\": \"<ISO timestamp>\",
-  \"logs\": [
-    {\"time\": \"HH:MM:SS\", \"event\": \"story_start\", \"story\": \"SEC-001\", \"message\": \"Protect /api/accounts\"},
-    {\"time\": \"HH:MM:SS\", \"event\": \"file_edit\", \"story\": \"SEC-001\", \"message\": \"src/app/api/accounts/route.ts\"},
-    {\"time\": \"HH:MM:SS\", \"event\": \"story_complete\", \"story\": \"SEC-001\", \"message\": \"Committed\"}
-  ]
-}
-
-Events possibles: started, prd_loaded, story_start, file_edit, file_create, commit, story_complete, error, completed
+1. Log: \`[HH:MM:SS] 🔨 Début STORY-ID: titre\`
+2. Update status.json: current_story = STORY-ID
+3. Implémente les changements
+4. Log chaque fichier modifié: \`[HH:MM:SS] 📝 Modification: path/to/file\`
+5. Commit: \`git commit -m \"feat(STORY-ID): description\"\`
+6. Log: \`[HH:MM:SS] 💾 Commit: feat(STORY-ID): description\`
+7. **Update status.json: ajoute STORY-ID au tableau completed**
+8. Log: \`[HH:MM:SS] ✅ STORY-ID terminée\`
+9. Passe à la story suivante
 
 ## Commence maintenant
 
-1. Écris dans activity.log: \"[HH:MM:SS] 🚀 Drone démarré\"
+1. Log: \"🚀 Drone démarré\"
 2. Lis le PRD
-3. Écris dans activity.log: \"[HH:MM:SS] 📖 PRD chargé: X stories à implémenter\"
-4. Implémente story par story, en loggant chaque action
+3. Update status.json: status = in_progress
+4. Log: \"📖 PRD chargé: X stories à implémenter\"
+5. Implémente story par story en suivant le workflow ci-dessus
 
-Sois autonome et méthodique."
+Sois autonome et méthodique. N'oublie JAMAIS de mettre à jour status.json!"
 
-    # Launch Claude in background
+    # Launch Claude in background using a loop (like Ralph)
     print_info "Launching Claude agent..."
 
-    # Create a temp file for the prompt
-    local prompt_file=$(mktemp)
+    # Create the prompt file (persistent, not temp)
+    local prompt_file="$drone_status_dir/prompt.md"
     echo "$drone_prompt" > "$prompt_file"
 
-    # Launch in background with nohup
+    # Create the launcher script that runs the loop
+    local launcher_script="$drone_status_dir/launcher.sh"
     local log_file="$drone_status_dir/drone.log"
-    nohup claude --print -p "$(cat "$prompt_file")" \
-        --model "$model" \
-        --max-turns "$iterations" \
+    local activity_log="$drone_status_dir/activity.log"
+
+    cat > "$launcher_script" << 'LAUNCHER_EOF'
+#!/bin/bash
+set -e
+
+DRONE_DIR="$1"
+PROMPT_FILE="$2"
+MODEL="$3"
+MAX_ITERATIONS="$4"
+WORKTREE="$5"
+DRONE_NAME="$6"
+
+LOG_FILE="$DRONE_DIR/drone.log"
+STATUS_FILE="$DRONE_DIR/status.json"
+ACTIVITY_LOG="$DRONE_DIR/activity.log"
+
+echo "Starting drone loop: $MAX_ITERATIONS iterations max" >> "$LOG_FILE"
+echo "Working directory: $WORKTREE" >> "$LOG_FILE"
+
+for i in $(seq 1 "$MAX_ITERATIONS"); do
+    echo "" >> "$LOG_FILE"
+    echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
+    echo "  Drone Iteration $i of $MAX_ITERATIONS - $(date)" >> "$LOG_FILE"
+    echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
+
+    # Check if all stories are completed
+    if [ -f "$STATUS_FILE" ]; then
+        STATUS=$(jq -r '.status // "in_progress"' "$STATUS_FILE" 2>/dev/null)
+        if [ "$STATUS" = "completed" ]; then
+            echo "" >> "$LOG_FILE"
+            echo "🎉 All stories completed! Drone finished at iteration $i." >> "$LOG_FILE"
+            exit 0
+        fi
+
+        COMPLETED=$(jq -r '.completed | length // 0' "$STATUS_FILE" 2>/dev/null)
+        TOTAL=$(jq -r '.total // 0' "$STATUS_FILE" 2>/dev/null)
+        if [ "$COMPLETED" -ge "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
+            # Mark as completed
+            jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.status = "completed" | .current_story = null | .updated = $ts' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
+            echo "" >> "$LOG_FILE"
+            echo "🎉 All $TOTAL stories completed! Drone finished at iteration $i." >> "$LOG_FILE"
+            exit 0
+        fi
+    fi
+
+    # Run Claude
+    cd "$WORKTREE"
+    claude --print -p "$(cat "$PROMPT_FILE")" \
+        --model "$MODEL" \
         --allowedTools "Bash,Read,Write,Edit,Glob,Grep,TodoWrite" \
-        > "$log_file" 2>&1 &
+        >> "$LOG_FILE" 2>&1 || true
+
+    echo "Iteration $i complete. Checking status..." >> "$LOG_FILE"
+    sleep 2
+done
+
+echo "" >> "$LOG_FILE"
+echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
+echo "  Drone reached max iterations ($MAX_ITERATIONS)" >> "$LOG_FILE"
+echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
+
+# Mark as paused, not error
+jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.updated = $ts' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
+LAUNCHER_EOF
+
+    chmod +x "$launcher_script"
+
+    # Launch the loop in background with nohup
+    nohup "$launcher_script" "$drone_status_dir" "$prompt_file" "$model" "$iterations" "$external_worktree" "$drone_name" > /dev/null 2>&1 &
 
     local pid=$!
     echo "$pid" > "$drone_status_dir/.pid"
-    rm "$prompt_file"
 
     print_success "Drone $drone_name launched! (PID: $pid)"
     print_info "Log: $log_file"
     print_info "Status: $drone_status_file"
+    print_info "Max iterations: $iterations (each iteration = full Claude session)"
     echo ""
     print_info "Monitor with: hive status"
     print_info "View logs: hive logs $drone_name"
