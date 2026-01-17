@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-01-17
+
+### Added
+- **Auto-update check** - Notifies when new version is available (cached 24h)
+- **`hive update` command** - Self-update CLI and skills in one command
+
+### Changed
+- Update check runs in background (non-blocking)
+- Skip update check for `help`, `version`, `update` commands
+
 ## [0.2.0] - 2025-01-17
 
 ### Added

@@ -81,6 +81,7 @@ hive clean security
 | `hive logs <name>` | `/hive:logs` | View drone logs |
 | `hive kill <name>` | `/hive:kill` | Stop a running drone |
 | `hive clean <name>` | `/hive:clean` | Remove drone and worktree |
+| `hive update` | - | Update Hive to latest version |
 | - | `/hive:prd` | Generate a PRD from feature description |
 | - | `/hive:statusline` | Configure statusline with drone tracking |
 

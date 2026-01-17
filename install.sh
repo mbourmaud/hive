@@ -21,7 +21,7 @@ else
 fi
 
 REPO_URL="https://raw.githubusercontent.com/mbourmaud/hive/main"
-VERSION="0.2.0"
+VERSION="0.2.1"
 INSTALLED_CLI=0
 INSTALLED_SKILLS=0
 

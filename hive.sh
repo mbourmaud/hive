@@ -18,13 +18,19 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="0.2.0"
+VERSION="0.2.1"
 
 # Configuration
 HIVE_DIR=".hive"
 CONFIG_FILE="$HIVE_DIR/config.json"
 PRDS_DIR="$HIVE_DIR/prds"
 DRONES_DIR="$HIVE_DIR/drones"
+
+# Update check config
+HIVE_CACHE_DIR="$HOME/.cache/hive"
+HIVE_VERSION_CACHE="$HIVE_CACHE_DIR/latest_version"
+HIVE_CHECK_INTERVAL=86400  # 24 hours in seconds
+HIVE_REPO_URL="https://raw.githubusercontent.com/mbourmaud/hive/main"
 
 # ============================================================================
 # Helper Functions
@@ -63,6 +69,65 @@ get_project_root() {
 
 get_project_name() {
     basename "$(get_project_root)"
+}
+
+# ============================================================================
+# Update Check Functions
+# ============================================================================
+
+# Compare semantic versions: returns 0 if $1 < $2
+version_lt() {
+    [ "$1" = "$2" ] && return 1
+    local IFS=.
+    local i ver1=($1) ver2=($2)
+    for ((i=0; i<${#ver1[@]}; i++)); do
+        [ -z "${ver2[i]}" ] && return 1
+        [ "${ver1[i]}" -lt "${ver2[i]}" ] 2>/dev/null && return 0
+        [ "${ver1[i]}" -gt "${ver2[i]}" ] 2>/dev/null && return 1
+    done
+    return 1
+}
+
+# Fetch latest version from GitHub (silent, non-blocking)
+fetch_latest_version() {
+    mkdir -p "$HIVE_CACHE_DIR"
+    local remote_version
+    remote_version=$(curl -sL --connect-timeout 2 --max-time 5 "$HIVE_REPO_URL/hive.sh" 2>/dev/null | grep '^VERSION=' | head -1 | cut -d'"' -f2)
+    if [ -n "$remote_version" ]; then
+        echo "$remote_version" > "$HIVE_VERSION_CACHE"
+        touch "$HIVE_VERSION_CACHE"
+    fi
+}
+
+# Check if update is available (uses cache, non-blocking)
+check_for_updates() {
+    # Skip update check if HIVE_NO_UPDATE_CHECK is set
+    [ -n "$HIVE_NO_UPDATE_CHECK" ] && return
+
+    mkdir -p "$HIVE_CACHE_DIR"
+
+    local should_fetch=false
+
+    if [ ! -f "$HIVE_VERSION_CACHE" ]; then
+        should_fetch=true
+    else
+        local cache_age=$(($(date +%s) - $(stat -f %m "$HIVE_VERSION_CACHE" 2>/dev/null || stat -c %Y "$HIVE_VERSION_CACHE" 2>/dev/null || echo 0)))
+        [ "$cache_age" -gt "$HIVE_CHECK_INTERVAL" ] && should_fetch=true
+    fi
+
+    # Fetch in background if needed (non-blocking)
+    if [ "$should_fetch" = true ]; then
+        (fetch_latest_version &) 2>/dev/null
+    fi
+
+    # Show update message if cache exists and version is newer
+    if [ -f "$HIVE_VERSION_CACHE" ]; then
+        local latest=$(cat "$HIVE_VERSION_CACHE" 2>/dev/null)
+        if [ -n "$latest" ] && version_lt "$VERSION" "$latest"; then
+            echo -e "${YELLOW}⚠ Update available: $VERSION → $latest${NC} (run 'hive update')"
+            echo ""
+        fi
+    fi
 }
 
 # ============================================================================
@@ -634,6 +699,98 @@ cmd_list() {
 }
 
 # ============================================================================
+# Update Command
+# ============================================================================
+
+cmd_update() {
+    print_info "Checking for updates..."
+
+    # Fetch latest version
+    local remote_version
+    remote_version=$(curl -sL --connect-timeout 5 --max-time 10 "$HIVE_REPO_URL/hive.sh" 2>/dev/null | grep '^VERSION=' | head -1 | cut -d'"' -f2)
+
+    if [ -z "$remote_version" ]; then
+        print_error "Could not fetch latest version. Check your internet connection."
+        exit 1
+    fi
+
+    # Update cache
+    mkdir -p "$HIVE_CACHE_DIR"
+    echo "$remote_version" > "$HIVE_VERSION_CACHE"
+
+    if [ "$VERSION" = "$remote_version" ]; then
+        print_success "Hive is already up to date (v$VERSION)"
+        exit 0
+    fi
+
+    if ! version_lt "$VERSION" "$remote_version"; then
+        print_success "Hive is already up to date (v$VERSION)"
+        exit 0
+    fi
+
+    echo ""
+    echo -e "  Current version: ${YELLOW}$VERSION${NC}"
+    echo -e "  Latest version:  ${GREEN}$remote_version${NC}"
+    echo ""
+
+    read -p "Update now? [Y/n] " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Nn]$ ]] && exit 0
+
+    print_info "Updating Hive..."
+
+    # Determine install directory (where current hive is)
+    local install_dir
+    install_dir=$(dirname "$(command -v hive 2>/dev/null || echo "$HOME/.local/bin/hive")")
+
+    # Download new CLI
+    print_info "Downloading CLI..."
+    if curl -sL -o "$install_dir/hive.tmp" "$HIVE_REPO_URL/hive.sh"; then
+        chmod +x "$install_dir/hive.tmp"
+        mv "$install_dir/hive.tmp" "$install_dir/hive"
+        print_success "CLI updated to v$remote_version"
+    else
+        print_error "Failed to download CLI"
+        rm -f "$install_dir/hive.tmp"
+        exit 1
+    fi
+
+    # Update skills for Claude Code
+    if [ -d "$HOME/.claude/commands" ]; then
+        print_info "Updating Claude Code skills..."
+        local skills=(
+            "hive:init"
+            "hive:start"
+            "hive:status"
+            "hive:list"
+            "hive:logs"
+            "hive:kill"
+            "hive:clean"
+            "hive:prd"
+            "hive:statusline"
+        )
+        for skill in "${skills[@]}"; do
+            curl -sL -o "$HOME/.claude/commands/$skill.md" "$HIVE_REPO_URL/commands/$skill.md" 2>/dev/null
+        done
+        print_success "Claude Code skills updated (${#skills[@]} skills)"
+    fi
+
+    # Update skills for Cursor
+    if [ -d "$HOME/.cursor/commands" ]; then
+        print_info "Updating Cursor commands..."
+        for skill in "${skills[@]}"; do
+            curl -sL -o "$HOME/.cursor/commands/$skill.md" "$HIVE_REPO_URL/commands/$skill.md" 2>/dev/null
+        done
+        print_success "Cursor commands updated"
+    fi
+
+    echo ""
+    print_success "Hive updated to v$remote_version!"
+    echo ""
+    echo "Changelog: https://github.com/mbourmaud/hive/blob/main/CHANGELOG.md"
+}
+
+# ============================================================================
 # Version Command
 # ============================================================================
 
@@ -662,6 +819,7 @@ ${CYAN}Commands:${NC}
   ${GREEN}kill${NC}     Stop a running drone
   ${GREEN}clean${NC}    Remove a drone and its worktree
   ${GREEN}init${NC}     Initialize Hive in current repo
+  ${GREEN}update${NC}   Update Hive to latest version
   ${GREEN}version${NC}  Show version
   ${GREEN}help${NC}     Show this help
 
@@ -697,6 +855,13 @@ main() {
     local command="${1:-help}"
     shift || true
 
+    # Check for updates (non-blocking, cached)
+    # Skip for certain commands to avoid noise
+    case "$command" in
+        update|version|--version|-v|help|--help|-h) ;;
+        *) check_for_updates ;;
+    esac
+
     case "$command" in
         start)   cmd_run "$@" ;;
         run)     cmd_run "$@" ;;  # alias for backwards compat
@@ -706,7 +871,8 @@ main() {
         kill)    cmd_kill "$@" ;;
         clean)   cmd_clean "$@" ;;
         init)    cmd_init "$@" ;;
-        version) cmd_version ;;
+        update)  cmd_update "$@" ;;
+        version|--version|-v) cmd_version ;;
         help|--help|-h) cmd_help ;;
         *)
             print_error "Unknown command: $command"
