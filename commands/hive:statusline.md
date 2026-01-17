@@ -13,7 +13,7 @@ imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
 
 **Line 2:** Hive dashboard (only if drones exist)
 ```
-👑 Hive v0.2.0 | 🐝 security ✓ (10/10) | 🐝 feature (5/10)
+👑 Hive v1.1.0 │ 🐝 security ✓ (10/10) │ 🐝 feature (5/10)
 ```
 
 ## Drone Status Icons
@@ -98,7 +98,7 @@ After editing, save the file and tell the user to restart Claude Code or open a 
 
 ```
 imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
-👑 Hive v0.3.0 | 🐝 security ✓ (10/10) | 🐝 feature (5/10) | 🐝 refactor ⏸ (3/8)
+👑 Hive v1.1.0 │ 🐝 security ✓ (10/10) │ 🐝 feature (5/10) │ 🐝 refactor ⏸ (3/8)
 ```
 
 ## Notes
