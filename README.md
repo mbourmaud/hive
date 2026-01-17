@@ -1,121 +1,60 @@
-# Hive - Multi-Ralph Orchestration
+# 👑 Hive
 
-**Run multiple Claude Code instances in parallel.** A single bash script for orchestrating multiple Claude Code (Ralph) instances via git worktrees.
+**Drone Orchestration for Claude Code**
+
+Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree, executing stories from a PRD while you continue working.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## What is Hive?
+## Quick Start
 
-Hive lets you spawn multiple Claude Code agents (Ralphs), each working in an isolated git worktree. Each Ralph runs autonomously, iterating until tasks are verified complete.
+```bash
+# Install
+make install
+
+# Initialize Hive in your project
+hive init
+
+# Launch a drone on a PRD
+hive start --prd .hive/prds/prd-security.json
+
+# Monitor progress
+hive status
+
+# View logs
+hive logs security
+
+# Cleanup when done
+hive clean security
+```
+
+---
+
+## What it does
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              Your Project Repository                │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  ┌───────────┐  ┌───────────┐  ┌───────────┐       │
-│  │  Ralph 1  │  │  Ralph 2  │  │  Ralph 3  │       │
-│  │ (worktree)│  │ (worktree)│  │ (worktree)│       │
-│  │ feature/A │  │ feature/B │  │ feature/C │       │
-│  └───────────┘  └───────────┘  └───────────┘       │
-│                                                     │
-│  Orchestrated by hive.sh                           │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  👑 Queen (main branch)                                     │
+│  You + Claude working on features                           │
+│  .hive/ folder with shared state                            │
+├─────────────────────────────────────────────────────────────┤
+│  🐝 Drone: security (hive/security branch)                  │
+│  Autonomously implementing SEC-001 → SEC-010                │
+│  .hive/ symlinked from queen                                │
+├─────────────────────────────────────────────────────────────┤
+│  🐝 Drone: feature-x (hive/feature-x branch)                │
+│  Autonomously implementing FEAT-001 → FEAT-005              │
+│  .hive/ symlinked from queen                                │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Perfect for:**
-- Fixing multiple bugs simultaneously
-- Developing features in parallel (frontend + backend + tests)
+- Executing PRD stories in the background
+- Running multiple parallel implementations
 - Large-scale refactoring with isolated workspaces
-- Continuous iteration until all tests pass
-
----
-
-## Prerequisites
-
-- **bash** - Shell interpreter (included on macOS/Linux)
-- **jq** - JSON processor ([install](https://jqlang.github.io/jq/download/))
-- **git** - Version control
-- **gh** - GitHub CLI ([install](https://cli.github.com/))
-- **claude** - Claude Code CLI
-
----
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/mbourmaud/hive
-cd hive
-
-# Install hive to ~/.local/bin
-make install
-```
-
-This copies `hive.sh` to `~/.local/bin/hive`. Make sure `~/.local/bin` is in your PATH.
-
-### Manual Installation
-
-```bash
-# Or just copy the script directly
-cp hive.sh ~/.local/bin/hive
-chmod +x ~/.local/bin/hive
-```
-
----
-
-## Quick Start
-
-### 1. Initialize in your project
-
-```bash
-cd your-project
-hive init
-```
-
-### 2. Create a Ralph
-
-```bash
-# Create a new branch for the Ralph
-hive spawn my-feature --create feature/my-feature
-
-# Or attach to an existing branch
-hive spawn my-feature --attach feature/existing-branch
-```
-
-### 3. Start the Ralph
-
-```bash
-hive start my-feature "Implement user authentication"
-```
-
-### 4. Monitor progress
-
-```bash
-# Check status of all Ralphs
-hive status
-
-# Watch live logs
-hive logs my-feature --follow
-
-# Live dashboard with auto-refresh
-hive dashboard
-```
-
-### 5. Create a Pull Request
-
-```bash
-hive pr my-feature
-```
-
-### 6. Cleanup after merge
-
-```bash
-hive cleanup my-feature
-```
+- Autonomous code generation from specifications
 
 ---
 
@@ -123,141 +62,194 @@ hive cleanup my-feature
 
 | Command | Description |
 |---------|-------------|
-| `hive init` | Initialize Hive in current repository |
-| `hive spawn <name> --create <branch>` | Create new Ralph with new branch |
-| `hive spawn <name> --attach <branch>` | Attach Ralph to existing branch |
-| `hive start <name> [prompt]` | Start Ralph background process |
-| `hive status` | Show status of all Ralphs |
-| `hive logs <name> [lines]` | View Ralph's output log |
-| `hive stop <name>` | Stop a running Ralph |
-| `hive sync <name>` | Sync worktree with target branch |
-| `hive pr <name> [--draft]` | Create Pull Request |
-| `hive prs` | List all PRs created by Hive |
-| `hive cleanup <name>` | Remove worktree after PR merge |
-| `hive clean <name>` | Remove worktree (abandon work) |
-| `hive dashboard` | Live status dashboard |
+| `hive start --prd <file>` | Launch a drone on a PRD |
+| `hive status` | Show status of all drones |
+| `hive list` | List active drones |
+| `hive logs <name>` | View drone logs |
+| `hive logs -f <name>` | Follow drone logs |
+| `hive kill <name>` | Stop a running drone |
+| `hive clean <name>` | Remove drone and worktree |
+| `hive init` | Initialize Hive in repo |
+| `hive help` | Show help |
 
-Run `hive <command> --help` for detailed information on each command.
+Run `hive <command> --help` for detailed options.
 
 ---
 
-## Example Workflows
-
-### Single Feature Development
+## Start Options
 
 ```bash
-# Initialize Hive in your repo
-hive init
+hive start --prd <file> [options]
 
-# Create a Ralph for a new feature
-hive spawn auth-feature --create feature/auth --from main
-
-# Start Ralph with a task
-hive start auth-feature "Implement JWT authentication"
-
-# Monitor progress
-hive status
-hive logs auth-feature --follow
-
-# When done, create a PR
-hive pr auth-feature
-
-# After PR is merged, cleanup
-hive cleanup auth-feature
+Options:
+  --prd <file>        PRD JSON file (required)
+  --name <name>       Drone name (default: from PRD id)
+  --base <branch>     Base branch (default: main)
+  --iterations <n>    Max turns (default: 50)
+  --model <model>     Claude model (default: opus)
 ```
 
-### Parallel Feature Development
+### Examples
 
 ```bash
-# Create multiple Ralphs for different features
-hive spawn frontend --create feature/ui-redesign
-hive spawn backend --create feature/api-v2
-hive spawn tests --create feature/e2e-tests
+# Simple - uses PRD id as drone name
+hive start --prd .hive/prds/prd-security.json
 
-# Start all Ralphs
-hive start frontend "Redesign the dashboard UI"
-hive start backend "Implement REST API v2"
-hive start tests "Add end-to-end test coverage"
+# Custom name and base branch
+hive start --prd feature.json --name auth-feature --base develop
 
-# Monitor all with dashboard
-hive dashboard
-```
+# More iterations for complex PRDs
+hive start --prd big-refactor.json --iterations 100
 
-### Collaborative Work on Same Branch
-
-```bash
-# First Ralph creates the branch
-hive spawn lead --create feature/big-feature
-
-# Second Ralph attaches with scoped access
-hive spawn helper --attach feature/big-feature --scope "src/utils/*"
-
-# Start both with different tasks
-hive start lead "Implement main feature logic"
-hive start helper "Create utility functions"
-```
-
-### Continue Existing Work
-
-```bash
-# Attach to an existing remote branch
-hive spawn continue-work --attach feature/existing-branch
-hive start continue-work "Complete the remaining tasks"
+# Use faster model
+hive start --prd small-task.json --model sonnet
 ```
 
 ---
 
-## Project Structure
+## PRD Format
 
-After running `hive init`, the following structure is created:
+PRDs are stored in `.hive/prds/`:
 
-```
-your-project/
-├── .hive/
-│   ├── config.json      # Configuration and state
-│   └── worktrees/       # Git worktrees for each Ralph
-│       ├── ralph-1/
-│       ├── ralph-2/
-│       └── ...
-└── ...
+```json
+{
+  "id": "security-api-protection",
+  "title": "Secure API Routes",
+  "description": "Add authentication to all API routes",
+  "stories": [
+    {
+      "id": "SEC-001",
+      "title": "Protect /api/accounts/*",
+      "description": "Add requireAuth() to account routes",
+      "acceptance_criteria": [
+        "GET /api/accounts returns 401 if not authenticated",
+        "POST /api/accounts returns 401 if not authenticated"
+      ],
+      "files": [
+        "src/app/api/accounts/route.ts"
+      ]
+    },
+    {
+      "id": "SEC-002",
+      "title": "Protect /api/users/*",
+      "description": "Add requireAuth() to user routes",
+      "acceptance_criteria": ["..."],
+      "files": ["..."]
+    }
+  ]
+}
 ```
 
 ---
 
-## How It Works
+## Claude Code Integration
 
-1. **Git Worktrees**: Each Ralph works in an isolated git worktree, allowing parallel development on different branches without conflicts.
+Use these skills in Claude Code:
 
-2. **Background Processes**: Ralphs run as background processes using `nohup`, surviving terminal sessions.
+| Skill | Description |
+|-------|-------------|
+| `/hive:start` | Interactive drone launch wizard |
+| `/hive:prd` | Generate a PRD from feature description |
+| `/hive:statusline` | Configure statusline with drone tracking |
 
-3. **State Management**: All state is stored in `.hive/config.json`, tracking Ralph status, PIDs, branches, and PR information.
+### Statusline
 
-4. **GitHub Integration**: Uses `gh` CLI for PR creation and status tracking.
+After running `/hive:statusline`, your statusline shows:
+
+```
+project │ main │ Opus 4.5 │ 45% │ ⬢ 22
+👑 Hive v0.2.0 | 🐝 security (4/10) | 🐝 feature ✓ (5/5)
+```
 
 ---
 
-## Tips
+## How it works
 
-- Use `hive dashboard` for a live view of all Ralphs
-- Use `--scope` when attaching multiple Ralphs to the same branch to avoid conflicts
-- Run `hive sync <name>` regularly to keep worktrees up-to-date with the target branch
-- Use `hive clean <name>` to abandon work without creating a PR
+1. **Init**: `hive init` creates `.hive/` folder (gitignored)
+2. **PRD**: Store PRDs in `.hive/prds/`
+3. **Branch**: Creates `hive/<drone-name>` from base branch
+4. **Worktree**: Creates `~/Projects/{project}-{drone}/`
+5. **Symlink**: Links `.hive/` to worktree (shared state!)
+6. **Launch**: Starts Claude agent in background
+7. **Track**: Drone updates `.hive/drones/<name>/status.json`
+8. **Commits**: Each story = one commit with `feat(<STORY-ID>): description`
+
+---
+
+## File Structure
+
+```
+your-project/                      # 👑 Queen (main repo)
+├── .hive/                         # Shared state (gitignored)
+│   ├── config.json
+│   ├── prds/                      # PRD files here
+│   │   └── prd-security.json
+│   └── drones/                    # Drone state
+│       └── security/
+│           ├── status.json        # Progress tracking
+│           ├── drone.log          # Output log
+│           └── .pid               # Process ID
+
+~/Projects/
+├── your-project/                  # Queen
+├── your-project-security/         # 🐝 Drone worktree
+│   ├── .hive -> ../your-project/.hive  # Symlink!
+│   └── (project files)
+└── your-project-feature/          # 🐝 Another drone
+    └── .hive -> ../your-project/.hive
+```
+
+The `.hive/` symlink enables **queen ↔ drone communication**:
+- Queen can monitor drone progress in real-time
+- Drones share PRDs from the same source
+- Status updates are immediately visible
+
+---
+
+## Requirements
+
+- `bash` - Shell interpreter
+- `jq` - JSON processor
+- `git` - Version control
+- `claude` - Claude Code CLI
+
+---
+
+## Installation
+
+```bash
+# Clone
+git clone https://github.com/mbourmaud/hive.git
+cd hive
+
+# Install to ~/.local/bin
+make install
+```
+
+Make sure `~/.local/bin` is in your PATH.
+
+### Manual Installation
+
+```bash
+cp hive.sh ~/.local/bin/hive
+chmod +x ~/.local/bin/hive
+```
 
 ---
 
 ## Troubleshooting
 
 ### "Not a git repository"
-Make sure you're in a git repository before running `hive init`.
+Make sure you're in a git repository before running hive commands.
 
-### "jq is required but not installed"
+### "jq is required"
 Install jq: `brew install jq` (macOS) or `apt install jq` (Ubuntu).
 
-### "gh CLI not authenticated"
-Run `gh auth login` to authenticate with GitHub.
+### Drone process died
+Check logs with `hive logs <name>`. Restart with `hive start --prd ...`.
 
-### Ralph process died unexpectedly
-Check the logs with `hive logs <name>` to see what went wrong. You can restart with `hive start <name>`.
+### Worktree conflicts
+Use `hive clean -f <name>` to force cleanup, then retry.
 
 ---
 
@@ -267,4 +259,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-Made with Claude Code by [@mbourmaud](https://github.com/mbourmaud)
+Made with 👑 by [@mbourmaud](https://github.com/mbourmaud)
