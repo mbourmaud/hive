@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="0.3.0"
+VERSION="1.0.0"
 
 # Configuration
 HIVE_DIR=".hive"
