@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hive - Drone Orchestration for Claude Code</title>
+  <meta name="description" content="Launch autonomous Claude agents on PRD files. Each drone works in its own git worktree while you continue working.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👑</text></svg>">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --border: #262626;
+      --text: #fafafa;
+      --text-muted: #a1a1aa;
+      --accent: #fbbf24;
+      --accent-dim: #92711c;
+      --cyan: #22d3ee;
+      --green: #4ade80;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .tagline {
+      font-size: 20px;
+      color: var(--text-muted);
+      max-width: 500px;
+      margin: 0 auto 40px;
+    }
+
+    /* Install */
+    .install {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .install code {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 14px;
+      color: var(--cyan);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .install button {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      flex-shrink: 0;
+    }
+
+    .install button:hover {
+      opacity: 0.9;
+    }
+
+    .install button.copied {
+      background: var(--green);
+    }
+
+    /* Diagram */
+    .diagram {
+      margin: 80px 0;
+    }
+
+    .diagram pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-x: auto;
+      color: var(--text-muted);
+    }
+
+    .diagram .queen { color: var(--accent); }
+    .diagram .drone { color: var(--cyan); }
+    .diagram .check { color: var(--green); }
+
+    /* Features */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+      margin: 60px 0;
+    }
+
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 12px;
+    }
+
+    .feature h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Commands */
+    .commands {
+      margin: 60px 0;
+    }
+
+    .commands h2 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .command-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .command {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+    }
+
+    .command .cli {
+      color: var(--cyan);
+      margin-bottom: 4px;
+    }
+
+    .command .skill {
+      color: var(--accent);
+      font-size: 12px;
+    }
+
+    .command .desc {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-top: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Footer */
+    footer {
+      padding: 60px 0;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      margin-top: 60px;
+    }
+
+    footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin: 0 16px;
+      transition: color 0.2s;
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 500;
+      margin-bottom: 24px;
+      transition: border-color 0.2s;
+    }
+
+    .github-btn:hover {
+      border-color: var(--text-muted);
+      color: var(--text);
+    }
+
+    .github-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    /* Mobile */
+    @media (max-width: 600px) {
+      header {
+        padding: 60px 0 40px;
+      }
+
+      h1 {
+        font-size: 36px;
+      }
+
+      .tagline {
+        font-size: 18px;
+      }
+
+      .install {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .install code {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">👑</div>
+      <h1><span>Hive</span></h1>
+      <p class="tagline">Drone orchestration for Claude Code. Launch autonomous agents on PRD files while you keep working.</p>
+
+      <div class="install">
+        <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</code>
+        <button onclick="copyInstall()">Copy</button>
+      </div>
+    </header>
+
+    <section class="diagram">
+      <pre><span class="queen">┌─────────────────────────────────────────────────────────────┐
+│  👑 Queen (main branch)                                     │
+│  You + Claude working on features                           │
+│  .hive/ folder with shared state                            │
+├─────────────────────────────────────────────────────────────┤</span>
+<span class="drone">│  🐝 Drone: security (hive/security branch)                  │
+│  Autonomously implementing SEC-001 → SEC-010                │
+│  .hive/ symlinked from queen                                │
+├─────────────────────────────────────────────────────────────┤
+│  🐝 Drone: feature-x (hive/feature-x branch)                │
+│  Autonomously implementing FEAT-001 → FEAT-005              │
+│  .hive/ symlinked from queen                                │
+└─────────────────────────────────────────────────────────────┘</span></pre>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <div class="feature-icon">🚀</div>
+        <h3>PRD-Driven</h3>
+        <p>Define stories in JSON, let drones execute them autonomously.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔀</div>
+        <h3>Git Worktrees</h3>
+        <p>Each drone works in isolation. No conflicts with your work.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📡</div>
+        <h3>Real-time Status</h3>
+        <p>Monitor progress from your terminal. Shared state via symlinks.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h3>One Command</h3>
+        <p>Install with curl, init with hive init, launch with hive start.</p>
+      </div>
+    </section>
+
+    <section class="commands">
+      <h2>Commands</h2>
+      <div class="command-grid">
+        <div class="command">
+          <div class="cli">hive init</div>
+          <div class="skill">/hive:init</div>
+          <div class="desc">Initialize Hive</div>
+        </div>
+        <div class="command">
+          <div class="cli">hive start</div>
+          <div class="skill">/hive:start</div>
+          <div class="desc">Launch a drone</div>
+        </div>
+        <div class="command">
+          <div class="cli">hive status</div>
+          <div class="skill">/hive:status</div>
+          <div class="desc">View all drones</div>
+        </div>
+        <div class="command">
+          <div class="cli">hive logs</div>
+          <div class="skill">/hive:logs</div>
+          <div class="desc">View drone logs</div>
+        </div>
+        <div class="command">
+          <div class="cli">hive kill</div>
+          <div class="skill">/hive:kill</div>
+          <div class="desc">Stop a drone</div>
+        </div>
+        <div class="command">
+          <div class="cli">hive clean</div>
+          <div class="skill">/hive:clean</div>
+          <div class="desc">Remove drone</div>
+        </div>
+        <div class="command">
+          <div class="cli">hive update</div>
+          <div class="skill">—</div>
+          <div class="desc">Self-update</div>
+        </div>
+        <div class="command">
+          <div class="cli">—</div>
+          <div class="skill">/hive:prd</div>
+          <div class="desc">Generate PRD</div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <a href="https://github.com/mbourmaud/hive" class="github-btn">
+        <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        View on GitHub
+      </a>
+      <div>
+        <a href="https://github.com/mbourmaud/hive/blob/main/README.md">Docs</a>
+        <a href="https://github.com/mbourmaud/hive/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/mbourmaud/hive/issues">Issues</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    function copyInstall() {
+      const cmd = document.getElementById('install-cmd').textContent;
+      navigator.clipboard.writeText(cmd);
+      const btn = document.querySelector('.install button');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
