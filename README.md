@@ -1,10 +1,21 @@
-# 👑 Hive
+<p align="center">
+  <img src="assets/logo.png" alt="Hive Logo" width="200">
+</p>
 
-**Drone Orchestration for Claude Code**
+<h1 align="center">Hive</h1>
 
-Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree, executing stories from a PRD while you continue working.
+<p align="center">
+  <strong>Drone Orchestration for Claude Code</strong>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree, executing stories from a PRD while you continue working.
+</p>
+
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://github.com/mbourmaud/hive/releases"><img src="https://img.shields.io/github/v/release/mbourmaud/hive" alt="Release"></a>
+</p>
 
 ---
 
@@ -17,6 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | ba
 Installs:
 - **CLI**: `hive` command to `~/.local/bin/`
 - **Skills**: `/hive:*` commands for Claude Code
+- **Icon**: Bee icon for notifications
 
 ---
 
@@ -70,6 +82,33 @@ hive clean security
 
 ---
 
+## Features
+
+### 🔔 Desktop Notifications
+
+Hive sends desktop notifications when:
+- **🐝 Drone Started** - When a new drone begins working
+- **🎉 Drone Completed** - When all stories are done
+- **⏸️ Drone Paused** - When max iterations reached
+
+**Platform Support:**
+| Platform | Tool | Custom Icon |
+|----------|------|-------------|
+| macOS | terminal-notifier | ✅ |
+| Linux | notify-send | ✅ |
+| Windows/WSL | PowerShell Toast | ❌ |
+
+### 📊 Statusline Integration
+
+After running `/hive:statusline`, your Claude Code statusline shows:
+
+```
+project │ main │ Opus 4.5 │ 45% │ ⬢ 22
+👑 Hive v1.1.0 | 🐝 security (4/10) | 🐝 feature ✓ (5/5)
+```
+
+---
+
 ## Commands
 
 | CLI | Skill | Description |
@@ -98,7 +137,7 @@ Options:
   --prd <file>        PRD JSON file (required)
   --name <name>       Drone name (default: from PRD id)
   --base <branch>     Base branch (default: main)
-  --iterations <n>    Max turns (default: 50)
+  --iterations <n>    Max iterations (default: 15)
   --model <model>     Claude model (default: opus)
 ```
 
@@ -155,17 +194,6 @@ PRDs are stored in `.hive/prds/`:
 
 ---
 
-## Statusline
-
-After running `/hive:statusline`, your Claude Code statusline shows:
-
-```
-project │ main │ Opus 4.5 │ 45% │ ⬢ 22
-👑 Hive v0.2.0 | 🐝 security (4/10) | 🐝 feature ✓ (5/5)
-```
-
----
-
 ## How it works
 
 1. **Init**: `hive init` creates `.hive/` folder (gitignored)
@@ -173,9 +201,10 @@ project │ main │ Opus 4.5 │ 45% │ ⬢ 22
 3. **Branch**: Creates `hive/<drone-name>` from base branch
 4. **Worktree**: Creates `~/Projects/{project}-{drone}/`
 5. **Symlink**: Links `.hive/` to worktree (shared state!)
-6. **Launch**: Starts Claude agent in background
+6. **Launch**: Starts Claude agent in background loop
 7. **Track**: Drone updates `.hive/drones/<name>/status.json`
-8. **Commits**: Each story = one commit with `feat(<STORY-ID>): description`
+8. **Notify**: Desktop notifications on start/complete/pause
+9. **Commits**: Each story = one commit with `feat(<STORY-ID>): description`
 
 ---
 
@@ -216,6 +245,7 @@ The `.hive/` symlink enables **queen ↔ drone communication**:
 - `jq` - JSON processor
 - `git` - Version control
 - `claude` - Claude Code CLI
+- `terminal-notifier` (macOS, optional) - For custom notification icons
 
 ---
 
@@ -234,6 +264,10 @@ chmod +x ~/.local/bin/hive
 
 # Install skills (Claude Code)
 cp commands/*.md ~/.claude/commands/
+
+# Install icon (for notifications)
+mkdir -p ~/.local/share/hive
+cp assets/logo.png ~/.local/share/hive/bee-icon.png
 ```
 
 Make sure `~/.local/bin` is in your PATH.
@@ -254,6 +288,9 @@ Check logs with `hive logs <name>`. Restart with `hive start --prd ...`.
 ### Worktree conflicts
 Use `hive clean -f <name>` to force cleanup, then retry.
 
+### No notifications on macOS
+Install terminal-notifier: `brew install terminal-notifier` and allow notifications in System Preferences.
+
 ---
 
 ## License
@@ -262,4 +299,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-Made with 👑 by [@mbourmaud](https://github.com/mbourmaud)
+<p align="center">
+  Made with 👑 by <a href="https://github.com/mbourmaud">@mbourmaud</a>
+</p>

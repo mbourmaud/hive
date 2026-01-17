@@ -1,811 +1,350 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hive - Drone Orchestration for Claude Code</title>
-  <meta name="description" content="Launch autonomous Claude agents on PRD files. Each drone works in its own git worktree while you continue working.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg viewBox='0 0 80 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='40' y1='40' x2='40' y2='88' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%23fcd34d'/%3E%3Cstop offset='100%25' stop-color='%23f59e0b'/%3E%3C/linearGradient%3E%3ClinearGradient id='hg' x1='40' y1='28' x2='40' y2='56' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0%25' stop-color='%23fde68a'/%3E%3Cstop offset='100%25' stop-color='%23fbbf24'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='22' cy='48' rx='14' ry='10' fill='%23bfdbfe' stroke='%2393c5fd'/%3E%3Cellipse cx='58' cy='48' rx='14' ry='10' fill='%23bfdbfe' stroke='%2393c5fd'/%3E%3Cellipse cx='40' cy='64' rx='18' ry='24' fill='url(%23bg)'/%3E%3Cpath d='M22 58 Q40 56 58 58' stroke='%2318181b' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M22 68 Q40 66 58 68' stroke='%2318181b' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M24 78 Q40 76 56 78' stroke='%2318181b' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='40' cy='42' r='14' fill='url(%23hg)'/%3E%3Cpath d='M34 30 Q32 20 28 12' stroke='%2318181b' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M46 30 Q48 20 52 12' stroke='%2318181b' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='12' r='3' fill='%2318181b'/%3E%3Ccircle cx='52' cy='12' r='3' fill='%2318181b'/%3E%3Cpath d='M26 32 L30 22 L40 28 L50 22 L54 32 Z' fill='%23fbbf24' stroke='%23f59e0b' stroke-width='1'/%3E%3Ccircle cx='30' cy='22' r='2.5' fill='%23ef4444'/%3E%3Ccircle cx='40' cy='26' r='2.5' fill='%2322c55e'/%3E%3Ccircle cx='50' cy='22' r='2.5' fill='%233b82f6'/%3E%3Cellipse cx='34' cy='42' rx='4' ry='5' fill='%2318181b'/%3E%3Cellipse cx='46' cy='42' rx='4' ry='5' fill='%2318181b'/%3E%3Ccircle cx='35' cy='40' r='1.5' fill='white'/%3E%3Ccircle cx='47' cy='40' r='1.5' fill='white'/%3E%3Cpath d='M35 48 Q40 52 45 48' stroke='%2318181b' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='44' r='3' fill='%23fcd34d' opacity='0.6'/%3E%3Ccircle cx='52' cy='44' r='3' fill='%23fcd34d' opacity='0.6'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hive - Drone Orchestration for Claude Code</title>
+    <meta name="description" content="Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree.">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-secondary: #161b22;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #f5a623;
+            --accent-light: #ffd666;
+            --border: #30363d;
+            --code-bg: #1f2428;
+        }
 
-    :root {
-      --bg: #ffffff;
-      --text: #09090b;
-      --text-secondary: #52525b;
-      --border: #e4e4e7;
-      --accent: #18181b;
-      --surface: #f4f4f5;
-      --amber: #f59e0b;
-      --amber-light: #fef3c7;
-      --green: #22c55e;
-    }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      -webkit-font-smoothing: antialiased;
-    }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
 
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+        .hero {
+            text-align: center;
+            padding: 80px 20px;
+            background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg) 100%);
+        }
 
-    /* Header */
-    header {
-      padding: 50px 0 0;
-      text-align: center;
-    }
+        .logo {
+            width: 150px;
+            height: 150px;
+            margin-bottom: 24px;
+            animation: float 3s ease-in-out infinite;
+        }
 
-    h1 {
-      font-size: 64px;
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      margin-bottom: 20px;
-      line-height: 1;
-    }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
 
-    h1 {
-      position: relative;
-      display: inline-block;
-    }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            color: var(--accent);
+        }
 
-    h1 .logo {
-      position: absolute;
-      right: 100%;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 72px;
-      height: 80px;
-      margin-right: 8px;
-      animation: float 2s ease-in-out infinite;
-    }
+        .tagline {
+            font-size: 1.4rem;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
 
-    @keyframes float {
-      0%, 100% { transform: translateY(-50%); }
-      50% { transform: translateY(calc(-50% - 6px)); }
-    }
+        .cta {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--bg);
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+        }
 
-    .tagline {
-      font-size: 22px;
-      color: var(--text-secondary);
-      max-width: 560px;
-      margin: 0 auto 0;
-      line-height: 1.5;
-    }
+        .cta:hover {
+            background: var(--accent-light);
+            transform: translateY(-2px);
+        }
 
-    /* Timeline */
-    .timeline {
-      margin: 30px 0 80px;
-    }
+        .install-code {
+            margin-top: 24px;
+            background: var(--code-bg);
+            padding: 16px 24px;
+            border-radius: 8px;
+            display: inline-block;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.95rem;
+            border: 1px solid var(--border);
+        }
 
-    .steps {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      position: relative;
-      padding-left: 80px;
-    }
+        .install-code::before {
+            content: '$ ';
+            color: var(--accent);
+        }
 
-    /* Bee track - spans full height of steps container */
-    .bee-track {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 64px;
-      pointer-events: none;
-    }
+        .features {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 80px 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+        }
 
-    /* Track line and progress are positioned by JS */
-    .track-line {
-      position: absolute;
-      left: 50%;
-      width: 4px;
-      background: var(--surface);
-      transform: translateX(-50%);
-      border-radius: 2px;
-    }
+        .feature {
+            background: var(--bg-secondary);
+            padding: 32px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
 
-    .track-progress {
-      position: absolute;
-      left: 50%;
-      width: 4px;
-      background: var(--amber);
-      transform: translateX(-50%);
-      border-radius: 2px;
-      transition: height 0.15s ease-out;
-    }
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+        }
 
-    .bee {
-      position: absolute;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 10;
-      transition: top 0.15s ease-out;
-    }
+        .feature h3 {
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-size: 1.3rem;
+        }
 
-    .bee svg {
-      width: 52px;
-      height: 52px;
-      filter: drop-shadow(0 4px 8px rgba(245, 158, 11, 0.3));
-      display: block;
-    }
+        .feature p {
+            color: var(--text-muted);
+        }
 
-    .step {
-      padding: 28px 32px;
-      background: var(--surface);
-      border-radius: 16px;
-      opacity: 0.5;
-      transform: translateX(12px);
-      transition: all 0.3s ease;
-    }
+        .diagram {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
 
-    .step.active {
-      opacity: 1;
-      transform: translateX(0);
-      background: var(--amber-light);
-    }
+        .diagram h2 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 32px;
+            font-size: 2rem;
+        }
 
-    .step.completed {
-      opacity: 1;
-      transform: translateX(0);
-    }
+        .diagram-box {
+            background: var(--code-bg);
+            padding: 24px;
+            border-radius: 12px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            white-space: pre;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+        }
 
-    .step-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 12px;
-    }
+        .commands {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
 
-    .step-num {
-      width: 44px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: white;
-      border-radius: 12px;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--text-secondary);
-      transition: all 0.3s ease;
-    }
+        .commands h2 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 32px;
+            font-size: 2rem;
+        }
 
-    .step.active .step-num {
-      background: var(--amber);
-      color: white;
-    }
+        .commands table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+        }
 
-    .step.completed .step-num {
-      background: var(--text);
-      color: white;
-    }
+        .commands th, .commands td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
 
-    .step-title {
-      font-size: 22px;
-      font-weight: 700;
-    }
+        .commands th {
+            background: var(--code-bg);
+            color: var(--accent);
+        }
 
-    .step-badge {
-      margin-left: auto;
-      font-size: 11px;
-      font-weight: 600;
-      color: white;
-      background: var(--accent);
-      padding: 5px 10px;
-      border-radius: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }
+        .commands code {
+            background: var(--code-bg);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+        }
 
-    .step-desc {
-      color: var(--text-secondary);
-      font-size: 17px;
-      margin-bottom: 16px;
-    }
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+        }
 
-    .step-code-wrapper {
-      display: flex;
-      align-items: center;
-      background: #f4f4f5;
-      border-radius: 10px;
-      overflow: hidden;
-    }
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
 
-    .step-code {
-      flex: 1;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      padding: 14px 18px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+        footer a:hover {
+            text-decoration: underline;
+        }
 
-    .copy-btn {
-      background: #e4e4e7;
-      color: var(--text-secondary);
-      border: none;
-      padding: 14px 16px;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            color: var(--text);
+            text-decoration: none;
+        }
 
-    .copy-btn:hover {
-      background: #d4d4d8;
-      color: var(--text);
-    }
+        .github-link:hover {
+            color: var(--accent);
+        }
 
-    .copy-btn.copied {
-      color: var(--green);
-    }
-
-    .copy-btn svg {
-      width: 18px;
-      height: 18px;
-    }
-
-    /* Simple step code (no copy button) */
-    .step .step-code:not(.step-code-wrapper .step-code) {
-      background: #fef9e7;
-      color: var(--text);
-      padding: 14px 18px;
-      border-radius: 10px;
-      border: 1px solid #fde68a;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .step-hint {
-      margin-top: 12px;
-      font-size: 15px;
-      color: var(--text-secondary);
-    }
-
-    /* Commands */
-    .commands {
-      margin: 80px 0;
-    }
-
-    .commands h2 {
-      font-size: 32px;
-      font-weight: 800;
-      margin-bottom: 32px;
-      text-align: center;
-    }
-
-    .commands-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-
-    .command {
-      padding: 24px;
-      background: var(--surface);
-      border-radius: 16px;
-    }
-
-    .command-name {
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
-    .command-skill {
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 14px;
-      color: var(--amber);
-      margin-bottom: 10px;
-    }
-
-    .command-desc {
-      font-size: 15px;
-      color: var(--text-secondary);
-    }
-
-    /* Footer */
-    footer {
-      padding: 60px 0;
-      text-align: center;
-      border-top: 2px solid var(--surface);
-      margin-top: 40px;
-    }
-
-    .github-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 28px;
-      background: var(--accent);
-      color: white;
-      text-decoration: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      transition: transform 0.15s, box-shadow 0.15s;
-      margin-bottom: 28px;
-    }
-
-    .github-link:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-
-    .github-link svg {
-      width: 22px;
-      height: 22px;
-      fill: currentColor;
-    }
-
-    .footer-links {
-      display: flex;
-      justify-content: center;
-      gap: 32px;
-    }
-
-    .footer-links a {
-      font-size: 16px;
-      color: var(--text-secondary);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.15s;
-    }
-
-    .footer-links a:hover {
-      color: var(--text);
-    }
-
-    /* Mobile */
-    @media (max-width: 640px) {
-      header {
-        padding: 30px 0 0;
-      }
-
-      h1 {
-        font-size: 42px;
-      }
-
-      .tagline {
-        font-size: 18px;
-      }
-
-      .steps {
-        padding-left: 0;
-      }
-
-      .bee-track {
-        display: none;
-      }
-
-      .step {
-        opacity: 1;
-        transform: none;
-      }
-
-      .step-title {
-        font-size: 18px;
-      }
-
-      .step-desc {
-        font-size: 15px;
-      }
-
-      .step-code-wrapper {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-      }
-
-      .step-code-wrapper .step-code {
-        font-size: 12px;
-        word-break: break-all;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        padding: 12px 14px;
-      }
-
-      .step-code-wrapper .copy-btn {
-        width: 100%;
-      }
-
-      .commands h2 {
-        font-size: 24px;
-      }
-
-      .commands-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+        .github-link svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1><svg class="logo" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <!-- Wings (with animation) -->
-        <ellipse cx="22" cy="48" rx="14" ry="10" fill="#bfdbfe" stroke="#93c5fd">
-          <animate attributeName="ry" values="10;6;10" dur="0.08s" repeatCount="indefinite"/>
-          <animate attributeName="rx" values="14;12;14" dur="0.08s" repeatCount="indefinite"/>
-        </ellipse>
-        <ellipse cx="58" cy="48" rx="14" ry="10" fill="#bfdbfe" stroke="#93c5fd">
-          <animate attributeName="ry" values="10;6;10" dur="0.08s" repeatCount="indefinite"/>
-          <animate attributeName="rx" values="14;12;14" dur="0.08s" repeatCount="indefinite"/>
-        </ellipse>
-        <!-- Body -->
-        <ellipse cx="40" cy="64" rx="18" ry="24" fill="url(#logoBodyGradient)"/>
-        <!-- Stripes -->
-        <path d="M22 58 Q40 56 58 58" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
-        <path d="M22 68 Q40 66 58 68" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
-        <path d="M24 78 Q40 76 56 78" stroke="#18181b" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <!-- Head -->
-        <circle cx="40" cy="42" r="14" fill="url(#logoHeadGradient)"/>
-        <!-- Antennae (behind crown, same style as scrollbar bee) -->
-        <path d="M34 30 Q32 20 28 12" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-        <path d="M46 30 Q48 20 52 12" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-        <circle cx="28" cy="12" r="3" fill="#18181b"/>
-        <circle cx="52" cy="12" r="3" fill="#18181b"/>
-        <!-- Crown (on head, in front of antennae) -->
-        <path d="M26 32 L30 22 L40 28 L50 22 L54 32 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
-        <circle cx="30" cy="22" r="2.5" fill="#ef4444"/>
-        <circle cx="40" cy="26" r="2.5" fill="#22c55e"/>
-        <circle cx="50" cy="22" r="2.5" fill="#3b82f6"/>
-        <!-- Eyes -->
-        <ellipse cx="34" cy="42" rx="4" ry="5" fill="#18181b"/>
-        <ellipse cx="46" cy="42" rx="4" ry="5" fill="#18181b"/>
-        <circle cx="35" cy="40" r="1.5" fill="white"/>
-        <circle cx="47" cy="40" r="1.5" fill="white"/>
-        <!-- Smile -->
-        <path d="M35 48 Q40 52 45 48" stroke="#18181b" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <!-- Cheeks -->
-        <circle cx="28" cy="44" r="3" fill="#fcd34d" opacity="0.6"/>
-        <circle cx="52" cy="44" r="3" fill="#fcd34d" opacity="0.6"/>
-        <!-- Gradients -->
-        <defs>
-          <linearGradient id="logoBodyGradient" x1="40" y1="40" x2="40" y2="88" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#fcd34d"/>
-            <stop offset="100%" stop-color="#f59e0b"/>
-          </linearGradient>
-          <linearGradient id="logoHeadGradient" x1="40" y1="28" x2="40" y2="56" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#fde68a"/>
-            <stop offset="100%" stop-color="#fbbf24"/>
-          </linearGradient>
-        </defs>
-      </svg>Hive</h1>
-      <p class="tagline">You're The Queen. They're The Drones.<br>Put Them To Work.</p>
-    </header>
+    <section class="hero">
+        <img src="assets/logo.png" alt="Hive Logo" class="logo">
+        <h1>Hive</h1>
+        <p class="tagline">Drone Orchestration for Claude Code</p>
+        <p style="max-width: 600px; margin: 0 auto 32px; color: var(--text-muted);">
+            Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree, executing stories while you continue working.
+        </p>
+        <a href="https://github.com/mbourmaud/hive" class="cta">Get Started</a>
+        <div class="install-code">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</div>
+        <br>
+        <a href="https://github.com/mbourmaud/hive" class="github-link">
+            <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            View on GitHub
+        </a>
+    </section>
 
-    <section class="timeline">
-      <div class="steps" id="steps">
-        <div class="bee-track">
-          <div class="track-line"></div>
-          <div class="track-progress" id="track-progress"></div>
-          <div class="bee" id="bee">
-              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <!-- Shadow -->
-                <ellipse cx="40" cy="72" rx="16" ry="4" fill="#00000015"/>
-                <!-- Left Wing -->
-                <ellipse cx="22" cy="28" rx="16" ry="12" fill="#bfdbfe" stroke="#93c5fd" stroke-width="1">
-                  <animate attributeName="ry" values="12;7;12" dur="0.06s" repeatCount="indefinite"/>
-                  <animate attributeName="rx" values="16;14;16" dur="0.06s" repeatCount="indefinite"/>
-                </ellipse>
-                <!-- Right Wing -->
-                <ellipse cx="58" cy="28" rx="16" ry="12" fill="#bfdbfe" stroke="#93c5fd" stroke-width="1">
-                  <animate attributeName="ry" values="12;7;12" dur="0.06s" repeatCount="indefinite"/>
-                  <animate attributeName="rx" values="16;14;16" dur="0.06s" repeatCount="indefinite"/>
-                </ellipse>
-                <!-- Body -->
-                <ellipse cx="40" cy="44" rx="18" ry="24" fill="url(#bodyGradient)"/>
-                <!-- Stripes -->
-                <path d="M22 38 Q40 36 58 38" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
-                <path d="M22 48 Q40 46 58 48" stroke="#18181b" stroke-width="5" fill="none" stroke-linecap="round"/>
-                <path d="M24 58 Q40 56 56 58" stroke="#18181b" stroke-width="4" fill="none" stroke-linecap="round"/>
-                <!-- Head -->
-                <circle cx="40" cy="22" r="14" fill="url(#headGradient)"/>
-                <!-- Eyes -->
-                <ellipse cx="34" cy="20" rx="4" ry="5" fill="#18181b"/>
-                <ellipse cx="46" cy="20" rx="4" ry="5" fill="#18181b"/>
-                <circle cx="35" cy="18" r="1.5" fill="white"/>
-                <circle cx="47" cy="18" r="1.5" fill="white"/>
-                <!-- Smile -->
-                <path d="M35 26 Q40 30 45 26" stroke="#18181b" stroke-width="2" fill="none" stroke-linecap="round"/>
-                <!-- Antennae -->
-                <path d="M34 10 Q32 4 28 2" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-                <path d="M46 10 Q48 4 52 2" stroke="#18181b" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-                <circle cx="28" cy="2" r="3" fill="#18181b"/>
-                <circle cx="52" cy="2" r="3" fill="#18181b"/>
-                <!-- Cheeks -->
-                <circle cx="28" cy="24" r="3" fill="#fcd34d" opacity="0.6"/>
-                <circle cx="52" cy="24" r="3" fill="#fcd34d" opacity="0.6"/>
-                <!-- Gradients -->
-                <defs>
-                  <linearGradient id="bodyGradient" x1="40" y1="20" x2="40" y2="68" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#fcd34d"/>
-                    <stop offset="100%" stop-color="#f59e0b"/>
-                  </linearGradient>
-                  <linearGradient id="headGradient" x1="40" y1="8" x2="40" y2="36" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#fde68a"/>
-                    <stop offset="100%" stop-color="#fbbf24"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-          </div>
-          <div class="step active" data-step="1">
-            <div class="step-header">
-              <div class="step-num">1</div>
-              <div class="step-title">Install</div>
-            </div>
-            <div class="step-desc">One command installs the CLI and all Claude Code skills.</div>
-            <div class="step-code-wrapper">
-              <code class="step-code" id="install-cmd">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</code>
-              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="step" data-step="2">
-            <div class="step-header">
-              <div class="step-num">2</div>
-              <div class="step-title">Initialize</div>
-            </div>
-            <div class="step-desc">Creates the .hive/ folder in your project to store PRDs and drone state.</div>
-            <div class="step-code-wrapper">
-              <code class="step-code">hive init</code>
-              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="step" data-step="3">
-            <div class="step-header">
-              <div class="step-num">3</div>
-              <div class="step-title">Create a PRD</div>
-              <div class="step-badge">Within Claude Code</div>
-            </div>
-            <div class="step-desc">Generate a PRD with stories from your feature description.</div>
-            <div class="step-code-wrapper">
-              <code class="step-code">/hive:prd</code>
-              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="step" data-step="4">
-            <div class="step-header">
-              <div class="step-num">4</div>
-              <div class="step-title">Launch a Drone</div>
-              <div class="step-badge">Within Claude Code</div>
-            </div>
-            <div class="step-desc">Start an autonomous Claude agent on your PRD. It creates a git worktree and works independently.</div>
-            <div class="step-code-wrapper">
-              <code class="step-code">/hive:start</code>
-              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="step" data-step="5">
-            <div class="step-header">
-              <div class="step-num">5</div>
-              <div class="step-title">Monitor</div>
-              <div class="step-badge">Within Claude Code</div>
-            </div>
-            <div class="step-desc">Check on your drones anytime. View status and logs in real-time.</div>
-            <div class="step-code-wrapper">
-              <code class="step-code">/hive:status</code>
-              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="step" data-step="6">
-            <div class="step-header">
-              <div class="step-num">6</div>
-              <div class="step-title">Setup Statusline</div>
-              <div class="step-badge">Within Claude Code</div>
-            </div>
-            <div class="step-desc">Track all drone progress directly in your statusline.</div>
-            <div class="step-code-wrapper">
-              <code class="step-code">/hive:statusline</code>
-              <button class="copy-btn" onclick="copyCmd(this)" title="Copy to clipboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-            <div class="step-hint">Optional — see drone progress without leaving your editor</div>
+    <section class="features">
+        <div class="feature">
+            <div class="feature-icon">🐝</div>
+            <h3>Autonomous Drones</h3>
+            <p>Launch Claude agents that work independently on PRD stories. Each drone operates in its own git worktree with full isolation.</p>
         </div>
-      </div>
+        <div class="feature">
+            <div class="feature-icon">👑</div>
+            <h3>Queen Monitoring</h3>
+            <p>Monitor all drones from your main workspace. Shared .hive/ folder enables real-time status updates and progress tracking.</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">🔔</div>
+            <h3>Desktop Notifications</h3>
+            <p>Get notified when drones start, complete, or pause. Works on macOS, Linux, and Windows/WSL.</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">📊</div>
+            <h3>Statusline Integration</h3>
+            <p>See drone progress directly in your Claude Code statusline. Track multiple drones at a glance.</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">🔀</div>
+            <h3>Git Worktrees</h3>
+            <p>Each drone gets its own worktree and branch. Clean separation, easy merging when stories are complete.</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">📝</div>
+            <h3>PRD-Driven</h3>
+            <p>Define stories in JSON PRD files. Drones execute each story sequentially, committing as they go.</p>
+        </div>
+    </section>
+
+    <section class="diagram">
+        <h2>How it Works</h2>
+        <div class="diagram-box">┌─────────────────────────────────────────────────────────────┐
+│  👑 Queen (main branch)                                     │
+│  You + Claude working on features                           │
+│  .hive/ folder with shared state                            │
+├─────────────────────────────────────────────────────────────┤
+│  🐝 Drone: security (hive/security branch)                  │
+│  Autonomously implementing SEC-001 → SEC-010                │
+│  .hive/ symlinked from queen                                │
+├─────────────────────────────────────────────────────────────┤
+│  🐝 Drone: feature-x (hive/feature-x branch)                │
+│  Autonomously implementing FEAT-001 → FEAT-005              │
+│  .hive/ symlinked from queen                                │
+└─────────────────────────────────────────────────────────────┘</div>
     </section>
 
     <section class="commands">
-      <h2>All Commands</h2>
-      <div class="commands-grid">
-        <div class="command">
-          <div class="command-name">hive init</div>
-          <div class="command-skill">/hive:init</div>
-          <div class="command-desc">Initialize Hive</div>
-        </div>
-        <div class="command">
-          <div class="command-name">hive start</div>
-          <div class="command-skill">/hive:start</div>
-          <div class="command-desc">Launch drone</div>
-        </div>
-        <div class="command">
-          <div class="command-name">hive status</div>
-          <div class="command-skill">/hive:status</div>
-          <div class="command-desc">View all drones</div>
-        </div>
-        <div class="command">
-          <div class="command-name">hive logs</div>
-          <div class="command-skill">/hive:logs</div>
-          <div class="command-desc">View logs</div>
-        </div>
-        <div class="command">
-          <div class="command-name">hive kill</div>
-          <div class="command-skill">/hive:kill</div>
-          <div class="command-desc">Stop drone</div>
-        </div>
-        <div class="command">
-          <div class="command-name">hive clean</div>
-          <div class="command-skill">/hive:clean</div>
-          <div class="command-desc">Remove drone</div>
-        </div>
-        <div class="command">
-          <div class="command-name">hive update</div>
-          <div class="command-skill">—</div>
-          <div class="command-desc">Self-update</div>
-        </div>
-        <div class="command">
-          <div class="command-name">—</div>
-          <div class="command-skill">/hive:prd</div>
-          <div class="command-desc">Generate PRD</div>
-        </div>
-        <div class="command">
-          <div class="command-name">—</div>
-          <div class="command-skill">/hive:statusline</div>
-          <div class="command-desc">Setup statusline</div>
-        </div>
-      </div>
+        <h2>Commands</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>CLI</th>
+                    <th>Skill</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>hive init</code></td>
+                    <td><code>/hive:init</code></td>
+                    <td>Initialize Hive in repo</td>
+                </tr>
+                <tr>
+                    <td><code>hive start --prd &lt;file&gt;</code></td>
+                    <td><code>/hive:start</code></td>
+                    <td>Launch a drone on a PRD</td>
+                </tr>
+                <tr>
+                    <td><code>hive status</code></td>
+                    <td><code>/hive:status</code></td>
+                    <td>Show status of all drones</td>
+                </tr>
+                <tr>
+                    <td><code>hive logs &lt;name&gt;</code></td>
+                    <td><code>/hive:logs</code></td>
+                    <td>View drone logs</td>
+                </tr>
+                <tr>
+                    <td><code>hive kill &lt;name&gt;</code></td>
+                    <td><code>/hive:kill</code></td>
+                    <td>Stop a running drone</td>
+                </tr>
+                <tr>
+                    <td><code>hive clean &lt;name&gt;</code></td>
+                    <td><code>/hive:clean</code></td>
+                    <td>Remove drone and worktree</td>
+                </tr>
+                <tr>
+                    <td>-</td>
+                    <td><code>/hive:prd</code></td>
+                    <td>Generate a PRD from feature description</td>
+                </tr>
+            </tbody>
+        </table>
     </section>
 
     <footer>
-      <a href="https://github.com/mbourmaud/hive" class="github-link">
-        <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        View on GitHub
-      </a>
-      <div class="footer-links">
-        <a href="https://github.com/mbourmaud/hive/blob/main/README.md">Docs</a>
-        <a href="https://github.com/mbourmaud/hive/blob/main/CHANGELOG.md">Changelog</a>
-        <a href="https://github.com/mbourmaud/hive/issues">Issues</a>
-      </div>
+        <p>Made with 👑 by <a href="https://github.com/mbourmaud">@mbourmaud</a></p>
+        <p style="margin-top: 8px;">MIT License</p>
     </footer>
-  </div>
-
-  <script>
-    function copyCmd(btn) {
-      const code = btn.parentElement.querySelector('.step-code');
-      navigator.clipboard.writeText(code.textContent);
-      const originalSvg = btn.innerHTML;
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-      btn.classList.add('copied');
-      setTimeout(() => {
-        btn.innerHTML = originalSvg;
-        btn.classList.remove('copied');
-      }, 2000);
-    }
-
-    // Timeline scroll animation
-    const steps = document.querySelectorAll('.step');
-    const bee = document.getElementById('bee');
-    const beeTrack = document.querySelector('.bee-track');
-    const trackLine = document.querySelector('.track-line');
-    const trackProgress = document.getElementById('track-progress');
-
-    function updateTimeline() {
-      if (steps.length === 0 || !beeTrack) return;
-
-      const trackRect = beeTrack.getBoundingClientRect();
-
-      // Calculate center Y of each step relative to bee-track
-      const stepCenters = Array.from(steps).map(step => {
-        const rect = step.getBoundingClientRect();
-        const centerY = rect.top + rect.height / 2;
-        return centerY - trackRect.top;
-      });
-
-      const firstCenter = stepCenters[0];
-      const lastCenter = stepCenters[stepCenters.length - 1];
-
-      // Position track-line from first to last step center
-      trackLine.style.top = firstCenter + 'px';
-      trackLine.style.height = (lastCenter - firstCenter) + 'px';
-
-      // Progress bar starts at first step center
-      trackProgress.style.top = firstCenter + 'px';
-
-      // Determine active step (when its top crosses 40% of viewport)
-      const activationY = window.innerHeight * 0.4;
-      let activeIndex = 0;
-      for (let i = 0; i < steps.length; i++) {
-        if (steps[i].getBoundingClientRect().top <= activationY) {
-          activeIndex = i;
-        }
-      }
-
-      // Calculate bee Y position
-      let beeY = stepCenters[activeIndex];
-
-      // Interpolate between steps when scrolling
-      if (activeIndex < steps.length - 1) {
-        const currentTop = steps[activeIndex].getBoundingClientRect().top;
-        const nextTop = steps[activeIndex + 1].getBoundingClientRect().top;
-        const distancePast = activationY - currentTop;
-
-        if (distancePast > 0) {
-          const t = Math.min(1, distancePast / (nextTop - currentTop));
-          beeY = stepCenters[activeIndex] + t * (stepCenters[activeIndex + 1] - stepCenters[activeIndex]);
-        }
-      }
-
-      // Apply positions
-      bee.style.top = beeY + 'px';
-      trackProgress.style.height = Math.max(0, beeY - firstCenter) + 'px';
-
-      // Update step visual states
-      steps.forEach((step, i) => {
-        step.classList.toggle('completed', i < activeIndex);
-        step.classList.toggle('active', i === activeIndex);
-      });
-    }
-
-    window.addEventListener('scroll', updateTimeline, { passive: true });
-    window.addEventListener('resize', updateTimeline);
-    window.addEventListener('load', updateTimeline);
-    updateTimeline();
-    setTimeout(updateTimeline, 100);
-  </script>
 </body>
 </html>

@@ -21,7 +21,7 @@ else
 fi
 
 REPO_URL="https://raw.githubusercontent.com/mbourmaud/hive/main"
-VERSION="0.2.1"
+VERSION="1.1.1"
 
 echo ""
 echo -e "${YELLOW}👑 Hive${RESET} v$VERSION - Drone Orchestration for Claude Code"
@@ -91,6 +91,26 @@ for skill in "${SKILLS[@]}"; do
 done
 
 echo -e "${GREEN}✓${RESET} ${#SKILLS[@]} skills installed to ~/.claude/commands/"
+
+# ============================================================================
+# Install Icon for Notifications
+# ============================================================================
+
+echo ""
+echo -e "${CYAN}Installing notification icon...${RESET}"
+
+mkdir -p "$HOME/.local/share/hive"
+curl -sL -o "$HOME/.local/share/hive/bee-icon.png" "$REPO_URL/assets/logo.png"
+echo -e "${GREEN}✓${RESET} Icon installed to ~/.local/share/hive/bee-icon.png"
+
+# Suggest terminal-notifier for macOS
+if [[ "$(uname)" == "Darwin" ]]; then
+  if ! command -v terminal-notifier &>/dev/null; then
+    echo ""
+    echo -e "${YELLOW}Tip:${RESET} Install terminal-notifier for custom notification icons:"
+    echo "  brew install terminal-notifier"
+  fi
+fi
 
 # ============================================================================
 # Summary
