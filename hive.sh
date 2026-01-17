@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.1.0"
+VERSION="1.1.1"
 
 # Configuration
 HIVE_DIR=".hive"
@@ -497,8 +497,21 @@ send_notification() {
     local title="$1"
     local message="$2"
     local sound="${3:-true}"
+    local icon="$HOME/.local/share/hive/bee-icon.png"
 
-    # macOS
+    # macOS with terminal-notifier (preferred - supports custom icon)
+    if command -v terminal-notifier &>/dev/null; then
+        local sound_param=""
+        [ "$sound" = "true" ] && sound_param="-sound Glass"
+        if [ -f "$icon" ]; then
+            terminal-notifier -title "$title" -message "$message" -contentImage "$icon" $sound_param -group "hive" 2>/dev/null || true
+        else
+            terminal-notifier -title "$title" -message "$message" $sound_param -group "hive" 2>/dev/null || true
+        fi
+        return
+    fi
+
+    # macOS fallback with osascript
     if command -v osascript &>/dev/null; then
         local sound_param=""
         [ "$sound" = "true" ] && sound_param='sound name "Glass"'
@@ -508,7 +521,11 @@ send_notification() {
 
     # Linux with notify-send
     if command -v notify-send &>/dev/null; then
-        notify-send "$title" "$message" --icon=dialog-information 2>/dev/null || true
+        if [ -f "$icon" ]; then
+            notify-send "$title" "$message" --icon="$icon" 2>/dev/null || true
+        else
+            notify-send "$title" "$message" --icon=dialog-information 2>/dev/null || true
+        fi
         if [ "$sound" = "true" ] && command -v paplay &>/dev/null; then
             paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null &
         fi
