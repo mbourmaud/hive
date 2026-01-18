@@ -5,10 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-01-18
+
+### Changed
+- **Cleaner timer format** - Changed from `⏱ 1h30m` to `(5/5 - 1h30m)` inline format
+- **Bold hive name** - Both "hive" and version are now bold in status header
+
 ## [1.3.0] - 2026-01-18
 
 ### Added
-- **Elapsed time display** - Shows `⏱ 1h30m` next to each drone in `hive status` and statusline
+- **Elapsed time display** - Shows elapsed time next to each drone in `hive status` and statusline
 - **Auto-clean suggestion** - Prompts to clean completed drones inactive for 60+ minutes
 - **Version in bold** - `hive v1.3.0 status` header with bold version number
 

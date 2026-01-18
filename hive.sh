@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.3.0"
+VERSION="1.3.1"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -880,14 +880,13 @@ cmd_status() {
                 "error") icon="❌"; color="$RED" ;;
             esac
 
-            # Build elapsed display
-            local elapsed_display=""
+            # Build progress display with optional elapsed time
+            local progress_display="${GREEN}$completed${NC}/${total}"
             if [ -n "$elapsed" ]; then
-                elapsed_display=" ⏱ ${elapsed}"
+                progress_display="${GREEN}$completed${NC}/${total} - ${elapsed}"
             fi
 
-            echo -e "${CYAN}║${NC}  ${color}$icon 🐝 $drone_name${NC}${elapsed_display}"
-            echo -e "${CYAN}║${NC}     Progress: ${GREEN}$completed${NC}/${total} stories"
+            echo -e "${CYAN}║${NC}  ${color}$icon 🐝 $drone_name${NC} ($progress_display)"
             echo -e "${CYAN}║${NC}     Current:  $current"
             echo -e "${CYAN}║${NC}     Status:   $status (running: $running)"
             echo -e "${CYAN}║${NC}     Worktree: $worktree"
