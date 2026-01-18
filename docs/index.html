@@ -40,6 +40,10 @@
             box-sizing: border-box;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
             font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--honey-pale);
@@ -209,7 +213,7 @@
             font-size: 1.4rem;
             font-weight: 700;
             color: var(--brown-dark);
-            margin-bottom: 8px;
+            margin-bottom: 0;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -217,6 +221,13 @@
 
         .timeline-item h3 .emoji {
             font-size: 1.6rem;
+        }
+
+        .timeline-item .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
         }
 
         .timeline-item p {
@@ -244,11 +255,10 @@
             font-weight: 700;
             padding: 3px 8px;
             border-radius: 4px;
-            margin-left: 8px;
-            vertical-align: middle;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             box-shadow: 0 2px 4px rgba(146, 64, 14, 0.3);
+            flex-shrink: 0;
         }
 
         /* Statusline section */
@@ -376,6 +386,17 @@
             text-decoration: none;
         }
 
+        .more-link {
+            color: var(--honey-dark);
+            font-weight: 600;
+            text-decoration: none;
+            font-style: normal;
+        }
+
+        .more-link:hover {
+            text-decoration: underline;
+        }
+
         .github-btn svg {
             width: 24px;
             height: 24px;
@@ -431,23 +452,34 @@
 
             <div class="timeline-item">
                 <span class="step-number">3</span>
-                <h3><span class="emoji">📝</span> Create a PRD</h3>
+                <div class="header-row">
+                    <h3><span class="emoji">📝</span> Create a PRD</h3>
+                    <span class="claude-tag">in Claude Code</span>
+                </div>
                 <p>Describe what you want to build. Use Claude Code to generate a proper PRD with stories.</p>
-                <code>/hive:prd</code><span class="claude-tag">in Claude Code</span>
+                <code>/hive:prd</code>
+                <p style="margin-top: 12px; font-size: 0.95rem;"><em>Optional:</em> Enable the statusline to track your drones at a glance. <a href="#statusline" class="more-link">More →</a></p>
+                <code>/hive:statusline</code>
             </div>
 
             <div class="timeline-item">
                 <span class="step-number">4</span>
-                <h3><span class="emoji">🚀</span> Launch Your Drones!</h3>
+                <div class="header-row">
+                    <h3><span class="emoji">🚀</span> Launch Your Drones!</h3>
+                    <span class="claude-tag">in Claude Code</span>
+                </div>
                 <p>Send your bees to work! Each drone gets its own git worktree and buzzes through stories.</p>
-                <code>/hive:start</code><span class="claude-tag">in Claude Code</span>
+                <code>/hive:start</code>
             </div>
 
             <div class="timeline-item">
                 <span class="step-number">5</span>
-                <h3><span class="emoji">👑</span> Be the Queen</h3>
+                <div class="header-row">
+                    <h3><span class="emoji">👑</span> Be the Queen</h3>
+                    <span class="claude-tag">in Claude Code</span>
+                </div>
                 <p>Monitor your drones while you work on other things. Check status anytime!</p>
-                <code>/hive:status</code><span class="claude-tag">in Claude Code</span>
+                <code>/hive:status</code>
             </div>
 
             <div class="timeline-item">
@@ -458,10 +490,13 @@
         </div>
     </section>
 
-    <section class="statusline-section">
+    <section class="statusline-section" id="statusline">
         <div class="statusline-content">
             <h2 class="section-title"><span>📊</span> Statusline</h2>
-            <p class="statusline-desc">Track all your drones at a glance. Run <code>/hive:statusline</code><span class="claude-tag">in Claude Code</span> to enable:</p>
+            <div class="header-row" style="justify-content: center; gap: 12px; margin-bottom: 16px;">
+                <span class="statusline-desc" style="margin: 0;">Track all your drones at a glance. Run <code>/hive:statusline</code> to enable.</span>
+                <span class="claude-tag">in Claude Code</span>
+            </div>
             <div class="statusline-preview">
                 <span class="statusline-text">project │ main │ Opus 4.5 │ 45%</span>
                 <span class="statusline-hive">👑 Hive v1.2.0 | 🐝 security (4/10) | 🐝 ui-refactor ✓</span>
