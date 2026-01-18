@@ -330,7 +330,8 @@ cmd_run() {
 
             # Update PRD in .hive/prds/ if provided a newer one
             local prd_basename=$(basename "$prd_file")
-            cp "$prd_file" "$PRDS_DIR/$prd_basename"
+            # Use cp -f and ignore error if files are identical
+            cp -f "$prd_file" "$PRDS_DIR/$prd_basename" 2>/dev/null || true
             print_info "PRD updated: .hive/prds/$prd_basename"
 
             # Ensure .hive symlink is correct
