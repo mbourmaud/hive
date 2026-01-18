@@ -236,6 +236,21 @@
             border: 2px dashed var(--honey);
         }
 
+        .claude-tag {
+            display: inline-block;
+            background: linear-gradient(135deg, #D97706 0%, #92400E 100%);
+            color: white;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(146, 64, 14, 0.3);
+        }
+
         /* Fun facts */
         .fun-fact {
             background: var(--honey-cream);
@@ -310,34 +325,6 @@
             fill: currentColor;
         }
 
-        /* Floating bees decoration */
-        .floating-bee {
-            position: fixed;
-            font-size: 2rem;
-            opacity: 0.6;
-            animation: fly 15s linear infinite;
-            pointer-events: none;
-            z-index: 100;
-        }
-
-        .floating-bee:nth-child(1) { left: 10%; animation-delay: 0s; }
-        .floating-bee:nth-child(2) { left: 30%; animation-delay: 3s; }
-        .floating-bee:nth-child(3) { left: 70%; animation-delay: 7s; }
-        .floating-bee:nth-child(4) { left: 90%; animation-delay: 11s; }
-
-        @keyframes fly {
-            0% {
-                transform: translateY(100vh) rotate(0deg);
-                opacity: 0;
-            }
-            10% { opacity: 0.6; }
-            90% { opacity: 0.6; }
-            100% {
-                transform: translateY(-100px) rotate(360deg);
-                opacity: 0;
-            }
-        }
-
         /* Responsive */
         @media (max-width: 600px) {
             h1 { font-size: 2.5rem; }
@@ -353,12 +340,6 @@
 </head>
 <body>
     <div class="honeycomb-bg"></div>
-
-    <!-- Floating bees -->
-    <div class="floating-bee">🐝</div>
-    <div class="floating-bee">🐝</div>
-    <div class="floating-bee">🐝</div>
-    <div class="floating-bee">🐝</div>
 
     <section class="hero">
         <img src="assets/logo.png" alt="Hive Bee Logo" class="logo">
@@ -395,7 +376,7 @@
                 <span class="step-number">3</span>
                 <h3><span class="emoji">📝</span> Create a PRD</h3>
                 <p>Describe what you want to build. Use Claude Code to generate a proper PRD with stories.</p>
-                <code>/hive:prd</code>
+                <code>/hive:prd</code><span class="claude-tag">in Claude Code</span>
             </div>
 
             <div class="timeline-item">
