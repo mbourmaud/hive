@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.3.3"
+VERSION="1.3.4"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -480,7 +480,7 @@ echo \"[\$(date +%H:%M:%S)] 💾 Commit STORY-ID\" >> $external_worktree/.hive/d
 
 ### 3. APRÈS avoir terminé une story (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log && C=\$(jq -r '.completed|length' $external_worktree/.hive/drones/$drone_name/status.json) && T=\$(jq -r '.total' $external_worktree/.hive/drones/$drone_name/status.json) && terminal-notifier -title \"🐝 $drone_name\" -message \"STORY-ID terminée (\$C/\$T)\" -sound Glass 2>/dev/null || osascript -e \"display notification \\\"STORY-ID terminée (\$C/\$T)\\\" with title \\\"🐝 $drone_name\\\" sound name \\\"Glass\\\"\" 2>/dev/null || true
 \`\`\`
 
 ### 4. Quand TOUTES les stories sont terminées:
