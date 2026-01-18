@@ -170,6 +170,7 @@
             width: 4px;
             background: #e0d5c5;
             border-radius: 4px;
+            z-index: 0;
         }
 
         /* Progress line that fills on scroll */
@@ -183,6 +184,7 @@
             background: linear-gradient(180deg, var(--honey) 0%, var(--honey-dark) 100%);
             border-radius: 4px;
             transition: height 0.3s ease-out;
+            z-index: 0;
         }
 
         .timeline-item {
@@ -212,6 +214,7 @@
             border-radius: 50%;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             transition: all 0.4s ease-out;
+            z-index: 1;
         }
 
         .timeline-item.active::before {
@@ -624,9 +627,15 @@
                 const lastActiveItem = items[activeCount - 1];
                 const lastActiveRect = lastActiveItem.getBoundingClientRect();
                 const timelineRect = timeline.getBoundingClientRect();
-                const progressHeight = (lastActiveRect.top - timelineRect.top + lastActiveRect.height / 2);
-                const percentage = Math.min((progressHeight / timelineHeight) * 100, 100);
-                timeline.style.setProperty('--progress', percentage + '%');
+
+                // If last item is active, go all the way to bottom
+                if (activeCount === items.length) {
+                    timeline.style.setProperty('--progress', '100%');
+                } else {
+                    const progressHeight = (lastActiveRect.top - timelineRect.top + lastActiveRect.height / 2);
+                    const percentage = Math.min((progressHeight / timelineHeight) * 100, 100);
+                    timeline.style.setProperty('--progress', percentage + '%');
+                }
             } else {
                 timeline.style.setProperty('--progress', '0%');
             }
