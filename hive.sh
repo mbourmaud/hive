@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.3.2"
+VERSION="1.3.3"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -466,75 +466,62 @@ EOF
     # Build the drone prompt
     local drone_prompt="# 🐝 Drone Hive - Agent Autonome
 
-## ⚠️ RÈGLE CRITIQUE - LIS CECI EN PREMIER
+## ⚠️ RÈGLES CRITIQUES - EXÉCUTE CES COMMANDES À CHAQUE STORY
 
-**APRÈS CHAQUE STORY TERMINÉE, TU DOIS EXÉCUTER CETTE COMMANDE:**
+### 1. AVANT de commencer une story (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID\" >> $external_worktree/.hive/drones/$drone_name/activity.log
 \`\`\`
 
-**C'EST NON NÉGOCIABLE.** Sans cette mise à jour, le système de monitoring ne sait pas où tu en es.
+### 2. APRÈS chaque commit (remplace STORY-ID par l'ID réel):
+\`\`\`bash
+echo \"[\$(date +%H:%M:%S)] 💾 Commit STORY-ID\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+\`\`\`
+
+### 3. APRÈS avoir terminé une story (remplace STORY-ID par l'ID réel):
+\`\`\`bash
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+\`\`\`
+
+### 4. Quand TOUTES les stories sont terminées:
+\`\`\`bash
+jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .current_story = null | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🎉 Terminé\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+\`\`\`
+
+**⚠️ SI TU N'EXÉCUTES PAS CES COMMANDES, LE MONITORING NE FONCTIONNE PAS.**
+**⚠️ EXÉCUTE-LES SYSTÉMATIQUEMENT, PAS D'EXCEPTION.**
 
 ---
 
 ## Configuration
 
-- **WORKING DIRECTORY**: $external_worktree
+- **WORKDIR**: $external_worktree
 - **PRD**: $external_worktree/.hive/prds/$prd_basename
-- **STATUS**: $external_worktree/.hive/drones/$drone_name/status.json
-- **LOG**: $external_worktree/.hive/drones/$drone_name/activity.log
-- **BRANCH**: $branch_name
+- **STATUS**: $external_worktree/.hive/drones/$drone_name/status.json (affiche X/Y dans hive status)
+- **LOG**: $external_worktree/.hive/drones/$drone_name/activity.log (visible via hive logs)
 
 ---
 
-## Workflow OBLIGATOIRE pour chaque story
+## Workflow pour chaque story
 
-### AVANT de commencer une story:
-\`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
-echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID: titre\" >> $external_worktree/.hive/drones/$drone_name/activity.log
-\`\`\`
+1. **Exécute commande #1** (current_story + log début)
+2. Implémente les changements
+3. \`git add -A && git commit -m \"feat(STORY-ID): description\"\`
+4. **Exécute commande #2** (log commit)
+5. **Exécute commande #3** (completed + log terminée) ← ⚠️ OBLIGATOIRE
+6. Passe à la story suivante
 
-### APRÈS avoir terminé une story (commit fait):
-\`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
-echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log
-\`\`\`
-
-### Quand TOUTES les stories sont terminées:
-\`\`\`bash
-jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .current_story = null | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
-echo \"[\$(date +%H:%M:%S)] 🎉 Toutes les stories terminées\" >> $external_worktree/.hive/drones/$drone_name/activity.log
-\`\`\`
+Quand toutes les stories sont faites → **Exécute commande #4**
 
 ---
 
 ## Ta mission
 
 1. Lis le PRD: $external_worktree/.hive/prds/$prd_basename
-2. Pour chaque story dans l'ordre:
-   - Exécute les commandes AVANT (current_story + log)
-   - Implémente les changements
-   - Commit: \`git commit -m \"feat(STORY-ID): description\"\`
-   - **EXÉCUTE LES COMMANDES APRÈS (completed + log)**
-3. Quand tout est fini, marque le status comme \"completed\"
+2. Implémente chaque story dans l'ordre
+3. **METS À JOUR status.json ET activity.log À CHAQUE ÉTAPE**
 
----
-
-## Rappel: Séquence pour UNE story
-
-1. \`jq ... current_story = STORY-ID\` ← Met à jour status.json
-2. \`echo ... 🔨 Début\` ← Log
-3. Code, édite les fichiers
-4. \`git add && git commit\`
-5. \`echo ... 💾 Commit\` ← Log
-6. **\`jq ... .completed += [STORY-ID]\`** ← ⚠️ OBLIGATOIRE
-7. \`echo ... ✅ terminée\` ← Log
-8. Passe à la story suivante
-
----
-
-**COMMENCE MAINTENANT. Lis le PRD et exécute les stories une par une.**"
+**COMMENCE MAINTENANT.**"
 
     # Launch Claude in background using a loop (like Ralph)
     print_info "Launching Claude agent..."
