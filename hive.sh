@@ -248,15 +248,17 @@ ${YELLOW}Options:${NC}
   --base <branch>     Base branch (default: main)
   --iterations <n>    Max iterations (default: 15, each = full Claude session)
   --model <model>     Claude model (default: opus)
+  --resume            Resume existing drone (don't recreate worktree)
   --help, -h          Show this help
 
 ${YELLOW}Examples:${NC}
   hive start --prd prd-security.json
   hive start --prd .hive/prds/feature.json --name feature-auth
   hive start --prd prd.json --iterations 100 --model sonnet
+  hive start --prd .hive/prds/feature.json --name feature-auth --resume
 
 ${YELLOW}What it does:${NC}
-  1. Creates branch hive/<name> from base
+  1. Creates branch hive/<name> from base (or resumes existing with --resume)
   2. Creates worktree at ~/Projects/{project}-{drone}/
   3. Symlinks .hive/ to worktree (shared state)
   4. Launches Claude agent in background
@@ -270,6 +272,7 @@ cmd_run() {
     local base_branch="main"
     local iterations=15
     local model="opus"
+    local resume=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -279,6 +282,7 @@ cmd_run() {
             --base) base_branch="$2"; shift 2 ;;
             --iterations) iterations="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
+            --resume) resume=true; shift ;;
             --help|-h) show_start_usage; exit 0 ;;
             *) print_error "Unknown option: $1"; show_start_usage; exit 1 ;;
         esac
@@ -320,48 +324,82 @@ cmd_run() {
 
     # Check if drone already exists
     if [ -d "$external_worktree" ]; then
-        print_warning "Drone $drone_name already exists"
-        read -p "Remove and recreate? [y/N] " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            cmd_kill "$drone_name" 2>/dev/null || true
-            git worktree remove "$external_worktree" --force 2>/dev/null || true
-            git branch -D "$branch_name" 2>/dev/null || true
-            rm -rf "$drone_status_dir" 2>/dev/null || true
+        if [ "$resume" = true ]; then
+            print_drone "Resuming drone: $drone_name"
+            print_info "Worktree: $external_worktree"
+
+            # Update PRD in .hive/prds/ if provided a newer one
+            local prd_basename=$(basename "$prd_file")
+            cp "$prd_file" "$PRDS_DIR/$prd_basename"
+            print_info "PRD updated: .hive/prds/$prd_basename"
+
+            # Ensure .hive symlink is correct
+            if [ ! -L "$external_worktree/.hive" ]; then
+                rm -rf "$external_worktree/.hive" 2>/dev/null
+                ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
+                print_info "Fixed .hive symlink"
+            fi
+
+            # Update status to resuming
+            local drone_status_dir="$HIVE_DIR/drones/$drone_name"
+            local drone_status_file="$drone_status_dir/status.json"
+            if [ -f "$drone_status_file" ]; then
+                local total_stories=$(jq '.stories | length' "$prd_file")
+                jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" \
+                    '.status = "resuming" | .updated = $ts | .total = $total' \
+                    "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+            fi
         else
+            print_warning "Drone $drone_name already exists"
+            print_info "Use --resume to continue with existing worktree"
+            print_info "Or use 'hive clean $drone_name' to remove it first"
             exit 1
+        fi
+    else
+        # Create new drone
+
+        # Create branch from base
+        print_info "Creating branch $branch_name from $base_branch..."
+        git branch "$branch_name" "$base_branch" 2>/dev/null || {
+            print_warning "Branch exists, reusing..."
+        }
+
+        # Create worktree (external path for cleaner separation)
+        print_info "Creating worktree at $external_worktree..."
+        mkdir -p "$(dirname "$external_worktree")"
+        git worktree add "$external_worktree" "$branch_name"
+
+        # Create symlink to .hive in worktree (shared state!)
+        # IMPORTANT: Remove any existing .hive first to avoid circular symlink
+        # (ln -sf on a directory creates the symlink inside it, not replacing it)
+        print_info "Linking .hive to worktree (shared state)..."
+        rm -rf "$external_worktree/.hive" 2>/dev/null
+        ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
+
+        # Copy PRD to .hive/prds/ if not already there
+        local prd_basename=$(basename "$prd_file")
+        if [ ! -f "$PRDS_DIR/$prd_basename" ]; then
+            cp "$prd_file" "$PRDS_DIR/$prd_basename"
+            print_info "PRD copied to .hive/prds/$prd_basename"
         fi
     fi
 
-    # Create branch from base
-    print_info "Creating branch $branch_name from $base_branch..."
-    git branch "$branch_name" "$base_branch" 2>/dev/null || {
-        print_warning "Branch exists, reusing..."
-    }
-
-    # Create worktree (external path for cleaner separation)
-    print_info "Creating worktree at $external_worktree..."
-    mkdir -p "$(dirname "$external_worktree")"
-    git worktree add "$external_worktree" "$branch_name"
-
-    # Create symlink to .hive in worktree (shared state!)
-    # IMPORTANT: Remove any existing .hive first to avoid circular symlink
-    # (ln -sf on a directory creates the symlink inside it, not replacing it)
-    print_info "Linking .hive to worktree (shared state)..."
-    rm -rf "$external_worktree/.hive" 2>/dev/null
-    ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
-
-    # Copy PRD to .hive/prds/ if not already there
-    local prd_basename=$(basename "$prd_file")
-    if [ ! -f "$PRDS_DIR/$prd_basename" ]; then
-        cp "$prd_file" "$PRDS_DIR/$prd_basename"
-        print_info "PRD copied to .hive/prds/$prd_basename"
-    fi
-
-    # Create drone status directory and file (in shared .hive)
+    # Create/update drone status directory and file (in shared .hive)
+    local drone_status_dir="$HIVE_DIR/drones/$drone_name"
+    local drone_status_file="$drone_status_dir/status.json"
     mkdir -p "$drone_status_dir"
+    local prd_basename=$(basename "$prd_file")
     local total_stories=$(jq '.stories | length' "$prd_file")
-    cat > "$drone_status_file" << EOF
+
+    if [ "$resume" = true ] && [ -f "$drone_status_file" ]; then
+        # Resume mode: update existing status
+        jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" --arg prd "$prd_basename" \
+            '.status = "resuming" | .updated = $ts | .total = $total | .prd = $prd' \
+            "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+        print_info "Status updated (resuming with $(jq -r '.completed | length' "$drone_status_file") stories completed)"
+    else
+        # New drone: create fresh status
+        cat > "$drone_status_file" << EOF
 {
   "drone": "$drone_name",
   "prd": "$prd_basename",
@@ -375,12 +413,19 @@ cmd_run() {
   "updated": "$(get_timestamp)"
 }
 EOF
+    fi
 
     # Also create a symlink in worktree for backwards compatibility
-    rm -f "$external_worktree/drone-status.json" 2>/dev/null
-    ln -s "$project_root/$drone_status_file" "$external_worktree/drone-status.json"
+    if [ ! -L "$external_worktree/drone-status.json" ]; then
+        rm -f "$external_worktree/drone-status.json" 2>/dev/null
+        ln -s "$project_root/$drone_status_file" "$external_worktree/drone-status.json"
+    fi
 
-    print_success "Drone $drone_name ready!"
+    if [ "$resume" = true ]; then
+        print_success "Drone $drone_name resumed!"
+    else
+        print_success "Drone $drone_name ready!"
+    fi
     print_info "Worktree: $external_worktree"
     print_info "Shared .hive linked (queen can monitor)"
 
