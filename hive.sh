@@ -18,7 +18,10 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.2.0"
+VERSION="1.3.0"
+
+# Auto-clean configuration
+INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
 
 # Configuration
 HIVE_DIR=".hive"
@@ -709,6 +712,93 @@ LAUNCHER_EOF
 }
 
 # ============================================================================
+# Auto-Clean Function
+# ============================================================================
+
+# Check for completed drones that have been inactive for more than INACTIVE_THRESHOLD
+# and offer to clean them up
+check_inactive_drones() {
+    local inactive_drones=()
+    local now=$(date +%s)
+
+    if [ -d "$DRONES_DIR" ]; then
+        for drone_dir in "$DRONES_DIR"/*/; do
+            [ -d "$drone_dir" ] || continue
+
+            local status_file="$drone_dir/status.json"
+            [ -f "$status_file" ] || continue
+
+            local drone_name=$(basename "$drone_dir")
+            local status=$(jq -r '.status // "unknown"' "$status_file")
+            local pid_file="$drone_dir/.pid"
+            local running="no"
+
+            # Check if drone is running
+            if [ -f "$pid_file" ]; then
+                local pid=$(cat "$pid_file")
+                if ps -p "$pid" > /dev/null 2>&1; then
+                    running="yes"
+                fi
+            fi
+
+            # Only consider completed drones that are not running
+            if [ "$status" = "completed" ] && [ "$running" = "no" ]; then
+                # Check last modification time of status file
+                local mtime
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    mtime=$(stat -f %m "$status_file" 2>/dev/null || echo 0)
+                else
+                    mtime=$(stat -c %Y "$status_file" 2>/dev/null || echo 0)
+                fi
+
+                local age=$((now - mtime))
+
+                if [ $age -gt $INACTIVE_THRESHOLD ]; then
+                    local age_mins=$((age / 60))
+                    inactive_drones+=("$drone_name:$age_mins")
+                fi
+            fi
+        done
+    fi
+
+    # If we found inactive drones, offer to clean them
+    if [ ${#inactive_drones[@]} -gt 0 ]; then
+        echo ""
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW}🧹 Inactive completed drones detected:${NC}"
+        echo ""
+
+        for entry in "${inactive_drones[@]}"; do
+            local name="${entry%%:*}"
+            local mins="${entry##*:}"
+            echo -e "   • ${CYAN}$name${NC} (completed ${mins} minutes ago)"
+        done
+
+        echo ""
+        # Only prompt if running interactively
+        if [ -t 0 ]; then
+            read -p "Clean up these drones? [y/N] " -n 1 -r
+            echo
+        else
+            # Non-interactive: show message but don't clean automatically
+            echo -e "   Run ${CYAN}hive clean <name>${NC} to remove them."
+            return
+        fi
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            for entry in "${inactive_drones[@]}"; do
+                local name="${entry%%:*}"
+                echo ""
+                print_info "Cleaning $name..."
+                cmd_clean -f "$name"
+            done
+            echo ""
+            print_success "All inactive drones cleaned up!"
+        fi
+    fi
+}
+
+# ============================================================================
 # Status Command
 # ============================================================================
 
@@ -719,7 +809,7 @@ cmd_status() {
 
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}                    ${YELLOW}👑 HIVE STATUS${NC}                            ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}              ${YELLOW}👑 hive${NC} \033[1mv${VERSION}\033[0m ${YELLOW}status${NC}                        ${CYAN}║${NC}"
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
 
     local found_drones=0
@@ -740,8 +830,31 @@ cmd_status() {
             local completed=$(jq -r '.completed | length // 0' "$status_file")
             local total=$(jq -r '.total // "?"' "$status_file")
             local worktree=$(jq -r '.worktree // ""' "$status_file")
+            local started=$(jq -r '.started // ""' "$status_file")
             local pid_file="$drone_dir/.pid"
             local running="no"
+            local elapsed=""
+
+            # Calculate elapsed time if started timestamp exists
+            if [ -n "$started" ] && [ "$started" != "null" ]; then
+                local start_epoch
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    start_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started" "+%s" 2>/dev/null || echo 0)
+                else
+                    start_epoch=$(date -d "$started" "+%s" 2>/dev/null || echo 0)
+                fi
+                if [ "$start_epoch" -gt 0 ]; then
+                    local now_epoch=$(date "+%s")
+                    local diff=$((now_epoch - start_epoch))
+                    local hours=$((diff / 3600))
+                    local mins=$(((diff % 3600) / 60))
+                    if [ $hours -gt 0 ]; then
+                        elapsed="${hours}h${mins}m"
+                    else
+                        elapsed="${mins}m"
+                    fi
+                fi
+            fi
 
             if [ -f "$pid_file" ]; then
                 local pid=$(cat "$pid_file")
@@ -767,7 +880,13 @@ cmd_status() {
                 "error") icon="❌"; color="$RED" ;;
             esac
 
-            echo -e "${CYAN}║${NC}  ${color}$icon 🐝 $drone_name${NC}"
+            # Build elapsed display
+            local elapsed_display=""
+            if [ -n "$elapsed" ]; then
+                elapsed_display=" ⏱ ${elapsed}"
+            fi
+
+            echo -e "${CYAN}║${NC}  ${color}$icon 🐝 $drone_name${NC}${elapsed_display}"
             echo -e "${CYAN}║${NC}     Progress: ${GREEN}$completed${NC}/${total} stories"
             echo -e "${CYAN}║${NC}     Current:  $current"
             echo -e "${CYAN}║${NC}     Status:   $status (running: $running)"
@@ -786,6 +905,9 @@ cmd_status() {
     echo -e "${CYAN}║${NC}  Last check: $(date '+%H:%M:%S')                                    ${CYAN}║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+
+    # Check for inactive drones and offer to clean them
+    check_inactive_drones
 }
 
 # ============================================================================
