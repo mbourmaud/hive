@@ -345,8 +345,11 @@ cmd_run() {
     git worktree add "$external_worktree" "$branch_name"
 
     # Create symlink to .hive in worktree (shared state!)
+    # IMPORTANT: Remove any existing .hive first to avoid circular symlink
+    # (ln -sf on a directory creates the symlink inside it, not replacing it)
     print_info "Linking .hive to worktree (shared state)..."
-    ln -sf "$project_root/$HIVE_DIR" "$external_worktree/.hive"
+    rm -rf "$external_worktree/.hive" 2>/dev/null
+    ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
 
     # Copy PRD to .hive/prds/ if not already there
     local prd_basename=$(basename "$prd_file")
@@ -374,7 +377,8 @@ cmd_run() {
 EOF
 
     # Also create a symlink in worktree for backwards compatibility
-    ln -sf "$project_root/$drone_status_file" "$external_worktree/drone-status.json"
+    rm -f "$external_worktree/drone-status.json" 2>/dev/null
+    ln -s "$project_root/$drone_status_file" "$external_worktree/drone-status.json"
 
     print_success "Drone $drone_name ready!"
     print_info "Worktree: $external_worktree"
