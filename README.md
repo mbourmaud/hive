@@ -1,304 +1,142 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Hive Logo" width="200">
+  <img src="assets/logo.png" alt="Hive Logo" width="180">
 </p>
 
 <h1 align="center">Hive</h1>
 
 <p align="center">
-  <strong>Drone Orchestration for Claude Code</strong>
+  <strong>Let Your Bees Do the Work! 🍯</strong>
 </p>
 
 <p align="center">
-  Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree, executing stories from a PRD while you continue working.
+  Launch autonomous Claude agents that buzz through your PRDs while you sip coffee.
 </p>
 
 <p align="center">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="https://github.com/mbourmaud/hive/releases"><img src="https://img.shields.io/github/v/release/mbourmaud/hive" alt="Release"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-F5A623.svg" alt="License: MIT"></a>
+  <a href="https://github.com/mbourmaud/hive/releases"><img src="https://img.shields.io/github/v/release/mbourmaud/hive?color=F5A623" alt="Release"></a>
 </p>
 
 ---
 
-## Installation
+## 📦 Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
 ```
 
-Installs:
-- **CLI**: `hive` command to `~/.local/bin/`
-- **Skills**: `/hive:*` commands for Claude Code
-- **Icon**: Bee icon for notifications
+---
+
+## 🐝 How to Bee Productive
+
+| Step | Command |
+|------|---------|
+| **1. Initialize Your Hive** | `hive init` |
+| **2. Create a PRD** <sup>`IN CLAUDE CODE`</sup> | `/hive:prd` |
+| **3. Launch Your Drones!** <sup>`IN CLAUDE CODE`</sup> | `/hive:start` |
+| **4. Be the Queen** <sup>`IN CLAUDE CODE`</sup> | `/hive:status` |
+| **5. Harvest the Honey!** | Review, PR, merge 🍯 |
 
 ---
 
-## Quick Start
+## 📊 Statusline - Track Your Drones
 
-```bash
-# Initialize Hive in your project
-hive init
-
-# Create a PRD (in Claude Code)
-/hive:prd
-
-# Launch a drone on the PRD
-hive start --prd .hive/prds/prd-security.json
-
-# Monitor progress
-hive status
-
-# View logs
-hive logs security
-
-# Cleanup when done
-hive clean security
-```
-
----
-
-## What it does
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  👑 Queen (main branch)                                     │
-│  You + Claude working on features                           │
-│  .hive/ folder with shared state                            │
-├─────────────────────────────────────────────────────────────┤
-│  🐝 Drone: security (hive/security branch)                  │
-│  Autonomously implementing SEC-001 → SEC-010                │
-│  .hive/ symlinked from queen                                │
-├─────────────────────────────────────────────────────────────┤
-│  🐝 Drone: feature-x (hive/feature-x branch)                │
-│  Autonomously implementing FEAT-001 → FEAT-005              │
-│  .hive/ symlinked from queen                                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Perfect for:**
-- Executing PRD stories in the background
-- Running multiple parallel implementations
-- Large-scale refactoring with isolated workspaces
-- Autonomous code generation from specifications
-
----
-
-## Features
-
-### 🔔 Desktop Notifications
-
-Hive sends desktop notifications when:
-- **🐝 Drone Started** - When a new drone begins working
-- **🎉 Drone Completed** - When all stories are done
-- **⏸️ Drone Paused** - When max iterations reached
-
-**Platform Support:**
-| Platform | Tool | Custom Icon |
-|----------|------|-------------|
-| macOS | terminal-notifier | ✅ |
-| Linux | notify-send | ✅ |
-| Windows/WSL | PowerShell Toast | ❌ |
-
-### 📊 Statusline Integration
-
-After running `/hive:statusline`, your Claude Code statusline shows:
+Run `/hive:statusline` in Claude Code to enable drone tracking in your statusline:
 
 ```
 project │ main │ Opus 4.5 │ 45% │ ⬢ 22
-👑 Hive v1.1.0 | 🐝 security (4/10) | 🐝 feature ✓ (5/5)
+👑 Hive v1.2.0 | 🐝 security (4/10) | 🐝 ui-refactor ✓
 ```
+
+See all your drones at a glance:
+- **🐝 name (X/Y)** - Drone in progress (X stories done out of Y)
+- **🐝 name ✓** - Drone completed all stories
+- **🔄** - Drone currently running
 
 ---
 
-## Commands
+## 🎯 Commands
 
-| CLI | Skill | Description |
-|-----|-------|-------------|
-| `hive init` | `/hive:init` | Initialize Hive in repo |
-| `hive start --prd <file>` | `/hive:start` | Launch a drone on a PRD |
-| `hive status` | `/hive:status` | Show status of all drones |
-| `hive list` | `/hive:list` | List active drones |
-| `hive logs <name>` | `/hive:logs` | View drone logs |
-| `hive kill <name>` | `/hive:kill` | Stop a running drone |
-| `hive clean <name>` | `/hive:clean` | Remove drone and worktree |
-| `hive update` | - | Update Hive to latest version |
-| - | `/hive:prd` | Generate a PRD from feature description |
-| - | `/hive:statusline` | Configure statusline with drone tracking |
-
-Run `hive <command> --help` for detailed options.
+| In Claude Code | CLI | What it does |
+|----------------|-----|--------------|
+| `/hive:init` | `hive init` | Set up the hive in your project |
+| `/hive:prd` | - | Generate a PRD from description |
+| `/hive:start` | `hive start --prd <file>` | Launch a drone |
+| `/hive:status` | `hive status` | See all drones status |
+| `/hive:logs` | `hive logs <name>` | View drone activity |
+| `/hive:kill` | `hive kill <name>` | Stop a drone |
+| `/hive:clean` | `hive clean <name>` | Remove drone & worktree |
+| `/hive:statusline` | - | Configure statusline |
 
 ---
 
-## Start Options
+## 🔔 Desktop Notifications
 
-```bash
-hive start --prd <file> [options]
+Get notified when drones start, complete, or pause:
 
-Options:
-  --prd <file>        PRD JSON file (required)
-  --name <name>       Drone name (default: from PRD id)
-  --base <branch>     Base branch (default: main)
-  --iterations <n>    Max iterations (default: 15)
-  --model <model>     Claude model (default: opus)
-```
+| Event | Notification |
+|-------|--------------|
+| 🐝 Started | "security: 10 stories" |
+| 🎉 Completed | "security: 10/10 done!" |
+| ⏸️ Paused | "security: 7/10 (max iterations)" |
 
-### Examples
-
-```bash
-# Simple - uses PRD id as drone name
-hive start --prd .hive/prds/prd-security.json
-
-# Custom name and base branch
-hive start --prd feature.json --name auth-feature --base develop
-
-# More iterations for complex PRDs
-hive start --prd big-refactor.json --iterations 100
-
-# Use faster model
-hive start --prd small-task.json --model sonnet
-```
+Works on macOS, Linux, and Windows/WSL.
 
 ---
 
-## PRD Format
+## 🏗️ How It Works
 
-PRDs are stored in `.hive/prds/`:
-
-```json
-{
-  "id": "security-api-protection",
-  "title": "Secure API Routes",
-  "description": "Add authentication to all API routes",
-  "stories": [
-    {
-      "id": "SEC-001",
-      "title": "Protect /api/accounts/*",
-      "description": "Add requireAuth() to account routes",
-      "acceptance_criteria": [
-        "GET /api/accounts returns 401 if not authenticated",
-        "POST /api/accounts returns 401 if not authenticated"
-      ],
-      "files": [
-        "src/app/api/accounts/route.ts"
-      ]
-    },
-    {
-      "id": "SEC-002",
-      "title": "Protect /api/users/*",
-      "description": "Add requireAuth() to user routes",
-      "acceptance_criteria": ["..."],
-      "files": ["..."]
-    }
-  ]
-}
 ```
+┌──────────────────────────────────────────────────────┐
+│  👑 Queen (your main branch)                         │
+│  You + Claude working on features                    │
+│  .hive/ folder with shared state                     │
+├──────────────────────────────────────────────────────┤
+│  🐝 Drone: security                                  │
+│  Branch: hive/security                               │
+│  Implementing SEC-001 → SEC-010 autonomously         │
+├──────────────────────────────────────────────────────┤
+│  🐝 Drone: ui-refactor                               │
+│  Branch: hive/ui-refactor                            │
+│  Implementing UI-001 → UI-025 autonomously           │
+└──────────────────────────────────────────────────────┘
+```
+
+Each drone:
+- Gets its own **git worktree** (isolated workspace)
+- Works on its own **branch** (`hive/<name>`)
+- **Commits** each story: `feat(SEC-001): description`
+- Updates **status.json** in real-time
 
 ---
 
-## How it works
-
-1. **Init**: `hive init` creates `.hive/` folder (gitignored)
-2. **PRD**: Store PRDs in `.hive/prds/`
-3. **Branch**: Creates `hive/<drone-name>` from base branch
-4. **Worktree**: Creates `~/Projects/{project}-{drone}/`
-5. **Symlink**: Links `.hive/` to worktree (shared state!)
-6. **Launch**: Starts Claude agent in background loop
-7. **Track**: Drone updates `.hive/drones/<name>/status.json`
-8. **Notify**: Desktop notifications on start/complete/pause
-9. **Commits**: Each story = one commit with `feat(<STORY-ID>): description`
-
----
-
-## File Structure
+## 📁 File Structure
 
 ```
-your-project/                      # 👑 Queen (main repo)
-├── .hive/                         # Shared state (gitignored)
-│   ├── config.json
-│   ├── prds/                      # PRD files here
+your-project/                        # 👑 Queen
+├── .hive/                           # Shared state
+│   ├── prds/                        # Your PRD files
 │   │   └── prd-security.json
-│   └── drones/                    # Drone state
+│   └── drones/                      # Drone status
 │       └── security/
-│           ├── status.json        # Progress tracking
-│           ├── activity.log       # Human-readable log
-│           ├── drone.log          # Raw Claude output
-│           └── .pid               # Process ID
+│           ├── status.json          # Progress: 4/10
+│           └── activity.log         # What it's doing
 
-~/Projects/
-├── your-project/                  # Queen
-├── your-project-security/         # 🐝 Drone worktree
-│   ├── .hive -> ../your-project/.hive  # Symlink!
-│   └── (project files)
-└── your-project-feature/          # 🐝 Another drone
-    └── .hive -> ../your-project/.hive
+~/Projects/your-project-security/    # 🐝 Drone worktree
+├── .hive -> ../your-project/.hive   # Symlinked!
+└── (your code being modified)
 ```
 
-The `.hive/` symlink enables **queen ↔ drone communication**:
-- Queen can monitor drone progress in real-time
-- Drones share PRDs from the same source
-- Status updates are immediately visible
-
 ---
 
-## Requirements
+## 📋 Requirements
 
-- `bash` - Shell interpreter
-- `jq` - JSON processor
-- `git` - Version control
-- `claude` - Claude Code CLI
-- `terminal-notifier` (macOS, optional) - For custom notification icons
-
----
-
-## Manual Installation
-
-If you prefer not to use the install script:
-
-```bash
-# Clone
-git clone https://github.com/mbourmaud/hive.git
-cd hive
-
-# Install CLI
-cp hive.sh ~/.local/bin/hive
-chmod +x ~/.local/bin/hive
-
-# Install skills (Claude Code)
-cp commands/*.md ~/.claude/commands/
-
-# Install icon (for notifications)
-mkdir -p ~/.local/share/hive
-cp assets/logo.png ~/.local/share/hive/bee-icon.png
-```
-
-Make sure `~/.local/bin` is in your PATH.
-
----
-
-## Troubleshooting
-
-### "Not a git repository"
-Make sure you're in a git repository before running hive commands.
-
-### "jq is required"
-Install jq: `brew install jq` (macOS) or `apt install jq` (Ubuntu).
-
-### Drone process died
-Check logs with `hive logs <name>`. Restart with `hive start --prd ...`.
-
-### Worktree conflicts
-Use `hive clean -f <name>` to force cleanup, then retry.
-
-### No notifications on macOS
-Install terminal-notifier: `brew install terminal-notifier` and allow notifications in System Preferences.
-
----
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
+- `bash`, `git`, `jq`
+- [Claude Code](https://claude.ai/code) CLI
 
 ---
 
 <p align="center">
-  Made with 👑 by <a href="https://github.com/mbourmaud">@mbourmaud</a>
+  Made with 🍯 by <a href="https://github.com/mbourmaud">@mbourmaud</a><br>
+  <sub>MIT License • Buzz responsibly</sub>
 </p>
