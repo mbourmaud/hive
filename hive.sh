@@ -1013,14 +1013,10 @@ cmd_kill() {
 
 cmd_clean() {
     local drone_name="$1"
-    local force=false
-
-    [ "$drone_name" = "-f" ] && { force=true; drone_name="$2"; }
-    [ "$drone_name" = "--force" ] && { force=true; drone_name="$2"; }
 
     if [ -z "$drone_name" ]; then
         print_error "Drone name required"
-        echo "Usage: hive clean [-f] <drone-name>"
+        echo "Usage: hive clean <drone-name>"
         exit 1
     fi
 
@@ -1038,12 +1034,6 @@ cmd_clean() {
 
     # Fallback to default path
     [ -z "$worktree_path" ] && worktree_path="/Users/fr162241/Projects/${project_name}-${drone_name}"
-
-    if [ "$force" = false ]; then
-        read -p "Remove drone $drone_name and its worktree? [y/N] " -n 1 -r
-        echo
-        [[ ! $REPLY =~ ^[Yy]$ ]] && exit 0
-    fi
 
     # Kill if running
     cmd_kill "$drone_name" 2>/dev/null || true
