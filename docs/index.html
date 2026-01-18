@@ -3,32 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hive - Drone Orchestration for Claude Code</title>
-    <meta name="description" content="Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree.">
+    <title>Hive - Let Your Bees Do the Work!</title>
+    <meta name="description" content="Launch autonomous Claude agents (drones) on PRD files. Your personal army of coding bees!">
 
     <!-- Favicons -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="assets/android-chrome-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="assets/android-chrome-512x512.png">
 
     <!-- Open Graph / Social -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Hive - Drone Orchestration for Claude Code">
-    <meta property="og:description" content="Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree.">
+    <meta property="og:title" content="Hive - Let Your Bees Do the Work!">
+    <meta property="og:description" content="Launch autonomous Claude agents (drones) on PRD files. Your personal army of coding bees!">
     <meta property="og:image" content="assets/logo.png">
     <meta name="twitter:card" content="summary_large_image">
+
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --bg: #0d1117;
-            --bg-secondary: #161b22;
-            --text: #c9d1d9;
-            --text-muted: #8b949e;
-            --accent: #f5a623;
-            --accent-light: #ffd666;
-            --border: #30363d;
-            --code-bg: #1f2428;
+            --honey-dark: #B8860B;
+            --honey: #F5A623;
+            --honey-light: #FFD93D;
+            --honey-cream: #FFF8E7;
+            --honey-pale: #FFFDF7;
+            --brown-dark: #4A3728;
+            --brown: #6B4423;
+            --brown-light: #8B6914;
+            --text: #3D2914;
+            --text-muted: #7A6B5A;
         }
 
         * {
@@ -38,326 +41,404 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: var(--bg);
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--honey-pale);
             color: var(--text);
             line-height: 1.6;
+            overflow-x: hidden;
         }
 
+        /* Honeycomb background pattern */
+        .honeycomb-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: -1;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='%23B8860B' d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill-opacity='1'/%3E%3Cpath fill='%23F5A623' d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill-opacity='0.5'/%3E%3C/svg%3E");
+        }
+
+        /* Hero Section */
         .hero {
             text-align: center;
-            padding: 80px 20px;
-            background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg) 100%);
+            padding: 60px 20px 80px;
+            background: linear-gradient(180deg, var(--honey-cream) 0%, var(--honey-pale) 100%);
+            position: relative;
         }
 
         .logo {
-            width: 150px;
-            height: 150px;
-            margin-bottom: 24px;
-            animation: float 3s ease-in-out infinite;
+            width: 180px;
+            height: 180px;
+            margin-bottom: 20px;
+            animation: bounce 2s ease-in-out infinite;
+            filter: drop-shadow(0 10px 20px rgba(245, 166, 35, 0.3));
         }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(-15px) rotate(5deg); }
         }
 
         h1 {
-            font-size: 3rem;
-            margin-bottom: 16px;
-            color: var(--accent);
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--brown-dark);
+            margin-bottom: 12px;
+            text-shadow: 2px 2px 0 var(--honey-light);
         }
 
         .tagline {
-            font-size: 1.4rem;
-            color: var(--text-muted);
-            margin-bottom: 32px;
-        }
-
-        .cta {
-            display: inline-block;
-            background: var(--accent);
-            color: var(--bg);
-            padding: 14px 32px;
-            border-radius: 8px;
-            text-decoration: none;
+            font-size: 1.6rem;
             font-weight: 600;
-            font-size: 1.1rem;
-            transition: all 0.2s;
+            color: var(--honey-dark);
+            margin-bottom: 24px;
         }
 
-        .cta:hover {
-            background: var(--accent-light);
-            transform: translateY(-2px);
+        .description {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            max-width: 500px;
+            margin: 0 auto 32px;
         }
 
-        .install-code {
-            margin-top: 24px;
-            background: var(--code-bg);
-            padding: 16px 24px;
-            border-radius: 8px;
+        .install-box {
             display: inline-block;
-            font-family: 'Fira Code', monospace;
+            background: var(--brown-dark);
+            color: var(--honey-light);
+            padding: 16px 28px;
+            border-radius: 50px;
+            font-family: 'Monaco', 'Consolas', monospace;
             font-size: 0.95rem;
-            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 55, 40, 0.3);
         }
 
-        .install-code::before {
+        .install-box:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 25px rgba(74, 55, 40, 0.4);
+        }
+
+        .install-box::before {
             content: '$ ';
-            color: var(--accent);
+            color: var(--honey);
         }
 
-        .features {
-            max-width: 1200px;
-            margin: 0 auto;
+        .copy-hint {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 12px;
+        }
+
+        /* Timeline Section */
+        .timeline-section {
             padding: 80px 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 32px;
+            max-width: 800px;
+            margin: 0 auto;
         }
 
-        .feature {
-            background: var(--bg-secondary);
-            padding: 32px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-        }
-
-        .feature-icon {
+        .section-title {
+            text-align: center;
             font-size: 2.5rem;
-            margin-bottom: 16px;
+            font-weight: 800;
+            color: var(--brown-dark);
+            margin-bottom: 60px;
         }
 
-        .feature h3 {
-            color: var(--accent);
+        .section-title span {
+            color: var(--honey-dark);
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 60px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: linear-gradient(180deg, var(--honey) 0%, var(--honey-dark) 100%);
+            border-radius: 4px;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 50px;
+            padding: 24px 28px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(184, 134, 11, 0.15);
+            transition: all 0.3s;
+        }
+
+        .timeline-item:hover {
+            transform: translateX(10px);
+            box-shadow: 0 8px 30px rgba(184, 134, 11, 0.25);
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -48px;
+            top: 30px;
+            width: 20px;
+            height: 20px;
+            background: var(--honey);
+            border: 4px solid var(--honey-cream);
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(245, 166, 35, 0.5);
+        }
+
+        .step-number {
+            position: absolute;
+            left: -85px;
+            top: 24px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--honey-dark);
+        }
+
+        .timeline-item h3 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--brown-dark);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timeline-item h3 .emoji {
+            font-size: 1.6rem;
+        }
+
+        .timeline-item p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
             margin-bottom: 12px;
-            font-size: 1.3rem;
         }
 
-        .feature p {
+        .timeline-item code {
+            display: inline-block;
+            background: var(--honey-cream);
+            color: var(--brown);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            border: 2px dashed var(--honey);
+        }
+
+        /* Fun facts */
+        .fun-fact {
+            background: var(--honey-cream);
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .fun-fact-content {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .fun-fact h2 {
+            font-size: 2rem;
+            color: var(--brown-dark);
+            margin-bottom: 20px;
+        }
+
+        .fun-fact p {
+            font-size: 1.2rem;
             color: var(--text-muted);
         }
 
-        .diagram {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 60px 20px;
+        .fun-fact .big-emoji {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            display: block;
         }
 
-        .diagram h2 {
-            text-align: center;
-            color: var(--accent);
-            margin-bottom: 32px;
-            font-size: 2rem;
-        }
-
-        .diagram-box {
-            background: var(--code-bg);
-            padding: 24px;
-            border-radius: 12px;
-            font-family: 'Fira Code', monospace;
-            font-size: 0.9rem;
-            white-space: pre;
-            overflow-x: auto;
-            border: 1px solid var(--border);
-        }
-
-        .commands {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 60px 20px;
-        }
-
-        .commands h2 {
-            text-align: center;
-            color: var(--accent);
-            margin-bottom: 32px;
-            font-size: 2rem;
-        }
-
-        .commands table {
-            width: 100%;
-            border-collapse: collapse;
-            background: var(--bg-secondary);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .commands th, .commands td {
-            padding: 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .commands th {
-            background: var(--code-bg);
-            color: var(--accent);
-        }
-
-        .commands code {
-            background: var(--code-bg);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-family: 'Fira Code', monospace;
-            font-size: 0.85rem;
-        }
-
+        /* Footer */
         footer {
             text-align: center;
             padding: 40px 20px;
-            border-top: 1px solid var(--border);
-            color: var(--text-muted);
+            background: var(--brown-dark);
+            color: var(--honey-cream);
         }
 
         footer a {
-            color: var(--accent);
+            color: var(--honey-light);
             text-decoration: none;
+            font-weight: 600;
         }
 
         footer a:hover {
             text-decoration: underline;
         }
 
-        .github-link {
+        .github-btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 16px;
-            color: var(--text);
+            gap: 10px;
+            background: var(--honey);
+            color: var(--brown-dark);
+            padding: 14px 28px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .github-btn:hover {
+            background: var(--honey-light);
+            transform: scale(1.05);
             text-decoration: none;
         }
 
-        .github-link:hover {
-            color: var(--accent);
-        }
-
-        .github-link svg {
+        .github-btn svg {
             width: 24px;
             height: 24px;
             fill: currentColor;
         }
+
+        /* Floating bees decoration */
+        .floating-bee {
+            position: fixed;
+            font-size: 2rem;
+            opacity: 0.6;
+            animation: fly 15s linear infinite;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .floating-bee:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .floating-bee:nth-child(2) { left: 30%; animation-delay: 3s; }
+        .floating-bee:nth-child(3) { left: 70%; animation-delay: 7s; }
+        .floating-bee:nth-child(4) { left: 90%; animation-delay: 11s; }
+
+        @keyframes fly {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            h1 { font-size: 2.5rem; }
+            .tagline { font-size: 1.2rem; }
+            .logo { width: 140px; height: 140px; }
+            .timeline { padding-left: 40px; }
+            .timeline::before { left: 14px; }
+            .timeline-item::before { left: -35px; }
+            .step-number { left: -60px; font-size: 1.2rem; }
+            .install-box { font-size: 0.8rem; padding: 12px 20px; }
+        }
     </style>
 </head>
 <body>
+    <div class="honeycomb-bg"></div>
+
+    <!-- Floating bees -->
+    <div class="floating-bee">🐝</div>
+    <div class="floating-bee">🐝</div>
+    <div class="floating-bee">🐝</div>
+    <div class="floating-bee">🐝</div>
+
     <section class="hero">
-        <img src="assets/logo.png" alt="Hive Logo" class="logo">
+        <img src="assets/logo.png" alt="Hive Bee Logo" class="logo">
         <h1>Hive</h1>
-        <p class="tagline">Drone Orchestration for Claude Code</p>
-        <p style="max-width: 600px; margin: 0 auto 32px; color: var(--text-muted);">
-            Launch autonomous Claude agents (drones) on PRD files. Each drone works in its own git worktree, executing stories while you continue working.
+        <p class="tagline">Let Your Bees Do the Work! 🍯</p>
+        <p class="description">
+            Launch autonomous Claude agents that buzz through your PRDs while you sip coffee.
         </p>
-        <a href="https://github.com/mbourmaud/hive" class="cta">Get Started</a>
-        <div class="install-code">curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash</div>
-        <br>
-        <a href="https://github.com/mbourmaud/hive" class="github-link">
-            <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            View on GitHub
-        </a>
+        <div class="install-box" onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash')">
+            curl -fsSL https://...hive.../install.sh | bash
+        </div>
+        <p class="copy-hint">Click to copy</p>
     </section>
 
-    <section class="features">
-        <div class="feature">
-            <div class="feature-icon">🐝</div>
-            <h3>Autonomous Drones</h3>
-            <p>Launch Claude agents that work independently on PRD stories. Each drone operates in its own git worktree with full isolation.</p>
-        </div>
-        <div class="feature">
-            <div class="feature-icon">👑</div>
-            <h3>Queen Monitoring</h3>
-            <p>Monitor all drones from your main workspace. Shared .hive/ folder enables real-time status updates and progress tracking.</p>
-        </div>
-        <div class="feature">
-            <div class="feature-icon">🔔</div>
-            <h3>Desktop Notifications</h3>
-            <p>Get notified when drones start, complete, or pause. Works on macOS, Linux, and Windows/WSL.</p>
-        </div>
-        <div class="feature">
-            <div class="feature-icon">📊</div>
-            <h3>Statusline Integration</h3>
-            <p>See drone progress directly in your Claude Code statusline. Track multiple drones at a glance.</p>
-        </div>
-        <div class="feature">
-            <div class="feature-icon">🔀</div>
-            <h3>Git Worktrees</h3>
-            <p>Each drone gets its own worktree and branch. Clean separation, easy merging when stories are complete.</p>
-        </div>
-        <div class="feature">
-            <div class="feature-icon">📝</div>
-            <h3>PRD-Driven</h3>
-            <p>Define stories in JSON PRD files. Drones execute each story sequentially, committing as they go.</p>
+    <section class="timeline-section">
+        <h2 class="section-title">How to <span>Bee</span> Productive</h2>
+
+        <div class="timeline">
+            <div class="timeline-item">
+                <span class="step-number">1</span>
+                <h3><span class="emoji">📦</span> Install Hive</h3>
+                <p>One command and you're ready to rule the hive!</p>
+                <code>curl -fsSL https://...hive.../install.sh | bash</code>
+            </div>
+
+            <div class="timeline-item">
+                <span class="step-number">2</span>
+                <h3><span class="emoji">🏠</span> Initialize Your Hive</h3>
+                <p>Set up the hive in your project. This creates the .hive/ folder where all the magic happens.</p>
+                <code>hive init</code>
+            </div>
+
+            <div class="timeline-item">
+                <span class="step-number">3</span>
+                <h3><span class="emoji">📝</span> Create a PRD</h3>
+                <p>Describe what you want to build. Use Claude Code to generate a proper PRD with stories.</p>
+                <code>/hive:prd</code>
+            </div>
+
+            <div class="timeline-item">
+                <span class="step-number">4</span>
+                <h3><span class="emoji">🚀</span> Launch Your Drones!</h3>
+                <p>Send your bees to work! Each drone gets its own git worktree and buzzes through stories.</p>
+                <code>hive start --prd my-feature.json</code>
+            </div>
+
+            <div class="timeline-item">
+                <span class="step-number">5</span>
+                <h3><span class="emoji">👑</span> Be the Queen</h3>
+                <p>Monitor your drones while you work on other things. Check status anytime!</p>
+                <code>hive status</code>
+            </div>
+
+            <div class="timeline-item">
+                <span class="step-number">6</span>
+                <h3><span class="emoji">🎉</span> Harvest the Honey!</h3>
+                <p>When drones finish, review the PR and merge. Sweet, sweet productivity!</p>
+                <code>gh pr create</code>
+            </div>
         </div>
     </section>
 
-    <section class="diagram">
-        <h2>How it Works</h2>
-        <div class="diagram-box">┌─────────────────────────────────────────────────────────────┐
-│  👑 Queen (main branch)                                     │
-│  You + Claude working on features                           │
-│  .hive/ folder with shared state                            │
-├─────────────────────────────────────────────────────────────┤
-│  🐝 Drone: security (hive/security branch)                  │
-│  Autonomously implementing SEC-001 → SEC-010                │
-│  .hive/ symlinked from queen                                │
-├─────────────────────────────────────────────────────────────┤
-│  🐝 Drone: feature-x (hive/feature-x branch)                │
-│  Autonomously implementing FEAT-001 → FEAT-005              │
-│  .hive/ symlinked from queen                                │
-└─────────────────────────────────────────────────────────────┘</div>
-    </section>
-
-    <section class="commands">
-        <h2>Commands</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>CLI</th>
-                    <th>Skill</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><code>hive init</code></td>
-                    <td><code>/hive:init</code></td>
-                    <td>Initialize Hive in repo</td>
-                </tr>
-                <tr>
-                    <td><code>hive start --prd &lt;file&gt;</code></td>
-                    <td><code>/hive:start</code></td>
-                    <td>Launch a drone on a PRD</td>
-                </tr>
-                <tr>
-                    <td><code>hive status</code></td>
-                    <td><code>/hive:status</code></td>
-                    <td>Show status of all drones</td>
-                </tr>
-                <tr>
-                    <td><code>hive logs &lt;name&gt;</code></td>
-                    <td><code>/hive:logs</code></td>
-                    <td>View drone logs</td>
-                </tr>
-                <tr>
-                    <td><code>hive kill &lt;name&gt;</code></td>
-                    <td><code>/hive:kill</code></td>
-                    <td>Stop a running drone</td>
-                </tr>
-                <tr>
-                    <td><code>hive clean &lt;name&gt;</code></td>
-                    <td><code>/hive:clean</code></td>
-                    <td>Remove drone and worktree</td>
-                </tr>
-                <tr>
-                    <td>-</td>
-                    <td><code>/hive:prd</code></td>
-                    <td>Generate a PRD from feature description</td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="fun-fact">
+        <div class="fun-fact-content">
+            <span class="big-emoji">🐝 + 🤖 = 💛</span>
+            <h2>Did You Know?</h2>
+            <p>
+                A real bee visits 50-100 flowers per trip. Your Hive drones can implement
+                50-100 stories per PRD. Coincidence? We think not! 🍯
+            </p>
+        </div>
     </section>
 
     <footer>
-        <p>Made with 👑 by <a href="https://github.com/mbourmaud">@mbourmaud</a></p>
-        <p style="margin-top: 8px;">MIT License</p>
+        <a href="https://github.com/mbourmaud/hive" class="github-btn">
+            <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            Star on GitHub
+        </a>
+        <p>Made with 🍯 by <a href="https://github.com/mbourmaud">@mbourmaud</a></p>
+        <p style="margin-top: 8px; opacity: 0.7;">MIT License • Buzz responsibly</p>
     </footer>
 </body>
 </html>
