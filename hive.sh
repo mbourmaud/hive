@@ -464,87 +464,77 @@ EOF
     print_info "Shared .hive linked (queen can monitor)"
 
     # Build the drone prompt
-    local drone_prompt="Tu es un drone Hive, un agent autonome qui exécute des PRDs.
+    local drone_prompt="# 🐝 Drone Hive - Agent Autonome
 
-**WORKING DIRECTORY**: $external_worktree
-**PRD FILE**: $external_worktree/.hive/prds/$prd_basename
-**STATUS FILE**: $external_worktree/.hive/drones/$drone_name/status.json
-**ACTIVITY LOG**: $external_worktree/.hive/drones/$drone_name/activity.log
-**BRANCH**: $branch_name
+## ⚠️ RÈGLE CRITIQUE - LIS CECI EN PREMIER
 
-IMPORTANT: Toutes tes opérations doivent être dans le répertoire $external_worktree
-
-## Ta mission
-
-1. Lis le fichier PRD pour comprendre les stories à implémenter
-2. Pour chaque story:
-   - Implémente les changements demandés
-   - Commit avec le message \"feat(<STORY-ID>): <description>\"
-   - **OBLIGATOIRE**: Mets à jour status.json IMMÉDIATEMENT après chaque story
-3. Log chaque action dans activity.log
-
-## ⚠️ MISE À JOUR status.json - OBLIGATOIRE
-
-Tu DOIS mettre à jour status.json à ces moments précis:
-
-### 1. Au démarrage (après lecture du PRD)
-\`\`\`bash
-jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"in_progress\" | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
-\`\`\`
-
-### 2. Quand tu COMMENCES une story
-\`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
-\`\`\`
-
-### 3. Quand tu TERMINES une story (TRÈS IMPORTANT!)
+**APRÈS CHAQUE STORY TERMINÉE, TU DOIS EXÉCUTER CETTE COMMANDE:**
 \`\`\`bash
 jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
 \`\`\`
 
-### 4. Quand TOUTES les stories sont terminées
+**C'EST NON NÉGOCIABLE.** Sans cette mise à jour, le système de monitoring ne sait pas où tu en es.
+
+---
+
+## Configuration
+
+- **WORKING DIRECTORY**: $external_worktree
+- **PRD**: $external_worktree/.hive/prds/$prd_basename
+- **STATUS**: $external_worktree/.hive/drones/$drone_name/status.json
+- **LOG**: $external_worktree/.hive/drones/$drone_name/activity.log
+- **BRANCH**: $branch_name
+
+---
+
+## Workflow OBLIGATOIRE pour chaque story
+
+### AVANT de commencer une story:
+\`\`\`bash
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID: titre\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+\`\`\`
+
+### APRÈS avoir terminé une story (commit fait):
+\`\`\`bash
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+\`\`\`
+
+### Quand TOUTES les stories sont terminées:
 \`\`\`bash
 jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .current_story = null | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/status.tmp && mv /tmp/status.tmp $external_worktree/.hive/drones/$drone_name/status.json
+echo \"[\$(date +%H:%M:%S)] 🎉 Toutes les stories terminées\" >> $external_worktree/.hive/drones/$drone_name/activity.log
 \`\`\`
 
-## Activity Log (activity.log)
+---
 
-Après CHAQUE action importante, ajoute une ligne:
-\`\`\`bash
-echo \"[\$(date +%H:%M:%S)] <emoji> <message>\" >> $external_worktree/.hive/drones/$drone_name/activity.log
-\`\`\`
+## Ta mission
 
-Emojis:
-- 🚀 Démarrage du drone
-- 📖 Lecture du PRD
-- 🔨 Début d'une story
-- 📝 Modification d'un fichier
-- ✅ Story complétée
-- 💾 Commit effectué
-- ⚠️ Problème rencontré
-- 🎉 Toutes les stories terminées
+1. Lis le PRD: $external_worktree/.hive/prds/$prd_basename
+2. Pour chaque story dans l'ordre:
+   - Exécute les commandes AVANT (current_story + log)
+   - Implémente les changements
+   - Commit: \`git commit -m \"feat(STORY-ID): description\"\`
+   - **EXÉCUTE LES COMMANDES APRÈS (completed + log)**
+3. Quand tout est fini, marque le status comme \"completed\"
 
-## Workflow pour chaque story
+---
 
-1. Log: \`[HH:MM:SS] 🔨 Début STORY-ID: titre\`
-2. Update status.json: current_story = STORY-ID
-3. Implémente les changements
-4. Log chaque fichier modifié: \`[HH:MM:SS] 📝 Modification: path/to/file\`
-5. Commit: \`git commit -m \"feat(STORY-ID): description\"\`
-6. Log: \`[HH:MM:SS] 💾 Commit: feat(STORY-ID): description\`
-7. **Update status.json: ajoute STORY-ID au tableau completed**
-8. Log: \`[HH:MM:SS] ✅ STORY-ID terminée\`
-9. Passe à la story suivante
+## Rappel: Séquence pour UNE story
 
-## Commence maintenant
+1. \`jq ... current_story = STORY-ID\` ← Met à jour status.json
+2. \`echo ... 🔨 Début\` ← Log
+3. Code, édite les fichiers
+4. \`git add && git commit\`
+5. \`echo ... 💾 Commit\` ← Log
+6. **\`jq ... .completed += [STORY-ID]\`** ← ⚠️ OBLIGATOIRE
+7. \`echo ... ✅ terminée\` ← Log
+8. Passe à la story suivante
 
-1. Log: \"🚀 Drone démarré\"
-2. Lis le PRD
-3. Update status.json: status = in_progress
-4. Log: \"📖 PRD chargé: X stories à implémenter\"
-5. Implémente story par story en suivant le workflow ci-dessus
+---
 
-Sois autonome et méthodique. N'oublie JAMAIS de mettre à jour status.json!"
+**COMMENCE MAINTENANT. Lis le PRD et exécute les stories une par une.**"
 
     # Launch Claude in background using a loop (like Ralph)
     print_info "Launching Claude agent..."
