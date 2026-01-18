@@ -251,6 +251,63 @@
             box-shadow: 0 2px 4px rgba(146, 64, 14, 0.3);
         }
 
+        /* Statusline section */
+        .statusline-section {
+            padding: 60px 20px;
+            background: white;
+        }
+
+        .statusline-content {
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .statusline-desc {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .statusline-desc code {
+            background: var(--honey-cream);
+            color: var(--brown);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+
+        .statusline-preview {
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 16px 24px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            text-align: left;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .statusline-text {
+            color: #888;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .statusline-hive {
+            color: var(--honey-light);
+            display: block;
+        }
+
+        .statusline-legend {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
         /* Fun facts */
         .fun-fact {
             background: var(--honey-cream);
@@ -397,6 +454,21 @@
                 <span class="step-number">6</span>
                 <h3><span class="emoji">🎉</span> Harvest the Honey!</h3>
                 <p>When drones finish, review the code, create a PR and merge. Sweet, sweet productivity!</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="statusline-section">
+        <div class="statusline-content">
+            <h2 class="section-title"><span>📊</span> Statusline</h2>
+            <p class="statusline-desc">Track all your drones at a glance. Run <code>/hive:statusline</code><span class="claude-tag">in Claude Code</span> to enable:</p>
+            <div class="statusline-preview">
+                <span class="statusline-text">project │ main │ Opus 4.5 │ 45%</span>
+                <span class="statusline-hive">👑 Hive v1.2.0 | 🐝 security (4/10) | 🐝 ui-refactor ✓</span>
+            </div>
+            <div class="statusline-legend">
+                <span><strong>🐝 name (X/Y)</strong> — In progress</span>
+                <span><strong>🐝 name ✓</strong> — Completed</span>
             </div>
         </div>
     </section>
