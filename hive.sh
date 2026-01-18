@@ -238,12 +238,15 @@ show_start_usage() {
 ${CYAN}hive start${NC} - Launch a drone on a PRD file
 
 ${YELLOW}Usage:${NC}
+  hive start <prd-name> [options]
   hive start --prd <file> [options]
 
-${YELLOW}Required:${NC}
-  --prd <file>        PRD JSON file to execute
+${YELLOW}Arguments:${NC}
+  <prd-name>          PRD name (searches .hive/prds/, current dir)
+                      Examples: ui-kit-refactor, valibot-migration
 
 ${YELLOW}Options:${NC}
+  --prd <file>        PRD JSON file path (alternative to positional arg)
   --name <name>       Drone name (default: derived from PRD id)
   --base <branch>     Base branch (default: main)
   --iterations <n>    Max iterations (default: 15, each = full Claude session)
@@ -251,9 +254,9 @@ ${YELLOW}Options:${NC}
   --help, -h          Show this help
 
 ${YELLOW}Examples:${NC}
-  hive start --prd prd-security.json
-  hive start --prd .hive/prds/feature.json --name feature-auth
-  hive start --prd prd.json --iterations 100 --model sonnet
+  hive start ui-kit-refactor                    # Finds .hive/prds/prd-ui-kit-refactor.json
+  hive start valibot-migration --model sonnet   # Use sonnet model
+  hive start --prd ./custom/my-prd.json         # Explicit path
 
 ${YELLOW}What it does:${NC}
   1. Creates branch hive/<name> from base (or resumes if drone exists)
@@ -286,14 +289,44 @@ cmd_run() {
             --model) model="$2"; shift 2 ;;
             --resume) resume=true; shift ;;
             --help|-h) show_start_usage; exit 0 ;;
-            *) print_error "Unknown option: $1"; show_start_usage; exit 1 ;;
+            -*)
+                print_error "Unknown option: $1"
+                show_start_usage
+                exit 1
+                ;;
+            *)
+                # Positional argument: PRD name or file
+                if [ -z "$prd_file" ]; then
+                    prd_file="$1"
+                fi
+                shift
+                ;;
         esac
     done
 
+    # Resolve PRD file from name if needed
+    if [ -n "$prd_file" ] && [ ! -f "$prd_file" ]; then
+        # Try common locations
+        local prd_name="$prd_file"
+        if [ -f ".hive/prds/${prd_name}.json" ]; then
+            prd_file=".hive/prds/${prd_name}.json"
+        elif [ -f ".hive/prds/prd-${prd_name}.json" ]; then
+            prd_file=".hive/prds/prd-${prd_name}.json"
+        elif [ -f "${prd_name}.json" ]; then
+            prd_file="${prd_name}.json"
+        elif [ -f "prd-${prd_name}.json" ]; then
+            prd_file="prd-${prd_name}.json"
+        else
+            print_error "PRD not found: $prd_name"
+            print_info "Searched: .hive/prds/${prd_name}.json, .hive/prds/prd-${prd_name}.json, ${prd_name}.json"
+            exit 1
+        fi
+    fi
+
     # Validate
     if [ -z "$prd_file" ]; then
-        print_error "PRD file required (--prd <file>)"
-        show_run_usage
+        print_error "PRD file required"
+        show_start_usage
         exit 1
     fi
 
