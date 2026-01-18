@@ -248,21 +248,23 @@ ${YELLOW}Options:${NC}
   --base <branch>     Base branch (default: main)
   --iterations <n>    Max iterations (default: 15, each = full Claude session)
   --model <model>     Claude model (default: opus)
-  --resume            Resume existing drone (don't recreate worktree)
   --help, -h          Show this help
 
 ${YELLOW}Examples:${NC}
   hive start --prd prd-security.json
   hive start --prd .hive/prds/feature.json --name feature-auth
   hive start --prd prd.json --iterations 100 --model sonnet
-  hive start --prd .hive/prds/feature.json --name feature-auth --resume
 
 ${YELLOW}What it does:${NC}
-  1. Creates branch hive/<name> from base (or resumes existing with --resume)
+  1. Creates branch hive/<name> from base (or resumes if drone exists)
   2. Creates worktree at ~/Projects/{project}-{drone}/
   3. Symlinks .hive/ to worktree (shared state)
   4. Launches Claude agent in background
   5. Updates .hive/drones/<name>/status.json for tracking
+
+${YELLOW}Note:${NC}
+  If the drone already exists, it will automatically resume with the
+  existing worktree. Use 'hive clean <name>' first to start fresh.
 EOF
 }
 
@@ -324,38 +326,33 @@ cmd_run() {
 
     # Check if drone already exists
     if [ -d "$external_worktree" ]; then
-        if [ "$resume" = true ]; then
-            print_drone "Resuming drone: $drone_name"
-            print_info "Worktree: $external_worktree"
+        # Auto-resume: reuse existing worktree
+        print_drone "Resuming drone: $drone_name"
+        print_info "Worktree: $external_worktree"
 
-            # Update PRD in .hive/prds/ if provided a newer one
-            local prd_basename=$(basename "$prd_file")
-            # Use cp -f and ignore error if files are identical
-            cp -f "$prd_file" "$PRDS_DIR/$prd_basename" 2>/dev/null || true
-            print_info "PRD updated: .hive/prds/$prd_basename"
+        # Update PRD in .hive/prds/ if provided a newer one
+        local prd_basename=$(basename "$prd_file")
+        # Use cp -f and ignore error if files are identical
+        cp -f "$prd_file" "$PRDS_DIR/$prd_basename" 2>/dev/null || true
+        print_info "PRD updated: .hive/prds/$prd_basename"
 
-            # Ensure .hive symlink is correct
-            if [ ! -L "$external_worktree/.hive" ]; then
-                rm -rf "$external_worktree/.hive" 2>/dev/null
-                ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
-                print_info "Fixed .hive symlink"
-            fi
-
-            # Update status to resuming
-            local drone_status_dir="$HIVE_DIR/drones/$drone_name"
-            local drone_status_file="$drone_status_dir/status.json"
-            if [ -f "$drone_status_file" ]; then
-                local total_stories=$(jq '.stories | length' "$prd_file")
-                jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" \
-                    '.status = "resuming" | .updated = $ts | .total = $total' \
-                    "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
-            fi
-        else
-            print_warning "Drone $drone_name already exists"
-            print_info "Use --resume to continue with existing worktree"
-            print_info "Or use 'hive clean $drone_name' to remove it first"
-            exit 1
+        # Ensure .hive symlink is correct
+        if [ ! -L "$external_worktree/.hive" ]; then
+            rm -rf "$external_worktree/.hive" 2>/dev/null
+            ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
+            print_info "Fixed .hive symlink"
         fi
+
+        # Update status to resuming
+        local drone_status_dir="$HIVE_DIR/drones/$drone_name"
+        local drone_status_file="$drone_status_dir/status.json"
+        if [ -f "$drone_status_file" ]; then
+            local total_stories=$(jq '.stories | length' "$prd_file")
+            jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" \
+                '.status = "resuming" | .updated = $ts | .total = $total' \
+                "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+        fi
+        resume=true
     else
         # Create new drone
 
