@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.5.1"
+VERSION="1.5.2"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -1000,7 +1000,7 @@ cmd_status_interactive() {
         for drone in "${drones[@]}"; do
             options+=("🐝 $drone")
         done
-        options+=("⟳ Refresh")
+        options+=("⟳ Auto-refresh (3s)")
         options+=("← Quit")
 
         # Use gum to select
@@ -1009,7 +1009,12 @@ cmd_status_interactive() {
 
         [ -z "$selection" ] && break
         [[ "$selection" == "← Quit" ]] && break
-        [[ "$selection" == "⟳ Refresh" ]] && continue
+
+        # Auto-refresh mode
+        if [[ "$selection" == "⟳ Auto-refresh (3s)" ]]; then
+            cmd_status_auto_refresh
+            continue
+        fi
 
         # Extract drone name
         local selected_drone="${selection#🐝 }"
@@ -1017,6 +1022,24 @@ cmd_status_interactive() {
 
         # Show drone actions menu
         cmd_status_drone_menu "$selected_drone"
+    done
+}
+
+cmd_status_auto_refresh() {
+    tput civis  # Hide cursor
+    trap 'tput cnorm; return' INT TERM
+
+    while true; do
+        clear
+        render_status_dashboard_interactive
+        echo -e "  \033[2mAuto-refresh every 3s │ Press any key to interact\033[0m"
+        echo ""
+
+        # Wait for 3 seconds or keypress
+        if read -t 3 -n 1 -s; then
+            tput cnorm  # Show cursor
+            return
+        fi
     done
 }
 
