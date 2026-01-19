@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.6.0"
+VERSION="1.6.1"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -536,9 +536,16 @@ Quand toutes les stories sont faites → **Exécute commande #4**
 
 ## Ta mission
 
-1. Lis le PRD: $external_worktree/.hive/prds/$prd_basename
-2. Implémente chaque story dans l'ordre
-3. **METS À JOUR status.json ET activity.log À CHAQUE ÉTAPE**
+1. **D'ABORD** lis le status.json pour voir les stories déjà terminées:
+   \`\`\`bash
+   cat $external_worktree/.hive/drones/$drone_name/status.json
+   \`\`\`
+2. Lis le PRD: $external_worktree/.hive/prds/$prd_basename
+3. **SAUTE les stories déjà dans 'completed'** - ne les refais PAS
+4. Implémente uniquement les stories restantes dans l'ordre
+5. **METS À JOUR status.json ET activity.log À CHAQUE ÉTAPE**
+
+**⚠️ IMPORTANT: Si une story est dans 'completed', PASSE À LA SUIVANTE. Ne refais JAMAIS une story déjà terminée.**
 
 **COMMENCE MAINTENANT.**"
 
