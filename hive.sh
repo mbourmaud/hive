@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.4.0"
+VERSION="1.4.1"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -796,10 +796,9 @@ cmd_status() {
 
     if [ "$follow" = true ]; then
         # Follow mode - continuous dashboard
-        trap 'tput cnorm; echo; exit 0' INT TERM
+        local cache_dir=$(mktemp -d)
+        trap 'tput cnorm; rm -rf "$cache_dir"; echo; exit 0' INT TERM
         tput civis  # Hide cursor
-
-        declare -A completed_cache
 
         while true; do
             clear
@@ -814,7 +813,9 @@ cmd_status() {
 
                     local drone_name=$(basename "$drone_dir")
                     local completed_list=$(jq -r '.completed | join(",")' "$status_file" 2>/dev/null)
-                    local cached="${completed_cache[$drone_name]:-}"
+                    local cache_file="$cache_dir/$drone_name"
+                    local cached=""
+                    [ -f "$cache_file" ] && cached=$(cat "$cache_file")
 
                     if [ -n "$completed_list" ] && [ "$completed_list" != "$cached" ]; then
                         local status=$(jq -r '.status // ""' "$status_file")
@@ -824,7 +825,7 @@ cmd_status() {
                             local last_story=$(jq -r '.completed[-1] // ""' "$status_file")
                             [ -n "$last_story" ] && send_notification "🐝 Story Done" "$drone_name: $last_story"
                         fi
-                        completed_cache[$drone_name]="$completed_list"
+                        echo "$completed_list" > "$cache_file"
                     fi
                 done
             fi
