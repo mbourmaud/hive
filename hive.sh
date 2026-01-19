@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.5.2"
+VERSION="1.6.0"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -460,6 +460,7 @@ cmd_run() {
   "status": "starting",
   "current_story": null,
   "completed": [],
+  "story_times": {},
   "total": $total_stories,
   "started": "$(get_timestamp)",
   "updated": "$(get_timestamp)"
@@ -488,7 +489,7 @@ EOF
 
 ### 1. AVANT de commencer une story (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts | .story_times[\$story].started = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID\" >> $external_worktree/.hive/drones/$drone_name/activity.log
 \`\`\`
 
 ### 2. APRÈS chaque commit (remplace STORY-ID par l'ID réel):
@@ -498,7 +499,7 @@ echo \"[\$(date +%H:%M:%S)] 💾 Commit STORY-ID\" >> $external_worktree/.hive/d
 
 ### 3. APRÈS avoir terminé une story (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log && C=\$(jq -r '.completed|length' $external_worktree/.hive/drones/$drone_name/status.json) && T=\$(jq -r '.total' $external_worktree/.hive/drones/$drone_name/status.json) && terminal-notifier -title \"🐝 $drone_name\" -message \"STORY-ID terminée (\$C/\$T)\" -sound Glass 2>/dev/null || osascript -e \"display notification \\\"STORY-ID terminée (\$C/\$T)\\\" with title \\\"🐝 $drone_name\\\" sound name \\\"Glass\\\"\" 2>/dev/null || true
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts | .story_times[\$story].completed = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log && C=\$(jq -r '.completed|length' $external_worktree/.hive/drones/$drone_name/status.json) && T=\$(jq -r '.total' $external_worktree/.hive/drones/$drone_name/status.json) && terminal-notifier -title \"🐝 $drone_name\" -message \"STORY-ID terminée (\$C/\$T)\" -sound Glass 2>/dev/null || osascript -e \"display notification \\\"STORY-ID terminée (\$C/\$T)\\\" with title \\\"🐝 $drone_name\\\" sound name \\\"Glass\\\"\" 2>/dev/null || true
 \`\`\`
 
 ### 4. Quand TOUTES les stories sont terminées:
@@ -927,8 +928,9 @@ render_status_dashboard() {
             echo -e "    ${bar} ${GREEN}${completed_count}${NC}/${total}"
             echo ""
 
-            # Load PRD stories
+            # Load PRD stories and story_times
             local prd_path="$PRDS_DIR/$prd_file"
+            local story_times_json=$(jq -r '.story_times // {}' "$status_file")
             if [ -f "$prd_path" ]; then
                 local stories=$(jq -c '.stories[]' "$prd_path" 2>/dev/null)
                 while IFS= read -r story; do
@@ -940,11 +942,48 @@ render_status_dashboard() {
                     local is_current=false
                     [ "$story_id" = "$current" ] && is_current=true
 
-                    # Display story
+                    # Calculate story duration
+                    local story_duration=""
+                    local story_started=$(echo "$story_times_json" | jq -r --arg id "$story_id" '.[$id].started // empty')
+                    local story_completed=$(echo "$story_times_json" | jq -r --arg id "$story_id" '.[$id].completed // empty')
+                    if [ -n "$story_started" ]; then
+                        local start_ts end_ts
+                        if [[ "$OSTYPE" == "darwin"* ]]; then
+                            start_ts=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$story_started" "+%s" 2>/dev/null || echo 0)
+                            if [ -n "$story_completed" ]; then
+                                end_ts=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$story_completed" "+%s" 2>/dev/null || echo 0)
+                            else
+                                end_ts=$now_epoch
+                            fi
+                        else
+                            start_ts=$(date -u -d "$story_started" "+%s" 2>/dev/null || echo 0)
+                            if [ -n "$story_completed" ]; then
+                                end_ts=$(date -u -d "$story_completed" "+%s" 2>/dev/null || echo 0)
+                            else
+                                end_ts=$now_epoch
+                            fi
+                        fi
+                        if [ "$start_ts" -gt 0 ] && [ "$end_ts" -gt 0 ]; then
+                            local sdiff=$((end_ts - start_ts))
+                            local smins=$((sdiff / 60))
+                            local ssecs=$((sdiff % 60))
+                            if [ $smins -gt 0 ]; then
+                                story_duration="${smins}m${ssecs}s"
+                            else
+                                story_duration="${ssecs}s"
+                            fi
+                        fi
+                    fi
+
+                    # Display story with duration
                     if [ "$is_completed" = "true" ]; then
-                        echo -e "    ${GREEN}✓${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}"
+                        local dur_str=""
+                        [ -n "$story_duration" ] && dur_str=" ${dim}(${story_duration})${NC}"
+                        echo -e "    ${GREEN}✓${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}${dur_str}"
                     elif [ "$is_current" = "true" ]; then
-                        echo -e "    ${YELLOW}▸${NC} ${YELLOW}${story_id}${NC} ${story_title}"
+                        local dur_str=""
+                        [ -n "$story_duration" ] && dur_str=" ${dim}(${story_duration})${NC}"
+                        echo -e "    ${YELLOW}▸${NC} ${YELLOW}${story_id}${NC} ${story_title}${dur_str}"
                     else
                         echo -e "    ${dim}○${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}"
                     fi
@@ -1133,8 +1172,9 @@ render_status_dashboard_interactive() {
             echo -e "    ${bar} ${GREEN}${completed_count}${NC}/${total}"
             echo ""
 
-            # Load PRD stories
+            # Load PRD stories and story_times
             local prd_path="$PRDS_DIR/$prd_file"
+            local story_times_json=$(jq -r '.story_times // {}' "$status_file")
             if [ -f "$prd_path" ]; then
                 local stories=$(jq -c '.stories[]' "$prd_path" 2>/dev/null)
                 while IFS= read -r story; do
@@ -1146,11 +1186,48 @@ render_status_dashboard_interactive() {
                     local is_current=false
                     [ "$story_id" = "$current" ] && is_current=true
 
-                    # Display story
+                    # Calculate story duration
+                    local story_duration=""
+                    local story_started=$(echo "$story_times_json" | jq -r --arg id "$story_id" '.[$id].started // empty')
+                    local story_completed=$(echo "$story_times_json" | jq -r --arg id "$story_id" '.[$id].completed // empty')
+                    if [ -n "$story_started" ]; then
+                        local start_ts end_ts
+                        if [[ "$OSTYPE" == "darwin"* ]]; then
+                            start_ts=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$story_started" "+%s" 2>/dev/null || echo 0)
+                            if [ -n "$story_completed" ]; then
+                                end_ts=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$story_completed" "+%s" 2>/dev/null || echo 0)
+                            else
+                                end_ts=$now_epoch
+                            fi
+                        else
+                            start_ts=$(date -u -d "$story_started" "+%s" 2>/dev/null || echo 0)
+                            if [ -n "$story_completed" ]; then
+                                end_ts=$(date -u -d "$story_completed" "+%s" 2>/dev/null || echo 0)
+                            else
+                                end_ts=$now_epoch
+                            fi
+                        fi
+                        if [ "$start_ts" -gt 0 ] && [ "$end_ts" -gt 0 ]; then
+                            local sdiff=$((end_ts - start_ts))
+                            local smins=$((sdiff / 60))
+                            local ssecs=$((sdiff % 60))
+                            if [ $smins -gt 0 ]; then
+                                story_duration="${smins}m${ssecs}s"
+                            else
+                                story_duration="${ssecs}s"
+                            fi
+                        fi
+                    fi
+
+                    # Display story with duration
                     if [ "$is_completed" = "true" ]; then
-                        echo -e "    ${GREEN}✓${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}"
+                        local dur_str=""
+                        [ -n "$story_duration" ] && dur_str=" ${dim}(${story_duration})${NC}"
+                        echo -e "    ${GREEN}✓${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}${dur_str}"
                     elif [ "$is_current" = "true" ]; then
-                        echo -e "    ${YELLOW}▸${NC} ${YELLOW}${story_id}${NC} ${story_title}"
+                        local dur_str=""
+                        [ -n "$story_duration" ] && dur_str=" ${dim}(${story_duration})${NC}"
+                        echo -e "    ${YELLOW}▸${NC} ${YELLOW}${story_id}${NC} ${story_title}${dur_str}"
                     else
                         echo -e "    ${dim}○${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}"
                     fi
