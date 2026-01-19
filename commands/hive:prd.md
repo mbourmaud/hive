@@ -4,7 +4,7 @@ Generate a PRD (Product Requirements Document) JSON file optimized for Hive dron
 
 ## What this does
 
-Creates a PRD JSON file in `.hive/prds/` with well-defined stories that a drone can execute autonomously.
+Creates a PRD JSON file in `.hive/prds/` with well-defined stories that a drone can execute autonomously. Each story has a clear **Definition of Done** validated with the user.
 
 ## Workflow
 
@@ -35,33 +35,64 @@ Ask the user for:
 - **Title** - Human-readable title
 - **Description** - Brief summary of the overall goal
 
-### Step 5: Break Down into Stories
+### Step 5: Break Down into Stories with Interactive DoD
 
-Create atomic, well-scoped stories. Each story should:
-- Be completable in 1-5 files
-- Have clear acceptance criteria
-- Be independent (can be done without other stories, ideally)
-- Have a unique ID with prefix (e.g., `SEC-001`, `FEAT-001`)
+For **EACH story**, follow this process:
 
-### Step 6: Review with User
+#### 5a. Propose the story
+```
+📋 Story: SEC-001 - Protect /api/accounts/*
 
-Present the stories in a clear format:
+Description: Add requireAuth() middleware to account routes
+
+Files concernés:
+- src/app/api/accounts/route.ts
+```
+
+#### 5b. Propose Definition of Done and ASK for validation
+```
+🎯 Definition of Done proposée:
+
+Cette story est TERMINÉE quand:
+1. Le middleware requireAuth() est ajouté aux routes GET et POST
+2. Un test vérifie que GET /api/accounts retourne 401 sans auth
+3. Un test vérifie que GET /api/accounts retourne 200 avec auth
+
+Commandes de vérification (le drone DOIT les exécuter):
+- `grep -r "requireAuth" src/app/api/accounts/` → doit matcher
+- `pnpm test --filter=accounts` → doit passer
+
+❓ Est-ce que cette Definition of Done est correcte ?
+   - Manque-t-il quelque chose ?
+   - Faut-il ajouter d'autres vérifications ?
+```
+
+#### 5c. Iterate until user validates
+The user might say:
+- "Il faut aussi logger les tentatives non authentifiées"
+- "Ajoute un test e2e"
+- "OK c'est bon"
+
+Update the DoD based on feedback, then move to next story.
+
+### Step 6: Review Complete PRD
+
+Once all stories have validated DoDs, present the full PRD:
 ```
 PRD: security-api-protection
-"Secure API Routes" - 10 stories
+"Secure API Routes" - 3 stories
 
 SEC-001: Protect /api/accounts/*
-  Files: src/app/api/accounts/route.ts
-  Criteria: GET returns 401 if not authenticated
+  ✅ DoD validée
 
 SEC-002: Protect /api/users/*
-  Files: src/app/api/users/route.ts
-  Criteria: All endpoints require auth
+  ✅ DoD validée
 
-...
+SEC-003: Add auth logging
+  ✅ DoD validée
 ```
 
-Ask: **"Does this look good? Want to add, remove, or modify any stories?"**
+Ask: **"Le PRD complet te convient ? Je génère le fichier ?"**
 
 ### Step 7: Generate PRD File
 
@@ -78,10 +109,20 @@ Write the JSON file to `.hive/prds/prd-<id>.json`:
       "id": "SEC-001",
       "title": "Protect /api/accounts/*",
       "description": "Add requireAuth() middleware to account routes",
-      "acceptance_criteria": [
-        "GET /api/accounts returns 401 if not authenticated",
-        "POST /api/accounts returns 401 if not authenticated",
-        "Authenticated requests work normally"
+      "definition_of_done": [
+        "Le middleware requireAuth() est ajouté aux routes GET et POST",
+        "Un test vérifie que GET /api/accounts retourne 401 sans auth",
+        "Un test vérifie que GET /api/accounts retourne 200 avec auth"
+      ],
+      "verification_commands": [
+        {
+          "command": "grep -r 'requireAuth' src/app/api/accounts/",
+          "expected": "Au moins un match"
+        },
+        {
+          "command": "pnpm test --filter=accounts",
+          "expected": "Exit code 0 (tests passent)"
+        }
       ],
       "files": [
         "src/app/api/accounts/route.ts"
@@ -120,19 +161,47 @@ interface Story {
   id: string;              // Unique ID (e.g., "SEC-001")
   title: string;           // Short title
   description: string;     // What to implement
-  acceptance_criteria: string[];  // How to verify it's done
+  definition_of_done: string[];      // Clear, validated DoD statements
+  verification_commands: {           // Commands drone MUST run to prove completion
+    command: string;
+    expected: string;
+  }[];
   files: string[];         // Files to modify/create
   dependencies?: string[]; // Other story IDs this depends on
 }
 ```
 
-## Tips for Good Stories
+## Definition of Done Guidelines
 
-1. **Atomic** - One logical change per story
-2. **Testable** - Clear criteria to verify completion
-3. **Scoped** - List specific files, not "update the codebase"
-4. **Ordered** - Put foundational stories first if there are dependencies
-5. **Independent** - Minimize dependencies between stories when possible
+A good DoD must be:
+
+1. **Vérifiable** - Peut être prouvé par une commande ou un check
+2. **Spécifique** - Pas de "ça marche bien", mais "retourne 200 avec body {x: y}"
+3. **Complet** - Inclut tests, commits, et toute action requise
+4. **Validé** - L'utilisateur a explicitement confirmé
+
+### Examples of GOOD DoD items:
+- "Le fichier `src/auth.ts` contient la fonction `validateToken()`"
+- "Les tests passent: `pnpm nx test plato --testPathPattern=auth`"
+- "Un commit est créé avec le message `feat(auth): add token validation`"
+- "La route GET /api/users retourne 401 sans header Authorization"
+
+### Examples of BAD DoD items:
+- "L'authentification fonctionne" (trop vague)
+- "Le code est propre" (subjectif)
+- "Tout est testé" (pas spécifique)
+
+## Verification Commands
+
+Each story SHOULD have verification commands that the drone will execute to PROVE the story is complete. These are not optional - they are mandatory checks.
+
+Types of verification:
+- **File existence**: `test -f src/auth.ts && echo "OK"`
+- **Code presence**: `grep -q "functionName" src/file.ts && echo "OK"`
+- **Tests pass**: `pnpm test --filter=module`
+- **Build succeeds**: `pnpm build`
+- **Git status**: `git diff --name-only` to verify files changed
+- **API check**: `curl -s localhost:3000/api/health | jq .status`
 
 ## File Location
 
@@ -141,20 +210,19 @@ PRDs are stored in `.hive/prds/` which is:
 - Shared via symlink with drone worktrees
 - Accessible by both queen and drones
 
-## Example PRDs
+## Interactive Clarification Questions
 
-### Small PRD (3 stories)
-```json
-{
-  "id": "add-dark-mode",
-  "title": "Dark Mode Support",
-  "stories": [
-    {"id": "DM-001", "title": "Add theme context", ...},
-    {"id": "DM-002", "title": "Create toggle component", ...},
-    {"id": "DM-003", "title": "Update global styles", ...}
-  ]
-}
-```
+When defining DoD, ask clarifying questions like:
 
-### Large PRD (10+ stories)
-Consider splitting into multiple PRDs that can run in parallel on different drones.
+- "Cette story nécessite-t-elle un test unitaire, d'intégration, ou les deux ?"
+- "Faut-il un commit séparé ou ça peut être groupé ?"
+- "Y a-t-il des effets de bord à vérifier ?"
+- "Quelle commande permet de vérifier que c'est fait ?"
+- "Est-ce que le drone doit aussi mettre à jour la doc ?"
+
+## Important Rules
+
+1. **NEVER generate a story without user validation of its DoD**
+2. **ALWAYS include at least one verification command per story**
+3. **ASK questions when the DoD is ambiguous**
+4. **ITERATE until the user says "OK" or "c'est bon"**

@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.6.1"
+VERSION="1.7.0"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -524,11 +524,20 @@ jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .curr
 ## Workflow pour chaque story
 
 1. **Exécute commande #1** (current_story + log début)
-2. Implémente les changements
-3. \`git add -A && git commit -m \"feat(STORY-ID): description\"\`
-4. **Exécute commande #2** (log commit)
-5. **Exécute commande #3** (completed + log terminée) ← ⚠️ OBLIGATOIRE
-6. Passe à la story suivante
+2. Lis la story dans le PRD, notamment:
+   - \`definition_of_done\`: liste des critères à remplir
+   - \`verification_commands\`: commandes à exécuter pour PROUVER que c'est fait
+3. Implémente les changements
+4. \`git add -A && git commit -m \"feat(STORY-ID): description\"\`
+5. **Exécute commande #2** (log commit)
+6. **⚠️ VÉRIFIE LA DEFINITION OF DONE:**
+   - Exécute CHAQUE commande dans \`verification_commands\`
+   - Vérifie que le résultat correspond à \`expected\`
+   - Si une vérification échoue → CORRIGE avant de continuer
+7. **Exécute commande #3** (completed + log terminée) ← SEULEMENT si toutes les vérifications passent
+8. Passe à la story suivante
+
+**⚠️ RÈGLE ABSOLUE: Tu ne peux PAS marquer une story comme terminée si les verification_commands échouent.**
 
 Quand toutes les stories sont faites → **Exécute commande #4**
 

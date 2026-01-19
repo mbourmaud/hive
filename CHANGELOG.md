@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-01-19
+
+### Added
+- **Definition of Done validation** - PRD stories now support `definition_of_done` and `verification_commands` fields
+- **Verification commands** - Drone MUST execute verification commands before marking story as complete
+- **Interactive PRD workflow** - `/hive:prd` now asks user to validate DoD for each story
+
+### Changed
+- Drone prompt now requires verification_commands to pass before completing a story
+- PRD skill updated with interactive DoD validation workflow
+
 ## [1.6.1] - 2026-01-19
 
 ### Fixed
