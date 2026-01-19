@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.7.0"
+VERSION="1.8.0"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -56,8 +56,21 @@ send_notification() {
     local title="$1"
     local message="$2"
     local sound="${3:-true}"  # Play sound by default
+    local icon="$HOME/.local/share/hive/bee-icon.png"
 
-    # macOS
+    # macOS with terminal-notifier (preferred - supports custom icon)
+    if command -v terminal-notifier &>/dev/null; then
+        local sound_param=""
+        [ "$sound" = "true" ] && sound_param="-sound Glass"
+        if [ -f "$icon" ]; then
+            terminal-notifier -title "$title" -message "$message" -appIcon "$icon" $sound_param -group "hive" 2>/dev/null || true
+        else
+            terminal-notifier -title "$title" -message "$message" $sound_param -group "hive" 2>/dev/null || true
+        fi
+        return
+    fi
+
+    # macOS fallback with osascript
     if command -v osascript &>/dev/null; then
         local sound_param=""
         [ "$sound" = "true" ] && sound_param='sound name "Glass"'
@@ -67,7 +80,11 @@ send_notification() {
 
     # Linux with notify-send (GNOME, KDE, etc.)
     if command -v notify-send &>/dev/null; then
-        notify-send "$title" "$message" --icon=dialog-information 2>/dev/null || true
+        if [ -f "$icon" ]; then
+            notify-send "$title" "$message" --icon="$icon" 2>/dev/null || true
+        else
+            notify-send "$title" "$message" --icon=dialog-information 2>/dev/null || true
+        fi
         # Play sound on Linux if paplay available
         if [ "$sound" = "true" ] && command -v paplay &>/dev/null; then
             paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null &
@@ -271,17 +288,19 @@ ${YELLOW}Options:${NC}
   --name <name>       Drone name (default: derived from PRD id)
   --base <branch>     Base branch (default: main)
   --iterations <n>    Max iterations (default: 15, each = full Claude session)
-  --model <model>     Claude model (default: opus)
+  --model <model>     Claude model (default: sonnet)
+  --local             Run in current directory (no worktree creation)
   --help, -h          Show this help
 
 ${YELLOW}Examples:${NC}
   hive start ui-kit-refactor                    # Finds .hive/prds/prd-ui-kit-refactor.json
-  hive start valibot-migration --model sonnet   # Use sonnet model
+  hive start valibot-migration --model opus     # Use opus model
   hive start --prd ./custom/my-prd.json         # Explicit path
+  hive start fix-queries --local                # Run in current directory
 
 ${YELLOW}What it does:${NC}
   1. Creates branch hive/<name> from base (or resumes if drone exists)
-  2. Creates worktree at ~/Projects/{project}-{drone}/
+  2. Creates worktree at ~/Projects/{project}-{drone}/ (unless --local)
   3. Symlinks .hive/ to worktree (shared state)
   4. Launches Claude agent in background
   5. Updates .hive/drones/<name>/status.json for tracking
@@ -289,6 +308,9 @@ ${YELLOW}What it does:${NC}
 ${YELLOW}Note:${NC}
   If the drone already exists, it will automatically resume with the
   existing worktree. Use 'hive clean <name>' first to start fresh.
+
+  Use --local when you're already on the target branch and want to
+  run the drone in your current working directory.
 EOF
 }
 
@@ -297,8 +319,9 @@ cmd_run() {
     local drone_name=""
     local base_branch="main"
     local iterations=15
-    local model="opus"
+    local model="sonnet"
     local resume=false
+    local local_mode=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -309,6 +332,7 @@ cmd_run() {
             --iterations) iterations="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
             --resume) resume=true; shift ;;
+            --local) local_mode=true; shift ;;
             --help|-h) show_start_usage; exit 0 ;;
             -*)
                 print_error "Unknown option: $1"
@@ -369,17 +393,55 @@ cmd_run() {
 
     local project_root=$(get_project_root)
     local project_name=$(get_project_name)
-    local branch_name="hive/$drone_name"
+
+    # Use target_branch from PRD if specified, otherwise default to hive/<name>
+    local target_branch=$(jq -r '.target_branch // empty' "$prd_file")
+    local branch_name="${target_branch:-hive/$drone_name}"
+
     local external_worktree="/Users/fr162241/Projects/${project_name}-${drone_name}"
     local drone_status_dir="$HIVE_DIR/drones/$drone_name"
     local drone_status_file="$drone_status_dir/status.json"
 
+    # Determine workdir: current directory (--local) or external worktree
+    local workdir
+    if [ "$local_mode" = true ]; then
+        workdir="$project_root"
+    else
+        workdir="$external_worktree"
+    fi
+
     print_drone "Launching drone: $drone_name"
     print_info "PRD: $prd_file"
-    print_info "Branch: $branch_name (from $base_branch)"
+    if [ "$local_mode" = true ]; then
+        print_info "Mode: local (current directory)"
+        print_info "Workdir: $workdir"
+    else
+        print_info "Branch: $branch_name (from $base_branch)"
+    fi
 
-    # Check if drone already exists
-    if [ -d "$external_worktree" ]; then
+    # Handle --local mode: run in current directory, no worktree
+    if [ "$local_mode" = true ]; then
+        # Copy PRD to .hive/prds/ if not already there
+        local prd_basename=$(basename "$prd_file")
+        if [ ! -f "$PRDS_DIR/$prd_basename" ]; then
+            cp "$prd_file" "$PRDS_DIR/$prd_basename"
+            print_info "PRD copied to .hive/prds/$prd_basename"
+        else
+            cp -f "$prd_file" "$PRDS_DIR/$prd_basename" 2>/dev/null || true
+            print_info "PRD updated: .hive/prds/$prd_basename"
+        fi
+
+        # Check if resuming (status file exists)
+        if [ -f "$drone_status_file" ]; then
+            print_drone "Resuming drone: $drone_name"
+            local total_stories=$(jq '.stories | length' "$prd_file")
+            jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" \
+                '.status = "resuming" | .updated = $ts | .total = $total' \
+                "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+            resume=true
+        fi
+    # Check if drone already exists (worktree mode)
+    elif [ -d "$external_worktree" ]; then
         # Auto-resume: reuse existing worktree
         print_drone "Resuming drone: $drone_name"
         print_info "Worktree: $external_worktree"
@@ -408,7 +470,7 @@ cmd_run() {
         fi
         resume=true
     else
-        # Create new drone
+        # Create new drone with worktree
 
         # Create branch from base
         print_info "Creating branch $branch_name from $base_branch..."
@@ -456,7 +518,8 @@ cmd_run() {
   "drone": "$drone_name",
   "prd": "$prd_basename",
   "branch": "$branch_name",
-  "worktree": "$external_worktree",
+  "worktree": "$workdir",
+  "local_mode": $local_mode,
   "status": "starting",
   "current_story": null,
   "completed": [],
@@ -468,10 +531,10 @@ cmd_run() {
 EOF
     fi
 
-    # Also create a symlink in worktree for backwards compatibility
-    if [ ! -L "$external_worktree/drone-status.json" ]; then
-        rm -f "$external_worktree/drone-status.json" 2>/dev/null
-        ln -s "$project_root/$drone_status_file" "$external_worktree/drone-status.json"
+    # Also create a symlink in worktree for backwards compatibility (not in local mode)
+    if [ "$local_mode" = false ] && [ ! -L "$workdir/drone-status.json" ]; then
+        rm -f "$workdir/drone-status.json" 2>/dev/null
+        ln -s "$project_root/$drone_status_file" "$workdir/drone-status.json"
     fi
 
     if [ "$resume" = true ]; then
@@ -479,8 +542,12 @@ EOF
     else
         print_success "Drone $drone_name ready!"
     fi
-    print_info "Worktree: $external_worktree"
-    print_info "Shared .hive linked (queen can monitor)"
+    if [ "$local_mode" = true ]; then
+        print_info "Workdir: $workdir (local mode)"
+    else
+        print_info "Worktree: $workdir"
+        print_info "Shared .hive linked (queen can monitor)"
+    fi
 
     # Build the drone prompt
     local drone_prompt="# 🐝 Drone Hive - Agent Autonome
@@ -489,22 +556,22 @@ EOF
 
 ### 1. AVANT de commencer une story (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts | .story_times[\$story].started = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.current_story = \$story | .updated = \$ts | .story_times[\$story].started = \$ts' $workdir/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $workdir/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🔨 Début STORY-ID\" >> $workdir/.hive/drones/$drone_name/activity.log
 \`\`\`
 
 ### 2. APRÈS chaque commit (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-echo \"[\$(date +%H:%M:%S)] 💾 Commit STORY-ID\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+echo \"[\$(date +%H:%M:%S)] 💾 Commit STORY-ID\" >> $workdir/.hive/drones/$drone_name/activity.log
 \`\`\`
 
 ### 3. APRÈS avoir terminé une story (remplace STORY-ID par l'ID réel):
 \`\`\`bash
-jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts | .story_times[\$story].completed = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $external_worktree/.hive/drones/$drone_name/activity.log && C=\$(jq -r '.completed|length' $external_worktree/.hive/drones/$drone_name/status.json) && T=\$(jq -r '.total' $external_worktree/.hive/drones/$drone_name/status.json) && terminal-notifier -title \"🐝 $drone_name\" -message \"STORY-ID terminée (\$C/\$T)\" -sound Glass 2>/dev/null || osascript -e \"display notification \\\"STORY-ID terminée (\$C/\$T)\\\" with title \\\"🐝 $drone_name\\\" sound name \\\"Glass\\\"\" 2>/dev/null || true
+jq --arg story \"STORY-ID\" --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.completed += [\$story] | .updated = \$ts | .story_times[\$story].completed = \$ts' $workdir/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $workdir/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] ✅ STORY-ID terminée\" >> $workdir/.hive/drones/$drone_name/activity.log && C=\$(jq -r '.completed|length' $workdir/.hive/drones/$drone_name/status.json) && T=\$(jq -r '.total' $workdir/.hive/drones/$drone_name/status.json) && terminal-notifier -title \"🐝 $drone_name\" -message \"STORY-ID terminée (\$C/\$T)\" -sound Glass 2>/dev/null || osascript -e \"display notification \\\"STORY-ID terminée (\$C/\$T)\\\" with title \\\"🐝 $drone_name\\\" sound name \\\"Glass\\\"\" 2>/dev/null || true
 \`\`\`
 
 ### 4. Quand TOUTES les stories sont terminées:
 \`\`\`bash
-jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .current_story = null | .updated = \$ts' $external_worktree/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $external_worktree/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🎉 Terminé\" >> $external_worktree/.hive/drones/$drone_name/activity.log
+jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .current_story = null | .updated = \$ts' $workdir/.hive/drones/$drone_name/status.json > /tmp/s.tmp && mv /tmp/s.tmp $workdir/.hive/drones/$drone_name/status.json && echo \"[\$(date +%H:%M:%S)] 🎉 Terminé\" >> $workdir/.hive/drones/$drone_name/activity.log
 \`\`\`
 
 **⚠️ SI TU N'EXÉCUTES PAS CES COMMANDES, LE MONITORING NE FONCTIONNE PAS.**
@@ -514,10 +581,10 @@ jq --arg ts \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '.status = \"completed\" | .curr
 
 ## Configuration
 
-- **WORKDIR**: $external_worktree
-- **PRD**: $external_worktree/.hive/prds/$prd_basename
-- **STATUS**: $external_worktree/.hive/drones/$drone_name/status.json (affiche X/Y dans hive status)
-- **LOG**: $external_worktree/.hive/drones/$drone_name/activity.log (visible via hive logs)
+- **WORKDIR**: $workdir
+- **PRD**: $workdir/.hive/prds/$prd_basename
+- **STATUS**: $workdir/.hive/drones/$drone_name/status.json (affiche X/Y dans hive status)
+- **LOG**: $workdir/.hive/drones/$drone_name/activity.log (visible via hive logs)
 
 ---
 
@@ -545,14 +612,21 @@ Quand toutes les stories sont faites → **Exécute commande #4**
 
 ## Ta mission
 
-1. **D'ABORD** lis le status.json pour voir les stories déjà terminées:
+1. **D'ABORD** installe les dépendances (worktree = copie fraîche, pas de deps installées):
+   - Détecte le type de projet et installe les dépendances appropriées
+   - Node.js: \`pnpm install\` / \`yarn install\` / \`npm install\` (selon lockfile)
+   - Python: \`pip install -r requirements.txt\` ou \`poetry install\` ou \`uv sync\`
+   - Go: \`go mod download\`
+   - Rust: \`cargo fetch\`
+   - Autre: adapte selon le projet
+2. Lis le status.json pour voir les stories déjà terminées:
    \`\`\`bash
-   cat $external_worktree/.hive/drones/$drone_name/status.json
+   cat $workdir/.hive/drones/$drone_name/status.json
    \`\`\`
-2. Lis le PRD: $external_worktree/.hive/prds/$prd_basename
-3. **SAUTE les stories déjà dans 'completed'** - ne les refais PAS
-4. Implémente uniquement les stories restantes dans l'ordre
-5. **METS À JOUR status.json ET activity.log À CHAQUE ÉTAPE**
+3. Lis le PRD: $workdir/.hive/prds/$prd_basename
+4. **SAUTE les stories déjà dans 'completed'** - ne les refais PAS
+5. Implémente uniquement les stories restantes dans l'ordre
+6. **METS À JOUR status.json ET activity.log À CHAQUE ÉTAPE**
 
 **⚠️ IMPORTANT: Si une story est dans 'completed', PASSE À LA SUIVANTE. Ne refais JAMAIS une story déjà terminée.**
 
@@ -599,7 +673,7 @@ send_notification() {
         local sound_param=""
         [ "$sound" = "true" ] && sound_param="-sound Glass"
         if [ -f "$icon" ]; then
-            terminal-notifier -title "$title" -message "$message" -contentImage "$icon" $sound_param -group "hive" 2>/dev/null || true
+            terminal-notifier -title "$title" -message "$message" -appIcon "$icon" $sound_param -group "hive" 2>/dev/null || true
         else
             terminal-notifier -title "$title" -message "$message" $sound_param -group "hive" 2>/dev/null || true
         fi
@@ -708,7 +782,7 @@ LAUNCHER_EOF
     chmod +x "$launcher_script"
 
     # Launch the loop in background with nohup
-    nohup "$launcher_script" "$drone_status_dir" "$prompt_file" "$model" "$iterations" "$external_worktree" "$drone_name" > /dev/null 2>&1 &
+    nohup "$launcher_script" "$drone_status_dir" "$prompt_file" "$model" "$iterations" "$workdir" "$drone_name" > /dev/null 2>&1 &
 
     local pid=$!
     echo "$pid" > "$drone_status_dir/.pid"
