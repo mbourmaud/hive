@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.3.4"
+VERSION="1.4.0"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -782,46 +782,109 @@ check_inactive_drones() {
 cmd_status() {
     check_git_repo
 
-    local project_name=$(get_project_name)
+    local follow=false
+    local interval=3
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--follow) follow=true; shift ;;
+            -i|--interval) interval="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    if [ "$follow" = true ]; then
+        # Follow mode - continuous dashboard
+        trap 'tput cnorm; echo; exit 0' INT TERM
+        tput civis  # Hide cursor
+
+        declare -A completed_cache
+
+        while true; do
+            clear
+            render_status_dashboard
+
+            # Check for story completions and notify
+            if [ -d "$DRONES_DIR" ]; then
+                for drone_dir in "$DRONES_DIR"/*/; do
+                    [ -d "$drone_dir" ] || continue
+                    local status_file="$drone_dir/status.json"
+                    [ -f "$status_file" ] || continue
+
+                    local drone_name=$(basename "$drone_dir")
+                    local completed_list=$(jq -r '.completed | join(",")' "$status_file" 2>/dev/null)
+                    local cached="${completed_cache[$drone_name]:-}"
+
+                    if [ -n "$completed_list" ] && [ "$completed_list" != "$cached" ]; then
+                        local status=$(jq -r '.status // ""' "$status_file")
+                        if [ "$status" = "completed" ]; then
+                            send_notification "🐝 Drone Completed!" "$drone_name finished all stories"
+                        elif [ -n "$cached" ]; then
+                            local last_story=$(jq -r '.completed[-1] // ""' "$status_file")
+                            [ -n "$last_story" ] && send_notification "🐝 Story Done" "$drone_name: $last_story"
+                        fi
+                        completed_cache[$drone_name]="$completed_list"
+                    fi
+                done
+            fi
+
+            sleep "$interval"
+        done
+    else
+        # One-shot mode
+        render_status_dashboard
+        check_inactive_drones
+    fi
+}
+
+render_status_dashboard() {
+    local now_epoch=$(date "+%s")
+    local dim='\033[2m'
+    local bold='\033[1m'
 
     echo ""
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}              ${YELLOW}👑 hive${NC} \033[1mv${VERSION}\033[0m ${YELLOW}status${NC}                        ${CYAN}║${NC}"
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${YELLOW}${bold}  👑 hive${NC} v${VERSION}  ${dim}$(date '+%H:%M:%S')${NC}"
+    echo ""
 
     local found_drones=0
 
-    # Scan for drones in .hive/drones/
     if [ -d "$DRONES_DIR" ]; then
         for drone_dir in "$DRONES_DIR"/*/; do
             [ -d "$drone_dir" ] || continue
-
             local status_file="$drone_dir/status.json"
             [ -f "$status_file" ] || continue
 
             found_drones=$((found_drones + 1))
 
             local drone_name=$(basename "$drone_dir")
+            local prd_file=$(jq -r '.prd // ""' "$status_file")
             local status=$(jq -r '.status // "unknown"' "$status_file")
-            local current=$(jq -r '.current_story // "n/a"' "$status_file")
-            local completed=$(jq -r '.completed | length // 0' "$status_file")
-            local total=$(jq -r '.total // "?"' "$status_file")
-            local worktree=$(jq -r '.worktree // ""' "$status_file")
+            local current=$(jq -r '.current_story // ""' "$status_file")
+            local completed_json=$(jq -r '.completed // []' "$status_file")
+            local completed_count=$(echo "$completed_json" | jq 'length')
+            local total=$(jq -r '.total // 0' "$status_file")
             local started=$(jq -r '.started // ""' "$status_file")
+            local updated=$(jq -r '.updated // ""' "$status_file")
             local pid_file="$drone_dir/.pid"
             local running="no"
             local elapsed=""
 
-            # Calculate elapsed time if started timestamp exists
+            # Check if running
+            if [ -f "$pid_file" ]; then
+                local pid=$(cat "$pid_file" 2>/dev/null)
+                ps -p "$pid" > /dev/null 2>&1 && running="yes"
+            fi
+
+            # Calculate elapsed time (UTC)
             if [ -n "$started" ] && [ "$started" != "null" ]; then
                 local start_epoch
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    start_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started" "+%s" 2>/dev/null || echo 0)
+                    start_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$started" "+%s" 2>/dev/null || echo 0)
                 else
-                    start_epoch=$(date -d "$started" "+%s" 2>/dev/null || echo 0)
+                    start_epoch=$(date -u -d "$started" "+%s" 2>/dev/null || echo 0)
                 fi
                 if [ "$start_epoch" -gt 0 ]; then
-                    local now_epoch=$(date "+%s")
                     local diff=$((now_epoch - start_epoch))
                     local hours=$((diff / 3600))
                     local mins=$(((diff % 3600) / 60))
@@ -833,57 +896,77 @@ cmd_status() {
                 fi
             fi
 
-            if [ -f "$pid_file" ]; then
-                local pid=$(cat "$pid_file")
-                if ps -p "$pid" > /dev/null 2>&1; then
-                    running="yes"
-                fi
-            fi
-
-            # Status icon
-            local icon="⏸️"
-            local color="$NC"
+            # Status indicator
+            local status_icon=""
+            local status_color=""
             case "$status" in
                 "in_progress"|"starting")
                     if [ "$running" = "yes" ]; then
-                        icon="🔄"
-                        color="$CYAN"
+                        status_icon="●"
+                        status_color="${GREEN}"
                     else
-                        icon="⏸️"
-                        color="$YELLOW"
+                        status_icon="○"
+                        status_color="${YELLOW}"
                     fi
                     ;;
-                "completed") icon="✅"; color="$GREEN" ;;
-                "error") icon="❌"; color="$RED" ;;
+                "completed") status_icon="✓"; status_color="${GREEN}" ;;
+                "error") status_icon="✗"; status_color="${RED}" ;;
+                *) status_icon="?"; status_color="${NC}" ;;
             esac
 
-            # Build progress display with optional elapsed time
-            local progress_display="${GREEN}$completed${NC}/${total}"
-            if [ -n "$elapsed" ]; then
-                progress_display="${GREEN}$completed${NC}/${total} - ${elapsed}"
+            # Drone header
+            echo -e "  ${status_color}${status_icon}${NC} ${YELLOW}${bold}🐝 ${drone_name}${NC}  ${dim}${elapsed}${NC}"
+
+            # Progress bar
+            local bar_width=40
+            local filled=$((total > 0 ? completed_count * bar_width / total : 0))
+            local empty=$((bar_width - filled))
+            local bar="${GREEN}"
+            for ((i=0; i<filled; i++)); do bar+="━"; done
+            bar+="${NC}${dim}"
+            for ((i=0; i<empty; i++)); do bar+="─"; done
+            bar+="${NC}"
+            echo -e "    ${bar} ${GREEN}${completed_count}${NC}/${total}"
+            echo ""
+
+            # Load PRD stories
+            local prd_path="$PRDS_DIR/$prd_file"
+            if [ -f "$prd_path" ]; then
+                local stories=$(jq -c '.stories[]' "$prd_path" 2>/dev/null)
+                while IFS= read -r story; do
+                    local story_id=$(echo "$story" | jq -r '.id')
+                    local story_title=$(echo "$story" | jq -r '.title')
+
+                    # Check if completed
+                    local is_completed=$(echo "$completed_json" | jq --arg id "$story_id" 'index($id) != null')
+                    local is_current=false
+                    [ "$story_id" = "$current" ] && is_current=true
+
+                    # Display story
+                    if [ "$is_completed" = "true" ]; then
+                        echo -e "    ${GREEN}✓${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}"
+                    elif [ "$is_current" = "true" ]; then
+                        echo -e "    ${YELLOW}▸${NC} ${YELLOW}${story_id}${NC} ${story_title}"
+                    else
+                        echo -e "    ${dim}○${NC} ${dim}${story_id}${NC} ${dim}${story_title}${NC}"
+                    fi
+                done <<< "$stories"
             fi
 
-            echo -e "${CYAN}║${NC}  ${color}$icon 🐝 $drone_name${NC} ($progress_display)"
-            echo -e "${CYAN}║${NC}     Current:  $current"
-            echo -e "${CYAN}║${NC}     Status:   $status (running: $running)"
-            echo -e "${CYAN}║${NC}     Worktree: $worktree"
-            echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
+            echo ""
         done
     fi
 
     if [ $found_drones -eq 0 ]; then
-        echo -e "${CYAN}║${NC}  No active drones found"
-        echo -e "${CYAN}║${NC}"
-        echo -e "${CYAN}║${NC}  Launch one with: hive run --prd <file.json>"
-        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "  ${dim}No active drones${NC}"
+        echo ""
+        echo -e "  Launch one with: ${YELLOW}hive start <prd-name>${NC}"
+        echo ""
     fi
 
-    echo -e "${CYAN}║${NC}  Last check: $(date '+%H:%M:%S')                                    ${CYAN}║${NC}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "  ${dim}─────────────────────────────────────────────────${NC}"
+    echo -e "  ${dim}logs${NC} ${CYAN}<drone>${NC}  ${dim}│${NC}  ${dim}kill${NC} ${CYAN}<drone>${NC}  ${dim}│${NC}  ${dim}clean${NC} ${CYAN}<drone>${NC}"
     echo ""
-
-    # Check for inactive drones and offer to clean them
-    check_inactive_drones
 }
 
 # ============================================================================
