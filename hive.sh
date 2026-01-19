@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.4.1"
+VERSION="1.5.0"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -124,6 +124,24 @@ check_dependencies() {
 
     if [ ${#missing[@]} -gt 0 ]; then
         print_error "Missing dependencies: ${missing[*]}"
+        exit 1
+    fi
+}
+
+# Install optional dependencies for enhanced features
+install_optional_deps() {
+    # gum - TUI toolkit for interactive mode
+    if ! command -v gum &>/dev/null; then
+        if command -v brew &>/dev/null; then
+            print_info "Installing gum (TUI toolkit)..."
+            brew install gum >/dev/null 2>&1 && print_success "gum installed"
+        fi
+    fi
+}
+
+check_gum() {
+    if ! command -v gum &>/dev/null; then
+        print_error "Interactive mode requires 'gum'. Install with: brew install gum"
         exit 1
     fi
 }
@@ -783,53 +801,32 @@ cmd_status() {
     check_git_repo
 
     local follow=false
+    local interactive=false
     local interval=3
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -f|--follow) follow=true; shift ;;
-            -i|--interval) interval="$2"; shift 2 ;;
+            -i|--interactive) interactive=true; shift ;;
+            --interval) interval="$2"; shift 2 ;;
             *) shift ;;
         esac
     done
 
+    if [ "$interactive" = true ]; then
+        cmd_status_interactive
+        return
+    fi
+
     if [ "$follow" = true ]; then
-        # Follow mode - continuous dashboard
-        local cache_dir=$(mktemp -d)
-        trap 'tput cnorm; rm -rf "$cache_dir"; echo; exit 0' INT TERM
+        # Follow mode - continuous dashboard (notifications handled by drone itself)
+        trap 'tput cnorm; echo; exit 0' INT TERM
         tput civis  # Hide cursor
 
         while true; do
             clear
             render_status_dashboard
-
-            # Check for story completions and notify
-            if [ -d "$DRONES_DIR" ]; then
-                for drone_dir in "$DRONES_DIR"/*/; do
-                    [ -d "$drone_dir" ] || continue
-                    local status_file="$drone_dir/status.json"
-                    [ -f "$status_file" ] || continue
-
-                    local drone_name=$(basename "$drone_dir")
-                    local completed_list=$(jq -r '.completed | join(",")' "$status_file" 2>/dev/null)
-                    local cache_file="$cache_dir/$drone_name"
-                    local cached=""
-                    [ -f "$cache_file" ] && cached=$(cat "$cache_file")
-
-                    if [ -n "$completed_list" ] && [ "$completed_list" != "$cached" ]; then
-                        local status=$(jq -r '.status // ""' "$status_file")
-                        if [ "$status" = "completed" ]; then
-                            send_notification "🐝 Drone Completed!" "$drone_name finished all stories"
-                        elif [ -n "$cached" ]; then
-                            local last_story=$(jq -r '.completed[-1] // ""' "$status_file")
-                            [ -n "$last_story" ] && send_notification "🐝 Story Done" "$drone_name: $last_story"
-                        fi
-                        echo "$completed_list" > "$cache_file"
-                    fi
-                done
-            fi
-
             sleep "$interval"
         done
     else
@@ -968,6 +965,186 @@ render_status_dashboard() {
     echo -e "  ${dim}─────────────────────────────────────────────────${NC}"
     echo -e "  ${dim}logs${NC} ${CYAN}<drone>${NC}  ${dim}│${NC}  ${dim}kill${NC} ${CYAN}<drone>${NC}  ${dim}│${NC}  ${dim}clean${NC} ${CYAN}<drone>${NC}"
     echo ""
+}
+
+# ============================================================================
+# Interactive Status (TUI with gum)
+# ============================================================================
+
+cmd_status_interactive() {
+    check_gum
+
+    while true; do
+        clear
+        echo ""
+        echo -e "${YELLOW}\033[1m  👑 hive${NC} v${VERSION}  \033[2m$(date '+%H:%M:%S')\033[0m"
+        echo ""
+
+        # Collect drones
+        local drones=()
+        local drone_displays=()
+
+        if [ -d "$DRONES_DIR" ]; then
+            for drone_dir in "$DRONES_DIR"/*/; do
+                [ -d "$drone_dir" ] || continue
+                local status_file="$drone_dir/status.json"
+                [ -f "$status_file" ] || continue
+
+                local drone_name=$(basename "$drone_dir")
+                local status=$(jq -r '.status // "unknown"' "$status_file")
+                local completed_count=$(jq -r '.completed | length' "$status_file")
+                local total=$(jq -r '.total // 0' "$status_file")
+                local pid_file="$drone_dir/.pid"
+                local running="no"
+
+                if [ -f "$pid_file" ]; then
+                    local pid=$(cat "$pid_file" 2>/dev/null)
+                    ps -p "$pid" > /dev/null 2>&1 && running="yes"
+                fi
+
+                local icon=""
+                case "$status" in
+                    "in_progress"|"starting")
+                        [ "$running" = "yes" ] && icon="●" || icon="○"
+                        ;;
+                    "completed") icon="✓" ;;
+                    "error") icon="✗" ;;
+                    *) icon="?" ;;
+                esac
+
+                drones+=("$drone_name")
+                drone_displays+=("$icon 🐝 $drone_name ($completed_count/$total)")
+            done
+        fi
+
+        if [ ${#drones[@]} -eq 0 ]; then
+            echo -e "  \033[2mNo active drones\033[0m"
+            echo ""
+            echo -e "  Launch one with: ${YELLOW}hive start <prd-name>${NC}"
+            echo ""
+            read -p "Press Enter to exit..." -r
+            break
+        fi
+
+        # Add back option
+        drone_displays+=("← Back / Quit")
+
+        # Use gum to select drone
+        local selection
+        selection=$(printf '%s\n' "${drone_displays[@]}" | gum choose --header "Select a drone:" --cursor "▸ " --cursor.foreground="220")
+
+        [ -z "$selection" ] && break
+        [[ "$selection" == "← Back / Quit" ]] && break
+
+        # Extract drone name from selection
+        local selected_drone
+        for i in "${!drone_displays[@]}"; do
+            if [ "${drone_displays[$i]}" = "$selection" ]; then
+                selected_drone="${drones[$i]}"
+                break
+            fi
+        done
+
+        [ -z "$selected_drone" ] && continue
+
+        # Show drone actions menu
+        cmd_status_drone_menu "$selected_drone"
+    done
+}
+
+cmd_status_drone_menu() {
+    local drone_name="$1"
+    local drone_dir="$DRONES_DIR/$drone_name"
+    local status_file="$drone_dir/status.json"
+
+    while true; do
+        clear
+        echo ""
+        echo -e "${YELLOW}\033[1m  🐝 $drone_name\033[0m"
+        echo ""
+
+        # Show drone info
+        local status=$(jq -r '.status // "unknown"' "$status_file")
+        local current=$(jq -r '.current_story // ""' "$status_file")
+        local completed_json=$(jq -r '.completed // []' "$status_file")
+        local completed_count=$(echo "$completed_json" | jq 'length')
+        local total=$(jq -r '.total // 0' "$status_file")
+        local prd_file=$(jq -r '.prd // ""' "$status_file")
+
+        echo -e "  Status: ${CYAN}$status${NC}"
+        echo -e "  Progress: ${GREEN}$completed_count${NC}/$total"
+        [ -n "$current" ] && [ "$current" != "null" ] && echo -e "  Current: ${YELLOW}$current${NC}"
+        echo ""
+
+        # Show stories
+        local prd_path="$PRDS_DIR/$prd_file"
+        if [ -f "$prd_path" ]; then
+            local stories=$(jq -c '.stories[]' "$prd_path" 2>/dev/null)
+            while IFS= read -r story; do
+                local story_id=$(echo "$story" | jq -r '.id')
+                local story_title=$(echo "$story" | jq -r '.title')
+                local is_completed=$(echo "$completed_json" | jq --arg id "$story_id" 'index($id) != null')
+                local is_current=false
+                [ "$story_id" = "$current" ] && is_current=true
+
+                if [ "$is_completed" = "true" ]; then
+                    echo -e "  ${GREEN}✓${NC} \033[2m$story_id\033[0m \033[2m$story_title\033[0m"
+                elif [ "$is_current" = "true" ]; then
+                    echo -e "  ${YELLOW}▸${NC} ${YELLOW}$story_id${NC} $story_title"
+                else
+                    echo -e "  \033[2m○ $story_id $story_title\033[0m"
+                fi
+            done <<< "$stories"
+        fi
+        echo ""
+
+        # Action menu
+        local action
+        action=$(gum choose --header "Action:" --cursor "▸ " --cursor.foreground="220" \
+            "📜 View logs" \
+            "📋 View raw logs" \
+            "🛑 Kill drone" \
+            "🗑  Clean drone" \
+            "← Back")
+
+        case "$action" in
+            "📜 View logs")
+                local log_file="$drone_dir/activity.log"
+                [ ! -f "$log_file" ] && log_file="$drone_dir/drone.log"
+                if [ -f "$log_file" ]; then
+                    gum pager < "$log_file"
+                else
+                    gum style --foreground 1 "No logs found"
+                    sleep 1
+                fi
+                ;;
+            "📋 View raw logs")
+                local log_file="$drone_dir/drone.log"
+                if [ -f "$log_file" ]; then
+                    gum pager < "$log_file"
+                else
+                    gum style --foreground 1 "No raw logs found"
+                    sleep 1
+                fi
+                ;;
+            "🛑 Kill drone")
+                if gum confirm "Kill drone $drone_name?"; then
+                    cmd_kill "$drone_name"
+                    sleep 1
+                fi
+                ;;
+            "🗑  Clean drone")
+                if gum confirm "Remove drone $drone_name and its worktree?"; then
+                    cmd_clean "$drone_name"
+                    sleep 1
+                    break
+                fi
+                ;;
+            "← Back"|"")
+                break
+                ;;
+        esac
+    done
 }
 
 # ============================================================================
@@ -1244,6 +1421,9 @@ cmd_update() {
         print_success "Cursor commands updated"
     fi
 
+    # Install optional dependencies
+    install_optional_deps
+
     echo ""
     print_success "Hive updated to v$remote_version!"
     echo ""
@@ -1283,9 +1463,14 @@ ${CYAN}Commands:${NC}
   ${GREEN}version${NC}  Show version
   ${GREEN}help${NC}     Show this help
 
+${CYAN}Status Options:${NC}
+  hive status              One-shot status display
+  hive status -f           Follow mode (auto-refresh)
+  hive status -i           Interactive TUI (requires gum)
+
 ${CYAN}Quick Start:${NC}
   hive start --prd prd-feature.json
-  hive status
+  hive status -i
   hive logs my-feature
   hive kill my-feature
 
