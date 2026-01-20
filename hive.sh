@@ -1874,6 +1874,7 @@ cmd_update() {
             "hive:logs"
             "hive:kill"
             "hive:clean"
+            "hive:profile"
             "hive:prd"
             "hive:statusline"
         )
