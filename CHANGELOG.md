@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-01-20
+
+### Added
+- **Comprehensive Logging System**: All Claude invocations now logged with complete metadata
+  - Story-specific logs in `.hive/drones/<name>/logs/<STORY-ID>/`
+  - Attempt-by-attempt logging with `attempt-N.log` and `attempt-N-metadata.json`
+  - Metadata includes: duration, exit code, timestamps, model, iteration number
+  - `/hive:logs` slash command updated for interactive log viewing
+  - TUI log navigation in `hive status -i` with "📊 View story logs" option
+
+- **Human-in-the-Loop Blocking System**: Automatic drone blocking on repeated errors
+  - Drones auto-block after 3+ failed attempts on same story
+  - Creates `blocked.md` with context and troubleshooting questions
+  - Desktop notifications when drone blocks: "⚠️ Hive - Drone Blocked"
+  - `hive start --resume <name>` clears blocked status and continues
+  - `hive unblock <name>` interactive command to review and unblock
+  - Blocked drones highlighted in RED in all status displays
+
+- **Enhanced Status Tracking**: New fields in `status.json`
+  - `error_count`: Track consecutive errors on same story
+  - `last_error_story`: Identify which story is causing issues
+  - `blocked_reason`: Human-readable explanation of blocking
+  - `blocked_questions`: Suggested clarifications needed
+  - `awaiting_human`: Boolean flag for blocked state
+
+### Changed
+- Enhanced `hive status` to show blocked drones with ⚠️ in red
+- Enhanced `hive status -i` TUI with story logs viewer
+- Improved error handling and retry logic in launcher script
+- Updated `/hive:logs` slash command with story-specific log viewing
+- Launcher script now uses `tee` to capture complete Claude output
+- Status indicator now includes "resuming" state
+
+### Fixed
+- Better log file organization for debugging
+- Improved tracking of drone execution state
+- More accurate error counting for blocking logic
+
 ## [1.8.0] - 2026-01-19
 
 ### Added

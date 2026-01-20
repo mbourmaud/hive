@@ -120,12 +120,75 @@ your-project/                        # 👑 Queen
 │   └── drones/                      # Drone status
 │       └── security/
 │           ├── status.json          # Progress: 4/10
-│           └── activity.log         # What it's doing
+│           ├── activity.log         # What it's doing
+│           ├── blocked.md           # Blocking info (if blocked)
+│           └── logs/                # Detailed execution logs
+│               ├── SEC-001/
+│               │   ├── attempt-1.log
+│               │   ├── attempt-1-metadata.json
+│               │   └── attempt-2.log
+│               └── SEC-002/
+│                   └── attempt-1.log
 
 ~/Projects/your-project-security/    # 🐝 Drone worktree
 ├── .hive -> ../your-project/.hive   # Symlinked!
 └── (your code being modified)
 ```
+
+---
+
+## 📊 Comprehensive Logging
+
+Hive now captures detailed execution logs for every Claude invocation:
+
+**Story-specific logs** - Each story gets its own directory:
+```
+.hive/drones/security/logs/SEC-001/
+  ├── attempt-1.log              # Complete Claude output
+  ├── attempt-1-metadata.json    # Duration, exit code, timestamps
+  └── attempt-2.log              # Retry attempts (if needed)
+```
+
+**Metadata tracking** - Every attempt includes:
+- Start and end timestamps
+- Duration in seconds
+- Exit code (success/failure)
+- Model used
+- Iteration number
+
+**View in TUI**:
+```bash
+hive status -i
+# Select drone → "📊 View story logs"
+```
+
+---
+
+## 🚫 Human-in-the-Loop Blocking
+
+Drones automatically block when they encounter repeated errors, preventing wasted resources:
+
+**Automatic blocking** - After 3+ failed attempts on the same story:
+- Drone sets status to `blocked`
+- Creates `blocked.md` with context and questions
+- Sends desktop notification
+- Stops execution
+
+**Unblock workflow**:
+```bash
+hive unblock <drone-name>
+# 1. Shows blocked.md with context
+# 2. Offers to edit PRD
+# 3. Prompts to resume
+
+# OR resume directly:
+hive start --resume <drone-name>
+```
+
+**Blocked drone indicators**:
+- `hive status` - Shows ⚠ in RED
+- `hive status -i` - Highlights in TUI
+- Desktop notification
 
 ---
 

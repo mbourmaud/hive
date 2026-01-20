@@ -18,7 +18,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Version
-VERSION="1.8.0"
+VERSION="1.9.0"
 
 # Auto-clean configuration
 INACTIVE_THRESHOLD=3600  # 60 minutes in seconds
@@ -556,14 +556,28 @@ cmd_run() {
     local drone_status_dir="$HIVE_DIR/drones/$drone_name"
     local drone_status_file="$drone_status_dir/status.json"
     mkdir -p "$drone_status_dir"
+    # Create logs directory for comprehensive logging
+    mkdir -p "$drone_status_dir/logs"
     local prd_basename=$(basename "$prd_file")
     local total_stories=$(jq '.stories | length' "$prd_file")
 
     if [ "$resume" = true ] && [ -f "$drone_status_file" ]; then
         # Resume mode: update existing status
-        jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" --arg prd "$prd_basename" \
-            '.status = "resuming" | .updated = $ts | .total = $total | .prd = $prd' \
-            "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+        local was_blocked=$(jq -r '.status // ""' "$drone_status_file")
+
+        # If drone was blocked, clear blocking fields
+        if [ "$was_blocked" = "blocked" ]; then
+            print_info "Clearing blocked status..."
+            rm -f "$drone_status_dir/blocked.md"
+            jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" --arg prd "$prd_basename" \
+                '.status = "resuming" | .updated = $ts | .total = $total | .prd = $prd | .blocked_reason = null | .blocked_questions = [] | .awaiting_human = false | .error_count = 0 | .last_error_story = null' \
+                "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+            print_success "Drone unblocked and ready to resume!"
+        else
+            jq --arg ts "$(get_timestamp)" --argjson total "$total_stories" --arg prd "$prd_basename" \
+                '.status = "resuming" | .updated = $ts | .total = $total | .prd = $prd' \
+                "$drone_status_file" > /tmp/status.tmp && mv /tmp/status.tmp "$drone_status_file"
+        fi
         print_info "Status updated (resuming with $(jq -r '.completed | length' "$drone_status_file") stories completed)"
     else
         # New drone: create fresh status
@@ -580,7 +594,12 @@ cmd_run() {
   "story_times": {},
   "total": $total_stories,
   "started": "$(get_timestamp)",
-  "updated": "$(get_timestamp)"
+  "updated": "$(get_timestamp)",
+  "error_count": 0,
+  "last_error_story": null,
+  "blocked_reason": null,
+  "blocked_questions": [],
+  "awaiting_human": false
 }
 EOF
     fi
@@ -713,6 +732,7 @@ CLAUDE_CMD="${7:-claude}"
 LOG_FILE="$DRONE_DIR/drone.log"
 STATUS_FILE="$DRONE_DIR/status.json"
 ACTIVITY_LOG="$DRONE_DIR/activity.log"
+LOGS_DIR="$DRONE_DIR/logs"
 
 # ============================================================================
 # Notification function (embedded in launcher for independence)
@@ -767,6 +787,53 @@ send_notification() {
 }
 
 # ============================================================================
+# Blocking function - Creates blocked.md and notifies
+# ============================================================================
+block_drone() {
+    local reason="$1"
+    local current_story="$2"
+
+    # Update status to blocked
+    jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+       --arg reason "$reason" \
+       --arg story "$current_story" \
+       '.status = "blocked" | .blocked_reason = $reason | .awaiting_human = true | .updated = $ts' \
+       "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
+
+    # Create blocked.md
+    cat > "$DRONE_DIR/blocked.md" <<BLOCKED_EOF
+# Drone Blocked: $current_story
+
+## Reason
+$reason
+
+## What Was Being Attempted
+Working on story: $current_story
+
+The drone encountered repeated errors (3+ attempts on the same story) and has automatically blocked itself to avoid wasting resources.
+
+## Questions for Human
+- Is the story definition clear and achievable?
+- Are there missing dependencies or prerequisites?
+- Does the codebase need changes before this story can be implemented?
+- Should this story be split into smaller stories?
+
+## To Unblock
+1. Review the story in the PRD file
+2. Update the PRD with clarifications or fixes
+3. Run: \`hive start --resume $DRONE_NAME\` or \`hive unblock $DRONE_NAME\`
+
+## Recent Logs
+Check logs in: $LOGS_DIR/$current_story/
+BLOCKED_EOF
+
+    # Send notification
+    send_notification "⚠️ Hive - Drone Blocked" "$DRONE_NAME needs input on $current_story"
+
+    echo "🚫 Drone blocked on $current_story. See $DRONE_DIR/blocked.md for details." >> "$LOG_FILE"
+}
+
+# ============================================================================
 # Drone Loop
 # ============================================================================
 
@@ -785,9 +852,15 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     echo "  Drone Iteration $i of $MAX_ITERATIONS - $(date)" >> "$LOG_FILE"
     echo "═══════════════════════════════════════════════════════" >> "$LOG_FILE"
 
-    # Check if all stories are completed
+    # Check if blocked
     if [ -f "$STATUS_FILE" ]; then
         STATUS=$(jq -r '.status // "in_progress"' "$STATUS_FILE" 2>/dev/null)
+        if [ "$STATUS" = "blocked" ]; then
+            echo "⚠️ Drone is blocked, stopping iteration." >> "$LOG_FILE"
+            exit 0
+        fi
+
+        # Check if all stories are completed
         if [ "$STATUS" = "completed" ]; then
             echo "" >> "$LOG_FILE"
             echo "🎉 All stories completed! Drone finished at iteration $i." >> "$LOG_FILE"
@@ -810,12 +883,77 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
         fi
     fi
 
-    # Run Claude
+    # Get current story and create story-specific log directory
+    CURRENT_STORY=$(jq -r '.current_story // "unknown"' "$STATUS_FILE" 2>/dev/null)
+    if [ "$CURRENT_STORY" != "null" ] && [ "$CURRENT_STORY" != "unknown" ] && [ -n "$CURRENT_STORY" ]; then
+        STORY_LOG_DIR="$LOGS_DIR/$CURRENT_STORY"
+        mkdir -p "$STORY_LOG_DIR"
+
+        # Count existing attempts for this story
+        ATTEMPT_COUNT=$(ls -1 "$STORY_LOG_DIR"/attempt-*.log 2>/dev/null | wc -l | tr -d ' ')
+        ATTEMPT_NUM=$((ATTEMPT_COUNT + 1))
+
+        # Check for repeated errors (3+ attempts on same story)
+        LAST_ERROR_STORY=$(jq -r '.last_error_story // ""' "$STATUS_FILE" 2>/dev/null)
+        ERROR_COUNT=$(jq -r '.error_count // 0' "$STATUS_FILE" 2>/dev/null)
+
+        if [ "$LAST_ERROR_STORY" = "$CURRENT_STORY" ] && [ "$ERROR_COUNT" -ge 3 ]; then
+            block_drone "Repeated errors on story $CURRENT_STORY (${ERROR_COUNT} attempts)" "$CURRENT_STORY"
+            exit 0
+        fi
+    else
+        STORY_LOG_DIR="$LOGS_DIR"
+        ATTEMPT_NUM=$i
+    fi
+
+    # Prepare log file for this attempt
+    ATTEMPT_LOG="$STORY_LOG_DIR/attempt-$ATTEMPT_NUM.log"
+    ATTEMPT_META="$STORY_LOG_DIR/attempt-$ATTEMPT_NUM-metadata.json"
+
+    # Capture start time
+    START_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    START_EPOCH=$(date +%s)
+
+    # Run Claude with tee to capture complete output
     cd "$WORKTREE"
+    EXIT_CODE=0
     $CLAUDE_CMD --print -p "$(cat "$PROMPT_FILE")" \
         --model "$MODEL" \
         --allowedTools "Bash,Read,Write,Edit,Glob,Grep,TodoWrite" \
-        >> "$LOG_FILE" 2>&1 || true
+        2>&1 | tee -a "$ATTEMPT_LOG" >> "$LOG_FILE" || EXIT_CODE=$?
+
+    # Capture end time and calculate duration
+    END_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    END_EPOCH=$(date +%s)
+    DURATION=$((END_EPOCH - START_EPOCH))
+
+    # Create metadata file
+    cat > "$ATTEMPT_META" <<META_EOF
+{
+  "story": "$CURRENT_STORY",
+  "attempt": $ATTEMPT_NUM,
+  "started": "$START_TIME",
+  "completed": "$END_TIME",
+  "duration_seconds": $DURATION,
+  "model": "$MODEL",
+  "exit_code": $EXIT_CODE,
+  "iteration": $i
+}
+META_EOF
+
+    # Track errors for blocking logic
+    if [ $EXIT_CODE -ne 0 ]; then
+        if [ "$LAST_ERROR_STORY" = "$CURRENT_STORY" ]; then
+            # Increment error count for same story
+            jq --argjson count "$((ERROR_COUNT + 1))" '.error_count = $count' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
+        else
+            # Reset error count for new story
+            jq --arg story "$CURRENT_STORY" '.error_count = 1 | .last_error_story = $story' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
+        fi
+    else
+        # Success - reset error tracking
+        jq '.error_count = 0 | .last_error_story = null' "$STATUS_FILE" > /tmp/status.tmp && mv /tmp/status.tmp "$STATUS_FILE"
+    fi
 
     echo "Iteration $i complete. Checking status..." >> "$LOG_FILE"
     sleep 2
@@ -1047,7 +1185,7 @@ render_status_dashboard() {
             local status_icon=""
             local status_color=""
             case "$status" in
-                "in_progress"|"starting")
+                "in_progress"|"starting"|"resuming")
                     if [ "$running" = "yes" ]; then
                         status_icon="●"
                         status_color="${GREEN}"
@@ -1057,6 +1195,7 @@ render_status_dashboard() {
                     fi
                     ;;
                 "completed") status_icon="✓"; status_color="${GREEN}" ;;
+                "blocked") status_icon="⚠"; status_color="${RED}" ;;
                 "error") status_icon="✗"; status_color="${RED}" ;;
                 *) status_icon="?"; status_color="${NC}" ;;
             esac
@@ -1291,7 +1430,7 @@ render_status_dashboard_interactive() {
             local status_icon=""
             local status_color=""
             case "$status" in
-                "in_progress"|"starting")
+                "in_progress"|"starting"|"resuming")
                     if [ "$running" = "yes" ]; then
                         status_icon="●"
                         status_color="${GREEN}"
@@ -1301,6 +1440,7 @@ render_status_dashboard_interactive() {
                     fi
                     ;;
                 "completed") status_icon="✓"; status_color="${GREEN}" ;;
+                "blocked") status_icon="⚠"; status_color="${RED}" ;;
                 "error") status_icon="✗"; status_color="${RED}" ;;
                 *) status_icon="?"; status_color="${NC}" ;;
             esac
@@ -1448,6 +1588,7 @@ cmd_status_drone_menu() {
         action=$(gum choose --header "Action:" --cursor "▸ " --cursor.foreground="220" \
             "📜 View logs" \
             "📋 View raw logs" \
+            "📊 View story logs" \
             "🛑 Kill drone" \
             "🗑  Clean drone" \
             "← Back")
@@ -1469,6 +1610,67 @@ cmd_status_drone_menu() {
                     gum pager < "$log_file"
                 else
                     gum style --foreground 1 "No raw logs found"
+                    sleep 1
+                fi
+                ;;
+            "📊 View story logs")
+                # Show story-specific logs
+                local logs_dir="$drone_dir/logs"
+                if [ -d "$logs_dir" ]; then
+                    # Get list of stories with logs
+                    local story_dirs=$(find "$logs_dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;  2>/dev/null | sort)
+                    if [ -n "$story_dirs" ]; then
+                        local selected_story
+                        selected_story=$(echo "$story_dirs" | gum choose --header "Select story:" --cursor "▸ " --cursor.foreground="220")
+                        if [ -n "$selected_story" ]; then
+                            local story_log_dir="$logs_dir/$selected_story"
+                            # Get list of attempts
+                            local attempts=$(ls -1 "$story_log_dir"/attempt-*.log 2>/dev/null | sort -V)
+                            if [ -n "$attempts" ]; then
+                                local selected_attempt
+                                selected_attempt=$(echo "$attempts" | xargs -n 1 basename | gum choose --header "Select attempt:" --cursor "▸ " --cursor.foreground="220")
+                                if [ -n "$selected_attempt" ]; then
+                                    local attempt_log="$story_log_dir/$selected_attempt"
+                                    local attempt_meta="${attempt_log%.log}-metadata.json"
+
+                                    # Show metadata header if exists
+                                    if [ -f "$attempt_meta" ]; then
+                                        clear
+                                        echo ""
+                                        echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+                                        echo -e "${YELLOW}Story:${NC} $selected_story"
+                                        echo -e "${YELLOW}Attempt:${NC} $(basename "$selected_attempt" | sed 's/attempt-\(.*\)\.log/\1/')"
+                                        if command -v jq &>/dev/null; then
+                                            local started=$(jq -r '.started // ""' "$attempt_meta")
+                                            local completed=$(jq -r '.completed // ""' "$attempt_meta")
+                                            local duration=$(jq -r '.duration_seconds // 0' "$attempt_meta")
+                                            local exit_code=$(jq -r '.exit_code // 0' "$attempt_meta")
+                                            echo -e "${YELLOW}Duration:${NC} ${duration}s"
+                                            echo -e "${YELLOW}Exit code:${NC} $exit_code"
+                                        fi
+                                        echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+                                        echo ""
+                                        echo "Press any key to view log..."
+                                        read -n 1 -s
+                                    fi
+
+                                    if command -v bat &>/dev/null; then
+                                        bat --paging=always "$attempt_log"
+                                    else
+                                        gum pager < "$attempt_log"
+                                    fi
+                                fi
+                            else
+                                gum style --foreground 1 "No attempt logs found for $selected_story"
+                                sleep 1
+                            fi
+                        fi
+                    else
+                        gum style --foreground 1 "No story logs found"
+                        sleep 1
+                    fi
+                else
+                    gum style --foreground 1 "No logs directory found"
                     sleep 1
                 fi
                 ;;
@@ -1643,6 +1845,92 @@ cmd_clean() {
 }
 
 # ============================================================================
+# Unblock Command
+# ============================================================================
+
+cmd_unblock() {
+    local drone_name="$1"
+
+    if [ -z "$drone_name" ]; then
+        print_error "Drone name required"
+        echo "Usage: hive unblock <drone-name>"
+        exit 1
+    fi
+
+    check_git_repo
+
+    local drone_status_dir="$DRONES_DIR/$drone_name"
+    local drone_status_file="$drone_status_dir/status.json"
+    local blocked_file="$drone_status_dir/blocked.md"
+
+    if [ ! -f "$drone_status_file" ]; then
+        print_error "Drone not found: $drone_name"
+        exit 1
+    fi
+
+    local status=$(jq -r '.status // ""' "$drone_status_file")
+    if [ "$status" != "blocked" ]; then
+        print_warning "Drone $drone_name is not blocked (status: $status)"
+        echo "Use 'hive start --resume $drone_name' to resume a non-blocked drone."
+        exit 0
+    fi
+
+    echo ""
+    print_info "Drone $drone_name is blocked. Here's what happened:"
+    echo ""
+
+    # Show blocked.md if exists
+    if [ -f "$blocked_file" ]; then
+        if command -v bat &>/dev/null; then
+            bat --style=plain --color=always "$blocked_file"
+        else
+            cat "$blocked_file"
+        fi
+        echo ""
+    fi
+
+    # Get PRD file
+    local prd_file=$(jq -r '.prd // ""' "$drone_status_file")
+    if [ -n "$prd_file" ] && [ -f "$PRDS_DIR/$prd_file" ]; then
+        echo ""
+        print_info "PRD file: $PRDS_DIR/$prd_file"
+        echo ""
+
+        # Prompt to edit PRD
+        if [ -t 0 ]; then
+            read -p "Would you like to edit the PRD to fix the issue? [Y/n] " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                # Open PRD in editor
+                ${EDITOR:-vi} "$PRDS_DIR/$prd_file"
+                echo ""
+                print_success "PRD updated"
+            fi
+        fi
+
+        echo ""
+        # Prompt to resume
+        if [ -t 0 ]; then
+            read -p "Ready to unblock and resume the drone? [y/N] " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_info "Resuming drone $drone_name..."
+                echo ""
+                # Call hive start with --resume
+                cmd_run --prd "$PRDS_DIR/$prd_file" --name "$drone_name" --resume
+            else
+                print_info "Drone remains blocked. Run 'hive start --resume $drone_name' when ready."
+            fi
+        else
+            print_info "Run 'hive start --resume $drone_name' when ready to unblock and resume."
+        fi
+    else
+        print_error "PRD file not found. Cannot resume without PRD."
+        exit 1
+    fi
+}
+
+# ============================================================================
 # List Command
 # ============================================================================
 
@@ -1665,13 +1953,19 @@ cmd_list() {
             local total=$(jq -r '.total // "?"' "$drone_dir/status.json")
 
             local status_icon=""
+            local status_display=""
             case "$status" in
                 "completed") status_icon="✓" ;;
+                "blocked") status_icon="⚠"; status_display="${RED}BLOCKED${NC}" ;;
                 "error") status_icon="✗" ;;
                 *) status_icon="" ;;
             esac
 
-            echo -e "  🐝 ${CYAN}$name${NC} $status_icon ($completed/$total)"
+            if [ -n "$status_display" ]; then
+                echo -e "  🐝 ${CYAN}$name${NC} $status_icon $status_display ($completed/$total)"
+            else
+                echo -e "  🐝 ${CYAN}$name${NC} $status_icon ($completed/$total)"
+            fi
             count=$((count + 1))
         done
     fi
@@ -1930,6 +2224,7 @@ ${CYAN}Commands:${NC}
   ${GREEN}logs${NC}     View drone logs
   ${GREEN}kill${NC}     Stop a running drone
   ${GREEN}clean${NC}    Remove a drone and its worktree
+  ${GREEN}unblock${NC}  Interactively unblock a blocked drone
   ${GREEN}profile${NC}  Manage Claude profiles (wrappers, API configs)
   ${GREEN}init${NC}     Initialize Hive in current repo
   ${GREEN}update${NC}   Update Hive to latest version
@@ -1988,6 +2283,7 @@ main() {
         logs)    cmd_logs "$@" ;;
         kill)    cmd_kill "$@" ;;
         clean)   cmd_clean "$@" ;;
+        unblock) cmd_unblock "$@" ;;
         profile) cmd_profile "$@" ;;
         init)    cmd_init "$@" ;;
         update)  cmd_update "$@" ;;
