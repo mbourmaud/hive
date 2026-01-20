@@ -29,6 +29,9 @@ CONFIG_FILE="$HIVE_DIR/config.json"
 PRDS_DIR="$HIVE_DIR/prds"
 DRONES_DIR="$HIVE_DIR/drones"
 
+# Profile configuration
+HIVE_GLOBAL_CONFIG="$HOME/.config/hive/config.json"
+
 # Update check config
 HIVE_CACHE_DIR="$HOME/.cache/hive"
 HIVE_VERSION_CACHE="$HIVE_CACHE_DIR/latest_version"
@@ -46,6 +49,54 @@ print_error() { echo -e "${RED}✗${NC} $1" >&2; }
 print_drone() { echo -e "${CYAN}🐝${NC} $1"; }
 
 get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+
+# ============================================================================
+# Profile Management Functions
+# ============================================================================
+
+# Initialize global config with default profile
+init_global_config() {
+    if [ ! -f "$HIVE_GLOBAL_CONFIG" ]; then
+        mkdir -p "$(dirname "$HIVE_GLOBAL_CONFIG")"
+        cat > "$HIVE_GLOBAL_CONFIG" <<EOF
+{
+  "version": "1.0.0",
+  "default_profile": "default",
+  "profiles": {
+    "default": {
+      "claude_command": "claude",
+      "description": "Default Claude CLI"
+    }
+  }
+}
+EOF
+    fi
+}
+
+# Get claude command for a profile
+get_claude_command() {
+    local profile="${1:-}"
+
+    init_global_config
+
+    # If no profile specified, use default
+    if [ -z "$profile" ]; then
+        profile=$(jq -r '.default_profile // "default"' "$HIVE_GLOBAL_CONFIG" 2>/dev/null)
+    fi
+
+    # Get command from profile
+    local cmd=$(jq -r --arg profile "$profile" '.profiles[$profile].claude_command // empty' "$HIVE_GLOBAL_CONFIG" 2>/dev/null)
+
+    if [ -z "$cmd" ]; then
+        # Profile not found, use default
+        if [ "$profile" != "default" ]; then
+            print_warning "Profile '$profile' not found, using 'default'"
+        fi
+        cmd=$(jq -r '.profiles.default.claude_command // "claude"' "$HIVE_GLOBAL_CONFIG" 2>/dev/null)
+    fi
+
+    echo "$cmd"
+}
 
 # ============================================================================
 # Notification Functions (cross-platform)
@@ -289,6 +340,7 @@ ${YELLOW}Options:${NC}
   --base <branch>     Base branch (default: main)
   --iterations <n>    Max iterations (default: 15, each = full Claude session)
   --model <model>     Claude model (default: sonnet)
+  --profile <name>    Claude profile to use (default: from ~/.config/hive/config.json)
   --local             Run in current directory (no worktree creation)
   --help, -h          Show this help
 
@@ -322,6 +374,7 @@ cmd_run() {
     local model="sonnet"
     local resume=false
     local local_mode=false
+    local profile=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -331,6 +384,7 @@ cmd_run() {
             --base) base_branch="$2"; shift 2 ;;
             --iterations) iterations="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
+            --profile) profile="$2"; shift 2 ;;
             --resume) resume=true; shift ;;
             --local) local_mode=true; shift ;;
             --help|-h) show_start_usage; exit 0 ;;
@@ -654,6 +708,7 @@ MODEL="$3"
 MAX_ITERATIONS="$4"
 WORKTREE="$5"
 DRONE_NAME="$6"
+CLAUDE_CMD="${7:-claude}"
 
 LOG_FILE="$DRONE_DIR/drone.log"
 STATUS_FILE="$DRONE_DIR/status.json"
@@ -757,7 +812,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     # Run Claude
     cd "$WORKTREE"
-    claude --print -p "$(cat "$PROMPT_FILE")" \
+    $CLAUDE_CMD --print -p "$(cat "$PROMPT_FILE")" \
         --model "$MODEL" \
         --allowedTools "Bash,Read,Write,Edit,Glob,Grep,TodoWrite" \
         >> "$LOG_FILE" 2>&1 || true
@@ -781,8 +836,11 @@ LAUNCHER_EOF
 
     chmod +x "$launcher_script"
 
+    # Get Claude command from profile
+    local claude_cmd=$(get_claude_command "$profile")
+
     # Launch the loop in background with nohup
-    nohup "$launcher_script" "$drone_status_dir" "$prompt_file" "$model" "$iterations" "$workdir" "$drone_name" > /dev/null 2>&1 &
+    nohup "$launcher_script" "$drone_status_dir" "$prompt_file" "$model" "$iterations" "$workdir" "$drone_name" "$claude_cmd" > /dev/null 2>&1 &
 
     local pid=$!
     echo "$pid" > "$drone_status_dir/.pid"
@@ -1623,6 +1681,132 @@ cmd_list() {
 }
 
 # ============================================================================
+# Profile Command
+# ============================================================================
+
+cmd_profile() {
+    local subcommand="${1:-list}"
+    shift || true
+
+    case "$subcommand" in
+        list|ls)
+            init_global_config
+            echo ""
+            echo -e "${CYAN}Claude Profiles:${NC}"
+            echo ""
+
+            local default_profile=$(jq -r '.default_profile // "default"' "$HIVE_GLOBAL_CONFIG")
+            local profiles=$(jq -r '.profiles | keys[]' "$HIVE_GLOBAL_CONFIG")
+
+            while IFS= read -r profile; do
+                local cmd=$(jq -r --arg p "$profile" '.profiles[$p].claude_command' "$HIVE_GLOBAL_CONFIG")
+                local desc=$(jq -r --arg p "$profile" '.profiles[$p].description // ""' "$HIVE_GLOBAL_CONFIG")
+
+                local default_mark=""
+                [ "$profile" = "$default_profile" ] && default_mark=" ${GREEN}(default)${NC}"
+
+                echo -e "  ${YELLOW}$profile${NC}$default_mark"
+                echo -e "    Command: ${CYAN}$cmd${NC}"
+                [ -n "$desc" ] && echo -e "    ${dim}$desc${NC}"
+                echo ""
+            done <<< "$profiles"
+            ;;
+
+        add)
+            local name="$1"
+            local command="$2"
+            local description="${3:-}"
+
+            if [ -z "$name" ] || [ -z "$command" ]; then
+                print_error "Usage: hive profile add <name> <command> [description]"
+                exit 1
+            fi
+
+            init_global_config
+
+            local profile_json=$(jq -n --arg cmd "$command" --arg desc "$description" '{claude_command: $cmd, description: $desc}')
+            jq --arg name "$name" --argjson profile "$profile_json" '.profiles[$name] = $profile' "$HIVE_GLOBAL_CONFIG" > /tmp/hive_config.tmp
+            mv /tmp/hive_config.tmp "$HIVE_GLOBAL_CONFIG"
+
+            print_success "Profile '$name' added"
+            ;;
+
+        set-default)
+            local name="$1"
+
+            if [ -z "$name" ]; then
+                print_error "Usage: hive profile set-default <name>"
+                exit 1
+            fi
+
+            init_global_config
+
+            # Check if profile exists
+            if ! jq -e --arg name "$name" '.profiles[$name]' "$HIVE_GLOBAL_CONFIG" > /dev/null 2>&1; then
+                print_error "Profile '$name' not found"
+                exit 1
+            fi
+
+            jq --arg name "$name" '.default_profile = $name' "$HIVE_GLOBAL_CONFIG" > /tmp/hive_config.tmp
+            mv /tmp/hive_config.tmp "$HIVE_GLOBAL_CONFIG"
+
+            print_success "Default profile set to '$name'"
+            ;;
+
+        rm|remove)
+            local name="$1"
+
+            if [ -z "$name" ]; then
+                print_error "Usage: hive profile rm <name>"
+                exit 1
+            fi
+
+            if [ "$name" = "default" ]; then
+                print_error "Cannot remove 'default' profile"
+                exit 1
+            fi
+
+            init_global_config
+
+            jq --arg name "$name" 'del(.profiles[$name])' "$HIVE_GLOBAL_CONFIG" > /tmp/hive_config.tmp
+            mv /tmp/hive_config.tmp "$HIVE_GLOBAL_CONFIG"
+
+            print_success "Profile '$name' removed"
+            ;;
+
+        help|--help|-h)
+            cat << EOF
+
+${CYAN}hive profile${NC} - Manage Claude profiles
+
+${YELLOW}Usage:${NC}
+  hive profile list              List all profiles
+  hive profile add <name> <cmd>  Add a new profile
+  hive profile set-default <name> Set default profile
+  hive profile rm <name>         Remove a profile
+
+${YELLOW}Examples:${NC}
+  hive profile add ml "claude-wrapper ml" "Bedrock (work)"
+  hive profile add perso "claude-wrapper perso" "MAX API (personal)"
+  hive profile set-default ml
+  hive profile list
+  hive profile rm perso
+
+${YELLOW}Config file:${NC}
+  ~/.config/hive/config.json
+
+EOF
+            ;;
+
+        *)
+            print_error "Unknown subcommand: $subcommand"
+            echo "Try 'hive profile help'"
+            exit 1
+            ;;
+    esac
+}
+
+# ============================================================================
 # Update Command
 # ============================================================================
 
@@ -1745,6 +1929,7 @@ ${CYAN}Commands:${NC}
   ${GREEN}logs${NC}     View drone logs
   ${GREEN}kill${NC}     Stop a running drone
   ${GREEN}clean${NC}    Remove a drone and its worktree
+  ${GREEN}profile${NC}  Manage Claude profiles (wrappers, API configs)
   ${GREEN}init${NC}     Initialize Hive in current repo
   ${GREEN}update${NC}   Update Hive to latest version
   ${GREEN}version${NC}  Show version
@@ -1802,6 +1987,7 @@ main() {
         logs)    cmd_logs "$@" ;;
         kill)    cmd_kill "$@" ;;
         clean)   cmd_clean "$@" ;;
+        profile) cmd_profile "$@" ;;
         init)    cmd_init "$@" ;;
         update)  cmd_update "$@" ;;
         version|--version|-v) cmd_version ;;
