@@ -133,11 +133,10 @@ fn main() {
             }
         }
         Commands::Start { name, prompt, resume, local, model, dry_run } => {
-            println!("Start command for drone '{}' - not yet implemented", name);
-            if let Some(p) = prompt {
-                println!("  Prompt: {}", p);
+            if let Err(e) = commands::start::run(name, prompt, resume, local, model, dry_run) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
-            println!("  Resume: {}, Local: {}, Model: {}, Dry run: {}", resume, local, model, dry_run);
         }
         Commands::Status { name, interactive, follow } => {
             if let Err(e) = commands::status::run(name, interactive, follow) {
