@@ -47,15 +47,15 @@ detect_platform() {
   case "$os" in
     Darwin)
       case "$arch" in
-        arm64|aarch64) echo "aarch64-apple-darwin" ;;
-        x86_64) echo "x86_64-apple-darwin" ;;
+        arm64|aarch64) echo "darwin-arm64" ;;
+        x86_64) echo "darwin-amd64" ;;
         *) echo "unsupported" ;;
       esac
       ;;
     Linux)
       case "$arch" in
-        aarch64|arm64) echo "aarch64-unknown-linux-gnu" ;;
-        x86_64) echo "x86_64-unknown-linux-gnu" ;;
+        aarch64|arm64) echo "linux-arm64" ;;
+        x86_64) echo "linux-amd64" ;;
         *) echo "unsupported" ;;
       esac
       ;;
@@ -111,23 +111,19 @@ else
 fi
 
 # Download binary
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/hive-$VERSION-$PLATFORM.tar.gz"
+DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/hive-$PLATFORM.tar.gz"
 TEMP_DIR=$(mktemp -d)
 
 if ! curl -sL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR" 2>/dev/null; then
-  # Try alternative naming convention
-  DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/hive-$PLATFORM.tar.gz"
-  if ! curl -sL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR" 2>/dev/null; then
-    echo -e "${RED}Error:${RESET} Failed to download binary"
-    echo "URL: $DOWNLOAD_URL"
-    echo ""
-    echo "You can try installing manually:"
-    echo "  1. Go to https://github.com/$REPO/releases/latest"
-    echo "  2. Download the binary for your platform"
-    echo "  3. Extract and move to $INSTALL_DIR/hive"
-    rm -rf "$TEMP_DIR"
-    exit 1
-  fi
+  echo -e "${RED}Error:${RESET} Failed to download binary"
+  echo "URL: $DOWNLOAD_URL"
+  echo ""
+  echo "You can try installing manually:"
+  echo "  1. Go to https://github.com/$REPO/releases/latest"
+  echo "  2. Download the binary for your platform"
+  echo "  3. Extract and move to $INSTALL_DIR/hive"
+  rm -rf "$TEMP_DIR"
+  exit 1
 fi
 
 # Find and install the binary
