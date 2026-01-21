@@ -37,16 +37,10 @@ enum Commands {
         dry_run: bool,
     },
 
-    /// Display drone status with optional TUI dashboard
-    Status {
+    /// Monitor drone status with auto-refreshing TUI dashboard
+    Monitor {
         /// Drone name (optional)
         name: Option<String>,
-        /// Interactive TUI mode
-        #[arg(short, long)]
-        interactive: bool,
-        /// Follow mode - auto-refresh
-        #[arg(short, long)]
-        follow: bool,
     },
 
     /// View drone activity logs
@@ -157,8 +151,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Status { name, interactive, follow } => {
-            if let Err(e) = commands::status::run(name, interactive, follow) {
+        Commands::Monitor { name } => {
+            if let Err(e) = commands::status::run_monitor(name) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

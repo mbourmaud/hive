@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use rust_embed::RustEmbed;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(RustEmbed)]
 #[folder = "commands/"]
@@ -30,7 +30,7 @@ pub fn run(skills_only: bool, bin_only: bool) -> Result<()> {
     Ok(())
 }
 
-fn install_binary(home: &PathBuf) -> Result<()> {
+fn install_binary(home: &Path) -> Result<()> {
     let bin_dir = home.join(".local").join("bin");
     fs::create_dir_all(&bin_dir)
         .context("Failed to create ~/.local/bin directory")?;
@@ -69,7 +69,7 @@ fn install_binary(home: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn install_skills(home: &PathBuf) -> Result<()> {
+fn install_skills(home: &Path) -> Result<()> {
     let skills_dir = home.join(".claude").join("commands");
     fs::create_dir_all(&skills_dir)
         .context("Failed to create ~/.claude/commands directory")?;

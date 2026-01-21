@@ -5,9 +5,15 @@ use std::path::PathBuf;
 
 use crate::types::{DroneState, DroneStatus};
 
+// New monitor command - always runs TUI with auto-refresh
+pub fn run_monitor(name: Option<String>) -> Result<()> {
+    run_tui(name)
+}
+
+// Legacy run function for backward compatibility (can be removed later)
 pub fn run(name: Option<String>, interactive: bool, follow: bool) -> Result<()> {
     if interactive {
-        run_tui(name, follow)
+        run_tui(name)
     } else {
         run_simple(name, follow)
     }
@@ -162,7 +168,7 @@ fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
     Ok(drones)
 }
 
-fn run_tui(_name: Option<String>, _follow: bool) -> Result<()> {
+fn run_tui(_name: Option<String>) -> Result<()> {
     // TUI implementation with ratatui
     use crossterm::{
         execute,
@@ -252,17 +258,14 @@ fn run_tui(_name: Option<String>, _follow: bool) -> Result<()> {
             f.render_widget(footer, chunks[2]);
         })?;
 
-        // Handle input
-        if crossterm::event::poll(std::time::Duration::from_millis(100))? {
+        // Handle input with 1s refresh interval
+        if crossterm::event::poll(std::time::Duration::from_secs(1))? {
             if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
                 if key.code == crossterm::event::KeyCode::Char('q') {
                     break;
                 }
             }
         }
-
-        // Auto-refresh
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     // Restore terminal

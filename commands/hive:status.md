@@ -23,8 +23,10 @@ fi
 
 Execute:
 ```bash
-hive status
+hive monitor
 ```
+
+Note: The `monitor` command opens an auto-refreshing TUI dashboard. Press 'q' to quit.
 
 Or manually gather status:
 
