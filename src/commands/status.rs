@@ -53,8 +53,19 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
         println!("  {} v{}", "👑 hive".yellow().bold(), env!("CARGO_PKG_VERSION"));
         println!();
 
-        for (drone_name, status) in filtered {
-            print_drone_status(&drone_name, &status);
+        // Sort: active drones first, completed last
+        let mut sorted = filtered;
+        sorted.sort_by_key(|(_, status)| {
+            match status.status {
+                DroneState::Completed => 1, // Completed last
+                _ => 0, // Everything else first
+            }
+        });
+
+        for (drone_name, status) in sorted {
+            // Use collapsed view for completed drones
+            let collapsed = status.status == DroneState::Completed;
+            print_drone_status(&drone_name, &status, collapsed);
             println!();
         }
 
@@ -144,7 +155,7 @@ fn read_drone_pid(drone_name: &str) -> Option<i32> {
     pid_str.trim().parse().ok()
 }
 
-fn print_drone_status(name: &str, status: &DroneStatus) {
+fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     // Check if process is actually running
     let process_running = read_drone_pid(name)
         .map(is_process_running)
@@ -172,6 +183,23 @@ fn print_drone_status(name: &str, status: &DroneStatus) {
         .map(|e| format!("  {}", e))
         .unwrap_or_default();
 
+    // If collapsed view (completed drones), show single line
+    if collapsed {
+        let progress = if status.total > 0 {
+            format!("{}/{}", status.completed.len(), status.total)
+        } else {
+            "0/0".to_string()
+        };
+
+        println!("  {} {}{}  {}",
+                 status_symbol,
+                 format!("🐝 {}", name).bright_black(),
+                 elapsed.bright_black(),
+                 progress.bright_black());
+        return; // Exit early, don't show full details
+    }
+
+    // Full view for active drones
     println!("  {} {}{}  {}",
              status_symbol,
              format!("🐝 {}", name).yellow().bold(),
