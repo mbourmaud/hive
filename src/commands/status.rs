@@ -113,15 +113,57 @@ fn load_prd(path: &PathBuf) -> Option<Prd> {
     serde_json::from_str(&contents).ok()
 }
 
+// Check if a process is running by PID
+fn is_process_running(pid: i32) -> bool {
+    #[cfg(unix)]
+    {
+        // On Unix, send signal 0 to check if process exists
+        // This doesn't actually send a signal, just checks permission
+        match nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None) {
+            Ok(_) => true,
+            Err(nix::errno::Errno::ESRCH) => false, // No such process
+            Err(_) => true, // Process exists but we don't have permission (still running)
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix systems, check if /proc/<pid> exists
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+}
+
+// Read PID from drone's .pid file
+fn read_drone_pid(drone_name: &str) -> Option<i32> {
+    let pid_path = PathBuf::from(".hive")
+        .join("drones")
+        .join(drone_name)
+        .join(".pid");
+
+    let pid_str = fs::read_to_string(pid_path).ok()?;
+    pid_str.trim().parse().ok()
+}
+
 fn print_drone_status(name: &str, status: &DroneStatus) {
-    // Print drone name with status - honey theme with bee emoji
+    // Check if process is actually running
+    let process_running = read_drone_pid(name)
+        .map(is_process_running)
+        .unwrap_or(false);
+
+    // Determine status symbol based on actual state and process status
     let status_symbol = match status.status {
         DroneState::Starting => "◐".yellow(),
         DroneState::Resuming => "◐".yellow(),
-        DroneState::InProgress => "●".green(),
+        DroneState::InProgress => {
+            if process_running {
+                "●".green()  // Actually running
+            } else {
+                "○".yellow()  // Says in_progress but process is dead
+            }
+        },
         DroneState::Completed => "✓".bright_green().bold(),
         DroneState::Error => "✗".red().bold(),
-        DroneState::Blocked => "⊗".red().bold(),
+        DroneState::Blocked => "⚠".red().bold(),
         DroneState::Stopped => "○".bright_black(),
     };
 
@@ -309,10 +351,21 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
             // Drone list
             let items: Vec<ListItem> = drones.iter().map(|(name, status)| {
+                // Check if process is actually running
+                let process_running = read_drone_pid(name)
+                    .map(is_process_running)
+                    .unwrap_or(false);
+
                 let status_color = match status.status {
                     DroneState::Starting => Color::Yellow,
                     DroneState::Resuming => Color::Yellow,
-                    DroneState::InProgress => Color::Green,
+                    DroneState::InProgress => {
+                        if process_running {
+                            Color::Green  // Actually running
+                        } else {
+                            Color::Yellow  // Says in_progress but process is dead
+                        }
+                    },
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
                     DroneState::Blocked => Color::Red,
