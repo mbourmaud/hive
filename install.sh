@@ -169,15 +169,13 @@ SKILLS_EXIT=$?
 
 echo ""
 echo -e "${GREEN}${BOLD}✓ Installation complete!${RESET}"
-echo ""
-echo -e "${GREEN}✓${RESET} Binary installed to $INSTALL_DIR/hive"
+echo -e "  ${GREEN}✓${RESET} Binary installed to $INSTALL_DIR/hive"
 if [ $SKILLS_EXIT -eq 0 ]; then
   SKILL_COUNT=$(echo "$SKILLS_OUTPUT" | grep -oE '[0-9]+ skills' | grep -oE '[0-9]+' || echo "8")
-  echo -e "${GREEN}✓${RESET} ${SKILL_COUNT} skills installed to ~/.claude/commands/"
+  echo -e "  ${GREEN}✓${RESET} ${SKILL_COUNT} skills installed to ~/.claude/commands/"
 else
-  echo -e "${YELLOW}⚠${RESET} Skills installation skipped (run 'hive install' later)"
+  echo -e "  ${YELLOW}⚠${RESET} Skills installation skipped (run 'hive install' later)"
 fi
-echo ""
 
 # Check if install dir is in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -189,12 +187,11 @@ fi
 # Get clean version
 VERSION=$("$INSTALL_DIR/hive" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
 echo -e "${BOLD}Getting Started:${RESET}"
-echo ""
-echo -e "${CYAN}1.${RESET} cd into your project"
-echo -e "${CYAN}2.${RESET} hive init"
-echo -e "${CYAN}3.${RESET} Create a PRD with ${CYAN}/hive:prd${RESET} in Claude Code"
-echo -e "${CYAN}4.${RESET} hive start my-drone"
-echo -e "${CYAN}5.${RESET} Monitor PRD progress with ${CYAN}hive monitor${RESET}"
+echo -e "  ${CYAN}1.${RESET} cd into your project"
+echo -e "  ${CYAN}2.${RESET} hive init"
+echo -e "  ${CYAN}3.${RESET} Create a PRD with ${CYAN}/hive:prd${RESET} in Claude Code"
+echo -e "  ${CYAN}4.${RESET} hive start my-drone"
+echo -e "  ${CYAN}5.${RESET} Monitor PRD progress with ${CYAN}hive monitor${RESET}"
 echo ""
 echo -e "${BOLD}Monitoring:${RESET}"
 echo -e "${DIM}Live dashboard:${RESET} hive monitor"
