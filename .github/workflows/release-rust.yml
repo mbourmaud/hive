@@ -1,0 +1,136 @@
+name: Release Rust Build
+
+on:
+  push:
+    tags:
+      - 'rust-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: hive-rust-x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: hive-rust-aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: hive-rust-x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+            ${{ runner.os }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Strip binary (non-Windows)
+        if: runner.os != 'Windows'
+        run: strip target/${{ matrix.target }}/release/hive-rust
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/hive-rust
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/rust-v}" >> $GITHUB_OUTPUT
+
+      - name: Verify version matches Cargo.toml
+        run: |
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -n 1 | cut -d'"' -f2)
+          TAG_VERSION=${{ steps.version.outputs.VERSION }}
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Tag version ($TAG_VERSION) doesn't match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+
+      - name: Create checksums
+        run: |
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            sha256sum * > ../checksums-$(basename "$dir").txt
+            cd ..
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Hive Rust v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Hive Rust Release v${{ steps.version.outputs.VERSION }}
+
+            High-performance Rust rewrite of Hive CLI.
+
+            ### Installation
+
+            #### Quick Install (Linux/macOS)
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/anthropics/hive/main/install-rust.sh | bash
+            ```
+
+            #### Manual Installation
+            1. Download the appropriate binary for your platform
+            2. Make it executable: `chmod +x hive-rust`
+            3. Move to PATH: `sudo mv hive-rust /usr/local/bin/`
+
+            ### Supported Platforms
+            - macOS (Intel): `hive-rust-x86_64-apple-darwin`
+            - macOS (Apple Silicon): `hive-rust-aarch64-apple-darwin`
+            - Linux (x64): `hive-rust-x86_64-unknown-linux-gnu`
+
+            ### What's New
+            See [RUST-PROGRESS.md](https://github.com/anthropics/hive/blob/main/RUST-PROGRESS.md) for details.
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/*/*
+            artifacts/checksums-*.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
