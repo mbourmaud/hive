@@ -7,6 +7,10 @@ description = "High-performance CLI tool for orchestrating multiple Claude Code 
 license = "MIT"
 repository = "https://github.com/anthropics/hive"
 
+[lib]
+name = "hive_rust"
+path = "src/lib.rs"
+
 [[bin]]
 name = "hive-rust"
 path = "src/main.rs"
