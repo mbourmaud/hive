@@ -184,19 +184,16 @@ fn main() {
             }
         }
         Commands::Profile { command } => {
-            match command {
-                ProfileCommands::List => {
-                    println!("Profile list - not yet implemented");
-                }
-                ProfileCommands::Create { name } => {
-                    println!("Profile create '{}' - not yet implemented", name);
-                }
-                ProfileCommands::Use { name } => {
-                    println!("Profile use '{}' - not yet implemented", name);
-                }
-                ProfileCommands::Delete { name } => {
-                    println!("Profile delete '{}' - not yet implemented", name);
-                }
+            let result = match command {
+                ProfileCommands::List => commands::profile::list(),
+                ProfileCommands::Create { name } => commands::profile::create(name),
+                ProfileCommands::Use { name } => commands::profile::use_profile(name),
+                ProfileCommands::Delete { name } => commands::profile::delete(name),
+            };
+
+            if let Err(e) = result {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
     }
