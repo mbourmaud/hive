@@ -1,6 +1,6 @@
 # Hive PRD - Generate a PRD for Drones
 
-Generate a PRD (Product Requirements Document) JSON file optimized for Hive drones.
+Generate a PRD (Product Requirements Document) JSON file optimized for Hive drones using the enhanced v2.x schema.
 
 ## What this does
 
@@ -34,6 +34,7 @@ Ask the user for:
 - **PRD ID** - Short kebab-case identifier (e.g., `security-api-protection`)
 - **Title** - Human-readable title
 - **Description** - Brief summary of the overall goal
+- **Target Branch** (optional) - Git branch name (default: `hive/{id}`)
 
 ### Step 5: Break Down into Stories with Interactive DoD
 
@@ -45,33 +46,33 @@ For **EACH story**, follow this process:
 
 Description: Add requireAuth() middleware to account routes
 
-Files concernés:
+Files concerned:
 - src/app/api/accounts/route.ts
 ```
 
 #### 5b. Propose Definition of Done and ASK for validation
 ```
-🎯 Definition of Done proposée:
+🎯 Proposed Definition of Done:
 
-Cette story est TERMINÉE quand:
-1. Le middleware requireAuth() est ajouté aux routes GET et POST
-2. Un test vérifie que GET /api/accounts retourne 401 sans auth
-3. Un test vérifie que GET /api/accounts retourne 200 avec auth
+This story is COMPLETE when:
+1. requireAuth() middleware is added to GET and POST routes
+2. A test verifies that GET /api/accounts returns 401 without auth
+3. A test verifies that GET /api/accounts returns 200 with auth
 
-Commandes de vérification (le drone DOIT les exécuter):
-- `grep -r "requireAuth" src/app/api/accounts/` → doit matcher
-- `pnpm test --filter=accounts` → doit passer
+Verification commands (the drone MUST execute these):
+- `grep -r "requireAuth" src/app/api/accounts/` → must match
+- `pnpm test --filter=accounts` → must pass
 
-❓ Est-ce que cette Definition of Done est correcte ?
-   - Manque-t-il quelque chose ?
-   - Faut-il ajouter d'autres vérifications ?
+❓ Is this Definition of Done correct?
+   - Is anything missing?
+   - Should we add other verifications?
 ```
 
 #### 5c. Iterate until user validates
 The user might say:
-- "Il faut aussi logger les tentatives non authentifiées"
-- "Ajoute un test e2e"
-- "OK c'est bon"
+- "Need to also log unauthenticated attempts"
+- "Add an e2e test"
+- "OK looks good"
 
 Update the DoD based on feedback, then move to next story.
 
@@ -83,55 +84,73 @@ PRD: security-api-protection
 "Secure API Routes" - 3 stories
 
 SEC-001: Protect /api/accounts/*
-  ✅ DoD validée
+  ✅ DoD validated
 
 SEC-002: Protect /api/users/*
-  ✅ DoD validée
+  ✅ DoD validated
 
 SEC-003: Add auth logging
-  ✅ DoD validée
+  ✅ DoD validated
 ```
 
-Ask: **"Le PRD complet te convient ? Je génère le fichier ?"**
+Ask: **"Does the complete PRD look good? Should I generate the file?"**
 
 ### Step 7: Generate PRD File
 
-Write the JSON file to `.hive/prds/prd-<id>.json`:
+Write the JSON file to `.hive/prds/prd-<id>.json` using the **current v2.x enhanced schema**:
 
 ```json
 {
   "id": "security-api-protection",
   "title": "Secure API Routes",
   "description": "Add authentication to all API routes",
-  "created": "2024-01-17T12:00:00Z",
+  "version": "1.0.0",
+  "created_at": "2024-01-21T12:00:00Z",
+  "target_branch": "feature/api-security",
   "stories": [
     {
       "id": "SEC-001",
       "title": "Protect /api/accounts/*",
       "description": "Add requireAuth() middleware to account routes",
       "definition_of_done": [
-        "Le middleware requireAuth() est ajouté aux routes GET et POST",
-        "Un test vérifie que GET /api/accounts retourne 401 sans auth",
-        "Un test vérifie que GET /api/accounts retourne 200 avec auth"
+        "requireAuth() middleware is added to GET and POST routes",
+        "A test verifies that GET /api/accounts returns 401 without auth",
+        "A test verifies that GET /api/accounts returns 200 with auth"
       ],
       "verification_commands": [
-        {
-          "command": "grep -r 'requireAuth' src/app/api/accounts/",
-          "expected": "Au moins un match"
-        },
-        {
-          "command": "pnpm test --filter=accounts",
-          "expected": "Exit code 0 (tests passent)"
-        }
+        "grep -r 'requireAuth' src/app/api/accounts/",
+        "pnpm test --filter=accounts"
       ],
       "files": [
-        "src/app/api/accounts/route.ts"
+        "src/app/api/accounts/route.ts",
+        "src/app/api/accounts/__tests__/auth.test.ts"
       ],
-      "dependencies": []
+      "actions": [
+        "Import requireAuth middleware",
+        "Add middleware to route handlers",
+        "Write unit tests for auth scenarios",
+        "Run tests to verify"
+      ],
+      "tools": [
+        "jest",
+        "pnpm"
+      ]
     }
   ]
 }
 ```
+
+**IMPORTANT**: For comprehensive PRDs, consider using the **enhanced schema** with additional fields:
+- `actions` - Step-by-step actions to take
+- `files` - Specific files to modify
+- `tools` - Tools/commands to use
+- `context` - Dependencies, prerequisites, architectural notes
+- `testing` - Unit/integration/e2e test requirements
+- `error_handling` - Expected errors and recovery strategies
+- `agent_controls` - Max iterations, approval requirements
+- `communication` - Commit/PR templates, docs to update
+
+See the full schema reference in `docs/PRD_GUIDE.md` or the example at `examples/prd-enhanced-example.json`.
 
 ### Step 8: Next Steps
 
@@ -140,34 +159,99 @@ Tell the user:
 PRD created: .hive/prds/prd-security-api-protection.json
 
 To launch a drone on this PRD:
-  /hive:start
+  hive start security-api-protection
 
-Or via CLI:
-  hive start --prd .hive/prds/prd-security-api-protection.json
+To monitor the drone:
+  hive monitor
 ```
 
-## PRD JSON Schema
+## PRD JSON Schema (v2.x)
+
+### Minimal Schema (Required Fields Only)
 
 ```typescript
 interface PRD {
   id: string;              // kebab-case identifier
   title: string;           // Human-readable title
-  description: string;     // Overall goal
-  created: string;         // ISO timestamp
+  description?: string;    // Overall goal
   stories: Story[];
 }
 
 interface Story {
-  id: string;              // Unique ID (e.g., "SEC-001")
-  title: string;           // Short title
-  description: string;     // What to implement
-  definition_of_done: string[];      // Clear, validated DoD statements
-  verification_commands: {           // Commands drone MUST run to prove completion
-    command: string;
-    expected: string;
-  }[];
-  files: string[];         // Files to modify/create
-  dependencies?: string[]; // Other story IDs this depends on
+  id: string;                    // Unique ID (e.g., "SEC-001")
+  title: string;                 // Short title
+  description?: string;          // What to implement
+  definition_of_done: string[];  // Clear, validated DoD statements
+  verification_commands: string[]; // Commands drone MUST run to prove completion
+}
+```
+
+### Enhanced Schema (All Fields)
+
+```typescript
+interface PRD {
+  id: string;
+  title: string;
+  description?: string;
+  version?: string;                    // e.g., "1.0.0"
+  created_at?: string;                 // ISO timestamp
+  target_platforms?: string[];         // ["web", "mobile", "api"]
+  target_branch?: string;              // Git branch (default: hive/{id})
+  stories: Story[];
+}
+
+interface Story {
+  // Core fields
+  id: string;
+  title: string;
+  description?: string;
+  acceptance_criteria?: string[];      // User-facing criteria
+  definition_of_done: string[];        // Technical completion criteria
+  verification_commands: string[];     // Shell commands to verify
+  notes?: string;
+
+  // Enhanced guidance fields
+  actions?: string[];                  // Step-by-step actions
+  files?: string[];                    // Files to modify/create
+  tools?: string[];                    // Tools/commands to use
+
+  // Context fields
+  context?: {
+    dependencies?: string[];           // External dependencies
+    prerequisites?: string[];          // Must be done first
+    architectural_notes?: string[];    // Patterns to follow
+    related_docs?: string[];           // Doc references
+  };
+
+  // Testing fields
+  testing?: {
+    unit_tests?: string[];             // Required unit tests
+    integration_tests?: string[];      // Required integration tests
+    e2e_tests?: string[];              // Required e2e tests
+    coverage_threshold?: number;       // Min coverage % (0-100)
+  };
+
+  // Error handling fields
+  error_handling?: {
+    expected_errors: string[];         // Expected error scenarios
+    rollback_procedure?: string;       // How to rollback
+    recovery_strategy?: string;        // How to recover
+  };
+
+  // Agent control fields
+  agent_controls?: {
+    max_iterations?: number;           // Max iterations before blocking
+    require_approval_for?: string[];   // Actions needing approval
+    block_on?: string[];               // Conditions to block on
+  };
+
+  // Communication fields
+  communication?: {
+    commit_template?: string;          // Git commit message template
+    pr_template?: string;              // Pull request template
+    docs_to_update?: string[];         // Documentation to update
+    changelog_entry?: string;          // CHANGELOG.md entry
+  };
 }
 ```
 
@@ -175,25 +259,27 @@ interface Story {
 
 A good DoD must be:
 
-1. **Vérifiable** - Peut être prouvé par une commande ou un check
-2. **Spécifique** - Pas de "ça marche bien", mais "retourne 200 avec body {x: y}"
-3. **Complet** - Inclut tests, commits, et toute action requise
-4. **Validé** - L'utilisateur a explicitement confirmé
+1. **Verifiable** - Can be proven by a command or check
+2. **Specific** - Not "it works well", but "returns 200 with body {x: y}"
+3. **Complete** - Includes tests, commits, and all required actions
+4. **Validated** - User has explicitly confirmed
 
 ### Examples of GOOD DoD items:
-- "Le fichier `src/auth.ts` contient la fonction `validateToken()`"
-- "Les tests passent: `pnpm nx test plato --testPathPattern=auth`"
-- "Un commit est créé avec le message `feat(auth): add token validation`"
-- "La route GET /api/users retourne 401 sans header Authorization"
+- "The file `src/auth.ts` contains the function `validateToken()`"
+- "Tests pass: `pnpm nx test plato --testPathPattern=auth`"
+- "A commit is created with message `feat(auth): add token validation`"
+- "Route GET /api/users returns 401 without Authorization header"
 
 ### Examples of BAD DoD items:
-- "L'authentification fonctionne" (trop vague)
-- "Le code est propre" (subjectif)
-- "Tout est testé" (pas spécifique)
+- "Authentication works" (too vague)
+- "Code is clean" (subjective)
+- "Everything is tested" (not specific)
 
 ## Verification Commands
 
 Each story SHOULD have verification commands that the drone will execute to PROVE the story is complete. These are not optional - they are mandatory checks.
+
+**Important**: `verification_commands` is an array of strings (shell commands), NOT objects. Each command should be executable as-is.
 
 Types of verification:
 - **File existence**: `test -f src/auth.ts && echo "OK"`
@@ -206,23 +292,40 @@ Types of verification:
 ## File Location
 
 PRDs are stored in `.hive/prds/` which is:
-- Gitignored (not committed)
+- Gitignored (not committed by default)
 - Shared via symlink with drone worktrees
-- Accessible by both queen and drones
+- Accessible by both main project and drones
 
 ## Interactive Clarification Questions
 
 When defining DoD, ask clarifying questions like:
 
-- "Cette story nécessite-t-elle un test unitaire, d'intégration, ou les deux ?"
-- "Faut-il un commit séparé ou ça peut être groupé ?"
-- "Y a-t-il des effets de bord à vérifier ?"
-- "Quelle commande permet de vérifier que c'est fait ?"
-- "Est-ce que le drone doit aussi mettre à jour la doc ?"
+- "Does this story need a unit test, integration test, or both?"
+- "Should there be a separate commit or can it be grouped?"
+- "Are there side effects to verify?"
+- "What command can verify this is done?"
+- "Should the drone also update documentation?"
+
+## Schema Recommendation
+
+For **simple, straightforward** tasks:
+- Use minimal schema (id, title, definition_of_done, verification_commands)
+- Keep it lightweight and fast
+
+For **complex, critical** features:
+- Use enhanced schema with context, testing, error_handling, agent_controls
+- Provides more guidance and safety
+- Better for production-critical work
+
+Refer to:
+- `docs/PRD_GUIDE.md` - Complete schema documentation
+- `examples/prd-enhanced-example.json` - Full example with all fields
 
 ## Important Rules
 
 1. **NEVER generate a story without user validation of its DoD**
 2. **ALWAYS include at least one verification command per story**
 3. **ASK questions when the DoD is ambiguous**
-4. **ITERATE until the user says "OK" or "c'est bon"**
+4. **ITERATE until the user says "OK" or "looks good"**
+5. **Use string arrays for verification_commands**, not objects
+6. **Follow the current v2.x schema** as defined in `src/types.rs`
