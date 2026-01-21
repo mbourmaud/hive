@@ -99,6 +99,15 @@ enum Commands {
         #[command(subcommand)]
         command: ProfileCommands,
     },
+
+    /// Browse Claude conversation logs
+    Sessions {
+        /// Drone name
+        name: String,
+        /// Open most recent session directly
+        #[arg(long)]
+        latest: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -192,6 +201,12 @@ fn main() {
             };
 
             if let Err(e) = result {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Sessions { name, latest } => {
+            if let Err(e) = commands::sessions::run(name, latest) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
