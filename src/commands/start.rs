@@ -142,7 +142,10 @@ pub fn run(
     }
 
     // 8. Send notification
-    send_notification(&name, "started")?;
+    crate::notifications::notify(
+        &format!("🐝 {}", name),
+        &format!("started ({} stories)", prd.stories.len())
+    );
 
     println!("\n{} Drone '{}' is running!", "✓".green().bold(), name.bright_cyan());
     println!("\nMonitor progress:");
@@ -258,25 +261,6 @@ fn launch_claude(worktree: &PathBuf, model: &str, drone_name: &str) -> Result<()
     Ok(())
 }
 
-fn send_notification(drone_name: &str, action: &str) -> Result<()> {
-    let message = format!("Drone {} {}", drone_name, action);
-
-    // Try terminal-notifier first (macOS)
-    let _ = ProcessCommand::new("terminal-notifier")
-        .args(["-title", "🐝 Hive", "-message", &message, "-sound", "Glass"])
-        .output();
-
-    // Fallback to osascript
-    let _ = ProcessCommand::new("osascript")
-        .arg("-e")
-        .arg(format!(
-            "display notification \"{}\" with title \"🐝 Hive\" sound name \"Glass\"",
-            message
-        ))
-        .output();
-
-    Ok(())
-}
 
 fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
     let output = ProcessCommand::new("git")
