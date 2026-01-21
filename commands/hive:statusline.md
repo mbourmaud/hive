@@ -50,7 +50,7 @@ The statusline is configured in `settings.json` under:
 The drone line logic should:
 
 1. Get hive version: `hive version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'`
-2. Scan for drone directories: `/Users/fr162241/Projects/${project_name}-*/`
+2. Scan for drone directories: `${HIVE_WORKTREE_BASE:-$HOME/Projects}/${project_name}-*/`
 3. Read status from `drone-status.json` or `ralph-status.json`
 4. Build the drone line with crown + version + drones
 5. Only show line 2 if there are active drones AND hive is installed
@@ -103,7 +103,7 @@ imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
 
 ## Notes
 
-- Drones are detected by looking for `{project}-{drone}/drone-status.json` in `/Users/fr162241/Projects/`
+- Drones are detected by looking for `{project}-{drone}/drone-status.json` in `${HIVE_WORKTREE_BASE:-$HOME/Projects}/`
 - Also supports legacy `ralph-status.json` files
 - The statusline refreshes on each user message
 - Line 2 only appears if both hive is installed AND drones exist

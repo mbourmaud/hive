@@ -291,6 +291,12 @@ cmd_init() {
 
     print_info "Initializing Hive..."
 
+    # Fix circular symlink bug: .hive should be a directory, not a symlink
+    if [ -L "$HIVE_DIR" ]; then
+        print_warning ".hive is a symlink (should be a directory). Fixing..."
+        rm "$HIVE_DIR"
+    fi
+
     mkdir -p "$HIVE_DIR" "$PRDS_DIR" "$DRONES_DIR"
 
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -452,7 +458,7 @@ cmd_run() {
     local target_branch=$(jq -r '.target_branch // empty' "$prd_file")
     local branch_name="${target_branch:-hive/$drone_name}"
 
-    local external_worktree="/Users/fr162241/Projects/${project_name}-${drone_name}"
+    local external_worktree="${HIVE_WORKTREE_BASE:-$HOME/Projects}/${project_name}-${drone_name}"
     local drone_status_dir="$HIVE_DIR/drones/$drone_name"
     local drone_status_file="$drone_status_dir/status.json"
 
@@ -509,7 +515,16 @@ cmd_run() {
         # Ensure .hive symlink is correct
         if [ ! -L "$external_worktree/.hive" ]; then
             rm -rf "$external_worktree/.hive" 2>/dev/null
-            ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
+
+            # Verify we're not creating a circular symlink
+            local hive_source="$project_root/$HIVE_DIR"
+            local hive_target="$external_worktree/.hive"
+            if [ "$(realpath "$hive_source" 2>/dev/null)" = "$(realpath "$hive_target" 2>/dev/null)" ]; then
+                print_error "Cannot create symlink: would be circular"
+                exit 1
+            fi
+
+            ln -s "$hive_source" "$hive_target"
             print_info "Fixed .hive symlink"
         fi
 
@@ -542,7 +557,18 @@ cmd_run() {
         # (ln -sf on a directory creates the symlink inside it, not replacing it)
         print_info "Linking .hive to worktree (shared state)..."
         rm -rf "$external_worktree/.hive" 2>/dev/null
-        ln -s "$project_root/$HIVE_DIR" "$external_worktree/.hive"
+
+        # Verify we're not creating a circular symlink
+        local hive_source="$project_root/$HIVE_DIR"
+        local hive_target="$external_worktree/.hive"
+        if [ "$(realpath "$hive_source" 2>/dev/null)" = "$(realpath "$hive_target" 2>/dev/null)" ]; then
+            print_error "Cannot create symlink: would be circular"
+            print_error "Source: $hive_source"
+            print_error "Target: $hive_target"
+            exit 1
+        fi
+
+        ln -s "$hive_source" "$hive_target"
 
         # Copy PRD to .hive/prds/ if not already there
         local prd_basename=$(basename "$prd_file")
@@ -1818,7 +1844,7 @@ cmd_clean() {
     fi
 
     # Fallback to default path
-    [ -z "$worktree_path" ] && worktree_path="/Users/fr162241/Projects/${project_name}-${drone_name}"
+    [ -z "$worktree_path" ] && worktree_path="${HIVE_WORKTREE_BASE:-$HOME/Projects}/${project_name}-${drone_name}"
 
     # Kill if running
     cmd_kill "$drone_name" 2>/dev/null || true

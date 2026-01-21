@@ -22,9 +22,16 @@ fi
 Check if Hive is already initialized:
 
 ```bash
-if [ -d ".hive" ]; then
+# Check if .hive exists as a directory (correct)
+if [ -d ".hive" ] && [ ! -L ".hive" ]; then
   echo "Hive is already initialized in this repository"
   exit 0
+fi
+
+# If .hive is a symlink (wrong!), remove it
+if [ -L ".hive" ]; then
+  echo "Warning: .hive is a symlink (should be a directory). Fixing..."
+  rm ".hive"
 fi
 ```
 
