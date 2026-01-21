@@ -62,14 +62,16 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
             }
         });
 
-        for (drone_name, status) in sorted {
+        for (drone_name, status) in &sorted {
             // Use collapsed view for completed drones
             let collapsed = status.status == DroneState::Completed;
-            print_drone_status(&drone_name, &status, collapsed);
+            print_drone_status(drone_name, status, collapsed);
             println!();
         }
 
+        // Check for inactive completed drones and suggest cleanup (only once per session)
         if !follow {
+            suggest_cleanup_for_inactive(&sorted);
             break;
         }
 
@@ -153,6 +155,59 @@ fn read_drone_pid(drone_name: &str) -> Option<i32> {
 
     let pid_str = fs::read_to_string(pid_path).ok()?;
     pid_str.trim().parse().ok()
+}
+
+// Suggest cleanup for inactive completed drones
+fn suggest_cleanup_for_inactive(drones: &[(String, DroneStatus)]) {
+    use std::env;
+
+    // Get threshold from env var or use default (3600 seconds = 1 hour)
+    let threshold_seconds = env::var("HIVE_INACTIVE_THRESHOLD")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(3600);
+
+    let now = Utc::now();
+
+    for (name, status) in drones {
+        // Only check completed drones
+        if status.status != DroneState::Completed {
+            continue;
+        }
+
+        // Parse updated timestamp
+        let updated = match parse_timestamp(&status.updated) {
+            Some(dt) => dt,
+            None => continue,
+        };
+
+        // Calculate inactive duration
+        let inactive_seconds = now.signed_duration_since(updated).num_seconds();
+
+        if inactive_seconds > threshold_seconds {
+            // Calculate human-readable duration
+            let hours = inactive_seconds / 3600;
+            let minutes = (inactive_seconds % 3600) / 60;
+
+            let duration_str = if hours > 0 {
+                format!("{}h {}m", hours, minutes)
+            } else {
+                format!("{}m", minutes)
+            };
+
+            println!();
+            println!(
+                "{} Drone {} completed {} ago. Clean up? {}",
+                "💡".bright_yellow(),
+                name.bright_cyan(),
+                duration_str.bright_black(),
+                format!("(hive clean {})", name).bright_black()
+            );
+
+            // Only suggest one cleanup per run to avoid spam
+            break;
+        }
+    }
 }
 
 fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
