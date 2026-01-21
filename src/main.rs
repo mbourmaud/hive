@@ -140,12 +140,10 @@ fn main() {
             println!("  Resume: {}, Local: {}, Model: {}, Dry run: {}", resume, local, model, dry_run);
         }
         Commands::Status { name, interactive, follow } => {
-            if let Some(n) = name {
-                println!("Status for drone '{}' - not yet implemented", n);
-            } else {
-                println!("Status for all drones - not yet implemented");
+            if let Err(e) = commands::status::run(name, interactive, follow) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
-            println!("  Interactive: {}, Follow: {}", interactive, follow);
         }
         Commands::Logs { name, lines, story } => {
             println!("Logs for drone '{}' - not yet implemented", name);
