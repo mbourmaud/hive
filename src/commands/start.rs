@@ -328,7 +328,12 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn launch_claude(worktree: &PathBuf, model: &str, drone_name: &str, prd_path: &PathBuf) -> Result<()> {
+fn launch_claude(
+    worktree: &PathBuf,
+    model: &str,
+    drone_name: &str,
+    prd_path: &PathBuf,
+) -> Result<()> {
     // Create log file
     let log_path = PathBuf::from(".hive/drones")
         .join(drone_name)
