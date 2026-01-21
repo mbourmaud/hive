@@ -28,7 +28,8 @@ else
 fi
 
 REPO="mbourmaud/hive"
-GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
+# This version is automatically updated by CI when a release is fully built
+STABLE_VERSION="2.2.3"
 
 echo ""
 echo -e "${YELLOW}"
@@ -86,23 +87,11 @@ fi
 echo -e "${CYAN}Detected platform:${RESET} $PLATFORM"
 
 # ============================================================================
-# Fetch Latest Release
+# Use Stable Version
 # ============================================================================
 
-echo -e "${CYAN}Fetching latest release...${RESET}"
-
-# Get latest release info
-RELEASE_JSON=$(curl -sL "$GITHUB_API")
-
-VERSION=$(echo "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/"tag_name": *"\(.*\)"/\1/' | tr -d 'v')
-
-if [ -z "$VERSION" ]; then
-  echo -e "${RED}Error:${RESET} Could not determine latest version"
-  echo "Check https://github.com/$REPO/releases for available releases"
-  exit 1
-fi
-
-echo -e "${GREEN}Latest version:${RESET} v$VERSION"
+VERSION="$STABLE_VERSION"
+echo -e "${GREEN}Installing version:${RESET} v$VERSION"
 
 # ============================================================================
 # Download Binary
@@ -122,22 +111,6 @@ fi
 
 # Download binary
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/hive-$PLATFORM.tar.gz"
-
-# Check if asset exists before attempting download
-HTTP_CODE=$(curl -sI "$DOWNLOAD_URL" | head -1 | awk '{print $2}')
-if [ "$HTTP_CODE" = "404" ]; then
-  echo -e "${YELLOW}⚠${RESET} Release v$VERSION exists but binaries are still building..."
-  echo ""
-  echo "The CI pipeline is compiling binaries for all platforms."
-  echo "This usually takes 2-3 minutes."
-  echo ""
-  echo "Please wait a moment and try again, or install manually:"
-  echo "  1. Wait for CI to finish: https://github.com/$REPO/actions"
-  echo "  2. Then run this installer again"
-  echo "  3. Or download manually from: https://github.com/$REPO/releases/tag/v$VERSION"
-  exit 0
-fi
-
 TEMP_DIR=$(mktemp -d)
 
 if ! curl -sL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR" 2>/dev/null; then

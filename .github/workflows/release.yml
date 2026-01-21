@@ -128,9 +128,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  update-install-script:
+    name: Update Install Script Version
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Update install script version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          sed -i "s/^STABLE_VERSION=.*/STABLE_VERSION=\"$VERSION\"/" install.sh
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add install.sh
+          git commit -m "chore: update install script to v$VERSION [skip ci]" || exit 0
+          git push
+
   update-homebrew:
     name: Update Homebrew Formula
-    needs: release
+    needs: update-install-script
     runs-on: ubuntu-latest
     if: ${{ !contains(github.ref, '-beta') && !contains(github.ref, '-alpha') && !contains(github.ref, '-rc') }}
 
