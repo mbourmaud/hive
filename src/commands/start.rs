@@ -7,6 +7,13 @@ use std::process::{Command as ProcessCommand, Stdio};
 use crate::config;
 use crate::types::{DroneState, DroneStatus, Prd};
 
+#[derive(Debug)]
+struct WorktreeInfo {
+    path: PathBuf,
+    branch: String,
+    prunable: bool,
+}
+
 pub fn run(
     name: String,
     _prompt: Option<String>,
@@ -28,25 +35,70 @@ pub fn run(
     let prd = load_prd(&prd_path)?;
     println!("  {} Found PRD: {}", "✓".green(), prd.title);
 
-    // 3. Determine worktree path
-    let worktree_path = if local {
-        std::env::current_dir()?
-    } else {
-        let worktree_base = config::get_worktree_base()?;
-        let project_name = get_project_name()?;
-        worktree_base.join(&project_name).join(&name)
-    };
-
-    println!("  {} Worktree: {}", "✓".green(), worktree_path.display());
-
-    // 4. Create worktree if not local and not exists
+    // 3. Determine branch and check for existing worktree
     let default_branch = format!("hive/{}", name);
     let branch = prd.target_branch.as_deref().unwrap_or(&default_branch);
 
-    if !local && !worktree_path.exists() {
-        create_worktree(&worktree_path, branch)?;
-        println!("  {} Created worktree", "✓".green());
-    }
+    let worktree_path = if local {
+        std::env::current_dir()?
+    } else if resume {
+        // On resume, check if worktree already exists for this branch
+        match find_existing_worktree(branch)? {
+            Some(existing) => {
+                if existing.prunable {
+                    println!("  {} Found prunable worktree at {}", "⚠".yellow(), existing.path.display());
+                    println!("  {} Pruning and recreating...", "→".bright_blue());
+
+                    // Prune the worktree
+                    let output = ProcessCommand::new("git")
+                        .args(["worktree", "remove", "--force", existing.path.to_str().unwrap()])
+                        .output()?;
+
+                    if !output.status.success() {
+                        bail!("Failed to remove prunable worktree: {}",
+                              String::from_utf8_lossy(&output.stderr));
+                    }
+
+                    // Now create new one
+                    let worktree_base = config::get_worktree_base()?;
+                    let project_name = get_project_name()?;
+                    let new_path = worktree_base.join(&project_name).join(&name);
+                    create_worktree(&new_path, branch)?;
+                    println!("  {} Created worktree at {}", "✓".green(), new_path.display());
+                    new_path
+                } else {
+                    println!("  {} Found existing worktree at {}", "✓".green(), existing.path.display());
+                    existing.path
+                }
+            }
+            None => {
+                // No existing worktree, create new one
+                let worktree_base = config::get_worktree_base()?;
+                let project_name = get_project_name()?;
+                let new_path = worktree_base.join(&project_name).join(&name);
+                create_worktree(&new_path, branch)?;
+                println!("  {} Created worktree at {}", "✓".green(), new_path.display());
+                new_path
+            }
+        }
+    } else {
+        // Not local, not resume - use standard path
+        let worktree_base = config::get_worktree_base()?;
+        let project_name = get_project_name()?;
+        let new_path = worktree_base.join(&project_name).join(&name);
+
+        // Check if worktree already exists to avoid error
+        if !new_path.exists() {
+            create_worktree(&new_path, branch)?;
+            println!("  {} Created worktree", "✓".green());
+        } else {
+            println!("  {} Using existing worktree", "✓".green());
+        }
+
+        new_path
+    };
+
+    println!("  {} Worktree: {}", "✓".green(), worktree_path.display());
 
     // 5. Create .hive symlink in worktree
     if !local {
@@ -224,4 +276,64 @@ fn send_notification(drone_name: &str, action: &str) -> Result<()> {
         .output();
 
     Ok(())
+}
+
+fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
+    let output = ProcessCommand::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .context("Failed to list worktrees")?;
+
+    if !output.status.success() {
+        bail!("Failed to list worktrees: {}",
+              String::from_utf8_lossy(&output.stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut worktrees = Vec::new();
+    let mut current_worktree = None::<WorktreeInfo>;
+
+    for line in stdout.lines() {
+        if line.starts_with("worktree ") {
+            if let Some(wt) = current_worktree.take() {
+                worktrees.push(wt);
+            }
+            let path = line.strip_prefix("worktree ").unwrap().trim();
+            current_worktree = Some(WorktreeInfo {
+                path: PathBuf::from(path),
+                branch: String::new(),
+                prunable: false,
+            });
+        } else if line.starts_with("branch ") {
+            if let Some(ref mut wt) = current_worktree {
+                let branch = line.strip_prefix("branch ").unwrap()
+                    .strip_prefix("refs/heads/")
+                    .unwrap_or(line.strip_prefix("branch ").unwrap())
+                    .trim();
+                wt.branch = branch.to_string();
+            }
+        } else if line == "prunable" {
+            if let Some(ref mut wt) = current_worktree {
+                wt.prunable = true;
+            }
+        }
+    }
+
+    if let Some(wt) = current_worktree {
+        worktrees.push(wt);
+    }
+
+    Ok(worktrees)
+}
+
+fn find_existing_worktree(branch: &str) -> Result<Option<WorktreeInfo>> {
+    let worktrees = list_worktrees()?;
+
+    for wt in worktrees {
+        if wt.branch == branch {
+            return Ok(Some(wt));
+        }
+    }
+
+    Ok(None)
 }
