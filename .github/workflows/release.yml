@@ -52,10 +52,10 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          # Rename binary to match platform (for Homebrew formula compatibility)
-          cp target/${{ matrix.target }}/release/hive dist/${{ matrix.name }}
+          # Copy binary as 'hive' for install script, but archive with platform name
+          cp target/${{ matrix.target }}/release/hive dist/hive
           cd dist
-          tar -czvf ${{ matrix.name }}.tar.gz ${{ matrix.name }}
+          tar -czvf ${{ matrix.name }}.tar.gz hive
           shasum -a 256 ${{ matrix.name }}.tar.gz > ${{ matrix.name }}.tar.gz.sha256
 
       - name: Upload artifact
