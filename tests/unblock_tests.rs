@@ -36,7 +36,11 @@ fn create_test_environment() -> TempDir {
 }
 
 fn create_blocked_drone(temp_dir: &TempDir, drone_name: &str) {
-    let drone_dir = temp_dir.path().join(".hive").join("drones").join(drone_name);
+    let drone_dir = temp_dir
+        .path()
+        .join(".hive")
+        .join("drones")
+        .join(drone_name);
     fs::create_dir_all(&drone_dir).unwrap();
 
     let mut story_times = HashMap::new();
@@ -72,7 +76,8 @@ fn create_blocked_drone(temp_dir: &TempDir, drone_name: &str) {
     fs::write(drone_dir.join("status.json"), status_json).unwrap();
 
     // Create blocked.md
-    let blocked_content = "# Blocked Context\n\nThis is additional context about why the drone is blocked.\n";
+    let blocked_content =
+        "# Blocked Context\n\nThis is additional context about why the drone is blocked.\n";
     fs::write(drone_dir.join("blocked.md"), blocked_content).unwrap();
 }
 
@@ -95,7 +100,10 @@ fn test_unblock_reads_blocked_status() {
     let status: DroneStatus = serde_json::from_str(&contents).unwrap();
 
     assert_eq!(status.status, DroneState::Blocked);
-    assert_eq!(status.blocked_reason, Some("Test blocked reason".to_string()));
+    assert_eq!(
+        status.blocked_reason,
+        Some("Test blocked reason".to_string())
+    );
     assert_eq!(status.blocked_questions.len(), 2);
     assert_eq!(status.error_count, 3);
     assert!(status.awaiting_human);
@@ -110,7 +118,8 @@ fn test_unblock_clears_blocked_fields() {
     create_blocked_drone(&temp_dir, "test-drone");
 
     // Load and modify status using absolute path
-    let status_path = temp_dir.path()
+    let status_path = temp_dir
+        .path()
         .join(".hive")
         .join("drones")
         .join("test-drone")

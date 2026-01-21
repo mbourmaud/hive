@@ -14,8 +14,18 @@ fn create_test_environment() -> TempDir {
     temp_dir
 }
 
-fn create_test_drone(temp_dir: &TempDir, drone_name: &str, status: DroneState, completed: usize, total: usize) {
-    let drone_dir = temp_dir.path().join(".hive").join("drones").join(drone_name);
+fn create_test_drone(
+    temp_dir: &TempDir,
+    drone_name: &str,
+    status: DroneState,
+    completed: usize,
+    total: usize,
+) {
+    let drone_dir = temp_dir
+        .path()
+        .join(".hive")
+        .join("drones")
+        .join(drone_name);
     fs::create_dir_all(&drone_dir).unwrap();
 
     let mut completed_stories = Vec::new();
@@ -123,7 +133,10 @@ fn test_list_multiple_drones() {
 fn test_version_format() {
     // Version should be in semver format
     let version = env!("CARGO_PKG_VERSION");
-    assert!(version.split('.').count() >= 2, "Version should be in semver format");
+    assert!(
+        version.split('.').count() >= 2,
+        "Version should be in semver format"
+    );
 }
 
 #[test]

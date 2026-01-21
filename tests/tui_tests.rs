@@ -74,7 +74,13 @@ fn create_mock_drone(
 
 #[test]
 fn tui_status_dashboard_single_drone() {
-    let drone = create_mock_drone("test-drone", DroneState::InProgress, vec!["STORY-1", "STORY-2"], 5, Some("STORY-3"));
+    let drone = create_mock_drone(
+        "test-drone",
+        DroneState::InProgress,
+        vec!["STORY-1", "STORY-2"],
+        5,
+        Some("STORY-3"),
+    );
     let drones = vec![drone];
 
     let output = render_to_string(80, 24, |f| {
@@ -90,7 +96,11 @@ fn tui_status_dashboard_single_drone() {
 
         // Title
         let title = Paragraph::new("Hive Status Dashboard")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, chunks[0]);
 
@@ -123,7 +133,9 @@ fn tui_status_dashboard_single_drone() {
                 let line = Line::from(vec![
                     Span::styled(
                         format!("{:<20}", name),
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(" "),
                     Span::styled(
@@ -157,9 +169,27 @@ fn tui_status_dashboard_single_drone() {
 #[test]
 fn tui_status_dashboard_multiple_drones() {
     let drones = vec![
-        create_mock_drone("frontend", DroneState::InProgress, vec!["STORY-1"], 3, Some("STORY-2")),
-        create_mock_drone("backend", DroneState::Completed, vec!["STORY-1", "STORY-2", "STORY-3"], 3, None),
-        create_mock_drone("database", DroneState::Error, vec!["STORY-1"], 5, Some("STORY-2")),
+        create_mock_drone(
+            "frontend",
+            DroneState::InProgress,
+            vec!["STORY-1"],
+            3,
+            Some("STORY-2"),
+        ),
+        create_mock_drone(
+            "backend",
+            DroneState::Completed,
+            vec!["STORY-1", "STORY-2", "STORY-3"],
+            3,
+            None,
+        ),
+        create_mock_drone(
+            "database",
+            DroneState::Error,
+            vec!["STORY-1"],
+            5,
+            Some("STORY-2"),
+        ),
     ];
 
     let output = render_to_string(80, 24, |f| {
@@ -175,7 +205,11 @@ fn tui_status_dashboard_multiple_drones() {
 
         // Title
         let title = Paragraph::new("Hive Status Dashboard")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, chunks[0]);
 
@@ -208,7 +242,9 @@ fn tui_status_dashboard_multiple_drones() {
                 let line = Line::from(vec![
                     Span::styled(
                         format!("{:<20}", name),
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(" "),
                     Span::styled(
@@ -264,7 +300,11 @@ fn tui_drone_detail_view() {
 
         // Title
         let title = Paragraph::new(format!("Drone: {}", drone.0))
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, chunks[0]);
 
@@ -305,8 +345,11 @@ fn tui_drone_detail_view() {
             .iter()
             .map(|story| ListItem::new(format!("✓ {}", story)))
             .collect();
-        let completed_list = List::new(completed_items)
-            .block(Block::default().borders(Borders::ALL).title("Completed Stories"));
+        let completed_list = List::new(completed_items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Completed Stories"),
+        );
         f.render_widget(completed_list, chunks[3]);
 
         // Footer
@@ -328,12 +371,7 @@ fn tui_progress_bar() {
             let bar_width = 40;
             let filled = (bar_width as f32 * pct as f32 / 100.0) as usize;
             let empty = bar_width - filled;
-            let bar_text = format!(
-                "[{}{}] {}%",
-                "█".repeat(filled),
-                "░".repeat(empty),
-                pct
-            );
+            let bar_text = format!("[{}{}] {}%", "█".repeat(filled), "░".repeat(empty), pct);
 
             let bar = Paragraph::new(bar_text)
                 .style(Style::default().fg(Color::Green))
@@ -399,7 +437,11 @@ fn tui_session_list() {
 
         // Title
         let title = Paragraph::new("Claude Sessions - test-drone")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, chunks[0]);
 
@@ -429,9 +471,10 @@ fn tui_session_list() {
         f.render_widget(list, chunks[1]);
 
         // Footer
-        let footer = Paragraph::new("Press 'Enter' to view session, 'q' to quit, 'j/k' to navigate")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::ALL));
+        let footer =
+            Paragraph::new("Press 'Enter' to view session, 'q' to quit, 'j/k' to navigate")
+                .style(Style::default().fg(Color::DarkGray))
+                .block(Block::default().borders(Borders::ALL));
         f.render_widget(footer, chunks[2]);
     });
 
@@ -453,7 +496,11 @@ fn tui_conversation_view() {
 
         // Title
         let title = Paragraph::new("Session: 2024-01-01 10:00:00")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, chunks[0]);
 
@@ -481,7 +528,8 @@ fn tui_conversation_view() {
             })
             .collect();
 
-        let list = List::new(items).block(Block::default().borders(Borders::ALL).title("Conversation"));
+        let list =
+            List::new(items).block(Block::default().borders(Borders::ALL).title("Conversation"));
         f.render_widget(list, chunks[1]);
 
         // Footer
@@ -512,8 +560,16 @@ fn tui_search_mode() {
         // Search bar
         let search_text = "Search: API";
         let search_bar = Paragraph::new(search_text)
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-            .block(Block::default().borders(Borders::ALL).title("Search (2 results)"));
+            .style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Search (2 results)"),
+            );
         f.render_widget(search_bar, chunks[1]);
     });
 

@@ -22,7 +22,11 @@ pub fn run(
     model: String,
     dry_run: bool,
 ) -> Result<()> {
-    println!("{} Launching drone '{}'...", "→".bright_blue(), name.bright_cyan());
+    println!(
+        "{} Launching drone '{}'...",
+        "→".bright_blue(),
+        name.bright_cyan()
+    );
 
     // 1. Check if drone already exists
     let drone_dir = PathBuf::from(".hive/drones").join(&name);
@@ -46,17 +50,28 @@ pub fn run(
         match find_existing_worktree(branch)? {
             Some(existing) => {
                 if existing.prunable {
-                    println!("  {} Found prunable worktree at {}", "⚠".yellow(), existing.path.display());
+                    println!(
+                        "  {} Found prunable worktree at {}",
+                        "⚠".yellow(),
+                        existing.path.display()
+                    );
                     println!("  {} Pruning and recreating...", "→".bright_blue());
 
                     // Prune the worktree
                     let output = ProcessCommand::new("git")
-                        .args(["worktree", "remove", "--force", existing.path.to_str().unwrap()])
+                        .args([
+                            "worktree",
+                            "remove",
+                            "--force",
+                            existing.path.to_str().unwrap(),
+                        ])
                         .output()?;
 
                     if !output.status.success() {
-                        bail!("Failed to remove prunable worktree: {}",
-                              String::from_utf8_lossy(&output.stderr));
+                        bail!(
+                            "Failed to remove prunable worktree: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
                     }
 
                     // Now create new one
@@ -64,10 +79,18 @@ pub fn run(
                     let project_name = get_project_name()?;
                     let new_path = worktree_base.join(&project_name).join(&name);
                     create_worktree(&new_path, branch)?;
-                    println!("  {} Created worktree at {}", "✓".green(), new_path.display());
+                    println!(
+                        "  {} Created worktree at {}",
+                        "✓".green(),
+                        new_path.display()
+                    );
                     new_path
                 } else {
-                    println!("  {} Found existing worktree at {}", "✓".green(), existing.path.display());
+                    println!(
+                        "  {} Found existing worktree at {}",
+                        "✓".green(),
+                        existing.path.display()
+                    );
                     existing.path
                 }
             }
@@ -77,7 +100,11 @@ pub fn run(
                 let project_name = get_project_name()?;
                 let new_path = worktree_base.join(&project_name).join(&name);
                 create_worktree(&new_path, branch)?;
-                println!("  {} Created worktree at {}", "✓".green(), new_path.display());
+                println!(
+                    "  {} Created worktree at {}",
+                    "✓".green(),
+                    new_path.display()
+                );
                 new_path
             }
         }
@@ -138,16 +165,24 @@ pub fn run(
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {
         launch_claude(&worktree_path, &model, &name)?;
-        println!("  {} Launched Claude (model: {})", "✓".green(), model.bright_cyan());
+        println!(
+            "  {} Launched Claude (model: {})",
+            "✓".green(),
+            model.bright_cyan()
+        );
     }
 
     // 8. Send notification
     crate::notifications::notify(
         &format!("🐝 {}", name),
-        &format!("started ({} stories)", prd.stories.len())
+        &format!("started ({} stories)", prd.stories.len()),
     );
 
-    println!("\n{} Drone '{}' is running!", "✓".green().bold(), name.bright_cyan());
+    println!(
+        "\n{} Drone '{}' is running!",
+        "✓".green().bold(),
+        name.bright_cyan()
+    );
     println!("\nMonitor progress:");
     println!("  hive-rust status {}", name);
     println!("  hive-rust logs {}", name);
@@ -205,7 +240,10 @@ fn find_prd(name: &str) -> Result<PathBuf> {
         }
 
         if available.is_empty() {
-            bail!("No PRD found for drone '{}'. No PRDs available in .hive/prds/", name);
+            bail!(
+                "No PRD found for drone '{}'. No PRDs available in .hive/prds/",
+                name
+            );
         } else {
             bail!(
                 "No PRD found for drone '{}'. Available PRDs:\n  {}",
@@ -225,7 +263,12 @@ fn find_prd(name: &str) -> Result<PathBuf> {
 
     println!("{}", "Multiple PRD files found:".bright_yellow());
     let selection = Select::new()
-        .items(&candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>())
+        .items(
+            &candidates
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>(),
+        )
         .default(0)
         .interact()?;
 
@@ -233,10 +276,8 @@ fn find_prd(name: &str) -> Result<PathBuf> {
 }
 
 fn load_prd(path: &PathBuf) -> Result<Prd> {
-    let contents = fs::read_to_string(path)
-        .context("Failed to read PRD")?;
-    let prd: Prd = serde_json::from_str(&contents)
-        .context("Failed to parse PRD")?;
+    let contents = fs::read_to_string(path).context("Failed to read PRD")?;
+    let prd: Prd = serde_json::from_str(&contents).context("Failed to parse PRD")?;
     Ok(prd)
 }
 
@@ -255,9 +296,7 @@ fn create_worktree(path: &std::path::Path, branch: &str) -> Result<()> {
     }
 
     // Try to create branch if it doesn't exist
-    let _ = ProcessCommand::new("git")
-        .args(["branch", branch])
-        .output();
+    let _ = ProcessCommand::new("git").args(["branch", branch]).output();
 
     // Create worktree
     let output = ProcessCommand::new("git")
@@ -266,8 +305,10 @@ fn create_worktree(path: &std::path::Path, branch: &str) -> Result<()> {
         .context("Failed to create worktree")?;
 
     if !output.status.success() {
-        bail!("Failed to create worktree: {}",
-              String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to create worktree: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     Ok(())
@@ -308,7 +349,6 @@ fn launch_claude(worktree: &PathBuf, model: &str, drone_name: &str) -> Result<()
     Ok(())
 }
 
-
 fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
     let output = ProcessCommand::new("git")
         .args(["worktree", "list", "--porcelain"])
@@ -316,8 +356,10 @@ fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
         .context("Failed to list worktrees")?;
 
     if !output.status.success() {
-        bail!("Failed to list worktrees: {}",
-              String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to list worktrees: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -337,7 +379,9 @@ fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
             });
         } else if line.starts_with("branch ") {
             if let Some(ref mut wt) = current_worktree {
-                let branch = line.strip_prefix("branch ").unwrap()
+                let branch = line
+                    .strip_prefix("branch ")
+                    .unwrap()
                     .strip_prefix("refs/heads/")
                     .unwrap_or(line.strip_prefix("branch ").unwrap())
                     .trim();

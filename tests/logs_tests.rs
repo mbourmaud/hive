@@ -1,7 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
-use std::io::Write;
 
 fn get_binary_path() -> PathBuf {
     let mut path = std::env::current_exe().unwrap();
@@ -18,8 +18,11 @@ fn setup_test_env() -> PathBuf {
         .unwrap()
         .as_nanos();
 
-    let temp_dir = std::env::temp_dir()
-        .join(format!("hive-test-logs-{}-{}", std::process::id(), timestamp));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "hive-test-logs-{}-{}",
+        std::process::id(),
+        timestamp
+    ));
 
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).unwrap();

@@ -37,13 +37,10 @@ fn show_activity_log(drone_dir: &std::path::Path, lines: Option<usize>) -> Resul
     println!("{}", "Activity Log".bright_cyan().bold());
     println!();
 
-    let file = fs::File::open(&log_path)
-        .context("Failed to open activity log")?;
+    let file = fs::File::open(&log_path).context("Failed to open activity log")?;
     let reader = BufReader::new(file);
 
-    let all_lines: Vec<String> = reader.lines()
-        .map_while(Result::ok)
-        .collect();
+    let all_lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
     let lines_to_show = if let Some(n) = lines {
         if all_lines.len() > n {
@@ -84,7 +81,10 @@ fn follow_activity_log(drone_dir: &std::path::Path) -> Result<()> {
         }
     }
 
-    println!("{} (Press Ctrl+C to exit)", "Following Activity Log".bright_cyan().bold());
+    println!(
+        "{} (Press Ctrl+C to exit)",
+        "Following Activity Log".bright_cyan().bold()
+    );
     println!();
 
     let mut file = fs::File::open(&log_path)?;
@@ -129,19 +129,18 @@ fn follow_story_logs(drone_dir: &std::path::Path, story_id: &str) -> Result<()> 
         bail!("No logs found for story '{}'", story_id);
     }
 
-    println!("{} {} (Press Ctrl+C to exit)", "Following Story Logs:".bright_cyan().bold(), story_id.bright_yellow());
+    println!(
+        "{} {} (Press Ctrl+C to exit)",
+        "Following Story Logs:".bright_cyan().bold(),
+        story_id.bright_yellow()
+    );
     println!();
 
     // Find latest attempt log
     let mut attempts: Vec<_> = fs::read_dir(&story_dir)?
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().ok().is_some_and(|t| t.is_file()))
-        .filter(|entry| {
-            entry.path()
-                .extension()
-                .and_then(|s| s.to_str())
-                == Some("log")
-        })
+        .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("log"))
         .collect();
 
     attempts.sort_by_key(|entry| entry.path());
@@ -202,26 +201,29 @@ fn print_colored_line(line: &str) {
     }
 }
 
-fn show_story_logs(drone_dir: &std::path::Path, story_id: &str, lines: Option<usize>) -> Result<()> {
+fn show_story_logs(
+    drone_dir: &std::path::Path,
+    story_id: &str,
+    lines: Option<usize>,
+) -> Result<()> {
     let story_dir = drone_dir.join("stories").join(story_id);
 
     if !story_dir.exists() {
         bail!("No logs found for story '{}'", story_id);
     }
 
-    println!("{} {}", "Story Logs:".bright_cyan().bold(), story_id.bright_yellow());
+    println!(
+        "{} {}",
+        "Story Logs:".bright_cyan().bold(),
+        story_id.bright_yellow()
+    );
     println!();
 
     // List all attempts
     let mut attempts: Vec<_> = fs::read_dir(&story_dir)?
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().ok().is_some_and(|t| t.is_file()))
-        .filter(|entry| {
-            entry.path()
-                .extension()
-                .and_then(|s| s.to_str())
-                == Some("log")
-        })
+        .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("log"))
         .collect();
 
     attempts.sort_by_key(|entry| entry.path());
@@ -263,9 +265,7 @@ fn show_story_logs(drone_dir: &std::path::Path, story_id: &str, lines: Option<us
         let file = fs::File::open(&log_path)?;
         let reader = BufReader::new(file);
 
-        let all_lines: Vec<String> = reader.lines()
-            .map_while(Result::ok)
-            .collect();
+        let all_lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
         let lines_to_show = if let Some(n) = lines {
             if all_lines.len() > n {

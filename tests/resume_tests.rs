@@ -44,7 +44,8 @@ branch refs/heads/hive/feature-branch
             }
             current_path = Some(line.strip_prefix("worktree ").unwrap().to_string());
         } else if line.starts_with("branch ") {
-            let branch = line.strip_prefix("branch ")
+            let branch = line
+                .strip_prefix("branch ")
                 .unwrap()
                 .strip_prefix("refs/heads/")
                 .unwrap_or(line.strip_prefix("branch ").unwrap());

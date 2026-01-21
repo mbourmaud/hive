@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
@@ -20,10 +20,12 @@ pub fn list() -> Result<()> {
     println!();
 
     // Header
-    println!("{:<20} {:<15} {:<10}",
-             "NAME".bright_black(),
-             "STATUS".bright_black(),
-             "PROGRESS".bright_black());
+    println!(
+        "{:<20} {:<15} {:<10}",
+        "NAME".bright_black(),
+        "STATUS".bright_black(),
+        "PROGRESS".bright_black()
+    );
     println!("{}", "─".repeat(50).bright_black());
 
     for (name, status) in drones {
@@ -49,10 +51,12 @@ pub fn list() -> Result<()> {
             0
         };
 
-        println!("{:<20} {:<15} {:<10}",
-                 format!("🐝 {}", name).yellow().bold(),
-                 status_str,
-                 format!("{} ({}%)", progress, percentage).bright_white());
+        println!(
+            "{:<20} {:<15} {:<10}",
+            format!("🐝 {}", name).yellow().bold(),
+            status_str,
+            format!("{} ({}%)", progress, percentage).bright_white()
+        );
     }
 
     Ok(())
@@ -111,7 +115,8 @@ pub fn update() -> Result<()> {
         .user_agent("hive-rust")
         .build()?;
 
-    let response = client.get(&url)
+    let response = client
+        .get(&url)
         .send()
         .context("Failed to fetch release info")?;
 
@@ -119,8 +124,7 @@ pub fn update() -> Result<()> {
         bail!("Failed to fetch release info: {}", response.status());
     }
 
-    let release: serde_json::Value = response.json()
-        .context("Failed to parse release info")?;
+    let release: serde_json::Value = response.json().context("Failed to parse release info")?;
 
     let latest_version = release["tag_name"]
         .as_str()
@@ -135,7 +139,14 @@ pub fn update() -> Result<()> {
         return Ok(());
     }
 
-    println!("{}", format!("New version available: {} -> {}", current_version, latest_version).bright_yellow());
+    println!(
+        "{}",
+        format!(
+            "New version available: {} -> {}",
+            current_version, latest_version
+        )
+        .bright_yellow()
+    );
 
     // Detect platform
     let platform = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
@@ -154,20 +165,23 @@ pub fn update() -> Result<()> {
         .context("Missing assets in release")?;
 
     let binary_name = format!("hive-rust-{}", platform);
-    let asset = assets.iter()
-        .find(|a| {
-            a["name"].as_str().is_some_and(|n| n.contains(platform))
-        })
+    let asset = assets
+        .iter()
+        .find(|a| a["name"].as_str().is_some_and(|n| n.contains(platform)))
         .context(format!("No binary found for platform '{}'", platform))?;
 
     let download_url = asset["browser_download_url"]
         .as_str()
         .context("Missing download URL")?;
 
-    println!("{}", format!("Downloading {}...", binary_name).bright_cyan());
+    println!(
+        "{}",
+        format!("Downloading {}...", binary_name).bright_cyan()
+    );
 
     // Download the binary
-    let response = client.get(download_url)
+    let response = client
+        .get(download_url)
         .send()
         .context("Failed to download binary")?;
 
@@ -175,17 +189,14 @@ pub fn update() -> Result<()> {
         bail!("Failed to download binary: {}", response.status());
     }
 
-    let binary_data = response.bytes()
-        .context("Failed to read binary data")?;
+    let binary_data = response.bytes().context("Failed to read binary data")?;
 
     // Get current executable path
-    let current_exe = std::env::current_exe()
-        .context("Failed to get current executable path")?;
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
 
     // Write to temporary file
     let temp_file = current_exe.with_extension("new");
-    fs::write(&temp_file, &binary_data)
-        .context("Failed to write new binary")?;
+    fs::write(&temp_file, &binary_data).context("Failed to write new binary")?;
 
     // Make executable (Unix only)
     #[cfg(unix)]
@@ -197,8 +208,7 @@ pub fn update() -> Result<()> {
     }
 
     // Replace current binary
-    fs::rename(&temp_file, &current_exe)
-        .context("Failed to replace current binary")?;
+    fs::rename(&temp_file, &current_exe).context("Failed to replace current binary")?;
 
     println!("{}", "✓ Update successful!".green().bold());
     println!("Please restart hive-rust to use the new version.");

@@ -41,7 +41,8 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
 
         // Filter by name if provided
         let filtered: Vec<_> = if let Some(ref n) = name {
-            drones.into_iter()
+            drones
+                .into_iter()
                 .filter(|(drone_name, _)| drone_name == n)
                 .collect()
         } else {
@@ -54,7 +55,11 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
         }
 
         // Use yellow/gold for the header with crown emoji
-        println!("  {} v{}", "👑 hive".yellow().bold(), env!("CARGO_PKG_VERSION"));
+        println!(
+            "  {} v{}",
+            "👑 hive".yellow().bold(),
+            env!("CARGO_PKG_VERSION")
+        );
         println!();
 
         // Sort: active drones first, completed last
@@ -62,7 +67,7 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
         sorted.sort_by_key(|(_, status)| {
             match status.status {
                 DroneState::Completed => 1, // Completed last
-                _ => 0, // Everything else first
+                _ => 0,                     // Everything else first
             }
         });
 
@@ -226,11 +231,11 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
         DroneState::Resuming => "◐".yellow(),
         DroneState::InProgress => {
             if process_running {
-                "●".green()  // Actually running
+                "●".green() // Actually running
             } else {
-                "○".yellow()  // Says in_progress but process is dead
+                "○".yellow() // Says in_progress but process is dead
             }
-        },
+        }
         DroneState::Completed => "✓".bright_green().bold(),
         DroneState::Error => "✗".red().bold(),
         DroneState::Blocked => "⚠".red().bold(),
@@ -250,20 +255,24 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
             "0/0".to_string()
         };
 
-        println!("  {} {}{}  {}",
-                 status_symbol,
-                 format!("🐝 {}", name).bright_black(),
-                 elapsed.bright_black(),
-                 progress.bright_black());
+        println!(
+            "  {} {}{}  {}",
+            status_symbol,
+            format!("🐝 {}", name).bright_black(),
+            elapsed.bright_black(),
+            progress.bright_black()
+        );
         return; // Exit early, don't show full details
     }
 
     // Full view for active drones
-    println!("  {} {}{}  {}",
-             status_symbol,
-             format!("🐝 {}", name).yellow().bold(),
-             elapsed.bright_black(),
-             format!("[{}]", status.status).bright_black());
+    println!(
+        "  {} {}{}  {}",
+        status_symbol,
+        format!("🐝 {}", name).yellow().bold(),
+        elapsed.bright_black(),
+        format!("[{}]", status.status).bright_black()
+    );
 
     // Print progress
     let progress = if status.total > 0 {
@@ -284,9 +293,11 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     let bar_width = 40;
     let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
     let empty = bar_width - filled;
-    let bar = format!("[{}{}]",
-                      "━".repeat(filled).green(),
-                      "─".repeat(empty).bright_black());
+    let bar = format!(
+        "[{}{}]",
+        "━".repeat(filled).green(),
+        "─".repeat(empty).bright_black()
+    );
     println!("  {}", bar);
 
     // Load PRD to get story titles
@@ -432,64 +443,84 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
             // Title with honey theme
             let title = Paragraph::new(format!("👑 hive v{}", env!("CARGO_PKG_VERSION")))
-                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .block(Block::default().borders(Borders::ALL));
             f.render_widget(title, chunks[0]);
 
             // Drone list
-            let items: Vec<ListItem> = drones.iter().map(|(name, status)| {
-                // Check if process is actually running
-                let process_running = read_drone_pid(name)
-                    .map(is_process_running)
-                    .unwrap_or(false);
+            let items: Vec<ListItem> = drones
+                .iter()
+                .map(|(name, status)| {
+                    // Check if process is actually running
+                    let process_running = read_drone_pid(name)
+                        .map(is_process_running)
+                        .unwrap_or(false);
 
-                let status_color = match status.status {
-                    DroneState::Starting => Color::Yellow,
-                    DroneState::Resuming => Color::Yellow,
-                    DroneState::InProgress => {
-                        if process_running {
-                            Color::Green  // Actually running
-                        } else {
-                            Color::Yellow  // Says in_progress but process is dead
+                    let status_color = match status.status {
+                        DroneState::Starting => Color::Yellow,
+                        DroneState::Resuming => Color::Yellow,
+                        DroneState::InProgress => {
+                            if process_running {
+                                Color::Green // Actually running
+                            } else {
+                                Color::Yellow // Says in_progress but process is dead
+                            }
                         }
-                    },
-                    DroneState::Completed => Color::Green,
-                    DroneState::Error => Color::Red,
-                    DroneState::Blocked => Color::Red,
-                    DroneState::Stopped => Color::DarkGray,
-                };
+                        DroneState::Completed => Color::Green,
+                        DroneState::Error => Color::Red,
+                        DroneState::Blocked => Color::Red,
+                        DroneState::Stopped => Color::DarkGray,
+                    };
 
-                let progress = if status.total > 0 {
-                    format!("{}/{}", status.completed.len(), status.total)
-                } else {
-                    "0/0".to_string()
-                };
+                    let progress = if status.total > 0 {
+                        format!("{}/{}", status.completed.len(), status.total)
+                    } else {
+                        "0/0".to_string()
+                    };
 
-                let percentage = if status.total > 0 {
-                    (status.completed.len() as f32 / status.total as f32 * 100.0) as u16
-                } else {
-                    0
-                };
+                    let percentage = if status.total > 0 {
+                        (status.completed.len() as f32 / status.total as f32 * 100.0) as u16
+                    } else {
+                        0
+                    };
 
-                // Calculate elapsed time
-                let elapsed = elapsed_since(&status.started)
-                    .unwrap_or_else(|| "?".to_string());
+                    // Calculate elapsed time
+                    let elapsed = elapsed_since(&status.started).unwrap_or_else(|| "?".to_string());
 
-                let line = Line::from(vec![
-                    Span::styled(format!("🐝 {:<18}", name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                    Span::raw(" "),
-                    Span::styled(format!("{:<10}", elapsed), Style::default().fg(Color::DarkGray)),
-                    Span::raw(" "),
-                    Span::styled(format!("{:<15}", status.status.to_string()), Style::default().fg(status_color)),
-                    Span::raw(" "),
-                    Span::styled(format!("{:>6} ({:>3}%)", progress, percentage), Style::default().fg(Color::White)),
-                ]);
+                    let line = Line::from(vec![
+                        Span::styled(
+                            format!("🐝 {:<18}", name),
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("{:<10}", elapsed),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("{:<15}", status.status.to_string()),
+                            Style::default().fg(status_color),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("{:>6} ({:>3}%)", progress, percentage),
+                            Style::default().fg(Color::White),
+                        ),
+                    ]);
 
-                ListItem::new(line)
-            }).collect();
+                    ListItem::new(line)
+                })
+                .collect();
 
-            let list = List::new(items)
-                .block(Block::default().borders(Borders::ALL).title("Drones"));
+            let list =
+                List::new(items).block(Block::default().borders(Borders::ALL).title("Drones"));
             f.render_widget(list, chunks[1]);
 
             // Footer

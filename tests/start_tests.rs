@@ -17,8 +17,11 @@ fn setup_test_env() -> PathBuf {
         .unwrap()
         .as_nanos();
 
-    let temp_dir = std::env::temp_dir()
-        .join(format!("hive-test-start-{}-{}", std::process::id(), timestamp));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "hive-test-start-{}-{}",
+        std::process::id(),
+        timestamp
+    ));
 
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).unwrap();
@@ -124,7 +127,9 @@ fn test_start_local_mode() {
     assert!(stdout.contains("Dry run"));
 
     // Verify status.json was created
-    assert!(temp_dir.join(".hive/drones/test-drone/status.json").exists());
+    assert!(temp_dir
+        .join(".hive/drones/test-drone/status.json")
+        .exists());
 
     cleanup(&temp_dir);
 }

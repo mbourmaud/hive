@@ -17,8 +17,8 @@ fn setup_temp_repo() -> PathBuf {
         .unwrap()
         .as_nanos();
 
-    let temp_dir = std::env::temp_dir()
-        .join(format!("hive-test-{}-{}", std::process::id(), timestamp));
+    let temp_dir =
+        std::env::temp_dir().join(format!("hive-test-{}-{}", std::process::id(), timestamp));
 
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).unwrap();
@@ -105,8 +105,11 @@ fn test_init_fails_without_git() {
         .as_nanos();
 
     let binary = get_binary_path();
-    let temp_dir = std::env::temp_dir()
-        .join(format!("hive-test-nogit-{}-{}", std::process::id(), timestamp));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "hive-test-nogit-{}-{}",
+        std::process::id(),
+        timestamp
+    ));
 
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).unwrap();

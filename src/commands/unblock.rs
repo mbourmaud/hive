@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use dialoguer::{Confirm, Select};
 use std::fs;
@@ -18,15 +18,20 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
         bail!("Drone '{}' not found", name);
     }
 
-    let contents = fs::read_to_string(&status_path)
-        .context("Failed to read drone status")?;
-    let mut status: DroneStatus = serde_json::from_str(&contents)
-        .context("Failed to parse drone status")?;
+    let contents = fs::read_to_string(&status_path).context("Failed to read drone status")?;
+    let mut status: DroneStatus =
+        serde_json::from_str(&contents).context("Failed to parse drone status")?;
 
     // Check if drone is actually blocked
     if status.status != DroneState::Blocked {
-        println!("{}", format!("⚠ Drone '{}' is not in blocked state (current: {})",
-                               name, status.status).yellow());
+        println!(
+            "{}",
+            format!(
+                "⚠ Drone '{}' is not in blocked state (current: {})",
+                name, status.status
+            )
+            .yellow()
+        );
         if !no_interactive {
             let proceed = Confirm::new()
                 .with_prompt("Do you want to proceed anyway?")
@@ -41,7 +46,12 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
     }
 
     // Display blocked information
-    println!("{}", format!("🐝 Unblocking Drone: {}", name).bright_cyan().bold());
+    println!(
+        "{}",
+        format!("🐝 Unblocking Drone: {}", name)
+            .bright_cyan()
+            .bold()
+    );
     println!();
 
     if let Some(ref reason) = status.blocked_reason {
@@ -67,22 +77,18 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
     if blocked_md_path.exists() {
         println!("{}", "Additional Context (blocked.md):".yellow().bold());
         println!();
-        let blocked_content = fs::read_to_string(&blocked_md_path)
-            .context("Failed to read blocked.md")?;
+        let blocked_content =
+            fs::read_to_string(&blocked_md_path).context("Failed to read blocked.md")?;
         println!("{}", blocked_content);
         println!();
     }
 
     // Load PRD for context
-    let prd_path = PathBuf::from(".hive")
-        .join("prds")
-        .join(&status.prd);
+    let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
 
     let prd = if prd_path.exists() {
-        let prd_contents = fs::read_to_string(&prd_path)
-            .context("Failed to read PRD")?;
-        Some(serde_json::from_str::<Prd>(&prd_contents)
-            .context("Failed to parse PRD")?)
+        let prd_contents = fs::read_to_string(&prd_path).context("Failed to read PRD")?;
+        Some(serde_json::from_str::<Prd>(&prd_contents).context("Failed to parse PRD")?)
     } else {
         None
     };
@@ -91,7 +97,12 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
     if let Some(ref story_id) = status.current_story {
         if let Some(ref prd) = prd {
             if let Some(story) = prd.stories.iter().find(|s| s.id == *story_id) {
-                println!("{}", format!("Current Story: {}", story_id).bright_yellow().bold());
+                println!(
+                    "{}",
+                    format!("Current Story: {}", story_id)
+                        .bright_yellow()
+                        .bold()
+                );
                 println!("  Title: {}", story.title);
                 println!("  Description: {}", story.description);
                 println!();
@@ -144,20 +155,37 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
                 if resume {
                     clear_blocked_status(&mut status)?;
                     save_status(&name, &status)?;
-                    println!("{}", format!("✓ Drone '{}' unblocked. Use 'hive-rust start {} --resume' to resume.", name, name).green());
+                    println!(
+                        "{}",
+                        format!(
+                            "✓ Drone '{}' unblocked. Use 'hive-rust start {} --resume' to resume.",
+                            name, name
+                        )
+                        .green()
+                    );
                 }
             }
             1 => {
                 // Clear and resume
                 clear_blocked_status(&mut status)?;
                 save_status(&name, &status)?;
-                println!("{}", format!("✓ Drone '{}' unblocked. Use 'hive-rust start {} --resume' to resume.", name, name).green());
+                println!(
+                    "{}",
+                    format!(
+                        "✓ Drone '{}' unblocked. Use 'hive-rust start {} --resume' to resume.",
+                        name, name
+                    )
+                    .green()
+                );
             }
             2 => {
                 // Clear without resume
                 clear_blocked_status(&mut status)?;
                 save_status(&name, &status)?;
-                println!("{}", format!("✓ Drone '{}' blocked status cleared.", name).green());
+                println!(
+                    "{}",
+                    format!("✓ Drone '{}' blocked status cleared.", name).green()
+                );
             }
             3 => {
                 // Cancel
@@ -170,7 +198,10 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
         // Non-interactive mode: just clear blocked status
         clear_blocked_status(&mut status)?;
         save_status(&name, &status)?;
-        println!("{}", format!("✓ Drone '{}' blocked status cleared.", name).green());
+        println!(
+            "{}",
+            format!("✓ Drone '{}' blocked status cleared.", name).green()
+        );
     }
 
     Ok(())
@@ -192,11 +223,9 @@ fn save_status(name: &str, status: &DroneStatus) -> Result<()> {
         .join(name)
         .join("status.json");
 
-    let contents = serde_json::to_string_pretty(status)
-        .context("Failed to serialize status")?;
+    let contents = serde_json::to_string_pretty(status).context("Failed to serialize status")?;
 
-    fs::write(&status_path, contents)
-        .context("Failed to write status")?;
+    fs::write(&status_path, contents).context("Failed to write status")?;
 
     Ok(())
 }

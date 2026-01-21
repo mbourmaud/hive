@@ -56,10 +56,9 @@ pub fn get_model() -> String {
 /// Load local config from .hive/config.json
 pub fn load_local_config() -> Result<HiveConfig> {
     let config_path = PathBuf::from(".hive").join("config.json");
-    let contents = std::fs::read_to_string(&config_path)
-        .context("Failed to read local config")?;
-    let config: HiveConfig = serde_json::from_str(&contents)
-        .context("Failed to parse local config")?;
+    let contents = std::fs::read_to_string(&config_path).context("Failed to read local config")?;
+    let config: HiveConfig =
+        serde_json::from_str(&contents).context("Failed to parse local config")?;
     Ok(config)
 }
 
@@ -69,20 +68,17 @@ pub fn load_global_config() -> Result<HiveConfig> {
         .context("Failed to get config directory")?
         .join("hive");
     let config_path = config_dir.join("config.json");
-    let contents = std::fs::read_to_string(&config_path)
-        .context("Failed to read global config")?;
-    let config: HiveConfig = serde_json::from_str(&contents)
-        .context("Failed to parse global config")?;
+    let contents = std::fs::read_to_string(&config_path).context("Failed to read global config")?;
+    let config: HiveConfig =
+        serde_json::from_str(&contents).context("Failed to parse global config")?;
     Ok(config)
 }
 
 /// Save local config to .hive/config.json
 pub fn save_local_config(config: &HiveConfig) -> Result<()> {
     let config_path = PathBuf::from(".hive").join("config.json");
-    let contents = serde_json::to_string_pretty(config)
-        .context("Failed to serialize config")?;
-    std::fs::write(&config_path, contents)
-        .context("Failed to write local config")?;
+    let contents = serde_json::to_string_pretty(config).context("Failed to serialize config")?;
+    std::fs::write(&config_path, contents).context("Failed to write local config")?;
     Ok(())
 }
 
@@ -91,13 +87,10 @@ pub fn save_global_config(config: &HiveConfig) -> Result<()> {
     let config_dir = dirs::config_dir()
         .context("Failed to get config directory")?
         .join("hive");
-    std::fs::create_dir_all(&config_dir)
-        .context("Failed to create config directory")?;
+    std::fs::create_dir_all(&config_dir).context("Failed to create config directory")?;
     let config_path = config_dir.join("config.json");
-    let contents = serde_json::to_string_pretty(config)
-        .context("Failed to serialize config")?;
-    std::fs::write(&config_path, contents)
-        .context("Failed to write global config")?;
+    let contents = serde_json::to_string_pretty(config).context("Failed to serialize config")?;
+    std::fs::write(&config_path, contents).context("Failed to write global config")?;
     Ok(())
 }
 

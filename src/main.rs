@@ -151,7 +151,14 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Start { name, prompt, resume, local, model, dry_run } => {
+        Commands::Start {
+            name,
+            prompt,
+            resume,
+            local,
+            model,
+            dry_run,
+        } => {
             if let Err(e) = commands::start::run(name, prompt, resume, local, model, dry_run) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -163,7 +170,12 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Logs { name, lines, story, follow } => {
+        Commands::Logs {
+            name,
+            lines,
+            story,
+            follow,
+        } => {
             if let Err(e) = commands::logs::run(name, lines, story, follow) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -181,7 +193,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Unblock { name, no_interactive } => {
+        Commands::Unblock {
+            name,
+            no_interactive,
+        } => {
             if let Err(e) = commands::unblock::run(name, no_interactive) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -222,7 +237,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Install { skills_only, bin_only } => {
+        Commands::Install {
+            skills_only,
+            bin_only,
+        } => {
             if let Err(e) = commands::install::run(skills_only, bin_only) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

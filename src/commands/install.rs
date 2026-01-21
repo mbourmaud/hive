@@ -32,17 +32,14 @@ pub fn run(skills_only: bool, bin_only: bool) -> Result<()> {
 
 fn install_binary(home: &Path) -> Result<()> {
     let bin_dir = home.join(".local").join("bin");
-    fs::create_dir_all(&bin_dir)
-        .context("Failed to create ~/.local/bin directory")?;
+    fs::create_dir_all(&bin_dir).context("Failed to create ~/.local/bin directory")?;
 
-    let current_exe = std::env::current_exe()
-        .context("Failed to get current executable path")?;
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
 
     let target_path = bin_dir.join("hive");
 
     // Copy the binary
-    fs::copy(&current_exe, &target_path)
-        .context("Failed to copy binary to ~/.local/bin/hive")?;
+    fs::copy(&current_exe, &target_path).context("Failed to copy binary to ~/.local/bin/hive")?;
 
     // Make it executable on Unix systems
     #[cfg(unix)]
@@ -53,9 +50,11 @@ fn install_binary(home: &Path) -> Result<()> {
         fs::set_permissions(&target_path, perms)?;
     }
 
-    println!("{} Binary installed to {}",
-             "✓".green().bold(),
-             target_path.display().to_string().cyan());
+    println!(
+        "{} Binary installed to {}",
+        "✓".green().bold(),
+        target_path.display().to_string().cyan()
+    );
 
     // Check if ~/.local/bin is in PATH
     if let Ok(path) = std::env::var("PATH") {
@@ -71,16 +70,15 @@ fn install_binary(home: &Path) -> Result<()> {
 
 fn install_skills(home: &Path) -> Result<()> {
     let skills_dir = home.join(".claude").join("commands");
-    fs::create_dir_all(&skills_dir)
-        .context("Failed to create ~/.claude/commands directory")?;
+    fs::create_dir_all(&skills_dir).context("Failed to create ~/.claude/commands directory")?;
 
     let mut installed_count = 0;
 
     // Iterate through embedded skills
     for file in Skills::iter() {
         if file.ends_with(".md") {
-            let content = Skills::get(&file)
-                .context(format!("Failed to get embedded skill: {}", file))?;
+            let content =
+                Skills::get(&file).context(format!("Failed to get embedded skill: {}", file))?;
 
             let target_path = skills_dir.join(file.as_ref());
 
@@ -91,10 +89,12 @@ fn install_skills(home: &Path) -> Result<()> {
         }
     }
 
-    println!("{} {} skills installed to {}",
-             "✓".green().bold(),
-             installed_count,
-             skills_dir.display().to_string().cyan());
+    println!(
+        "{} {} skills installed to {}",
+        "✓".green().bold(),
+        installed_count,
+        skills_dir.display().to_string().cyan()
+    );
 
     Ok(())
 }

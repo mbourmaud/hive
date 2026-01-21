@@ -129,7 +129,8 @@ fn find_sessions(worktree_path: &str) -> Result<Vec<Session>> {
 
                     sessions.push(Session {
                         path: file_path.clone(),
-                        name: file_path.file_name()
+                        name: file_path
+                            .file_name()
                             .and_then(|n| n.to_str())
                             .unwrap_or("Unknown")
                             .to_string(),
@@ -171,7 +172,11 @@ fn view_session_directly(session_path: &Path) -> Result<()> {
             }
             "tool_use" => {
                 if let Some(name) = &item.tool_name {
-                    println!("{} {}", "Tool:".bright_yellow().bold(), name.bright_yellow());
+                    println!(
+                        "{} {}",
+                        "Tool:".bright_yellow().bold(),
+                        name.bright_yellow()
+                    );
                     if let Some(input) = &item.tool_input {
                         println!("Input: {}", input);
                     }
@@ -210,7 +215,9 @@ fn parse_session(session_path: &Path) -> Result<Vec<ConversationItem>> {
 
         match msg.message_type.as_str() {
             "user" | "assistant" => {
-                let content = msg.content.get("content")
+                let content = msg
+                    .content
+                    .get("content")
                     .and_then(|c| {
                         if c.is_string() {
                             c.as_str().map(|s| s.to_string())
@@ -232,12 +239,16 @@ fn parse_session(session_path: &Path) -> Result<Vec<ConversationItem>> {
                 });
             }
             "tool_use" => {
-                let tool_name = msg.content.get("name")
+                let tool_name = msg
+                    .content
+                    .get("name")
                     .and_then(|n| n.as_str())
                     .unwrap_or("unknown")
                     .to_string();
 
-                let tool_input = msg.content.get("input")
+                let tool_input = msg
+                    .content
+                    .get("input")
                     .map(|i| serde_json::to_string_pretty(i).unwrap_or_default());
 
                 items.push(ConversationItem {
@@ -250,7 +261,9 @@ fn parse_session(session_path: &Path) -> Result<Vec<ConversationItem>> {
                 });
             }
             "tool_result" => {
-                let tool_output = msg.content.get("content")
+                let tool_output = msg
+                    .content
+                    .get("content")
                     .and_then(|c| c.as_str())
                     .map(|s| s.to_string());
 
@@ -271,7 +284,8 @@ fn parse_session(session_path: &Path) -> Result<Vec<ConversationItem>> {
 }
 
 fn extract_text_from_content_array(content: &serde_json::Value) -> String {
-    content.as_array()
+    content
+        .as_array()
         .map(|arr| {
             arr.iter()
                 .filter_map(|item| {
@@ -371,24 +385,26 @@ fn run_app<B: ratatui::backend::Backend>(
                         if !state.search_results.is_empty() {
                             state.current_search_result =
                                 (state.current_search_result + 1) % state.search_results.len();
-                            state.conversation_scroll = state.search_results[state.current_search_result];
+                            state.conversation_scroll =
+                                state.search_results[state.current_search_result];
                         }
                     }
                     KeyCode::Char('N') => {
                         if !state.search_results.is_empty() {
-                            state.current_search_result =
-                                if state.current_search_result == 0 {
-                                    state.search_results.len() - 1
-                                } else {
-                                    state.current_search_result - 1
-                                };
-                            state.conversation_scroll = state.search_results[state.current_search_result];
+                            state.current_search_result = if state.current_search_result == 0 {
+                                state.search_results.len() - 1
+                            } else {
+                                state.current_search_result - 1
+                            };
+                            state.conversation_scroll =
+                                state.search_results[state.current_search_result];
                         }
                     }
                     KeyCode::Enter => {
                         if let Some(selected) = state.conversation_state.selected() {
                             if selected < state.conversation.len() {
-                                state.conversation[selected].collapsed = !state.conversation[selected].collapsed;
+                                state.conversation[selected].collapsed =
+                                    !state.conversation[selected].collapsed;
                             }
                         }
                     }
@@ -424,11 +440,14 @@ fn perform_search(state: &mut SessionViewerState) {
         return;
     }
 
-    state.search_results = state.conversation
+    state.search_results = state
+        .conversation
         .iter()
         .enumerate()
         .filter(|(_, item)| {
-            item.content.to_lowercase().contains(&state.search_query.to_lowercase())
+            item.content
+                .to_lowercase()
+                .contains(&state.search_query.to_lowercase())
         })
         .map(|(i, _)| i)
         .collect();
@@ -498,12 +517,15 @@ fn ui(f: &mut Frame, state: &mut SessionViewerState) {
 fn render_session_list(f: &mut Frame, state: &SessionViewerState) {
     let area = f.area();
 
-    let items: Vec<ListItem> = state.sessions
+    let items: Vec<ListItem> = state
+        .sessions
         .iter()
         .enumerate()
         .map(|(i, session)| {
             let style = if i == state.selected_session {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -513,11 +535,16 @@ fn render_session_list(f: &mut Frame, state: &SessionViewerState) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(Block::default()
+    let list = List::new(items).block(
+        Block::default()
             .borders(Borders::ALL)
             .title(" Claude Sessions (↑/↓ navigate, Enter view, q quit) ")
-            .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)));
+            .title_style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+    );
 
     f.render_widget(list, area);
 }
@@ -527,36 +554,37 @@ fn render_conversation_view(f: &mut Frame, state: &mut SessionViewerState) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Min(1), Constraint::Length(3)])
         .split(area);
 
-    let visible_items: Vec<Line> = state.conversation
+    let visible_items: Vec<Line> = state
+        .conversation
         .iter()
         .skip(state.conversation_scroll)
         .take(chunks[0].height as usize)
         .flat_map(render_conversation_item)
         .collect();
 
-    let paragraph = Paragraph::new(visible_items)
-        .block(Block::default()
+    let paragraph = Paragraph::new(visible_items).block(
+        Block::default()
             .borders(Borders::ALL)
-            .title(" Conversation (↑/↓ scroll, / search, e export, q back) "));
+            .title(" Conversation (↑/↓ scroll, / search, e export, q back) "),
+    );
 
     f.render_widget(paragraph, chunks[0]);
 
     let help_text = if state.search_mode {
         format!("Search: {}", state.search_query)
     } else if !state.search_results.is_empty() {
-        format!("Search results: {} (n/N navigate)", state.search_results.len())
+        format!(
+            "Search results: {} (n/N navigate)",
+            state.search_results.len()
+        )
     } else {
         "j/k or ↑/↓: scroll | /: search | e: export | q: back".to_string()
     };
 
-    let help = Paragraph::new(help_text)
-        .block(Block::default().borders(Borders::ALL));
+    let help = Paragraph::new(help_text).block(Block::default().borders(Borders::ALL));
 
     f.render_widget(help, chunks[1]);
 }
@@ -566,16 +594,22 @@ fn render_conversation_item(item: &ConversationItem) -> Vec<Line<'_>> {
 
     match item.message_type.as_str() {
         "user" => {
-            lines.push(Line::from(vec![
-                Span::styled("User: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "User: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )]));
             lines.push(Line::from(item.content.clone()));
             lines.push(Line::from(""));
         }
         "assistant" => {
-            lines.push(Line::from(vec![
-                Span::styled("Assistant: ", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "Assistant: ",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            )]));
             lines.push(Line::from(item.content.clone()));
             lines.push(Line::from(""));
         }
@@ -584,7 +618,12 @@ fn render_conversation_item(item: &ConversationItem) -> Vec<Line<'_>> {
                 let prefix = if item.collapsed { "▶ " } else { "▼ " };
                 lines.push(Line::from(vec![
                     Span::styled(prefix, Style::default().fg(Color::Yellow)),
-                    Span::styled(format!("Tool: {}", name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("Tool: {}", name),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                 ]));
 
                 if !item.collapsed {
@@ -602,7 +641,12 @@ fn render_conversation_item(item: &ConversationItem) -> Vec<Line<'_>> {
             let prefix = if item.collapsed { "▶ " } else { "▼ " };
             lines.push(Line::from(vec![
                 Span::styled(prefix, Style::default().fg(Color::Magenta)),
-                Span::styled("Tool Result", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Tool Result",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]));
 
             if !item.collapsed {

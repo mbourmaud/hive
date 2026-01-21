@@ -14,7 +14,11 @@ pub fn kill(name: String) -> Result<()> {
         bail!("Drone '{}' not found", name);
     }
 
-    println!("{} Stopping drone '{}'...", "→".bright_blue(), name.bright_cyan());
+    println!(
+        "{} Stopping drone '{}'...",
+        "→".bright_blue(),
+        name.bright_cyan()
+    );
 
     // Find Claude process
     let ps_output = ProcessCommand::new("ps")
@@ -83,7 +87,11 @@ pub fn kill(name: String) -> Result<()> {
     // Send notification
     send_notification(&name, "stopped")?;
 
-    println!("\n{} Drone '{}' stopped", "✓".green().bold(), name.bright_cyan());
+    println!(
+        "\n{} Drone '{}' stopped",
+        "✓".green().bold(),
+        name.bright_cyan()
+    );
 
     Ok(())
 }
@@ -111,17 +119,25 @@ pub fn clean(name: String, force: bool) -> Result<()> {
         .context("Failed to run ps command")?;
 
     let ps_str = String::from_utf8_lossy(&ps_output.stdout);
-    let is_running = ps_str.lines()
+    let is_running = ps_str
+        .lines()
         .any(|line| line.contains("claude") && line.contains(&status.worktree));
 
     if is_running {
-        bail!("Drone '{}' is still running. Stop it first with 'hive-rust kill {}'", name, name);
+        bail!(
+            "Drone '{}' is still running. Stop it first with 'hive-rust kill {}'",
+            name,
+            name
+        );
     }
 
     // Confirm cleanup
     if !force {
         let confirmed = Confirm::new()
-            .with_prompt(format!("Clean up drone '{}'? This will remove the worktree and all drone data.", name))
+            .with_prompt(format!(
+                "Clean up drone '{}'? This will remove the worktree and all drone data.",
+                name
+            ))
             .default(false)
             .interact()?;
 
@@ -131,7 +147,11 @@ pub fn clean(name: String, force: bool) -> Result<()> {
         }
     }
 
-    println!("{} Cleaning up drone '{}'...", "→".bright_blue(), name.bright_cyan());
+    println!(
+        "{} Cleaning up drone '{}'...",
+        "→".bright_blue(),
+        name.bright_cyan()
+    );
 
     // Remove worktree if not in local mode
     if !status.local_mode {
@@ -140,7 +160,12 @@ pub fn clean(name: String, force: bool) -> Result<()> {
         if worktree_path.exists() {
             // Remove git worktree
             let output = ProcessCommand::new("git")
-                .args(["worktree", "remove", "--force", worktree_path.to_str().unwrap()])
+                .args([
+                    "worktree",
+                    "remove",
+                    "--force",
+                    worktree_path.to_str().unwrap(),
+                ])
                 .output();
 
             if let Ok(out) = output {
@@ -159,11 +184,14 @@ pub fn clean(name: String, force: bool) -> Result<()> {
     }
 
     // Remove drone directory
-    fs::remove_dir_all(&drone_dir)
-        .context("Failed to remove drone directory")?;
+    fs::remove_dir_all(&drone_dir).context("Failed to remove drone directory")?;
     println!("  {} Removed drone state", "✓".green());
 
-    println!("\n{} Drone '{}' cleaned up", "✓".green().bold(), name.bright_cyan());
+    println!(
+        "\n{} Drone '{}' cleaned up",
+        "✓".green().bold(),
+        name.bright_cyan()
+    );
 
     Ok(())
 }

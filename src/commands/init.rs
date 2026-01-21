@@ -19,10 +19,8 @@ pub fn run() -> Result<()> {
     let prds_dir = hive_dir.join("prds");
     let drones_dir = hive_dir.join("drones");
 
-    std::fs::create_dir_all(&prds_dir)
-        .context("Failed to create .hive/prds directory")?;
-    std::fs::create_dir_all(&drones_dir)
-        .context("Failed to create .hive/drones directory")?;
+    std::fs::create_dir_all(&prds_dir).context("Failed to create .hive/prds directory")?;
+    std::fs::create_dir_all(&drones_dir).context("Failed to create .hive/drones directory")?;
 
     println!("  {} Created .hive directory structure", "✓".green());
 
@@ -36,8 +34,7 @@ pub fn run() -> Result<()> {
             project: Some(project_name.clone()),
             ..Default::default()
         };
-        config::save_local_config(&config)
-            .context("Failed to save config")?;
+        config::save_local_config(&config).context("Failed to save config")?;
         println!("  {} Created .hive/config.json", "✓".green());
     } else {
         println!("  {} .hive/config.json already exists", "→".yellow());
@@ -76,15 +73,19 @@ pub fn run() -> Result<()> {
             ..Default::default()
         };
 
-        config::save_global_config(&global_config)
-            .context("Failed to save global config")?;
+        config::save_global_config(&global_config).context("Failed to save global config")?;
 
-        println!("  {} Created global config at ~/.config/hive/config.json", "✓".green());
+        println!(
+            "  {} Created global config at ~/.config/hive/config.json",
+            "✓".green()
+        );
     }
 
-    println!("\n{} Hive initialized successfully for project '{}'",
-             "✓".green().bold(),
-             project_name.bright_cyan());
+    println!(
+        "\n{} Hive initialized successfully for project '{}'",
+        "✓".green().bold(),
+        project_name.bright_cyan()
+    );
     println!("\nNext steps:");
     println!("  1. Create a PRD file in .hive/prds/");
     println!("  2. Run 'hive-rust start <drone-name>' to launch a drone");
@@ -125,8 +126,7 @@ fn get_project_name() -> Result<String> {
 fn extract_repo_name(url: &str) -> Option<String> {
     let url = url.trim();
     let parts: Vec<&str> = url.split('/').collect();
-    parts.last()
-        .map(|s| s.trim_end_matches(".git").to_string())
+    parts.last().map(|s| s.trim_end_matches(".git").to_string())
 }
 
 fn add_to_gitignore(pattern: &str) -> Result<()> {
@@ -134,8 +134,7 @@ fn add_to_gitignore(pattern: &str) -> Result<()> {
 
     // Read existing content
     let content = if gitignore_path.exists() {
-        std::fs::read_to_string(&gitignore_path)
-            .context("Failed to read .gitignore")?
+        std::fs::read_to_string(&gitignore_path).context("Failed to read .gitignore")?
     } else {
         String::new()
     };
@@ -152,8 +151,7 @@ fn add_to_gitignore(pattern: &str) -> Result<()> {
         format!("{}\n{}\n", content, pattern)
     };
 
-    std::fs::write(&gitignore_path, new_content)
-        .context("Failed to write .gitignore")?;
+    std::fs::write(&gitignore_path, new_content).context("Failed to write .gitignore")?;
 
     Ok(())
 }

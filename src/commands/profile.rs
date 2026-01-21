@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use dialoguer::Confirm;
 use serde::{Deserialize, Serialize};
@@ -30,8 +30,7 @@ impl Default for Profile {
 }
 
 fn get_profiles_dir() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir()
-        .context("Failed to get config directory")?;
+    let config_dir = dirs::config_dir().context("Failed to get config directory")?;
     let profiles_dir = config_dir.join("hive").join("profiles");
     Ok(profiles_dir)
 }
@@ -130,7 +129,10 @@ pub fn create(name: String) -> Result<()> {
     fs::write(&profile_path, contents)?;
 
     println!("{}", format!("✓ Profile '{}' created", name).green());
-    println!("  Path: {}", profile_path.display().to_string().bright_black());
+    println!(
+        "  Path: {}",
+        profile_path.display().to_string().bright_black()
+    );
     println!();
     println!("Edit the profile file to customize:");
     println!("  - description: Profile description");
@@ -146,7 +148,10 @@ pub fn use_profile(name: String) -> Result<()> {
     let profile_path = profiles_dir.join(format!("{}.json", name));
 
     if !profile_path.exists() {
-        bail!("Profile '{}' not found. Use 'hive-rust profile list' to see available profiles.", name);
+        bail!(
+            "Profile '{}' not found. Use 'hive-rust profile list' to see available profiles.",
+            name
+        );
     }
 
     let active_path = get_active_profile_path()?;
@@ -169,7 +174,10 @@ pub fn delete(name: String) -> Result<()> {
     // Check if it's the active profile
     let active_profile = get_active_profile().ok();
     if active_profile.as_ref() == Some(&name) {
-        println!("{}", format!("⚠ Profile '{}' is currently active", name).yellow());
+        println!(
+            "{}",
+            format!("⚠ Profile '{}' is currently active", name).yellow()
+        );
         let confirm = Confirm::new()
             .with_prompt("Are you sure you want to delete it?")
             .default(false)

@@ -104,12 +104,7 @@ fn find_jsonl_files(dir: &PathBuf) -> Vec<PathBuf> {
     fs::read_dir(dir)
         .unwrap()
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.path()
-                .extension()
-                .and_then(|s| s.to_str())
-                == Some("jsonl")
-        })
+        .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("jsonl"))
         .map(|entry| entry.path())
         .collect()
 }

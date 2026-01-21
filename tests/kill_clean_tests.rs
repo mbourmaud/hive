@@ -17,8 +17,11 @@ fn setup_test_env() -> PathBuf {
         .unwrap()
         .as_nanos();
 
-    let temp_dir = std::env::temp_dir()
-        .join(format!("hive-test-kill-{}-{}", std::process::id(), timestamp));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "hive-test-kill-{}-{}",
+        std::process::id(),
+        timestamp
+    ));
 
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).unwrap();

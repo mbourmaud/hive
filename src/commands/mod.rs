@@ -1,10 +1,10 @@
 pub mod init;
-pub mod status;
-pub mod start;
-pub mod logs;
+pub mod install;
 pub mod kill_clean;
-pub mod unblock;
-pub mod utils;
+pub mod logs;
 pub mod profile;
 pub mod sessions;
-pub mod install;
+pub mod start;
+pub mod status;
+pub mod unblock;
+pub mod utils;
