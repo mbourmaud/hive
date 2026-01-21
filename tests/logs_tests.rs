@@ -7,7 +7,7 @@ fn get_binary_path() -> PathBuf {
     let mut path = std::env::current_exe().unwrap();
     path.pop();
     path.pop();
-    path.push("hive-rust");
+    path.push("hive");
     path
 }
 
