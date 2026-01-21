@@ -6,9 +6,13 @@ use std::path::PathBuf;
 
 use crate::types::{DroneState, DroneStatus, Prd};
 
-// New monitor command - always runs TUI with auto-refresh
-pub fn run_monitor(name: Option<String>) -> Result<()> {
-    run_tui(name)
+// New monitor command - auto-refresh TUI by default, simple mode for scripts/CI
+pub fn run_monitor(name: Option<String>, simple: bool) -> Result<()> {
+    if simple {
+        run_simple(name, false)
+    } else {
+        run_tui(name)
+    }
 }
 
 // Legacy run function for backward compatibility (can be removed later)

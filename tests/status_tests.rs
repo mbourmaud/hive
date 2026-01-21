@@ -82,7 +82,7 @@ fn test_status_shows_drones() {
     let temp_dir = setup_test_env();
 
     let output = Command::new(&binary)
-        .args(["status"])
+        .args(["monitor", "--simple"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();
@@ -104,7 +104,7 @@ fn test_status_specific_drone() {
     let temp_dir = setup_test_env();
 
     let output = Command::new(&binary)
-        .args(["status", "test-drone"])
+        .args(["monitor", "--simple", "test-drone"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();
@@ -124,7 +124,7 @@ fn test_status_nonexistent_drone() {
     let temp_dir = setup_test_env();
 
     let output = Command::new(&binary)
-        .args(["status", "nonexistent"])
+        .args(["monitor", "--simple", "nonexistent"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();
@@ -172,7 +172,7 @@ fn test_status_no_drones() {
         .unwrap();
 
     let output = Command::new(&binary)
-        .args(["status"])
+        .args(["monitor", "--simple"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();

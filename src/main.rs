@@ -41,6 +41,9 @@ enum Commands {
     Monitor {
         /// Drone name (optional)
         name: Option<String>,
+        /// Simple output mode (no TUI, for scripts/CI)
+        #[arg(short, long)]
+        simple: bool,
     },
 
     /// View drone activity logs
@@ -154,8 +157,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Monitor { name } => {
-            if let Err(e) = commands::status::run_monitor(name) {
+        Commands::Monitor { name, simple } => {
+            if let Err(e) = commands::status::run_monitor(name, simple) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -100,6 +100,7 @@ fn tui_status_dashboard_single_drone() {
             .map(|(name, status)| {
                 let status_color = match status.status {
                     DroneState::Starting => Color::Yellow,
+                    DroneState::Resuming => Color::Yellow,
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
@@ -184,6 +185,7 @@ fn tui_status_dashboard_multiple_drones() {
             .map(|(name, status)| {
                 let status_color = match status.status {
                     DroneState::Starting => Color::Yellow,
+                    DroneState::Resuming => Color::Yellow,
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
