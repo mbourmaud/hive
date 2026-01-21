@@ -31,7 +31,7 @@ fn buffer_to_string(buffer: &ratatui::buffer::Buffer, width: u16, height: u16) -
     let mut result = String::new();
     for y in 0..height {
         for x in 0..width {
-            let cell = buffer.get(x, y);
+            let cell = &buffer[(x, y)];
             result.push_str(cell.symbol());
         }
         if y < height - 1 {
@@ -446,7 +446,7 @@ fn tui_session_list() {
         f.render_widget(title, chunks[0]);
 
         // Session list
-        let sessions = vec![
+        let sessions = [
             "2024-01-01 10:00:00 - Session 1 (45 messages)",
             "2024-01-01 11:30:00 - Session 2 (32 messages)",
             "2024-01-01 14:15:00 - Session 3 (18 messages)",
@@ -505,7 +505,7 @@ fn tui_conversation_view() {
         f.render_widget(title, chunks[0]);
 
         // Conversation
-        let messages = vec![
+        let messages = [
             "[USER] Can you help me implement a feature?",
             "[ASSISTANT] Of course! I'd be happy to help.",
             "[TOOL: Read] Reading file: src/main.rs",

@@ -5,7 +5,7 @@ use std::process::Command;
 #[test]
 fn test_resume_module_exists() {
     // Basic test to ensure resume functionality compiles
-    assert!(true);
+    // This test intentionally does nothing - just verifies compilation
 }
 
 #[test]

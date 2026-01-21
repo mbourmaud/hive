@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[test]
 fn test_sessions_module_exists() {
     // Basic test to ensure sessions module compiles
-    assert!(true);
+    // This test intentionally does nothing - just verifies compilation
 }
 
 #[test]

@@ -162,7 +162,7 @@ fn check_and_notify_update() -> Result<()> {
             )
             .yellow()
         );
-        eprintln!("{}", format!("   Run {} to update", "hive update".cyan()));
+        eprintln!("   Run {} to update", "hive update".cyan());
     }
 
     Ok(())

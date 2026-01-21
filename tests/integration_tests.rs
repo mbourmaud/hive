@@ -1,7 +1,7 @@
 use hive_lib::types::{DroneState, DroneStatus, HiveConfig, Prd, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 fn create_hive_structure(temp_dir: &TempDir) -> PathBuf {
@@ -15,7 +15,7 @@ fn create_hive_structure(temp_dir: &TempDir) -> PathBuf {
     hive_dir
 }
 
-fn create_test_prd(prds_dir: &PathBuf, prd_name: &str) {
+fn create_test_prd(prds_dir: &Path, prd_name: &str) {
     let prd = Prd {
         id: prd_name.to_string(),
         title: format!("{} Title", prd_name),
@@ -32,7 +32,7 @@ fn create_test_prd(prds_dir: &PathBuf, prd_name: &str) {
     fs::write(&prd_path, json).unwrap();
 }
 
-fn create_test_drone(drones_dir: &PathBuf, drone_name: &str, prd_name: &str) {
+fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
     let drone_dir = drones_dir.join(drone_name);
     fs::create_dir_all(&drone_dir).unwrap();
 
