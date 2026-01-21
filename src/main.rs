@@ -163,8 +163,10 @@ fn main() {
             }
         }
         Commands::Unblock { name, no_interactive } => {
-            println!("Unblock drone '{}' - not yet implemented", name);
-            println!("  No interactive: {}", no_interactive);
+            if let Err(e) = commands::unblock::run(name, no_interactive) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::List => {
             println!("List command - not yet implemented");
