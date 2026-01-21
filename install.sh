@@ -30,17 +30,18 @@ fi
 REPO="mbourmaud/hive"
 GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
 
+echo ""
+echo -e "${YELLOW}"
 cat << 'EOF'
-
-    ██╗  ██╗██╗██╗   ██╗███████╗
-    ██║  ██║██║██║   ██║██╔════╝
-    ███████║██║██║   ██║█████╗
-    ██╔══██║██║╚██╗ ██╔╝██╔══╝
-    ██║  ██║██║ ╚████╔╝ ███████╗
-    ╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝
-
+██╗  ██╗██╗██╗   ██╗███████╗
+██║  ██║██║██║   ██║██╔════╝
+███████║██║██║   ██║█████╗
+██╔══██║██║╚██╗ ██╔╝██╔══╝
+██║  ██║██║ ╚████╔╝ ███████╗
+╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝
 EOF
-echo -e "  ${YELLOW}Drone Orchestration for Claude Code${RESET}"
+echo -e "${RESET}"
+echo -e "${YELLOW}Drone Orchestration for Claude Code${RESET}"
 echo ""
 
 # ============================================================================
@@ -151,37 +152,39 @@ mv "$BINARY" "$INSTALL_DIR/hive"
 chmod +x "$INSTALL_DIR/hive"
 rm -rf "$TEMP_DIR"
 
-echo -e "${GREEN}✓${RESET} Binary installed to $INSTALL_DIR/hive"
-
-# Check if install dir is in PATH
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-  echo ""
-  echo -e "${YELLOW}⚠${RESET} Add $INSTALL_DIR to your PATH:"
-  echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
-  echo ""
-fi
-
 # ============================================================================
 # Install Skills via hive install command
 # ============================================================================
 
 echo ""
-echo -e "${CYAN}Installing Claude Code skills...${RESET}"
+echo -e "${CYAN}Installing components...${RESET}"
 
-# The Rust binary has embedded skills - just run hive install
-if "$INSTALL_DIR/hive" install --skills-only 2>/dev/null; then
-  echo -e "${GREEN}✓${RESET} Skills installed to ~/.claude/commands/"
-else
-  echo -e "${YELLOW}⚠${RESET} Skills installation skipped (run 'hive install' later)"
-fi
+# The Rust binary has embedded skills - just run hive install quietly
+SKILLS_OUTPUT=$("$INSTALL_DIR/hive" install --skills-only 2>&1)
+SKILLS_EXIT=$?
 
 # ============================================================================
-# Success!
+# Installation Summary
 # ============================================================================
 
 echo ""
 echo -e "${GREEN}${BOLD}✓ Installation complete!${RESET}"
 echo ""
+echo -e "  ${GREEN}✓${RESET} Binary installed to $INSTALL_DIR/hive"
+if [ $SKILLS_EXIT -eq 0 ]; then
+  SKILL_COUNT=$(echo "$SKILLS_OUTPUT" | grep -oE '[0-9]+ skills' | grep -oE '[0-9]+' || echo "8")
+  echo -e "  ${GREEN}✓${RESET} ${SKILL_COUNT} skills installed to ~/.claude/commands/"
+else
+  echo -e "  ${YELLOW}⚠${RESET} Skills installation skipped (run 'hive install' later)"
+fi
+echo ""
+
+# Check if install dir is in PATH
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+  echo -e "${YELLOW}⚠${RESET} Add $INSTALL_DIR to your PATH:"
+  echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
+  echo ""
+fi
 
 # Get clean version
 VERSION=$("$INSTALL_DIR/hive" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
