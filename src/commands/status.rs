@@ -406,6 +406,7 @@ fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
 fn run_tui(_name: Option<String>) -> Result<()> {
     // TUI implementation with ratatui
     use crossterm::{
+        event::{self, Event, KeyCode},
         execute,
         terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     };
@@ -426,9 +427,18 @@ fn run_tui(_name: Option<String>) -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    let mut selected_index: usize = 0;
+    let mut message: Option<String> = None;
+    let mut message_color = Color::Green;
+
     // Main loop
     loop {
         let drones = list_drones()?;
+
+        // Clamp selected index
+        if !drones.is_empty() && selected_index >= drones.len() {
+            selected_index = drones.len() - 1;
+        }
 
         terminal.draw(|f| {
             let chunks = Layout::default()
@@ -454,7 +464,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             // Drone list
             let items: Vec<ListItem> = drones
                 .iter()
-                .map(|(name, status)| {
+                .enumerate()
+                .map(|(i, (name, status))| {
                     // Check if process is actually running
                     let process_running = read_drone_pid(name)
                         .map(is_process_running)
@@ -491,12 +502,16 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     // Calculate elapsed time
                     let elapsed = elapsed_since(&status.started).unwrap_or_else(|| "?".to_string());
 
+                    // Add selection indicator
+                    let indicator = if i == selected_index { "▸ " } else { "  " };
+
                     let line = Line::from(vec![
+                        Span::raw(indicator),
                         Span::styled(
                             format!("🐝 {:<18}", name),
                             Style::default()
                                 .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
+                                .add_modifier(if i == selected_index { Modifier::BOLD } else { Modifier::empty() }),
                         ),
                         Span::raw(" "),
                         Span::styled(
@@ -523,18 +538,112 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 List::new(items).block(Block::default().borders(Borders::ALL).title("Drones"));
             f.render_widget(list, chunks[1]);
 
-            // Footer
-            let footer = Paragraph::new("Press 'q' to quit")
-                .style(Style::default().fg(Color::DarkGray))
+            // Footer with actions and message
+            let footer_text = if let Some(msg) = &message {
+                msg.clone()
+            } else {
+                "[N]ew  [L]ogs  [X]Stop  [C]lean  [U]nblock  [S]essions  [Q]uit".to_string()
+            };
+
+            let footer = Paragraph::new(footer_text)
+                .style(Style::default().fg(if message.is_some() { message_color } else { Color::DarkGray }))
                 .block(Block::default().borders(Borders::ALL));
             f.render_widget(footer, chunks[2]);
         })?;
 
+        // Clear message after displaying
+        if message.is_some() {
+            message = None;
+        }
+
         // Handle input with 1s refresh interval
-        if crossterm::event::poll(std::time::Duration::from_secs(1))? {
-            if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
-                if key.code == crossterm::event::KeyCode::Char('q') {
-                    break;
+        if event::poll(std::time::Duration::from_secs(1))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Char('Q') => break,
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        if !drones.is_empty() && selected_index < drones.len() - 1 {
+                            selected_index += 1;
+                        }
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        if selected_index > 0 {
+                            selected_index -= 1;
+                        }
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') => {
+                        // New drone - launch PRD browser
+                        match handle_new_drone(&mut terminal) {
+                            Ok(Some(msg)) => {
+                                message = Some(msg);
+                                message_color = Color::Green;
+                            }
+                            Ok(None) => {}
+                            Err(e) => {
+                                message = Some(format!("Error: {}", e));
+                                message_color = Color::Red;
+                            }
+                        }
+                    }
+                    KeyCode::Char('l') | KeyCode::Char('L') => {
+                        if !drones.is_empty() {
+                            let drone_name = &drones[selected_index].0;
+                            // Show logs inline (for now just a message, can be improved later)
+                            message = Some(format!("Use: hive logs {}", drone_name));
+                            message_color = Color::Yellow;
+                        }
+                    }
+                    KeyCode::Char('x') | KeyCode::Char('X') => {
+                        if !drones.is_empty() {
+                            let drone_name = drones[selected_index].0.clone();
+                            match handle_stop_drone(&drone_name) {
+                                Ok(msg) => {
+                                    message = Some(msg);
+                                    message_color = Color::Green;
+                                }
+                                Err(e) => {
+                                    message = Some(format!("Error: {}", e));
+                                    message_color = Color::Red;
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('c') | KeyCode::Char('C') => {
+                        if !drones.is_empty() {
+                            let drone_name = drones[selected_index].0.clone();
+                            match handle_clean_drone(&mut terminal, &drone_name) {
+                                Ok(msg) => {
+                                    message = Some(msg);
+                                    message_color = Color::Green;
+                                }
+                                Err(e) => {
+                                    message = Some(format!("Error: {}", e));
+                                    message_color = Color::Red;
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('u') | KeyCode::Char('U') => {
+                        if !drones.is_empty() {
+                            let drone_name = &drones[selected_index].0;
+                            let status = &drones[selected_index].1;
+                            if status.status == DroneState::Blocked {
+                                message = Some(format!("Use: hive unblock {}", drone_name));
+                                message_color = Color::Yellow;
+                            } else {
+                                message = Some(format!("Drone {} is not blocked", drone_name));
+                                message_color = Color::Yellow;
+                            }
+                        }
+                    }
+                    KeyCode::Char('s') | KeyCode::Char('S') => {
+                        if !drones.is_empty() {
+                            let drone_name = &drones[selected_index].0;
+                            message = Some(format!("Use: hive sessions {}", drone_name));
+                            message_color = Color::Yellow;
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -546,4 +655,133 @@ fn run_tui(_name: Option<String>) -> Result<()> {
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+// Handler for 'New Drone' action - browse PRDs and launch
+fn handle_new_drone<B: ratatui::backend::Backend>(_terminal: &mut ratatui::Terminal<B>) -> Result<Option<String>> {
+    use dialoguer::{Select, Input, theme::ColorfulTheme};
+    use std::io;
+
+    // Find all PRD files
+    let prds = find_prd_files()?;
+
+    if prds.is_empty() {
+        return Ok(Some("No PRD files found in .hive/prds/ or project root".to_string()));
+    }
+
+    // Disable raw mode temporarily for dialoguer
+    crossterm::terminal::disable_raw_mode()?;
+    crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
+
+    let result = (|| -> Result<Option<String>> {
+        // Let user select PRD
+        let prd_names: Vec<String> = prds.iter().map(|p| p.display().to_string()).collect();
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select PRD")
+            .items(&prd_names)
+            .default(0)
+            .interact_opt()?;
+
+        let prd_path = match selection {
+            Some(idx) => &prds[idx],
+            None => return Ok(None), // User cancelled
+        };
+
+        // Read PRD to get default name
+        let prd_contents = fs::read_to_string(prd_path)?;
+        let prd: Prd = serde_json::from_str(&prd_contents)?;
+        let default_name = prd.id.clone();
+
+        // Prompt for drone name
+        let drone_name: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Drone name")
+            .default(default_name)
+            .interact_text()?;
+
+        // Prompt for model
+        let models = vec!["sonnet", "opus", "haiku"];
+        let model_idx = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select model")
+            .items(&models)
+            .default(0)
+            .interact()?;
+        let model = models[model_idx].to_string();
+
+        // Launch drone using start command
+        crate::commands::start::run(drone_name.clone(), None, false, false, model, false)?;
+
+        Ok(Some(format!("🐝 Launched drone: {}", drone_name)))
+    })();
+
+    // Re-enable raw mode
+    crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
+    crossterm::terminal::enable_raw_mode()?;
+
+    result
+}
+
+// Find all PRD files in .hive/prds/ and project root
+fn find_prd_files() -> Result<Vec<PathBuf>> {
+    let mut prds = Vec::new();
+
+    // Search in .hive/prds/
+    let hive_prds = PathBuf::from(".hive").join("prds");
+    if hive_prds.exists() {
+        for entry in fs::read_dir(&hive_prds)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                prds.push(path);
+            }
+        }
+    }
+
+    // Search in project root for prd*.json
+    for entry in fs::read_dir(".")? {
+        let entry = entry?;
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+            if name.starts_with("prd") && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                prds.push(path);
+            }
+        }
+    }
+
+    Ok(prds)
+}
+
+// Handler for 'Stop' action
+fn handle_stop_drone(drone_name: &str) -> Result<String> {
+    crate::commands::kill_clean::kill(drone_name.to_string())?;
+    Ok(format!("🛑 Stopped drone: {}", drone_name))
+}
+
+// Handler for 'Clean' action with confirmation
+fn handle_clean_drone<B: ratatui::backend::Backend>(_terminal: &mut ratatui::Terminal<B>, drone_name: &str) -> Result<String> {
+    use dialoguer::{Confirm, theme::ColorfulTheme};
+    use std::io;
+
+    // Disable raw mode temporarily for dialoguer
+    crossterm::terminal::disable_raw_mode()?;
+    crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
+
+    let result = (|| -> Result<String> {
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!("Clean drone '{}' (remove worktree and branch)?", drone_name))
+            .default(false)
+            .interact()?;
+
+        if confirmed {
+            crate::commands::kill_clean::clean(drone_name.to_string(), true)?;
+            Ok(format!("🧹 Cleaned drone: {}", drone_name))
+        } else {
+            Ok("Cancelled".to_string())
+        }
+    })();
+
+    // Re-enable raw mode
+    crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
+    crossterm::terminal::enable_raw_mode()?;
+
+    result
 }

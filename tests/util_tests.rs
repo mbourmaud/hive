@@ -71,15 +71,10 @@ fn create_test_drone(
 fn test_list_no_drones() {
     let temp_dir = create_test_environment();
 
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    // Should succeed with empty list
+    // Use absolute path instead of changing current directory (avoids race conditions)
     let drones_dir = temp_dir.path().join(".hive").join("drones");
     assert!(drones_dir.exists());
     assert_eq!(fs::read_dir(&drones_dir).unwrap().count(), 0);
-
-    std::env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
@@ -87,10 +82,10 @@ fn test_list_single_drone() {
     let temp_dir = create_test_environment();
     create_test_drone(&temp_dir, "test-drone", DroneState::InProgress, 5, 10);
 
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    let status_path = PathBuf::from(".hive")
+    // Use absolute path instead of changing current directory (avoids race conditions)
+    let status_path = temp_dir
+        .path()
+        .join(".hive")
         .join("drones")
         .join("test-drone")
         .join("status.json");
@@ -102,8 +97,6 @@ fn test_list_single_drone() {
     assert_eq!(status.status, DroneState::InProgress);
     assert_eq!(status.completed.len(), 5);
     assert_eq!(status.total, 10);
-
-    std::env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
@@ -113,10 +106,8 @@ fn test_list_multiple_drones() {
     create_test_drone(&temp_dir, "drone-2", DroneState::Completed, 5, 5);
     create_test_drone(&temp_dir, "drone-3", DroneState::Error, 1, 8);
 
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    let drones_dir = PathBuf::from(".hive").join("drones");
+    // Use absolute path instead of changing current directory (avoids race conditions)
+    let drones_dir = temp_dir.path().join(".hive").join("drones");
     let drone_count = fs::read_dir(&drones_dir).unwrap().count();
     assert_eq!(drone_count, 3);
 
@@ -125,8 +116,6 @@ fn test_list_multiple_drones() {
         let status_path = drones_dir.join(drone_name).join("status.json");
         assert!(status_path.exists());
     }
-
-    std::env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
