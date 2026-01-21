@@ -145,12 +145,9 @@ fn main() {
             }
         }
         Commands::Logs { name, lines, story } => {
-            println!("Logs for drone '{}' - not yet implemented", name);
-            if let Some(l) = lines {
-                println!("  Lines: {}", l);
-            }
-            if let Some(s) = story {
-                println!("  Story: {}", s);
+            if let Err(e) = commands::logs::run(name, lines, story) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Kill { name } => {
