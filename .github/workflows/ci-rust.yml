@@ -94,7 +94,7 @@ jobs:
 
       - name: Check binary size
         run: |
-          BINARY="target/${{ matrix.target }}/release/hive-rust"
+          BINARY="target/${{ matrix.target }}/release/hive"
           SIZE=$(stat -f%z "$BINARY" 2>/dev/null || stat -c%s "$BINARY")
           echo "Binary size: $SIZE bytes"
           MAX_SIZE=$((10 * 1024 * 1024))  # 10MB
