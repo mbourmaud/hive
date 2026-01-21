@@ -169,13 +169,19 @@ fn main() {
             }
         }
         Commands::List => {
-            println!("List command - not yet implemented");
+            if let Err(e) = commands::utils::list() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Version => {
             println!("hive-rust version {}", VERSION);
         }
         Commands::Update => {
-            println!("Update command - not yet implemented");
+            if let Err(e) = commands::utils::update() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Profile { command } => {
             match command {
