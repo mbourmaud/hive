@@ -1240,12 +1240,19 @@ cmd_status() {
 
     if [ "$follow" = true ]; then
         # Follow mode - continuous dashboard (notifications handled by drone itself)
-        trap 'tput cnorm; echo; exit 0' INT TERM
+        trap 'tput cnorm; tput rmcup; echo; exit 0' INT TERM
         tput civis  # Hide cursor
 
+        # Use alternate screen buffer for clean exit
+        tput smcup
+        clear
+
         while true; do
-            clear
+            # Move cursor to home instead of clearing (smooth refresh, no flash)
+            tput home
             render_status_dashboard
+            # Clear any remaining old content below
+            tput ed
             sleep "$interval"
         done
     else
@@ -1485,17 +1492,28 @@ cmd_status_interactive() {
 
 cmd_status_auto_refresh() {
     tput civis  # Hide cursor
-    trap 'tput cnorm; return' INT TERM
+    trap 'tput cnorm; tput rmcup; return' INT TERM
+
+    # Use alternate screen buffer for clean exit
+    tput smcup
+    clear
 
     while true; do
-        clear
+        # Move cursor to home position instead of clearing (no flash)
+        tput home
+
+        # Clear from cursor to end of screen (handles shrinking content)
         render_status_dashboard_interactive
         echo -e "  \033[2mAuto-refresh every 30s │ Press any key to interact\033[0m"
         echo ""
 
+        # Clear any remaining old content below
+        tput ed
+
         # Wait for 30 seconds or keypress
         if read -t 30 -n 1 -s; then
             tput cnorm  # Show cursor
+            tput rmcup  # Exit alternate screen
             return
         fi
     done
