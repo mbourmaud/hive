@@ -8,14 +8,37 @@
 
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-NC='\033[0m'
+# Detect color support
+# Respect NO_COLOR standard (https://no-color.org/)
+# Also allow HIVE_NO_COLOR=1 to disable colors
+if [ -n "$NO_COLOR" ] || [ "$HIVE_NO_COLOR" = "1" ]; then
+    # Colors explicitly disabled
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    CYAN=''
+    MAGENTA=''
+    NC=''
+elif [ "$HIVE_FORCE_COLOR" = "1" ] || ([ -t 1 ] && command -v tput >/dev/null 2>&1 && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]); then
+    # Terminal supports colors or colors forced
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    MAGENTA='\033[0;35m'
+    NC='\033[0m'
+else
+    # No color support
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    CYAN=''
+    MAGENTA=''
+    NC=''
+fi
 
 # Version
 VERSION="1.10.0"

@@ -223,6 +223,31 @@ vim ~/.config/hive/config.json
 echo 'export HIVE_WORKTREE_BASE="$HOME/custom/path"' >> ~/.bashrc
 ```
 
+### Color Output
+
+Hive automatically detects terminal color support. To control colors:
+
+**Disable colors**:
+```bash
+export NO_COLOR=1        # Standard way (https://no-color.org/)
+# or
+export HIVE_NO_COLOR=1   # Hive-specific
+```
+
+**Force colors** (when auto-detection fails):
+```bash
+export HIVE_FORCE_COLOR=1
+```
+
+**Troubleshooting**: If you see raw ANSI codes like `\033[0;32m` instead of colors:
+```bash
+# Set proper terminal type
+export TERM=xterm-256color
+
+# Or disable colors
+export NO_COLOR=1
+```
+
 ---
 
 ## 📋 Requirements
