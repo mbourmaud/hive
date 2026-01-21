@@ -62,6 +62,13 @@ enum Commands {
     },
 
     /// Stop a running drone
+    Stop {
+        /// Drone name
+        name: String,
+    },
+
+    /// [DEPRECATED] Use 'stop' instead
+    #[command(hide = true)]
     Kill {
         /// Drone name
         name: String,
@@ -181,7 +188,14 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::Stop { name } => {
+            if let Err(e) = commands::kill_clean::kill(name) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Commands::Kill { name } => {
+            eprintln!("Warning: 'hive kill' is deprecated. Use 'hive stop' instead.");
             if let Err(e) = commands::kill_clean::kill(name) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

@@ -1,7 +1,6 @@
 use hive_rust::types::{DroneState, DroneStatus, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 fn create_test_environment() -> TempDir {
@@ -140,14 +139,10 @@ fn test_drone_states() {
     create_test_drone(&temp_dir, "blocked-drone", DroneState::Blocked, 2, 5);
     create_test_drone(&temp_dir, "stopped-drone", DroneState::Stopped, 3, 5);
 
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    let drones_dir = PathBuf::from(".hive").join("drones");
+    // Use absolute path instead of changing current directory (avoids race conditions)
+    let drones_dir = temp_dir.path().join(".hive").join("drones");
     let drone_count = fs::read_dir(&drones_dir).unwrap().count();
     assert_eq!(drone_count, 6);
-
-    std::env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
@@ -155,10 +150,10 @@ fn test_progress_calculation() {
     let temp_dir = create_test_environment();
     create_test_drone(&temp_dir, "half-done", DroneState::InProgress, 5, 10);
 
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    let status_path = PathBuf::from(".hive")
+    // Use absolute path instead of changing current directory (avoids race conditions)
+    let status_path = temp_dir
+        .path()
+        .join(".hive")
         .join("drones")
         .join("half-done")
         .join("status.json");
@@ -168,6 +163,4 @@ fn test_progress_calculation() {
 
     let percentage = (status.completed.len() as f32 / status.total as f32 * 100.0) as u32;
     assert_eq!(percentage, 50);
-
-    std::env::set_current_dir(original_dir).unwrap();
 }

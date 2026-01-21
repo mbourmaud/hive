@@ -509,9 +509,13 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         Span::raw(indicator),
                         Span::styled(
                             format!("🐝 {:<18}", name),
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(if i == selected_index { Modifier::BOLD } else { Modifier::empty() }),
+                            Style::default().fg(Color::Yellow).add_modifier(
+                                if i == selected_index {
+                                    Modifier::BOLD
+                                } else {
+                                    Modifier::empty()
+                                },
+                            ),
                         ),
                         Span::raw(" "),
                         Span::styled(
@@ -542,11 +546,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             let footer_text = if let Some(msg) = &message {
                 msg.clone()
             } else {
-                "[N]ew  [L]ogs  [X]Stop  [C]lean  [U]nblock  [S]essions  [Q]uit".to_string()
+                "[N]ew  [L]ogs  [X]top  [C]lean  [U]nblock  [S]essions  [Q]uit".to_string()
             };
 
             let footer = Paragraph::new(footer_text)
-                .style(Style::default().fg(if message.is_some() { message_color } else { Color::DarkGray }))
+                .style(Style::default().fg(if message.is_some() {
+                    message_color
+                } else {
+                    Color::DarkGray
+                }))
                 .block(Block::default().borders(Borders::ALL));
             f.render_widget(footer, chunks[2]);
         })?;
@@ -567,9 +575,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        if selected_index > 0 {
-                            selected_index -= 1;
-                        }
+                        selected_index = selected_index.saturating_sub(1);
                     }
                     KeyCode::Char('n') | KeyCode::Char('N') => {
                         // New drone - launch PRD browser
@@ -658,15 +664,19 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 }
 
 // Handler for 'New Drone' action - browse PRDs and launch
-fn handle_new_drone<B: ratatui::backend::Backend>(_terminal: &mut ratatui::Terminal<B>) -> Result<Option<String>> {
-    use dialoguer::{Select, Input, theme::ColorfulTheme};
+fn handle_new_drone<B: ratatui::backend::Backend>(
+    _terminal: &mut ratatui::Terminal<B>,
+) -> Result<Option<String>> {
+    use dialoguer::{theme::ColorfulTheme, Input, Select};
     use std::io;
 
     // Find all PRD files
     let prds = find_prd_files()?;
 
     if prds.is_empty() {
-        return Ok(Some("No PRD files found in .hive/prds/ or project root".to_string()));
+        return Ok(Some(
+            "No PRD files found in .hive/prds/ or project root".to_string(),
+        ));
     }
 
     // Disable raw mode temporarily for dialoguer
@@ -741,7 +751,8 @@ fn find_prd_files() -> Result<Vec<PathBuf>> {
         let entry = entry?;
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-            if name.starts_with("prd") && path.extension().and_then(|s| s.to_str()) == Some("json") {
+            if name.starts_with("prd") && path.extension().and_then(|s| s.to_str()) == Some("json")
+            {
                 prds.push(path);
             }
         }
@@ -757,8 +768,11 @@ fn handle_stop_drone(drone_name: &str) -> Result<String> {
 }
 
 // Handler for 'Clean' action with confirmation
-fn handle_clean_drone<B: ratatui::backend::Backend>(_terminal: &mut ratatui::Terminal<B>, drone_name: &str) -> Result<String> {
-    use dialoguer::{Confirm, theme::ColorfulTheme};
+fn handle_clean_drone<B: ratatui::backend::Backend>(
+    _terminal: &mut ratatui::Terminal<B>,
+    drone_name: &str,
+) -> Result<String> {
+    use dialoguer::{theme::ColorfulTheme, Confirm};
     use std::io;
 
     // Disable raw mode temporarily for dialoguer
@@ -767,7 +781,10 @@ fn handle_clean_drone<B: ratatui::backend::Backend>(_terminal: &mut ratatui::Ter
 
     let result = (|| -> Result<String> {
         let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("Clean drone '{}' (remove worktree and branch)?", drone_name))
+            .with_prompt(format!(
+                "Clean drone '{}' (remove worktree and branch)?",
+                drone_name
+            ))
             .default(false)
             .interact()?;
 
