@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use hive_rust::commands;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -126,7 +127,10 @@ fn main() {
 
     match cli.command {
         Commands::Init => {
-            println!("Init command - not yet implemented");
+            if let Err(e) = commands::init::run() {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Start { name, prompt, resume, local, model, dry_run } => {
             println!("Start command for drone '{}' - not yet implemented", name);
