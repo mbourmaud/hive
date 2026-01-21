@@ -6,9 +6,14 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prd {
     pub id: String,
+    /// Title of the PRD (also accepts "name" for backwards compatibility)
+    #[serde(alias = "name")]
     pub title: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default)]
     pub version: String,
+    #[serde(default)]
     pub created_at: String,
     pub target_platforms: Option<Vec<String>>,
     pub target_branch: Option<String>,
@@ -20,9 +25,12 @@ pub struct Prd {
 pub struct Story {
     pub id: String,
     pub title: String,
+    #[serde(default)]
     pub description: String,
     pub acceptance_criteria: Option<Vec<String>>,
+    #[serde(default)]
     pub definition_of_done: Vec<String>,
+    #[serde(default)]
     pub verification_commands: Vec<String>,
     pub notes: Option<String>,
 }
