@@ -162,27 +162,74 @@ fn find_prd(name: &str) -> Result<PathBuf> {
         bail!("No PRDs directory found. Run 'hive-rust init' first.");
     }
 
-    // Try exact match first
-    let exact = prds_dir.join(format!("prd-{}.json", name));
-    if exact.exists() {
-        return Ok(exact);
-    }
+    let mut candidates = Vec::new();
 
-    let exact2 = prds_dir.join(format!("{}.json", name));
-    if exact2.exists() {
-        return Ok(exact2);
-    }
+    // Search patterns: prd-<name>.json, <name>.json, <name>-prd.json
+    let patterns = vec![
+        prds_dir.join(format!("prd-{}.json", name)),
+        prds_dir.join(format!("{}.json", name)),
+        prds_dir.join(format!("{}-prd.json", name)),
+    ];
 
-    // Search for any PRD
-    for entry in fs::read_dir(&prds_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("json") {
-            return Ok(path);
+    for pattern in patterns {
+        if pattern.exists() {
+            candidates.push(pattern);
         }
     }
 
-    bail!("No PRD found for drone '{}'", name);
+    // Also search in project root for prd*.json files
+    let root_dir = std::env::current_dir()?;
+    if let Ok(entries) = fs::read_dir(&root_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                    if filename.starts_with("prd") && filename.ends_with(".json") {
+                        candidates.push(path);
+                    }
+                }
+            }
+        }
+    }
+
+    // If no candidates found, list available PRDs
+    if candidates.is_empty() {
+        let mut available = Vec::new();
+        for entry in fs::read_dir(&prds_dir)?.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                    available.push(filename.to_string());
+                }
+            }
+        }
+
+        if available.is_empty() {
+            bail!("No PRD found for drone '{}'. No PRDs available in .hive/prds/", name);
+        } else {
+            bail!(
+                "No PRD found for drone '{}'. Available PRDs:\n  {}",
+                name,
+                available.join("\n  ")
+            );
+        }
+    }
+
+    // If only one candidate, use it
+    if candidates.len() == 1 {
+        return Ok(candidates.into_iter().next().unwrap());
+    }
+
+    // Multiple candidates - prompt user to select
+    use dialoguer::Select;
+
+    println!("{}", "Multiple PRD files found:".bright_yellow());
+    let selection = Select::new()
+        .items(&candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>())
+        .default(0)
+        .interact()?;
+
+    Ok(candidates[selection].clone())
 }
 
 fn load_prd(path: &PathBuf) -> Result<Prd> {
