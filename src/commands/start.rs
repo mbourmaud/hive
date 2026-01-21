@@ -164,7 +164,7 @@ pub fn run(
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {
-        launch_claude(&worktree_path, &model, &name)?;
+        launch_claude(&worktree_path, &model, &name, &prd_path)?;
         println!(
             "  {} Launched Claude (model: {})",
             "✓".green(),
@@ -328,17 +328,30 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn launch_claude(worktree: &PathBuf, model: &str, drone_name: &str) -> Result<()> {
+fn launch_claude(worktree: &PathBuf, model: &str, drone_name: &str, prd_path: &PathBuf) -> Result<()> {
     // Create log file
     let log_path = PathBuf::from(".hive/drones")
         .join(drone_name)
         .join("activity.log");
     let log_file = fs::File::create(&log_path)?;
 
-    // Launch claude in background
+    // Read PRD content
+    let prd_content = fs::read_to_string(prd_path)?;
+
+    // Create initial prompt with PRD
+    let prompt = format!(
+        "You are a Hive drone working on this PRD. Execute each story in order.\n\n\
+         PRD Content:\n{}\n\n\
+         Start with the first story and work through them sequentially. \
+         After completing each story, move to the next one automatically.",
+        prd_content
+    );
+
+    // Launch claude in background with the PRD as initial prompt
     ProcessCommand::new("claude")
         .arg("--model")
         .arg(model)
+        .arg(prompt)
         .current_dir(worktree)
         .stdin(Stdio::null())
         .stdout(log_file.try_clone()?)
