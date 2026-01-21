@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::{DroneState, DroneStatus};
+use crate::types::{DroneState, DroneStatus, Prd};
 
 // New monitor command - always runs TUI with auto-refresh
 pub fn run_monitor(name: Option<String>) -> Result<()> {
@@ -68,6 +69,50 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
     Ok(())
 }
 
+// Helper function to parse ISO8601 timestamp
+fn parse_timestamp(ts: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(ts)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+// Helper function to calculate duration between two timestamps
+fn duration_between(start: &str, end: &str) -> Option<chrono::Duration> {
+    let start_dt = parse_timestamp(start)?;
+    let end_dt = parse_timestamp(end)?;
+    Some(end_dt.signed_duration_since(start_dt))
+}
+
+// Helper function to format duration as "Xh Ym" or "Xm Ys"
+fn format_duration(duration: chrono::Duration) -> String {
+    let total_seconds = duration.num_seconds();
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    if hours > 0 {
+        format!("{}h {}m", hours, minutes)
+    } else if minutes > 0 {
+        format!("{}m {}s", minutes, seconds)
+    } else {
+        format!("{}s", seconds)
+    }
+}
+
+// Calculate elapsed time since a timestamp
+fn elapsed_since(start: &str) -> Option<String> {
+    let start_dt = parse_timestamp(start)?;
+    let now = Utc::now();
+    let duration = now.signed_duration_since(start_dt);
+    Some(format_duration(duration))
+}
+
+// Load PRD from path
+fn load_prd(path: &PathBuf) -> Option<Prd> {
+    let contents = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
 fn print_drone_status(name: &str, status: &DroneStatus) {
     // Print drone name with status - honey theme with bee emoji
     let status_symbol = match status.status {
@@ -80,9 +125,15 @@ fn print_drone_status(name: &str, status: &DroneStatus) {
         DroneState::Stopped => "○".bright_black(),
     };
 
-    println!("  {} {} {}",
+    // Calculate total elapsed time
+    let elapsed = elapsed_since(&status.started)
+        .map(|e| format!("  {}", e))
+        .unwrap_or_default();
+
+    println!("  {} {}{}  {}",
              status_symbol,
              format!("🐝 {}", name).yellow().bold(),
+             elapsed.bright_black(),
              format!("[{}]", status.status).bright_black());
 
     // Print progress
@@ -109,9 +160,53 @@ fn print_drone_status(name: &str, status: &DroneStatus) {
                       "─".repeat(empty).bright_black());
     println!("  {}", bar);
 
-    // Print current story
-    if let Some(ref story) = status.current_story {
-        println!("  Current: {}", story.bright_yellow());
+    // Load PRD to get story titles
+    let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
+    if let Some(prd) = load_prd(&prd_path) {
+        println!("\n  Stories:");
+        for story in &prd.stories {
+            let is_completed = status.completed.contains(&story.id);
+            let is_current = status.current_story.as_ref() == Some(&story.id);
+
+            let (icon, color_fn): (_, fn(String) -> colored::ColoredString) = if is_completed {
+                ("✓", |s| s.green())
+            } else if is_current {
+                ("▸", |s| s.yellow())
+            } else {
+                ("○", |s| s.bright_black())
+            };
+
+            // Calculate duration
+            let duration_str = if let Some(timing) = status.story_times.get(&story.id) {
+                if let (Some(started), Some(completed)) = (&timing.started, &timing.completed) {
+                    // Completed story - show duration
+                    if let Some(dur) = duration_between(started, completed) {
+                        format!(" ({})", format_duration(dur))
+                    } else {
+                        String::new()
+                    }
+                } else if let Some(started) = &timing.started {
+                    // In-progress story - show elapsed time
+                    if let Some(elapsed) = elapsed_since(started) {
+                        format!(" ({})", elapsed)
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
+            let story_line = format!("    {} {} {}{}", icon, story.id, story.title, duration_str);
+            println!("{}", color_fn(story_line));
+        }
+    } else {
+        // Fallback: just show current story if PRD not loaded
+        if let Some(ref story) = status.current_story {
+            println!("  Current: {}", story.bright_yellow());
+        }
     }
 
     // Print blocked reason
@@ -236,8 +331,14 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     0
                 };
 
+                // Calculate elapsed time
+                let elapsed = elapsed_since(&status.started)
+                    .unwrap_or_else(|| "?".to_string());
+
                 let line = Line::from(vec![
                     Span::styled(format!("🐝 {:<18}", name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::raw(" "),
+                    Span::styled(format!("{:<10}", elapsed), Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
                     Span::styled(format!("{:<15}", status.status.to_string()), Style::default().fg(status_color)),
                     Span::raw(" "),
