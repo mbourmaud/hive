@@ -15,14 +15,43 @@
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-F5A623.svg" alt="License: MIT"></a>
   <a href="https://github.com/mbourmaud/hive/releases"><img src="https://img.shields.io/github/v/release/mbourmaud/hive?color=F5A623" alt="Release"></a>
+  <a href="https://github.com/mbourmaud/hive/actions"><img src="https://github.com/mbourmaud/hive/workflows/CI/badge.svg" alt="CI"></a>
 </p>
 
 ---
 
 ## 📦 Install
 
+### Homebrew (macOS/Linux)
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
+brew tap mbourmaud/tap
+brew install hive-ai
+```
+
+### Direct Download
+
+```bash
+# macOS (Apple Silicon)
+curl -fsSL https://github.com/mbourmaud/hive/releases/latest/download/hive-darwin-arm64.tar.gz | tar xz
+sudo mv hive /usr/local/bin/
+
+# macOS (Intel)
+curl -fsSL https://github.com/mbourmaud/hive/releases/latest/download/hive-darwin-amd64.tar.gz | tar xz
+sudo mv hive /usr/local/bin/
+
+# Linux (x86_64)
+curl -fsSL https://github.com/mbourmaud/hive/releases/latest/download/hive-linux-amd64.tar.gz | tar xz
+sudo mv hive /usr/local/bin/
+```
+
+### From Source
+
+```bash
+git clone https://github.com/mbourmaud/hive.git
+cd hive
+cargo build --release
+sudo cp target/release/hive /usr/local/bin/
 ```
 
 ---
@@ -62,9 +91,9 @@ See all your drones at a glance:
 | `/hive:init` | `hive init` | Set up the hive in your project |
 | `/hive:prd` | - | Generate a PRD from description |
 | `/hive:start` | `hive start --prd <file>` | Launch a drone |
-| `/hive:status` | `hive status` | See all drones status |
+| `/hive:status` | `hive monitor` | TUI dashboard for all drones |
 | `/hive:logs` | `hive logs <name>` | View drone activity |
-| `/hive:kill` | `hive kill <name>` | Stop a drone |
+| `/hive:stop` | `hive stop <name>` | Stop a running drone |
 | `/hive:clean` | `hive clean <name>` | Remove drone & worktree |
 | `/hive:statusline` | - | Configure statusline |
 
@@ -161,8 +190,8 @@ Hive now captures detailed execution logs for every Claude invocation:
 
 **View in TUI**:
 ```bash
-hive status -i
-# Select drone → "📊 View story logs"
+hive monitor
+# Select drone → View logs, stop, clean
 ```
 
 ---
@@ -252,8 +281,44 @@ export NO_COLOR=1
 
 ## 📋 Requirements
 
-- `bash`, `git`, `jq`
+- `git`
 - [Claude Code](https://claude.ai/code) CLI
+
+---
+
+## 🔧 Development
+
+### Build from source
+
+```bash
+# Debug build
+cargo build
+
+# Release build (optimized)
+cargo build --release
+
+# Run tests
+cargo test
+
+# Run with debug output
+RUST_LOG=debug cargo run -- monitor
+```
+
+### Project Structure
+
+```
+src/
+├── main.rs           # CLI entry point (clap)
+├── lib.rs            # Library exports
+├── types.rs          # Shared types (DroneStatus, Prd, etc.)
+└── commands/
+    ├── init.rs       # hive init
+    ├── start.rs      # hive start
+    ├── status.rs     # hive monitor (TUI)
+    ├── logs.rs       # hive logs
+    ├── kill_clean.rs # hive stop/clean
+    └── ...
+```
 
 ---
 

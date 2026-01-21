@@ -38,3 +38,8 @@ __pycache__/
 
 # Ralph work artifacts (not tracked in main repo)
 ralph-output.log
+
+
+# Added by cargo
+
+/target

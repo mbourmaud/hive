@@ -2,30 +2,24 @@
 
 ## Overview
 
-Pure bash script for orchestrating multiple Claude Code (Ralph) instances via git worktrees. No build step required.
+Rust CLI for orchestrating multiple Claude Code instances (drones) via git worktrees. Features a TUI dashboard for monitoring and managing drones.
 
 ## Commands
 
 ```bash
-hive.sh init                              # Initialize Hive in current repo
-hive.sh spawn <name> --create <branch>    # Create new Ralph with new branch
-hive.sh spawn <name> --attach <branch>    # Attach Ralph to existing branch
-hive.sh start <name> [prompt]             # Start Ralph background process
-hive.sh status                            # Show status of all Ralphs
-hive.sh logs <name> [lines]               # View Ralph's output log
-hive.sh stop <name>                       # Stop a running Ralph
-hive.sh sync <name>                       # Sync worktree with target branch
-hive.sh pr <name> [--draft]               # Create Pull Request
-hive.sh prs                               # List all PRs created by Hive
-hive.sh cleanup <name>                    # Remove worktree after PR merge
-hive.sh clean <name>                      # Remove worktree (abandon work)
-hive.sh dashboard                         # Live status dashboard
+hive init                              # Initialize Hive in current repo
+hive start --prd <file>                # Launch a drone with a PRD
+hive monitor                           # TUI dashboard for all drones
+hive monitor --simple                  # Simple text output (for scripts)
+hive logs <name>                       # View drone activity log
+hive stop <name>                       # Stop a running drone
+hive clean <name>                      # Remove drone & worktree
+hive list                              # Quick list of all drones
+hive update                            # Self-update to latest version
 ```
 
 ## Dependencies
 
-- bash
-- jq
 - git
 - gh CLI (for PR operations)
 - claude CLI
@@ -33,15 +27,19 @@ hive.sh dashboard                         # Live status dashboard
 ## Installation
 
 ```bash
-make install    # Copies hive.sh to ~/.local/bin/hive
+curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
 ```
 
 ## Project Structure
 
 ```
-.hive/              # Created by 'hive.sh init'
-  config.json       # Configuration and state
-  worktrees/        # Git worktrees for each Ralph
-hive.sh             # Main script
-Makefile            # Install/uninstall targets
+.hive/              # Created by 'hive init'
+  config.json       # Configuration
+  prds/             # PRD files
+  drones/           # Drone status and logs
+    <name>/
+      status.json   # Real-time progress
+      activity.log  # Activity feed
+src/                # Rust source code
+tests/              # Test suite
 ```
