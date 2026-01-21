@@ -103,10 +103,11 @@ Works on macOS, Linux, and Windows/WSL.
 ```
 
 Each drone:
-- Gets its own **git worktree** (isolated workspace)
+- Gets its own **git worktree** (isolated workspace) in `~/.hive/worktrees/<project>/<drone>/`
 - Works on its own **branch** (`hive/<name>`)
 - **Commits** each story: `feat(SEC-001): description`
 - Updates **status.json** in real-time
+- Shares `.hive/` state with main project via symlink
 
 ---
 
@@ -130,9 +131,11 @@ your-project/                        # 👑 Queen
 │               └── SEC-002/
 │                   └── attempt-1.log
 
-~/Projects/your-project-security/    # 🐝 Drone worktree
-├── .hive -> ../your-project/.hive   # Symlinked!
-└── (your code being modified)
+~/.hive/worktrees/                   # Global worktree base
+└── your-project/                    # Per-project directory
+    └── security/                    # 🐝 Drone worktree
+        ├── .hive -> /path/to/your-project/.hive  # Symlinked!
+        └── (your code being modified)
 ```
 
 ---
@@ -189,6 +192,36 @@ hive start --resume <drone-name>
 - `hive status` - Shows ⚠ in RED
 - `hive status -i` - Highlights in TUI
 - Desktop notification
+
+---
+
+## ⚙️ Configuration
+
+### Worktree Location
+
+On first `hive init`, you'll be prompted to choose where drone worktrees are created:
+
+**Default**: `~/.hive/worktrees/` (recommended - keeps everything centralized and clean)
+
+**Custom**: You can specify any directory, or set via environment variable:
+```bash
+export HIVE_WORKTREE_BASE="/custom/path"
+```
+
+**Priority**:
+1. `HIVE_WORKTREE_BASE` environment variable
+2. Local `.hive/config.json` (per-project override)
+3. Global `~/.config/hive/config.json`
+4. Default: `~/.hive/worktrees/`
+
+To change the global default later:
+```bash
+# Edit global config
+vim ~/.config/hive/config.json
+
+# Or set environment variable permanently
+echo 'export HIVE_WORKTREE_BASE="$HOME/custom/path"' >> ~/.bashrc
+```
 
 ---
 

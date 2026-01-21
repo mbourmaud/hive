@@ -63,7 +63,22 @@ else
 fi
 ```
 
-### Step 3: Confirm
+### Step 3: Configure Worktree Location (First Time Only)
+
+On **first `hive init` ever**, configure global worktree location:
+
+```
+🐝 First-time Hive Setup
+Drones will be created in separate worktrees outside your repositories.
+Default location: ~/.hive/worktrees
+Structure: ~/.hive/worktrees/<project>/<drone>/
+
+Use default location? (Y/n):
+```
+
+This creates `~/.config/hive/config.json` with the chosen worktree base.
+
+### Step 4: Confirm
 
 Tell the user:
 ```
@@ -74,6 +89,8 @@ Structure created:
   ├── config.json
   ├── prds/        # Store your PRD files here
   └── drones/      # Drone state (auto-managed)
+
+Drone worktrees: ~/.hive/worktrees/<project>/<drone>/
 
 Next steps:
   1. Create a PRD:     /hive:prd

@@ -222,6 +222,31 @@ get_project_name() {
     basename "$(get_project_root)"
 }
 
+get_worktree_base() {
+    # Priority: 1. ENV var, 2. local config.json, 3. global config, 4. default
+    if [ -n "$HIVE_WORKTREE_BASE" ]; then
+        echo "$HIVE_WORKTREE_BASE"
+    elif [ -f "$CONFIG_FILE" ]; then
+        local config_base=$(jq -r '.worktree_base // ""' "$CONFIG_FILE" 2>/dev/null)
+        if [ -n "$config_base" ]; then
+            echo "$config_base"
+            return
+        fi
+    fi
+
+    # Try global config
+    if [ -f "$HIVE_GLOBAL_CONFIG" ]; then
+        local global_base=$(jq -r '.worktree_base // ""' "$HIVE_GLOBAL_CONFIG" 2>/dev/null)
+        if [ -n "$global_base" ]; then
+            echo "$global_base"
+            return
+        fi
+    fi
+
+    # Default: centralized worktrees in home directory
+    echo "$HOME/.hive/worktrees"
+}
+
 # ============================================================================
 # Update Check Functions
 # ============================================================================
@@ -307,6 +332,56 @@ cmd_init() {
   "created": "$(get_timestamp)"
 }
 EOF
+    fi
+
+    # Ensure global config exists (first-time setup)
+    if [ ! -f "$HIVE_GLOBAL_CONFIG" ]; then
+        # Default: centralized worktrees in home directory (cleaner)
+        local worktree_base="$HOME/.hive/worktrees"
+
+        echo ""
+        print_info "🐝 First-time Hive Setup"
+        echo -e "${CYAN}Drones will be created in separate worktrees outside your repositories.${NC}"
+        echo -e "${CYAN}Default location: ${YELLOW}$worktree_base${NC}"
+        echo -e "${CYAN}Structure: ${YELLOW}~/.hive/worktrees/<project>/<drone>/${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}Use default location? (Y/n): ${NC}")" -n 1 -r use_default
+        echo ""
+
+        if [[ ! $use_default =~ ^[Yy]$ ]] && [[ -n $use_default ]]; then
+            read -p "$(echo -e "${YELLOW}Enter worktree base path: ${NC}")" custom_path
+            if [ -n "$custom_path" ]; then
+                # Expand ~ to $HOME
+                worktree_base="${custom_path/#\~/$HOME}"
+            fi
+        fi
+
+        # Create worktree base directory if it doesn't exist
+        if [ ! -d "$worktree_base" ]; then
+            echo ""
+            print_warning "Directory does not exist: $worktree_base"
+            read -p "$(echo -e "${YELLOW}Create it? (Y/n): ${NC}")" -n 1 -r create_dir
+            echo ""
+
+            if [[ $create_dir =~ ^[Yy]$ ]] || [[ -z $create_dir ]]; then
+                mkdir -p "$worktree_base"
+                print_success "Created: $worktree_base"
+            else
+                print_error "Aborting: worktree base directory must exist"
+                exit 1
+            fi
+        fi
+
+        # Create global config
+        mkdir -p "$(dirname "$HIVE_GLOBAL_CONFIG")"
+        cat > "$HIVE_GLOBAL_CONFIG" << EOF
+{
+  "worktree_base": "$worktree_base"
+}
+EOF
+        print_success "Global worktree base configured: $worktree_base"
+        print_info "You can change this later by editing: $HIVE_GLOBAL_CONFIG"
+        echo ""
     fi
 
     # Add to .gitignore if not already
@@ -458,7 +533,8 @@ cmd_run() {
     local target_branch=$(jq -r '.target_branch // empty' "$prd_file")
     local branch_name="${target_branch:-hive/$drone_name}"
 
-    local external_worktree="${HIVE_WORKTREE_BASE:-$HOME/Projects}/${project_name}-${drone_name}"
+    local worktree_base=$(get_worktree_base)
+    local external_worktree="$worktree_base/$project_name/$drone_name"
     local drone_status_dir="$HIVE_DIR/drones/$drone_name"
     local drone_status_file="$drone_status_dir/status.json"
 
@@ -546,6 +622,13 @@ cmd_run() {
         git branch "$branch_name" "$base_branch" 2>/dev/null || {
             print_warning "Branch exists, reusing..."
         }
+
+        # Ensure worktree base directory exists
+        if [ ! -d "$worktree_base" ]; then
+            print_warning "Worktree base directory does not exist: $worktree_base"
+            mkdir -p "$worktree_base"
+            print_success "Created: $worktree_base"
+        fi
 
         # Create worktree (external path for cleaner separation)
         print_info "Creating worktree at $external_worktree..."
@@ -1844,7 +1927,10 @@ cmd_clean() {
     fi
 
     # Fallback to default path
-    [ -z "$worktree_path" ] && worktree_path="${HIVE_WORKTREE_BASE:-$HOME/Projects}/${project_name}-${drone_name}"
+    if [ -z "$worktree_path" ]; then
+        local worktree_base=$(get_worktree_base)
+        worktree_path="$worktree_base/$project_name/$drone_name"
+    fi
 
     # Kill if running
     cmd_kill "$drone_name" 2>/dev/null || true
