@@ -108,6 +108,16 @@ enum Commands {
         #[arg(long)]
         latest: bool,
     },
+
+    /// Install Hive binary and skills
+    Install {
+        /// Only install skills without binary
+        #[arg(long)]
+        skills_only: bool,
+        /// Only install binary without skills
+        #[arg(long)]
+        bin_only: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -208,6 +218,12 @@ fn main() {
         }
         Commands::Sessions { name, latest } => {
             if let Err(e) = commands::sessions::run(name, latest) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Install { skills_only, bin_only } => {
+            if let Err(e) = commands::install::run(skills_only, bin_only) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

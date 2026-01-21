@@ -7,3 +7,4 @@ pub mod unblock;
 pub mod utils;
 pub mod profile;
 pub mod sessions;
+pub mod install;
