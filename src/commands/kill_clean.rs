@@ -7,18 +7,30 @@ use std::process::Command as ProcessCommand;
 
 use crate::types::DroneStatus;
 
+/// Stop a drone by name. If `quiet` is true, no output is printed (for TUI use).
 pub fn kill(name: String) -> Result<()> {
+    kill_impl(name, false)
+}
+
+/// Stop a drone quietly (no stdout output) - for use from TUI
+pub fn kill_quiet(name: String) -> Result<()> {
+    kill_impl(name, true)
+}
+
+fn kill_impl(name: String, quiet: bool) -> Result<()> {
     let drone_dir = PathBuf::from(".hive/drones").join(&name);
 
     if !drone_dir.exists() {
         bail!("Drone '{}' not found", name);
     }
 
-    println!(
-        "{} Stopping drone '{}'...",
-        "→".bright_blue(),
-        name.bright_cyan()
-    );
+    if !quiet {
+        println!(
+            "{} Stopping drone '{}'...",
+            "→".bright_blue(),
+            name.bright_cyan()
+        );
+    }
 
     // Find Claude process
     let ps_output = ProcessCommand::new("ps")
@@ -53,7 +65,9 @@ pub fn kill(name: String) -> Result<()> {
     }
 
     if pids.is_empty() {
-        println!("  {} No running process found", "→".yellow());
+        if !quiet {
+            println!("  {} No running process found", "→".yellow());
+        }
     } else {
         for pid in &pids {
             // Try SIGTERM first
@@ -61,7 +75,9 @@ pub fn kill(name: String) -> Result<()> {
                 .args(["-TERM", &pid.to_string()])
                 .output();
 
-            println!("  {} Sent SIGTERM to PID {}", "✓".green(), pid);
+            if !quiet {
+                println!("  {} Sent SIGTERM to PID {}", "✓".green(), pid);
+            }
 
             // Wait a bit
             std::thread::sleep(std::time::Duration::from_secs(2));
@@ -79,7 +95,9 @@ pub fn kill(name: String) -> Result<()> {
                     .args(["-KILL", &pid.to_string()])
                     .output();
 
-                println!("  {} Sent SIGKILL to PID {}", "✓".green(), pid);
+                if !quiet {
+                    println!("  {} Sent SIGKILL to PID {}", "✓".green(), pid);
+                }
             }
         }
     }
@@ -87,11 +105,13 @@ pub fn kill(name: String) -> Result<()> {
     // Send notification
     send_notification(&name, "stopped")?;
 
-    println!(
-        "\n{} Drone '{}' stopped",
-        "✓".green().bold(),
-        name.bright_cyan()
-    );
+    if !quiet {
+        println!(
+            "\n{} Drone '{}' stopped",
+            "✓".green().bold(),
+            name.bright_cyan()
+        );
+    }
 
     Ok(())
 }
