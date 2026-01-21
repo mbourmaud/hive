@@ -1,0 +1,344 @@
+{
+  "id": "oauth-auth-system",
+  "title": "OAuth2 Authentication System",
+  "description": "Implement a complete OAuth2 authentication system with Google, GitHub, and Microsoft providers, including session management and user profile storage",
+  "version": "2.0.0",
+  "created_at": "2024-01-21T00:00:00Z",
+  "target_platforms": ["web", "api"],
+  "target_branch": "feature/oauth-auth",
+  "stories": [
+    {
+      "id": "AUTH-001",
+      "title": "Setup OAuth2 infrastructure",
+      "description": "Create base OAuth2 infrastructure including configuration, types, and service interfaces",
+      "acceptance_criteria": [
+        "OAuth configuration file structure exists",
+        "TypeScript types for OAuth providers defined",
+        "Service interfaces for OAuth operations defined"
+      ],
+      "definition_of_done": [
+        "OAuth configuration file created with provider schemas",
+        "TypeScript interfaces for OAuth tokens and profiles",
+        "Service interface defines validate(), authorize(), callback() methods",
+        "Configuration validated with Zod schemas",
+        "Unit tests for configuration validation pass"
+      ],
+      "verification_commands": [
+        "test -f src/auth/oauth/config.ts",
+        "test -f src/auth/oauth/types.ts",
+        "test -f src/auth/oauth/service.interface.ts",
+        "pnpm test src/auth/oauth/__tests__/config.test.ts",
+        "pnpm tsc --noEmit"
+      ],
+      "actions": [
+        "Create src/auth/oauth/ directory structure",
+        "Define OAuth provider configuration schema",
+        "Create TypeScript types for tokens, profiles, errors",
+        "Define OAuth service interface",
+        "Add Zod validation for configuration",
+        "Write unit tests for config validation"
+      ],
+      "files": [
+        "src/auth/oauth/config.ts",
+        "src/auth/oauth/types.ts",
+        "src/auth/oauth/service.interface.ts",
+        "src/auth/oauth/__tests__/config.test.ts"
+      ],
+      "tools": [
+        "zod",
+        "typescript",
+        "vitest"
+      ],
+      "context": {
+        "dependencies": [
+          "Zod for runtime type validation",
+          "TypeScript for compile-time types"
+        ],
+        "prerequisites": [
+          "Project already has TypeScript configured",
+          "Vitest test framework set up"
+        ],
+        "architectural_notes": [
+          "Follow existing service pattern in src/services/",
+          "Use dependency injection for all services",
+          "Keep OAuth logic separate from existing auth module",
+          "Use Zod for all configuration validation"
+        ],
+        "related_docs": [
+          "docs/architecture/services.md",
+          "docs/architecture/dependency-injection.md"
+        ]
+      },
+      "testing": {
+        "unit_tests": [
+          "Test valid OAuth configuration parsing",
+          "Test invalid configuration rejection",
+          "Test missing required fields error",
+          "Test type inference from configuration"
+        ],
+        "coverage_threshold": 90.0
+      },
+      "communication": {
+        "commit_template": "feat(auth): add OAuth2 infrastructure\n\n- Create OAuth configuration schema\n- Define TypeScript types and interfaces\n- Add Zod validation for config\n- Write unit tests for validation\n\nRef: AUTH-001",
+        "docs_to_update": [
+          "docs/architecture/authentication.md - add OAuth section"
+        ]
+      }
+    },
+    {
+      "id": "AUTH-002",
+      "title": "Implement Google OAuth provider",
+      "description": "Implement complete Google OAuth2 provider with authorization flow, token exchange, and profile extraction",
+      "acceptance_criteria": [
+        "Users can initiate Google OAuth flow",
+        "Authorization redirects to Google consent screen",
+        "Callback handler exchanges code for tokens",
+        "User profile extracted from Google API"
+      ],
+      "definition_of_done": [
+        "GoogleOAuthProvider class implements OAuthServiceInterface",
+        "authorize() method generates Google authorization URL",
+        "callback() method exchanges code for access token",
+        "Profile extraction gets user email, name, picture",
+        "Error handling for invalid codes, network errors, API errors",
+        "Unit tests achieve >85% coverage",
+        "Integration tests with mock Google API"
+      ],
+      "verification_commands": [
+        "test -f src/auth/oauth/providers/google.ts",
+        "grep -q 'class GoogleOAuthProvider' src/auth/oauth/providers/google.ts",
+        "pnpm test src/auth/oauth/__tests__/google.test.ts",
+        "pnpm test:coverage src/auth/oauth/providers/google.ts",
+        "pnpm tsc --noEmit"
+      ],
+      "actions": [
+        "Create GoogleOAuthProvider class",
+        "Implement authorize() - generate Google OAuth URL with state/PKCE",
+        "Implement callback() - exchange code for tokens",
+        "Implement getProfile() - fetch user data from Google API",
+        "Add error handling for all failure scenarios",
+        "Write unit tests for each method",
+        "Write integration test with mocked Google API",
+        "Add logging for debugging"
+      ],
+      "files": [
+        "src/auth/oauth/providers/google.ts",
+        "src/auth/oauth/__tests__/google.test.ts",
+        "src/auth/oauth/__tests__/mocks/google-api.mock.ts"
+      ],
+      "tools": [
+        "google-auth-library",
+        "axios or fetch for API calls",
+        "vitest",
+        "msw for API mocking"
+      ],
+      "context": {
+        "dependencies": [
+          "Google OAuth2 API (https://accounts.google.com)",
+          "google-auth-library npm package",
+          "Environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET"
+        ],
+        "prerequisites": [
+          "OAuth app registered in Google Cloud Console",
+          "Redirect URI configured in Google Console",
+          "Environment variables set in .env",
+          "AUTH-001 completed (infrastructure ready)"
+        ],
+        "architectural_notes": [
+          "Use PKCE flow for enhanced security",
+          "Store state parameter to prevent CSRF",
+          "Implement exponential backoff for API calls",
+          "Follow OAuth2 spec RFC 6749",
+          "Use Google's recommended token validation"
+        ],
+        "related_docs": [
+          "https://developers.google.com/identity/protocols/oauth2",
+          "docs/setup/oauth-providers.md"
+        ]
+      },
+      "testing": {
+        "unit_tests": [
+          "Test authorize() generates valid Google OAuth URL",
+          "Test authorize() includes state and PKCE parameters",
+          "Test callback() with valid authorization code",
+          "Test callback() with invalid/expired code",
+          "Test getProfile() successful profile extraction",
+          "Test getProfile() error handling when API fails",
+          "Test token refresh logic",
+          "Test PKCE code verifier generation and validation"
+        ],
+        "integration_tests": [
+          "Test full OAuth flow with mocked Google API",
+          "Test error recovery when Google API is unavailable",
+          "Test concurrent authorization requests",
+          "Test state parameter validation prevents CSRF"
+        ],
+        "coverage_threshold": 85.0
+      },
+      "error_handling": {
+        "expected_errors": [
+          "Invalid authorization code (400 from Google)",
+          "Expired authorization code (400 from Google)",
+          "Google API unavailable (network timeout, 5xx errors)",
+          "Invalid client credentials (401 from Google)",
+          "User denied authorization (user clicks 'cancel')",
+          "State parameter mismatch (CSRF attempt)",
+          "Invalid PKCE code_verifier"
+        ],
+        "recovery_strategy": "Retry with exponential backoff for network/5xx errors (max 3 retries), show user-friendly error message for auth failures, log all errors for debugging"
+      },
+      "agent_controls": {
+        "max_iterations": 8,
+        "require_approval_for": [
+          "environment_variables",
+          "external_api_configuration"
+        ],
+        "block_on": [
+          "test_failures",
+          "security_vulnerabilities",
+          "missing_environment_variables"
+        ]
+      },
+      "communication": {
+        "commit_template": "feat(auth): implement Google OAuth provider\n\n- Add GoogleOAuthProvider class\n- Implement authorization URL generation\n- Implement token exchange callback\n- Add user profile extraction\n- Handle errors with retry logic\n- Achieve 85% test coverage\n\nRef: AUTH-002",
+        "pr_template": "## Summary\nImplements Google OAuth2 provider with PKCE flow.\n\n## Changes\n- GoogleOAuthProvider with authorize/callback/getProfile methods\n- PKCE implementation for enhanced security\n- Error handling with exponential backoff\n- Comprehensive test coverage (85%)\n\n## Security\n- PKCE flow prevents authorization code interception\n- State parameter prevents CSRF attacks\n- Secrets stored in environment variables\n- Token validation follows Google best practices\n\n## Testing\n- ✅ Unit tests for all methods\n- ✅ Integration tests with mocked API\n- ✅ Error scenario coverage\n- ✅ PKCE validation tests",
+        "docs_to_update": [
+          "docs/setup/oauth-providers.md - add Google setup instructions",
+          "docs/api/auth-endpoints.md - document OAuth endpoints",
+          "README.md - update OAuth provider list"
+        ],
+        "changelog_entry": "Added Google OAuth2 provider with PKCE support"
+      },
+      "notes": "Use PKCE flow (RFC 7636) for enhanced security. Ensure state parameter is cryptographically random. Test with both development and production OAuth apps."
+    },
+    {
+      "id": "AUTH-003",
+      "title": "Add session management with Redis",
+      "description": "Implement session management using Redis to store user sessions after successful OAuth authentication",
+      "acceptance_criteria": [
+        "Sessions created after successful OAuth",
+        "Session data stored in Redis",
+        "Session validation middleware works",
+        "Sessions expire after configured TTL"
+      ],
+      "definition_of_done": [
+        "SessionService class created with CRUD operations",
+        "Session data includes userId, provider, tokens, expiresAt",
+        "Redis connection configured with environment variables",
+        "Middleware validates session on protected routes",
+        "Sessions auto-expire based on TTL",
+        "Unit tests for SessionService",
+        "Integration tests with real Redis instance"
+      ],
+      "verification_commands": [
+        "test -f src/auth/session/session.service.ts",
+        "grep -q 'class SessionService' src/auth/session/session.service.ts",
+        "test -f src/middleware/session.middleware.ts",
+        "pnpm test src/auth/session/__tests__/",
+        "redis-cli ping",
+        "pnpm build"
+      ],
+      "actions": [
+        "Create SessionService with create, get, delete, refresh methods",
+        "Configure Redis client with connection pooling",
+        "Implement session data serialization/deserialization",
+        "Create session validation middleware",
+        "Add session TTL and auto-expiration",
+        "Implement session refresh logic",
+        "Write unit tests for all SessionService methods",
+        "Write integration tests with Redis",
+        "Add health check for Redis connection"
+      ],
+      "files": [
+        "src/auth/session/session.service.ts",
+        "src/auth/session/types.ts",
+        "src/middleware/session.middleware.ts",
+        "src/auth/session/__tests__/session.test.ts",
+        "src/config/redis.config.ts"
+      ],
+      "tools": [
+        "ioredis",
+        "redis",
+        "vitest",
+        "testcontainers (for integration tests)"
+      ],
+      "context": {
+        "dependencies": [
+          "Redis server (localhost:6379 in dev, managed service in prod)",
+          "ioredis client library",
+          "Environment variables: REDIS_URL, SESSION_TTL, SESSION_SECRET"
+        ],
+        "prerequisites": [
+          "Redis server running and accessible",
+          "AUTH-002 completed (OAuth providers working)",
+          "Environment variables configured"
+        ],
+        "architectural_notes": [
+          "Use Redis for session storage (fast, distributed)",
+          "Session keys: session:{sessionId}",
+          "Store minimal data in session (userId, provider, tokenExpiry)",
+          "Use Redis TTL for automatic session expiration",
+          "Implement connection pooling for performance",
+          "Follow existing service pattern with dependency injection"
+        ],
+        "related_docs": [
+          "docs/architecture/sessions.md",
+          "docs/infrastructure/redis.md"
+        ]
+      },
+      "testing": {
+        "unit_tests": [
+          "Test SessionService.create() creates session",
+          "Test SessionService.get() retrieves session",
+          "Test SessionService.delete() removes session",
+          "Test SessionService.refresh() extends TTL",
+          "Test session serialization/deserialization",
+          "Test session validation logic"
+        ],
+        "integration_tests": [
+          "Test session lifecycle with real Redis (testcontainers)",
+          "Test session expiration after TTL",
+          "Test concurrent session operations",
+          "Test Redis connection failure handling",
+          "Test session middleware on protected routes"
+        ],
+        "coverage_threshold": 80.0
+      },
+      "error_handling": {
+        "expected_errors": [
+          "Redis connection unavailable",
+          "Redis timeout on operations",
+          "Invalid session data format",
+          "Session expired",
+          "Session not found",
+          "Redis authentication failed"
+        ],
+        "rollback_procedure": "Fall back to in-memory session storage (dev only), graceful degradation in production with error logging",
+        "recovery_strategy": "Retry Redis operations with exponential backoff, health check endpoint to monitor Redis, automatic reconnection on connection loss"
+      },
+      "agent_controls": {
+        "max_iterations": 10,
+        "require_approval_for": [
+          "redis_configuration_changes",
+          "session_schema_changes"
+        ],
+        "block_on": [
+          "redis_connection_failures",
+          "test_failures"
+        ]
+      },
+      "communication": {
+        "commit_template": "feat(auth): add Redis session management\n\n- Implement SessionService with CRUD operations\n- Add session validation middleware\n- Configure Redis with connection pooling\n- Add TTL-based session expiration\n- Write comprehensive tests\n\nRef: AUTH-003",
+        "pr_template": "## Summary\nAdds Redis-based session management for OAuth authentication.\n\n## Changes\n- SessionService with create/get/delete/refresh operations\n- Redis client configuration with pooling\n- Session validation middleware\n- Automatic TTL-based expiration\n- Health check for Redis connection\n\n## Testing\n- ✅ Unit tests for all SessionService methods\n- ✅ Integration tests with testcontainers\n- ✅ Session lifecycle tests\n- ✅ Error handling tests\n\n## Infrastructure\n- Requires Redis server (>= 6.0)\n- Environment variables: REDIS_URL, SESSION_TTL\n- See docs/infrastructure/redis.md for setup",
+        "docs_to_update": [
+          "docs/infrastructure/redis.md - create Redis setup guide",
+          "docs/architecture/sessions.md - document session management",
+          "docs/setup/environment-variables.md - add Redis variables",
+          "README.md - add Redis to dependencies"
+        ],
+        "changelog_entry": "Added Redis-based session management with automatic expiration"
+      },
+      "notes": "Use testcontainers for integration tests to avoid manual Redis setup. Implement graceful degradation if Redis is unavailable. Monitor Redis connection health."
+    }
+  ]
+}
