@@ -151,6 +151,9 @@ enum ProfileCommands {
 fn main() {
     let cli = Cli::parse();
 
+    // Check for updates in background (non-blocking, once per day)
+    commands::utils::check_for_updates_background();
+
     match cli.command {
         Commands::Init => {
             if let Err(e) = commands::init::run() {

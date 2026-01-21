@@ -2,6 +2,7 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 
 use crate::types::{DroneState, DroneStatus};
 
@@ -94,6 +95,70 @@ fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
     drones.sort_by(|a, b| b.1.updated.cmp(&a.1.updated));
 
     Ok(drones)
+}
+
+/// Check for updates silently (called on every command)
+pub fn check_for_updates_background() {
+    // Only check once per day
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return,
+    };
+
+    let cache_dir = home.join(".cache").join("hive");
+    let _ = fs::create_dir_all(&cache_dir);
+    let last_check_file = cache_dir.join("last_update_check");
+
+    // Check if we checked recently (within 24 hours)
+    if let Ok(metadata) = fs::metadata(&last_check_file) {
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                if elapsed < Duration::from_secs(86400) {
+                    // Checked less than 24h ago, skip
+                    return;
+                }
+            }
+        }
+    }
+
+    // Update last check time
+    let _ = fs::write(&last_check_file, "");
+
+    // Check for updates in background (don't block)
+    std::thread::spawn(|| {
+        let _ = check_and_notify_update();
+    });
+}
+
+fn check_and_notify_update() -> Result<()> {
+    const REPO: &str = "mbourmaud/hive";
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("hive")
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
+    let url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
+    let response = client.get(&url).send()?;
+
+    if !response.status().is_success() {
+        return Ok(());
+    }
+
+    let release: serde_json::Value = response.json()?;
+    let latest_version = release["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .trim_start_matches('v');
+
+    // Simple version comparison
+    if current_version < latest_version {
+        eprintln!("\n{}", format!("💡 New Hive version available: {} → {}", current_version, latest_version).yellow());
+        eprintln!("{}", format!("   Run {} to update", "hive update".cyan()));
+    }
+
+    Ok(())
 }
 
 /// Self-update via GitHub releases
@@ -210,8 +275,26 @@ pub fn update() -> Result<()> {
     // Replace current binary
     fs::rename(&temp_file, &current_exe).context("Failed to replace current binary")?;
 
-    println!("{}", "✓ Update successful!".green().bold());
-    println!("Please restart hive-rust to use the new version.");
+    println!("{}", "✓ Binary updated successfully!".green().bold());
 
+    // Update skills automatically
+    println!("\n{}", "Updating skills...".bright_cyan());
+    if let Err(e) = update_skills() {
+        eprintln!("{} Failed to update skills: {}", "⚠".yellow(), e);
+        eprintln!("Run {} to update skills manually", "hive install --skills-only".cyan());
+    } else {
+        println!("{}", "✓ Skills updated successfully!".green().bold());
+    }
+
+    println!("\n{}", "Update complete!".green().bold());
+    println!("Hive {} is now ready to use.", latest_version.bright_cyan());
+
+    Ok(())
+}
+
+/// Update skills by calling the install command
+fn update_skills() -> Result<()> {
+    use crate::commands::install;
+    install::run(true, false)?; // skills_only=true, bin_only=false to just update skills
     Ok(())
 }
