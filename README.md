@@ -62,9 +62,9 @@ See all your drones at a glance:
 | `/hive:init` | `hive init` | Set up the hive in your project |
 | `/hive:prd` | - | Generate a PRD from description |
 | `/hive:start` | `hive start --prd <file>` | Launch a drone |
-| `/hive:status` | `hive status` | See all drones status |
+| `/hive:status` | `hive monitor` | TUI dashboard for all drones |
 | `/hive:logs` | `hive logs <name>` | View drone activity |
-| `/hive:kill` | `hive kill <name>` | Stop a drone |
+| `/hive:stop` | `hive stop <name>` | Stop a running drone |
 | `/hive:clean` | `hive clean <name>` | Remove drone & worktree |
 | `/hive:statusline` | - | Configure statusline |
 
@@ -161,8 +161,8 @@ Hive now captures detailed execution logs for every Claude invocation:
 
 **View in TUI**:
 ```bash
-hive status -i
-# Select drone → "📊 View story logs"
+hive monitor
+# Select drone → View logs, stop, clean
 ```
 
 ---
@@ -252,7 +252,7 @@ export NO_COLOR=1
 
 ## 📋 Requirements
 
-- `bash`, `git`, `jq`
+- `git`
 - [Claude Code](https://claude.ai/code) CLI
 
 ---
