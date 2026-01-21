@@ -15,7 +15,8 @@ pub fn list() -> Result<()> {
         return Ok(());
     }
 
-    println!("{}", "Hive Drones".bright_cyan().bold());
+    // Honey theme header with crown emoji
+    println!("{}", "👑 Hive Drones".yellow().bold());
     println!();
 
     // Header
@@ -28,6 +29,7 @@ pub fn list() -> Result<()> {
     for (name, status) in drones {
         let status_str = match status.status {
             DroneState::Starting => "starting".yellow(),
+            DroneState::Resuming => "resuming".yellow(),
             DroneState::InProgress => "in_progress".green(),
             DroneState::Completed => "completed".bright_green().bold(),
             DroneState::Error => "error".red().bold(),
@@ -48,7 +50,7 @@ pub fn list() -> Result<()> {
         };
 
         println!("{:<20} {:<15} {:<10}",
-                 name.bright_cyan(),
+                 format!("🐝 {}", name).yellow().bold(),
                  status_str,
                  format!("{} ({}%)", progress, percentage).bright_white());
     }

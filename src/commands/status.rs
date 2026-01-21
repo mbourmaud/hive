@@ -42,7 +42,8 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
             return Ok(());
         }
 
-        println!("{}", "Hive Status".bright_cyan().bold());
+        // Use yellow/gold for the header with crown emoji
+        println!("  {} v{}", "👑 hive".yellow().bold(), env!("CARGO_PKG_VERSION"));
         println!();
 
         for (drone_name, status) in filtered {
@@ -62,9 +63,10 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
 }
 
 fn print_drone_status(name: &str, status: &DroneStatus) {
-    // Print drone name with status
+    // Print drone name with status - honey theme with bee emoji
     let status_symbol = match status.status {
         DroneState::Starting => "◐".yellow(),
+        DroneState::Resuming => "◐".yellow(),
         DroneState::InProgress => "●".green(),
         DroneState::Completed => "✓".bright_green().bold(),
         DroneState::Error => "✗".red().bold(),
@@ -72,10 +74,10 @@ fn print_drone_status(name: &str, status: &DroneStatus) {
         DroneState::Stopped => "○".bright_black(),
     };
 
-    println!("{} {} [{}]",
+    println!("  {} {} {}",
              status_symbol,
-             name.bright_cyan().bold(),
-             status.status.to_string().bright_white());
+             format!("🐝 {}", name).yellow().bold(),
+             format!("[{}]", status.status).bright_black());
 
     // Print progress
     let progress = if status.total > 0 {
@@ -92,13 +94,13 @@ fn print_drone_status(name: &str, status: &DroneStatus) {
 
     println!("  Progress: {} ({}%)", progress.bright_white(), percentage);
 
-    // Print progress bar
+    // Print progress bar with honey theme (━ filled, ─ empty)
     let bar_width = 40;
     let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
     let empty = bar_width - filled;
     let bar = format!("[{}{}]",
-                      "█".repeat(filled).green(),
-                      "░".repeat(empty).bright_black());
+                      "━".repeat(filled).green(),
+                      "─".repeat(empty).bright_black());
     println!("  {}", bar);
 
     // Print current story
@@ -198,9 +200,9 @@ fn run_tui(_name: Option<String>, _follow: bool) -> Result<()> {
                 ])
                 .split(f.area());
 
-            // Title
-            let title = Paragraph::new("Hive Status Dashboard")
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            // Title with honey theme
+            let title = Paragraph::new(format!("👑 hive v{}", env!("CARGO_PKG_VERSION")))
+                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
                 .block(Block::default().borders(Borders::ALL));
             f.render_widget(title, chunks[0]);
 
@@ -208,6 +210,7 @@ fn run_tui(_name: Option<String>, _follow: bool) -> Result<()> {
             let items: Vec<ListItem> = drones.iter().map(|(name, status)| {
                 let status_color = match status.status {
                     DroneState::Starting => Color::Yellow,
+                    DroneState::Resuming => Color::Yellow,
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
@@ -228,7 +231,7 @@ fn run_tui(_name: Option<String>, _follow: bool) -> Result<()> {
                 };
 
                 let line = Line::from(vec![
-                    Span::styled(format!("{:<20}", name), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("🐝 {:<18}", name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                     Span::raw(" "),
                     Span::styled(format!("{:<15}", status.status.to_string()), Style::default().fg(status_color)),
                     Span::raw(" "),

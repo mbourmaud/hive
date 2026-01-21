@@ -61,6 +61,7 @@ pub struct StoryTiming {
 #[serde(rename_all = "snake_case")]
 pub enum DroneState {
     Starting,
+    Resuming,
     InProgress,
     Completed,
     Error,
@@ -72,6 +73,7 @@ impl std::fmt::Display for DroneState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DroneState::Starting => write!(f, "starting"),
+            DroneState::Resuming => write!(f, "resuming"),
             DroneState::InProgress => write!(f, "in_progress"),
             DroneState::Completed => write!(f, "completed"),
             DroneState::Error => write!(f, "error"),
@@ -178,6 +180,7 @@ mod tests {
     #[test]
     fn test_drone_state_display() {
         assert_eq!(DroneState::Starting.to_string(), "starting");
+        assert_eq!(DroneState::Resuming.to_string(), "resuming");
         assert_eq!(DroneState::InProgress.to_string(), "in_progress");
         assert_eq!(DroneState::Completed.to_string(), "completed");
         assert_eq!(DroneState::Error.to_string(), "error");

@@ -184,7 +184,8 @@ fn main() {
             }
         }
         Commands::Version => {
-            println!("hive-rust version {}", VERSION);
+            println!("🐝 Hive v{}", VERSION);
+            println!("Drone orchestration for Claude Code");
         }
         Commands::Update => {
             if let Err(e) = commands::utils::update() {
