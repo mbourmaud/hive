@@ -533,6 +533,80 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             let mut lines: Vec<Line> = Vec::new();
             let mut drone_line_indices: Vec<usize> = Vec::new(); // Track which line each drone header is on
 
+            // Show placeholder when no drones
+            if drones.is_empty() {
+                lines.push(Line::raw(""));
+                lines.push(Line::raw(""));
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        "  No drones running",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::raw(""));
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled("Get started:", Style::default().fg(Color::Yellow)),
+                ]));
+                lines.push(Line::raw(""));
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled("1. ", Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        "Create a PRD with ",
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        "/hive:prd",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(" in Claude Code", Style::default().fg(Color::White)),
+                ]));
+                lines.push(Line::raw(""));
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled("2. ", Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        "Launch a drone with ",
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        "hive start <name>",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::raw(""));
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled("3. ", Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        "Monitor progress here with ",
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        "hive monitor",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::raw(""));
+                lines.push(Line::raw(""));
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "Press 'n' to create a new drone",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
+
             for (idx, (name, status)) in drones.iter().enumerate() {
                 drone_line_indices.push(lines.len());
 
