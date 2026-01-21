@@ -537,14 +537,12 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             if drones.is_empty() {
                 lines.push(Line::raw(""));
                 lines.push(Line::raw(""));
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        "  No drones running",
-                        Style::default()
-                            .fg(Color::DarkGray)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    "  No drones running",
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 lines.push(Line::raw(""));
                 lines.push(Line::from(vec![
                     Span::raw("  "),
@@ -554,10 +552,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled("1. ", Style::default().fg(Color::Cyan)),
-                    Span::styled(
-                        "Create a PRD with ",
-                        Style::default().fg(Color::White),
-                    ),
+                    Span::styled("Create a PRD with ", Style::default().fg(Color::White)),
                     Span::styled(
                         "/hive:prd",
                         Style::default()
@@ -570,10 +565,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled("2. ", Style::default().fg(Color::Cyan)),
-                    Span::styled(
-                        "Launch a drone with ",
-                        Style::default().fg(Color::White),
-                    ),
+                    Span::styled("Launch a drone with ", Style::default().fg(Color::White)),
                     Span::styled(
                         "hive start <name>",
                         Style::default()

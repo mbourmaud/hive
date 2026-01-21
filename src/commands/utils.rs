@@ -154,7 +154,14 @@ fn check_and_notify_update() -> Result<()> {
 
     // Simple version comparison
     if current_version < latest_version {
-        eprintln!("\n{}", format!("💡 New Hive version available: {} → {}", current_version, latest_version).yellow());
+        eprintln!(
+            "\n{}",
+            format!(
+                "💡 New Hive version available: {} → {}",
+                current_version, latest_version
+            )
+            .yellow()
+        );
         eprintln!("{}", format!("   Run {} to update", "hive update".cyan()));
     }
 
@@ -281,7 +288,10 @@ pub fn update() -> Result<()> {
     println!("\n{}", "Updating skills...".bright_cyan());
     if let Err(e) = update_skills() {
         eprintln!("{} Failed to update skills: {}", "⚠".yellow(), e);
-        eprintln!("Run {} to update skills manually", "hive install --skills-only".cyan());
+        eprintln!(
+            "Run {} to update skills manually",
+            "hive install --skills-only".cyan()
+        );
     } else {
         println!("{}", "✓ Skills updated successfully!".green().bold());
     }

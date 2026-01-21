@@ -14,11 +14,16 @@ fn send_notification(title: &str, message: &str) -> Result<(), Box<dyn std::erro
     // Try terminal-notifier first (if installed) with app icon
     let terminal_notifier_result = Command::new("terminal-notifier")
         .args([
-            "-title", title,
-            "-message", message,
-            "-sound", "Glass",
-            "-appIcon", "https://raw.githubusercontent.com/mbourmaud/hive/main/assets/hive-icon.png",
-            "-group", "hive-notifications"  // Prevent duplicate notifications
+            "-title",
+            title,
+            "-message",
+            message,
+            "-sound",
+            "Glass",
+            "-appIcon",
+            "https://raw.githubusercontent.com/mbourmaud/hive/main/assets/hive-icon.png",
+            "-group",
+            "hive-notifications", // Prevent duplicate notifications
         ])
         .status();
 
@@ -68,10 +73,12 @@ fn send_notification(title: &str, message: &str) -> Result<(), Box<dyn std::erro
         // Regular Linux - use notify-send with icon
         Command::new("notify-send")
             .args([
-                "-i", "dialog-information",  // Use system icon, or could download custom icon
-                "-a", "Hive",  // Application name
+                "-i",
+                "dialog-information", // Use system icon, or could download custom icon
+                "-a",
+                "Hive", // Application name
                 title,
-                message
+                message,
             ])
             .status()?;
     }
