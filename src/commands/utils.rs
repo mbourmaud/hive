@@ -98,7 +98,7 @@ fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
 
 /// Self-update via GitHub releases
 pub fn update() -> Result<()> {
-    const REPO: &str = "anthropics/hive";
+    const REPO: &str = "mbourmaud/hive";
 
     println!("{}", "🔄 Checking for updates...".bright_cyan());
 
