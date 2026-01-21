@@ -88,7 +88,7 @@ pub fn run() -> Result<()> {
     );
     println!("\nNext steps:");
     println!("  1. Create a PRD file in .hive/prds/");
-    println!("  2. Run 'hive-rust start <drone-name>' to launch a drone");
+    println!("  2. Run 'hive start <drone-name>' to launch a drone");
 
     Ok(())
 }

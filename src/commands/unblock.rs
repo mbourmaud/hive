@@ -158,7 +158,7 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
                     println!(
                         "{}",
                         format!(
-                            "✓ Drone '{}' unblocked. Use 'hive-rust start {} --resume' to resume.",
+                            "✓ Drone '{}' unblocked. Use 'hive start {} --resume' to resume.",
                             name, name
                         )
                         .green()
@@ -172,7 +172,7 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
                 println!(
                     "{}",
                     format!(
-                        "✓ Drone '{}' unblocked. Use 'hive-rust start {} --resume' to resume.",
+                        "✓ Drone '{}' unblocked. Use 'hive start {} --resume' to resume.",
                         name, name
                     )
                     .green()

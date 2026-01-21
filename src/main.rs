@@ -4,7 +4,7 @@ use hive_lib::commands;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser)]
-#[command(name = "hive-rust")]
+#[command(name = "hive")]
 #[command(about = "High-performance CLI tool for orchestrating multiple Claude Code instances")]
 #[command(version = VERSION)]
 struct Cli {

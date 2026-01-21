@@ -46,7 +46,7 @@ pub fn list() -> Result<()> {
 
     if !profiles_dir.exists() {
         println!("{}", "No profiles found".yellow());
-        println!("\nRun 'hive-rust profile create <name>' to create a profile");
+        println!("\nRun 'hive profile create <name>' to create a profile");
         return Ok(());
     }
 
@@ -149,7 +149,7 @@ pub fn use_profile(name: String) -> Result<()> {
 
     if !profile_path.exists() {
         bail!(
-            "Profile '{}' not found. Use 'hive-rust profile list' to see available profiles.",
+            "Profile '{}' not found. Use 'hive profile list' to see available profiles.",
             name
         );
     }

@@ -12,7 +12,7 @@ pub fn list() -> Result<()> {
 
     if drones.is_empty() {
         println!("{}", "No drones found".yellow());
-        println!("\nRun 'hive-rust init' to initialize Hive");
+        println!("\nRun 'hive init' to initialize Hive");
         return Ok(());
     }
 
@@ -177,7 +177,7 @@ pub fn update() -> Result<()> {
     println!("{}", "Fetching latest release info...".bright_black());
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent("hive-rust")
+        .user_agent("hive")
         .build()?;
 
     let response = client
@@ -229,7 +229,7 @@ pub fn update() -> Result<()> {
         .as_array()
         .context("Missing assets in release")?;
 
-    let binary_name = format!("hive-rust-{}", platform);
+    let binary_name = format!("hive-{}", platform);
     let asset = assets
         .iter()
         .find(|a| a["name"].as_str().is_some_and(|n| n.contains(platform)))

@@ -184,8 +184,8 @@ pub fn run(
         name.bright_cyan()
     );
     println!("\nMonitor progress:");
-    println!("  hive-rust status {}", name);
-    println!("  hive-rust logs {}", name);
+    println!("  hive status {}", name);
+    println!("  hive logs {}", name);
 
     Ok(())
 }
@@ -194,7 +194,7 @@ fn find_prd(name: &str) -> Result<PathBuf> {
     let prds_dir = PathBuf::from(".hive/prds");
 
     if !prds_dir.exists() {
-        bail!("No PRDs directory found. Run 'hive-rust init' first.");
+        bail!("No PRDs directory found. Run 'hive init' first.");
     }
 
     let mut candidates = Vec::new();

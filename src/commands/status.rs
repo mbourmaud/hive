@@ -35,7 +35,7 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
 
         if drones.is_empty() {
             println!("{}", "No drones found".yellow());
-            println!("\nRun 'hive-rust init' to initialize Hive");
+            println!("\nRun 'hive init' to initialize Hive");
             return Ok(());
         }
 
