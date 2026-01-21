@@ -1,4 +1,4 @@
-use hive_rust::types::{DroneState, DroneStatus, StoryTiming};
+use hive_lib::types::{DroneState, DroneStatus, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;

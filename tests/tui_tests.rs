@@ -1,4 +1,4 @@
-use hive_rust::types::{DroneState, DroneStatus};
+use hive_lib::types::{DroneState, DroneStatus};
 use ratatui::{
     backend::TestBackend,
     layout::{Constraint, Direction, Layout},

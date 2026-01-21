@@ -33,6 +33,15 @@ pub struct Story {
     #[serde(default)]
     pub verification_commands: Vec<String>,
     pub notes: Option<String>,
+    /// Specific actions to take (optional, enhances guidance)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<String>,
+    /// Files to modify/create (optional, helps target work)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+    /// Tools/commands to use (optional, specifies tooling)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<String>,
 }
 
 /// Drone execution status
