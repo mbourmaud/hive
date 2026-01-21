@@ -151,11 +151,16 @@ fn main() {
             }
         }
         Commands::Kill { name } => {
-            println!("Kill drone '{}' - not yet implemented", name);
+            if let Err(e) = commands::kill_clean::kill(name) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Clean { name, force } => {
-            println!("Clean drone '{}' - not yet implemented", name);
-            println!("  Force: {}", force);
+            if let Err(e) = commands::kill_clean::clean(name, force) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Unblock { name, no_interactive } => {
             println!("Unblock drone '{}' - not yet implemented", name);
