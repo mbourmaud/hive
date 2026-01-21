@@ -11,13 +11,21 @@ pub fn notify(title: &str, message: &str) {
 
 #[cfg(target_os = "macos")]
 fn send_notification(title: &str, message: &str) -> Result<(), Box<dyn std::error::Error>> {
-    // Try terminal-notifier first (if installed)
-    if Command::new("terminal-notifier")
-        .args(["-title", title, "-message", message, "-sound", "Glass"])
-        .status()
-        .is_ok()
-    {
-        return Ok(());
+    // Try terminal-notifier first (if installed) with app icon
+    let terminal_notifier_result = Command::new("terminal-notifier")
+        .args([
+            "-title", title,
+            "-message", message,
+            "-sound", "Glass",
+            "-appIcon", "https://raw.githubusercontent.com/mbourmaud/hive/main/assets/hive-icon.png",
+            "-group", "hive-notifications"  // Prevent duplicate notifications
+        ])
+        .status();
+
+    if let Ok(status) = terminal_notifier_result {
+        if status.success() {
+            return Ok(());
+        }
     }
 
     // Fallback to osascript (always available on macOS)
@@ -57,9 +65,14 @@ fn send_notification(title: &str, message: &str) -> Result<(), Box<dyn std::erro
             ])
             .status()?;
     } else {
-        // Regular Linux - use notify-send
+        // Regular Linux - use notify-send with icon
         Command::new("notify-send")
-            .args([title, message])
+            .args([
+                "-i", "dialog-information",  // Use system icon, or could download custom icon
+                "-a", "Hive",  // Application name
+                title,
+                message
+            ])
             .status()?;
     }
 
