@@ -30,8 +30,17 @@ fi
 REPO="mbourmaud/hive"
 GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
 
-echo ""
-echo -e "${YELLOW}${BOLD}👑 Hive${RESET} - Drone Orchestration for Claude Code"
+cat << 'EOF'
+
+    ██╗  ██╗██╗██╗   ██╗███████╗
+    ██║  ██║██║██║   ██║██╔════╝
+    ███████║██║██║   ██║█████╗
+    ██╔══██║██║╚██╗ ██╔╝██╔══╝
+    ██║  ██║██║ ╚████╔╝ ███████╗
+    ╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝
+
+EOF
+echo -e "  ${YELLOW}Drone Orchestration for Claude Code${RESET}"
 echo ""
 
 # ============================================================================
@@ -167,33 +176,25 @@ else
 fi
 
 # ============================================================================
-# Verify Installation
+# Success!
 # ============================================================================
 
 echo ""
-INSTALLED_VERSION=$("$INSTALL_DIR/hive" --version 2>/dev/null | head -1 || echo "unknown")
-echo -e "${GREEN}${BOLD}✓ Hive installed successfully!${RESET}"
-echo -e "  Version: $INSTALLED_VERSION"
+echo -e "${GREEN}${BOLD}✓ Installation complete!${RESET}"
 echo ""
 
-# ============================================================================
-# Summary
-# ============================================================================
-
-echo "Quick start:"
-echo -e "  ${DIM}# Initialize Hive in your project${RESET}"
-echo "  hive init"
+# Get clean version
+VERSION=$("$INSTALL_DIR/hive" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+echo -e "${BOLD}Getting Started:${RESET}"
 echo ""
-echo -e "  ${DIM}# Create a PRD (in Claude Code)${RESET}"
-echo "  /hive:prd"
+echo -e "  ${CYAN}1.${RESET} cd into your project"
+echo -e "  ${CYAN}2.${RESET} hive init"
+echo -e "  ${CYAN}3.${RESET} Create a PRD with ${CYAN}/hive:prd${RESET} in Claude Code"
+echo -e "  ${CYAN}4.${RESET} hive start my-drone"
 echo ""
-echo -e "  ${DIM}# Launch a drone${RESET}"
-echo "  hive start my-feature"
+echo -e "${DIM}Monitor progress:      ${RESET}hive monitor"
+echo -e "${DIM}View logs:             ${RESET}hive logs <name>"
+echo -e "${DIM}Update Hive:           ${RESET}hive update"
 echo ""
-echo -e "  ${DIM}# Monitor${RESET}"
-echo "  hive monitor"
+echo -e "${DIM}Hive ${VERSION} • https://github.com/$REPO${RESET}"
 echo ""
-echo -e "  ${DIM}# Update to latest version${RESET}"
-echo "  hive update"
-echo ""
-echo "Documentation: https://github.com/$REPO"
