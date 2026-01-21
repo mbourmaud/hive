@@ -427,10 +427,28 @@ fn run_tui(_name: Option<String>) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut selected_index: usize = 0;
+    let mut selected_story_index: Option<usize> = None; // None = drone selected, Some(i) = story i selected
     let mut message: Option<String> = None;
     let mut message_color = Color::Green;
-    let mut expanded_drones: HashSet<String> = HashSet::new();
     let mut scroll_offset: usize = 0;
+    let mut blocked_view: Option<String> = None; // Some(drone_name) = showing blocked detail view
+
+    // Pre-expand in_progress and blocked drones by default
+    let initial_drones = list_drones()?;
+    let mut expanded_drones: HashSet<String> = initial_drones
+        .iter()
+        .filter(|(_, status)| {
+            matches!(
+                status.status,
+                DroneState::InProgress
+                    | DroneState::Starting
+                    | DroneState::Resuming
+                    | DroneState::Blocked
+                    | DroneState::Error
+            )
+        })
+        .map(|(name, _)| name.clone())
+        .collect();
 
     loop {
         let mut drones = list_drones()?;
@@ -460,36 +478,56 @@ fn run_tui(_name: Option<String>) -> Result<()> {
         terminal.draw(|f| {
             let area = f.area();
 
+            // Check if we're showing the blocked detail view
+            if let Some(ref blocked_drone_name) = blocked_view {
+                // Find the blocked drone
+                if let Some((_, status)) =
+                    drones.iter().find(|(name, _)| name == blocked_drone_name)
+                {
+                    render_blocked_detail_view(f, area, blocked_drone_name, status, &prd_cache);
+                    return;
+                }
+            }
+
             // Main layout: header, content, footer
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(2), // Header
+                    Constraint::Length(4), // Header with ASCII art
                     Constraint::Min(0),    // Content
-                    Constraint::Length(2), // Footer
+                    Constraint::Length(1), // Footer
                 ])
                 .split(area);
 
-            // Header - minimal, no borders
-            let header = Line::from(vec![
-                Span::styled("  👑 ", Style::default().fg(Color::Yellow)),
-                Span::styled(
-                    "hive",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" v{}", env!("CARGO_PKG_VERSION")),
-                    Style::default().fg(Color::DarkGray),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    format!("{} drones", drones.len()),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]);
-            f.render_widget(Paragraph::new(header), chunks[0]);
+            // Header with ASCII art
+            let header_lines = vec![
+                Line::from(vec![
+                    Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        "  Orchestrate Claude Code",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("  v{}", env!("CARGO_PKG_VERSION")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!(
+                            "  {} drone{}",
+                            drones.len(),
+                            if drones.len() != 1 { "s" } else { "" }
+                        ),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+            ];
+            f.render_widget(Paragraph::new(header_lines), chunks[0]);
 
             // Build content lines
             let mut lines: Vec<Line> = Vec::new();
@@ -533,7 +571,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                 let progress_bar = if status.status == DroneState::Completed {
                     // Completed: dim bar
-                    format!("{}",  "━".repeat(bar_width))
+                    "━".repeat(bar_width)
                 } else {
                     format!("{}{}", "━".repeat(filled), "─".repeat(empty))
                 };
@@ -544,18 +582,14 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     _ => Color::Green,
                 };
 
-                // Expand/collapse indicator
-                let expand_indicator = if status.status != DroneState::Completed {
-                    if is_expanded { "▼" } else { "▶" }
-                } else {
-                    " "
-                };
+                // Expand/collapse indicator (all drones can be expanded)
+                let expand_indicator = if is_expanded { "▼" } else { "▶" };
 
                 // Selection indicator
                 let select_char = if is_selected { "▸" } else { " " };
 
                 // Elapsed time
-                let elapsed = elapsed_since(&status.started).unwrap_or_else(|| "".to_string());
+                let elapsed = elapsed_since(&status.started).unwrap_or_default();
 
                 // Drone header line
                 let name_style = if is_selected {
@@ -598,33 +632,21 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 ]);
                 lines.push(header_line);
 
-                // Show blocked reason inline
-                if status.status == DroneState::Blocked {
-                    if let Some(ref reason) = status.blocked_reason {
-                        let reason_short = if reason.len() > 60 {
-                            format!("{}...", &reason[..57])
-                        } else {
-                            reason.clone()
-                        };
-                        lines.push(Line::from(vec![
-                            Span::raw("         "),
-                            Span::styled("⚠ ", Style::default().fg(Color::Rgb(255, 165, 0))),
-                            Span::styled(reason_short, Style::default().fg(Color::Rgb(255, 165, 0))),
-                        ]));
-                    }
-                }
-
-                // Expanded: show stories
-                if is_expanded && status.status != DroneState::Completed {
+                // Expanded: show stories (works for all drones including completed)
+                if is_expanded {
                     if let Some(prd) = prd_cache.get(&status.prd) {
-                        for story in &prd.stories {
+                        for (story_idx, story) in prd.stories.iter().enumerate() {
                             let is_completed = status.completed.contains(&story.id);
                             let is_current = status.current_story.as_ref() == Some(&story.id);
+                            let is_story_selected =
+                                is_selected && selected_story_index == Some(story_idx);
 
-                            let (story_icon, story_color) = if is_completed {
+                            let (story_icon, story_color) = if is_story_selected {
+                                ("▸", Color::Cyan)
+                            } else if is_completed {
                                 ("✓", Color::Green)
                             } else if is_current {
-                                ("▸", Color::Yellow)
+                                ("●", Color::Yellow)
                             } else {
                                 ("○", Color::DarkGray)
                             };
@@ -659,23 +681,59 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 story.title.clone()
                             };
 
+                            let line_style = if is_story_selected {
+                                Style::default().add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default()
+                            };
+
                             lines.push(Line::from(vec![
-                                Span::raw("           "),
-                                Span::styled(story_icon, Style::default().fg(story_color)),
+                                Span::styled("      ", line_style),
+                                Span::styled(story_icon, line_style.fg(story_color)),
                                 Span::raw(" "),
                                 Span::styled(
                                     format!("{:<10}", story.id),
-                                    Style::default().fg(story_color),
+                                    line_style.fg(if is_story_selected {
+                                        Color::Cyan
+                                    } else {
+                                        story_color
+                                    }),
                                 ),
-                                Span::styled(title_short, Style::default().fg(story_color)),
-                                Span::styled(duration_str, Style::default().fg(Color::DarkGray)),
+                                Span::styled(
+                                    title_short,
+                                    line_style.fg(if is_story_selected {
+                                        Color::Cyan
+                                    } else {
+                                        story_color
+                                    }),
+                                ),
+                                Span::styled(duration_str, line_style.fg(Color::DarkGray)),
                             ]));
                         }
                     }
+
+                    // Show blocked indicator (press 'b' for details)
+                    if status.status == DroneState::Blocked {
+                        let orange = Color::Rgb(255, 165, 0);
+                        lines.push(Line::from(vec![
+                            Span::raw("      "),
+                            Span::styled(
+                                "⚠ BLOCKED",
+                                Style::default().fg(orange).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                " - press 'b' for details",
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]));
+                    }
                 }
 
-                // Add spacing between drones
-                lines.push(Line::raw(""));
+                // Add separator between drones
+                lines.push(Line::styled(
+                    "  ─────────────────────────────────────────────────────",
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
 
             // Calculate visible area and scroll
@@ -723,11 +781,13 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
             }
 
-            // Footer - shortcuts
+            // Footer - shortcuts (context-dependent)
             let footer_text = if let Some(msg) = &message {
                 msg.clone()
+            } else if selected_story_index.is_some() {
+                " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " n new  l logs  x stop  c clean  u unblock  ↵ expand  q quit".to_string()
+                " ↵ expand  l logs  b blocked  x stop  c clean  q quit".to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -746,102 +806,265 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             message = None;
         }
 
-        // Handle input
-        if event::poll(std::time::Duration::from_secs(1))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => break,
-                    KeyCode::Char('j') | KeyCode::Down => {
-                        if !drones.is_empty() && selected_index < drones.len() - 1 {
-                            selected_index += 1;
-                        }
-                    }
-                    KeyCode::Char('k') | KeyCode::Up => {
-                        selected_index = selected_index.saturating_sub(1);
-                    }
-                    KeyCode::Enter => {
-                        // Toggle expand/collapse
-                        if !drones.is_empty() {
-                            let drone_name = &drones[selected_index].0;
-                            if expanded_drones.contains(drone_name) {
-                                expanded_drones.remove(drone_name);
-                            } else {
-                                expanded_drones.insert(drone_name.clone());
-                            }
-                        }
-                    }
-                    KeyCode::Char('n') | KeyCode::Char('N') => {
-                        match handle_new_drone(&mut terminal) {
-                            Ok(Some(msg)) => {
-                                message = Some(msg);
-                                message_color = Color::Green;
-                            }
-                            Ok(None) => {}
-                            Err(e) => {
-                                message = Some(format!("Error: {}", e));
-                                message_color = Color::Red;
-                            }
-                        }
-                    }
-                    KeyCode::Char('l') | KeyCode::Char('L') => {
-                        if !drones.is_empty() {
-                            let drone_name = &drones[selected_index].0;
-                            message = Some(format!("Use: hive logs {}", drone_name));
-                            message_color = Color::Yellow;
-                        }
-                    }
-                    KeyCode::Char('x') | KeyCode::Char('X') => {
-                        if !drones.is_empty() {
-                            let drone_name = drones[selected_index].0.clone();
-                            match handle_stop_drone(&drone_name) {
-                                Ok(msg) => {
-                                    message = Some(msg);
-                                    message_color = Color::Green;
-                                }
-                                Err(e) => {
-                                    message = Some(format!("Error: {}", e));
-                                    message_color = Color::Red;
-                                }
-                            }
-                        }
-                    }
-                    KeyCode::Char('c') | KeyCode::Char('C') => {
-                        if !drones.is_empty() {
-                            let drone_name = drones[selected_index].0.clone();
-                            match handle_clean_drone(&mut terminal, &drone_name) {
-                                Ok(msg) => {
-                                    message = Some(msg);
-                                    message_color = Color::Green;
-                                }
-                                Err(e) => {
-                                    message = Some(format!("Error: {}", e));
-                                    message_color = Color::Red;
-                                }
-                            }
-                        }
-                    }
-                    KeyCode::Char('u') | KeyCode::Char('U') => {
-                        if !drones.is_empty() {
-                            let drone_name = &drones[selected_index].0;
-                            let status = &drones[selected_index].1;
-                            if status.status == DroneState::Blocked {
-                                message = Some(format!("Use: hive unblock {}", drone_name));
-                                message_color = Color::Yellow;
-                            } else {
-                                message = Some(format!("Drone {} is not blocked", drone_name));
-                                message_color = Color::Yellow;
-                            }
-                        }
-                    }
-                    KeyCode::Char('s') | KeyCode::Char('S') => {
-                        if !drones.is_empty() {
-                            let drone_name = &drones[selected_index].0;
-                            message = Some(format!("Use: hive sessions {}", drone_name));
-                            message_color = Color::Yellow;
-                        }
-                    }
-                    _ => {}
+        // Handle input (including resize events)
+        if event::poll(std::time::Duration::from_millis(100))? {
+            match event::read()? {
+                Event::Resize(_, _) => {
+                    // Terminal resized, just continue to redraw
+                    continue;
                 }
+                Event::Key(key) => {
+                    // Get story count for current drone if expanded
+                    let current_story_count = if !drones.is_empty() {
+                        let drone_name = &drones[selected_index].0;
+                        let status = &drones[selected_index].1;
+                        if expanded_drones.contains(drone_name) {
+                            prd_cache
+                                .get(&status.prd)
+                                .map(|p| p.stories.len())
+                                .unwrap_or(0)
+                        } else {
+                            0
+                        }
+                    } else {
+                        0
+                    };
+
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                            // If in blocked view, go back to main view
+                            if blocked_view.is_some() {
+                                blocked_view = None;
+                            } else if selected_story_index.is_some() {
+                                // If story selected, go back to drone
+                                selected_story_index = None;
+                            } else {
+                                // Quit
+                                break;
+                            }
+                        }
+                        KeyCode::Char('b') | KeyCode::Char('B') => {
+                            // Open blocked detail view for current drone if it's blocked
+                            if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                let status = &drones[selected_index].1;
+                                if status.status == DroneState::Blocked {
+                                    blocked_view = Some(drone_name.clone());
+                                } else {
+                                    message = Some("Drone is not blocked".to_string());
+                                    message_color = Color::Yellow;
+                                }
+                            }
+                        }
+                        KeyCode::Char('j') | KeyCode::Down => {
+                            if !drones.is_empty() {
+                                if let Some(story_idx) = selected_story_index {
+                                    // Navigate within stories
+                                    if story_idx < current_story_count.saturating_sub(1) {
+                                        selected_story_index = Some(story_idx + 1);
+                                    }
+                                } else if selected_index < drones.len() - 1 {
+                                    // Navigate between drones
+                                    selected_index += 1;
+                                    selected_story_index = None;
+                                }
+                            }
+                        }
+                        KeyCode::Char('k') | KeyCode::Up => {
+                            if let Some(story_idx) = selected_story_index {
+                                // Navigate within stories
+                                if story_idx > 0 {
+                                    selected_story_index = Some(story_idx - 1);
+                                } else {
+                                    // Go back to drone header
+                                    selected_story_index = None;
+                                }
+                            } else {
+                                // Navigate between drones
+                                selected_index = selected_index.saturating_sub(1);
+                            }
+                        }
+                        KeyCode::Enter => {
+                            if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                if selected_story_index.is_some() {
+                                    // Enter on story = show story details
+                                    if let Some(story_idx) = selected_story_index {
+                                        let status = &drones[selected_index].1;
+                                        if let Some(prd) = prd_cache.get(&status.prd) {
+                                            if let Some(story) = prd.stories.get(story_idx) {
+                                                message =
+                                                    Some(format!("{}: {}", story.id, story.title));
+                                                message_color = Color::Cyan;
+                                            }
+                                        }
+                                    }
+                                } else if expanded_drones.contains(drone_name) {
+                                    // Collapse or enter story navigation
+                                    if current_story_count > 0 {
+                                        // Enter story navigation mode
+                                        selected_story_index = Some(0);
+                                    } else {
+                                        // Collapse
+                                        expanded_drones.remove(drone_name);
+                                    }
+                                } else {
+                                    // Expand
+                                    expanded_drones.insert(drone_name.clone());
+                                }
+                            }
+                        }
+                        KeyCode::Left => {
+                            // Collapse current drone
+                            if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                expanded_drones.remove(drone_name);
+                                selected_story_index = None;
+                            }
+                        }
+                        KeyCode::Right => {
+                            // Expand current drone or enter stories
+                            if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                if !expanded_drones.contains(drone_name) {
+                                    expanded_drones.insert(drone_name.clone());
+                                } else if current_story_count > 0 && selected_story_index.is_none()
+                                {
+                                    selected_story_index = Some(0);
+                                }
+                            }
+                        }
+                        KeyCode::Char('n') | KeyCode::Char('N') => {
+                            match handle_new_drone(&mut terminal) {
+                                Ok(Some(msg)) => {
+                                    message = Some(msg);
+                                    message_color = Color::Green;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    message = Some(format!("Error: {}", e));
+                                    message_color = Color::Red;
+                                }
+                            }
+                        }
+                        KeyCode::Char('l') | KeyCode::Char('L') => {
+                            // Open logs viewer
+                            if let Some(ref drone_name) = blocked_view {
+                                // In blocked view - open logs for this drone
+                                match show_logs_viewer(&mut terminal, drone_name) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        message = Some(format!("Error: {}", e));
+                                        message_color = Color::Red;
+                                    }
+                                }
+                            } else if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                let status = &drones[selected_index].1;
+                                if let Some(story_idx) = selected_story_index {
+                                    // Show logs for specific story
+                                    if let Some(prd) = prd_cache.get(&status.prd) {
+                                        if let Some(story) = prd.stories.get(story_idx) {
+                                            message = Some(format!(
+                                                "Use: hive logs {} --story {}",
+                                                drone_name, story.id
+                                            ));
+                                            message_color = Color::Yellow;
+                                        }
+                                    }
+                                } else {
+                                    // Open logs viewer for selected drone
+                                    match show_logs_viewer(&mut terminal, drone_name) {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            message = Some(format!("Error: {}", e));
+                                            message_color = Color::Red;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        KeyCode::Char('i') | KeyCode::Char('I') => {
+                            // Show story details
+                            if !drones.is_empty() {
+                                if let Some(story_idx) = selected_story_index {
+                                    let status = &drones[selected_index].1;
+                                    if let Some(prd) = prd_cache.get(&status.prd) {
+                                        if let Some(story) = prd.stories.get(story_idx) {
+                                            // Show full story info
+                                            let desc = if story.description.is_empty() {
+                                                "No description".to_string()
+                                            } else if story.description.len() > 80 {
+                                                format!("{}...", &story.description[..77])
+                                            } else {
+                                                story.description.clone()
+                                            };
+                                            message = Some(format!("[{}] {}", story.id, desc));
+                                            message_color = Color::Cyan;
+                                        }
+                                    }
+                                } else {
+                                    message = Some(
+                                        "Select a story first (↵ to enter stories)".to_string(),
+                                    );
+                                    message_color = Color::Yellow;
+                                }
+                            }
+                        }
+                        KeyCode::Char('x') | KeyCode::Char('X') => {
+                            if !drones.is_empty() {
+                                let drone_name = drones[selected_index].0.clone();
+                                match handle_stop_drone(&drone_name) {
+                                    Ok(msg) => {
+                                        message = Some(msg);
+                                        message_color = Color::Green;
+                                    }
+                                    Err(e) => {
+                                        message = Some(format!("Error: {}", e));
+                                        message_color = Color::Red;
+                                    }
+                                }
+                            }
+                        }
+                        KeyCode::Char('c') | KeyCode::Char('C') => {
+                            if !drones.is_empty() {
+                                let drone_name = drones[selected_index].0.clone();
+                                match handle_clean_drone(&drone_name) {
+                                    Ok(msg) => {
+                                        message = Some(msg);
+                                        message_color = Color::Green;
+                                    }
+                                    Err(e) => {
+                                        message = Some(format!("Error: {}", e));
+                                        message_color = Color::Red;
+                                    }
+                                }
+                            }
+                        }
+                        KeyCode::Char('u') | KeyCode::Char('U') => {
+                            if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                let status = &drones[selected_index].1;
+                                if status.status == DroneState::Blocked {
+                                    message = Some(format!("Use: hive unblock {}", drone_name));
+                                    message_color = Color::Yellow;
+                                } else {
+                                    message = Some(format!("Drone {} is not blocked", drone_name));
+                                    message_color = Color::Yellow;
+                                }
+                            }
+                        }
+                        KeyCode::Char('s') | KeyCode::Char('S') => {
+                            if !drones.is_empty() {
+                                let drone_name = &drones[selected_index].0;
+                                message = Some(format!("Use: hive sessions {}", drone_name));
+                                message_color = Color::Yellow;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -957,38 +1180,369 @@ fn handle_stop_drone(drone_name: &str) -> Result<String> {
     Ok(format!("🛑 Stopped drone: {}", drone_name))
 }
 
-// Handler for 'Clean' action with confirmation
-fn handle_clean_drone<B: ratatui::backend::Backend>(
-    _terminal: &mut ratatui::Terminal<B>,
+// Handler for 'Clean' action - cleans in background, disappears from list immediately
+fn handle_clean_drone(drone_name: &str) -> Result<String> {
+    crate::commands::kill_clean::clean_background(drone_name.to_string());
+    Ok(format!("🧹 Cleaning drone: {}", drone_name))
+}
+
+// Render the blocked detail view
+fn render_blocked_detail_view(
+    f: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
     drone_name: &str,
-) -> Result<String> {
-    use dialoguer::{theme::ColorfulTheme, Confirm};
-    use std::io;
+    status: &DroneStatus,
+    prd_cache: &std::collections::HashMap<String, Prd>,
+) {
+    use ratatui::{
+        layout::{Constraint, Direction, Layout},
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::Paragraph,
+    };
 
-    // Disable raw mode temporarily for dialoguer
-    crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
+    let orange = Color::Rgb(255, 165, 0);
 
-    let result = (|| -> Result<String> {
-        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "Clean drone '{}' (remove worktree and branch)?",
-                drone_name
-            ))
-            .default(false)
-            .interact()?;
+    // Layout: header (4) + subheader (2) + content + footer (1)
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4), // Header with ASCII art
+            Constraint::Length(2), // Subheader with drone info
+            Constraint::Min(0),    // Content
+            Constraint::Length(1), // Footer
+        ])
+        .split(area);
 
-        if confirmed {
-            crate::commands::kill_clean::clean(drone_name.to_string(), true)?;
-            Ok(format!("🧹 Cleaned drone: {}", drone_name))
-        } else {
-            Ok("Cancelled".to_string())
+    // Header with ASCII art (same as main view)
+    let header_lines = vec![
+        Line::from(vec![
+            Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "  Orchestrate Claude Code",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("  v{}", env!("CARGO_PKG_VERSION")),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "  BLOCKED DRONE",
+                Style::default().fg(orange).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+    ];
+    f.render_widget(Paragraph::new(header_lines), chunks[0]);
+
+    // Subheader: drone name + blocked story
+    let blocked_story = status.current_story.as_deref().unwrap_or("Unknown");
+    let story_title = prd_cache
+        .get(&status.prd)
+        .and_then(|prd| prd.stories.iter().find(|s| s.id == blocked_story))
+        .map(|s| s.title.as_str())
+        .unwrap_or("");
+
+    let subheader_lines = vec![
+        Line::from(vec![
+            Span::styled("  ⚠ ", Style::default().fg(orange)),
+            Span::styled(
+                format!("🐝 {}", drone_name),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                blocked_story,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {}", story_title),
+                Style::default().fg(Color::White),
+            ),
+        ]),
+        Line::styled(
+            "  ─────────────────────────────────────────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        ),
+    ];
+    f.render_widget(Paragraph::new(subheader_lines), chunks[1]);
+
+    // Content: blocked reason + questions
+    let mut content_lines: Vec<Line> = Vec::new();
+    content_lines.push(Line::raw(""));
+
+    // Blocked reason
+    if let Some(ref reason) = status.blocked_reason {
+        content_lines.push(Line::from(vec![Span::styled(
+            "  REASON",
+            Style::default().fg(orange).add_modifier(Modifier::BOLD),
+        )]));
+        content_lines.push(Line::raw(""));
+
+        // Word-wrap the reason text
+        let max_width = (area.width as usize).saturating_sub(6).min(80);
+        let wrapped = wrap_text(reason, max_width);
+        for line in wrapped {
+            content_lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(line, Style::default().fg(Color::White)),
+            ]));
         }
-    })();
+    }
 
-    // Re-enable raw mode
-    crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
-    crossterm::terminal::enable_raw_mode()?;
+    // Questions
+    if !status.blocked_questions.is_empty() {
+        content_lines.push(Line::raw(""));
+        content_lines.push(Line::from(vec![Span::styled(
+            "  QUESTIONS",
+            Style::default().fg(orange).add_modifier(Modifier::BOLD),
+        )]));
+        content_lines.push(Line::raw(""));
 
-    result
+        let max_width = (area.width as usize).saturating_sub(8).min(78);
+        for (i, question) in status.blocked_questions.iter().enumerate() {
+            content_lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(format!("{}. ", i + 1), Style::default().fg(Color::Yellow)),
+            ]));
+
+            let wrapped = wrap_text(question, max_width);
+            for (j, line) in wrapped.iter().enumerate() {
+                if j == 0 {
+                    // First line: just append to the number
+                    if let Some(last_line) = content_lines.last_mut() {
+                        last_line.spans.push(Span::styled(
+                            line.clone(),
+                            Style::default().fg(Color::White),
+                        ));
+                    }
+                } else {
+                    // Continuation lines: indent
+                    content_lines.push(Line::from(vec![
+                        Span::raw("     "),
+                        Span::styled(line.clone(), Style::default().fg(Color::White)),
+                    ]));
+                }
+            }
+            content_lines.push(Line::raw(""));
+        }
+    }
+
+    // Show last errors from log if any
+    if status.error_count > 0 {
+        content_lines.push(Line::raw(""));
+        content_lines.push(Line::from(vec![Span::styled(
+            format!("  ERRORS ({})", status.error_count),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )]));
+        content_lines.push(Line::raw(""));
+        content_lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                "Press 'l' to view full logs",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+    }
+
+    f.render_widget(Paragraph::new(content_lines), chunks[2]);
+
+    // Footer
+    let footer = Paragraph::new(Line::from(vec![Span::styled(
+        " l logs  q back",
+        Style::default().fg(Color::DarkGray),
+    )]));
+    f.render_widget(footer, chunks[3]);
+}
+
+// Word wrap helper function
+fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+
+    for word in text.split_whitespace() {
+        if current_line.is_empty() {
+            current_line = word.to_string();
+        } else if current_line.len() + 1 + word.len() <= max_width {
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            lines.push(current_line);
+            current_line = word.to_string();
+        }
+    }
+
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+
+    lines
+}
+
+// Show logs viewer in TUI
+fn show_logs_viewer<B: ratatui::backend::Backend>(
+    terminal: &mut ratatui::Terminal<B>,
+    drone_name: &str,
+) -> Result<()> {
+    use crossterm::event::{self, Event, KeyCode};
+    use ratatui::{
+        layout::{Constraint, Direction, Layout},
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    };
+
+    // Read log file
+    let log_path = PathBuf::from(".hive")
+        .join("drones")
+        .join(drone_name)
+        .join("drone.log");
+
+    let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| "No logs found".to_string());
+
+    let log_lines: Vec<&str> = log_content.lines().collect();
+    let total_lines = log_lines.len();
+    let mut scroll_offset: usize = total_lines.saturating_sub(20); // Start at bottom
+
+    loop {
+        terminal.draw(|f| {
+            let area = f.area();
+
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(2), // Header
+                    Constraint::Min(0),    // Content
+                    Constraint::Length(1), // Footer
+                ])
+                .split(area);
+
+            // Header
+            let header = Paragraph::new(vec![
+                Line::from(vec![
+                    Span::styled(
+                        "  📜 LOGS: ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        drone_name,
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("  ({} lines)", total_lines),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]),
+                Line::styled(
+                    "  ─────────────────────────────────────────────────────────────",
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]);
+            f.render_widget(header, chunks[0]);
+
+            // Content - log lines with syntax highlighting
+            let content_height = chunks[1].height as usize;
+            let visible_lines: Vec<Line> = log_lines
+                .iter()
+                .skip(scroll_offset)
+                .take(content_height)
+                .map(|line| {
+                    let style = if line.contains("ERROR") || line.contains("error") {
+                        Style::default().fg(Color::Red)
+                    } else if line.contains("BLOCKED") || line.contains("blocked") {
+                        Style::default().fg(Color::Rgb(255, 165, 0))
+                    } else if line.contains("Completed") || line.contains("passed") {
+                        Style::default().fg(Color::Green)
+                    } else if line.contains("Starting") || line.contains("===") {
+                        Style::default().fg(Color::Cyan)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    Line::from(vec![Span::raw("  "), Span::styled(*line, style)])
+                })
+                .collect();
+
+            f.render_widget(Paragraph::new(visible_lines), chunks[1]);
+
+            // Scrollbar
+            if total_lines > content_height {
+                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(Some("│"))
+                    .thumb_symbol("█");
+
+                let mut scrollbar_state = ScrollbarState::new(total_lines)
+                    .position(scroll_offset)
+                    .viewport_content_length(content_height);
+
+                let scrollbar_area = ratatui::layout::Rect {
+                    x: chunks[1].x + chunks[1].width - 1,
+                    y: chunks[1].y,
+                    width: 1,
+                    height: chunks[1].height,
+                };
+                f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+            }
+
+            // Footer
+            let footer = Paragraph::new(Line::from(vec![Span::styled(
+                " ↑↓ scroll  G end  g start  q back",
+                Style::default().fg(Color::DarkGray),
+            )]));
+            f.render_widget(footer, chunks[2]);
+        })?;
+
+        // Handle input
+        if event::poll(std::time::Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                let content_height = terminal.size()?.height.saturating_sub(3) as usize;
+
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => break,
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        if scroll_offset < total_lines.saturating_sub(content_height) {
+                            scroll_offset += 1;
+                        }
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        scroll_offset = scroll_offset.saturating_sub(1);
+                    }
+                    KeyCode::Char('g') => {
+                        scroll_offset = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        scroll_offset = total_lines.saturating_sub(content_height);
+                    }
+                    KeyCode::PageDown => {
+                        scroll_offset = (scroll_offset + content_height)
+                            .min(total_lines.saturating_sub(content_height));
+                    }
+                    KeyCode::PageUp => {
+                        scroll_offset = scroll_offset.saturating_sub(content_height);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

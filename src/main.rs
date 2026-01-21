@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use hive_rust::commands;
+use hive_lib::commands;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 

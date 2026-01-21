@@ -1,18 +1,18 @@
 [package]
-name = "hive-rust"
+name = "hive"
 version = "2.0.0"
 edition = "2021"
-authors = ["Hive Team"]
-description = "High-performance CLI tool for orchestrating multiple Claude Code instances via git worktrees"
+authors = ["Mathieu Bourmaud <mathieu.bourmaud@gmail.com>"]
+description = "CLI tool for orchestrating multiple Claude Code instances via git worktrees"
 license = "MIT"
-repository = "https://github.com/anthropics/hive"
+repository = "https://github.com/mbourmaud/hive"
 
 [lib]
-name = "hive_rust"
+name = "hive_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "hive-rust"
+name = "hive"
 path = "src/main.rs"
 
 [dependencies]

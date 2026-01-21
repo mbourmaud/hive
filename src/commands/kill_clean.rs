@@ -117,6 +117,22 @@ fn kill_impl(name: String, quiet: bool) -> Result<()> {
 }
 
 pub fn clean(name: String, force: bool) -> Result<()> {
+    clean_impl(name, force, false)
+}
+
+/// Clean a drone quietly (no stdout output) - for use from TUI
+pub fn clean_quiet(name: String) -> Result<()> {
+    clean_impl(name, true, true)
+}
+
+/// Clean in background thread (returns immediately, cleans async)
+pub fn clean_background(name: String) {
+    std::thread::spawn(move || {
+        let _ = clean_impl(name, true, true);
+    });
+}
+
+fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
     let drone_dir = PathBuf::from(".hive/drones").join(&name);
 
     if !drone_dir.exists() {
@@ -145,14 +161,14 @@ pub fn clean(name: String, force: bool) -> Result<()> {
 
     if is_running {
         bail!(
-            "Drone '{}' is still running. Stop it first with 'hive-rust kill {}'",
+            "Drone '{}' is still running. Stop it first with 'hive kill {}'",
             name,
             name
         );
     }
 
-    // Confirm cleanup
-    if !force {
+    // Confirm cleanup (only in interactive mode)
+    if !force && !quiet {
         let confirmed = Confirm::new()
             .with_prompt(format!(
                 "Clean up drone '{}'? This will remove the worktree and all drone data.",
@@ -167,11 +183,19 @@ pub fn clean(name: String, force: bool) -> Result<()> {
         }
     }
 
-    println!(
-        "{} Cleaning up drone '{}'...",
-        "→".bright_blue(),
-        name.bright_cyan()
-    );
+    if !quiet {
+        println!(
+            "{} Cleaning up drone '{}'...",
+            "→".bright_blue(),
+            name.bright_cyan()
+        );
+    }
+
+    // Remove drone directory first (so it disappears from list immediately)
+    fs::remove_dir_all(&drone_dir).context("Failed to remove drone directory")?;
+    if !quiet {
+        println!("  {} Removed drone state", "✓".green());
+    }
 
     // Remove worktree if not in local mode
     if !status.local_mode {
@@ -188,9 +212,11 @@ pub fn clean(name: String, force: bool) -> Result<()> {
                 ])
                 .output();
 
-            if let Ok(out) = output {
-                if out.status.success() {
-                    println!("  {} Removed worktree", "✓".green());
+            if !quiet {
+                if let Ok(out) = output {
+                    if out.status.success() {
+                        println!("  {} Removed worktree", "✓".green());
+                    }
                 }
             }
         }
@@ -200,18 +226,18 @@ pub fn clean(name: String, force: bool) -> Result<()> {
             .args(["branch", "-D", &status.branch])
             .output();
 
-        println!("  {} Deleted branch {}", "✓".green(), status.branch);
+        if !quiet {
+            println!("  {} Deleted branch {}", "✓".green(), status.branch);
+        }
     }
 
-    // Remove drone directory
-    fs::remove_dir_all(&drone_dir).context("Failed to remove drone directory")?;
-    println!("  {} Removed drone state", "✓".green());
-
-    println!(
-        "\n{} Drone '{}' cleaned up",
-        "✓".green().bold(),
-        name.bright_cyan()
-    );
+    if !quiet {
+        println!(
+            "\n{} Drone '{}' cleaned up",
+            "✓".green().bold(),
+            name.bright_cyan()
+        );
+    }
 
     Ok(())
 }

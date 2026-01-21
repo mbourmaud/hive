@@ -5,47 +5,216 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: hive-darwin-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: hive-darwin-arm64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: hive-linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: hive-linux-arm64
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
 
-      - name: Verify version matches hive.sh
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          SCRIPT_VERSION=$(grep '^VERSION=' hive.sh | cut -d'"' -f2)
-          TAG_VERSION=${{ steps.version.outputs.VERSION }}
-          if [ "$SCRIPT_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Tag version ($TAG_VERSION) doesn't match hive.sh version ($SCRIPT_VERSION)"
-            exit 1
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          # Rename binary to match platform (for Homebrew formula compatibility)
+          cp target/${{ matrix.target }}/release/hive dist/${{ matrix.name }}
+          cd dist
+          tar -czvf ${{ matrix.name }}.tar.gz ${{ matrix.name }}
+          shasum -a 256 ${{ matrix.name }}.tar.gz > ${{ matrix.name }}.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}.tar.gz*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find artifacts -name "*.tar.gz*" -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Extract changelog for this version if exists
+          if [ -f CHANGELOG.md ]; then
+            # Try to extract section for this version
+            sed -n "/^## \[${VERSION}\]/,/^## \[/p" CHANGELOG.md | head -n -1 > notes.md
           fi
 
-      - name: Create Release
+          if [ ! -s notes.md ]; then
+            echo "Release $VERSION" > notes.md
+            echo "" >> notes.md
+            echo "## Installation" >> notes.md
+            echo "" >> notes.md
+            echo '```bash' >> notes.md
+            echo "# macOS (Apple Silicon)" >> notes.md
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/$VERSION/hive-darwin-arm64.tar.gz | tar xz" >> notes.md
+            echo "sudo mv hive /usr/local/bin/" >> notes.md
+            echo "" >> notes.md
+            echo "# macOS (Intel)" >> notes.md
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/$VERSION/hive-darwin-amd64.tar.gz | tar xz" >> notes.md
+            echo "sudo mv hive /usr/local/bin/" >> notes.md
+            echo "" >> notes.md
+            echo "# Linux (x86_64)" >> notes.md
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/$VERSION/hive-linux-amd64.tar.gz | tar xz" >> notes.md
+            echo "sudo mv hive /usr/local/bin/" >> notes.md
+            echo '```' >> notes.md
+          fi
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Hive v${{ steps.version.outputs.VERSION }}
-          body: |
-            ## Installation
-
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash
-            ```
-
-            ## What's Changed
-
-            See [CHANGELOG.md](https://github.com/mbourmaud/hive/blob/main/CHANGELOG.md) for details.
+          name: ${{ steps.release_notes.outputs.version }}
+          body_path: notes.md
+          files: release/*
           draft: false
-          prerelease: false
-          files: |
-            hive.sh
-            install.sh
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') || contains(github.ref, '-rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref, '-beta') && !contains(github.ref, '-alpha') && !contains(github.ref, '-rc') }}
+
+    steps:
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set, skipping Homebrew update"
+            exit 0
+          fi
+
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Download checksums
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/hive-darwin-arm64.tar.gz.sha256 -o darwin-arm64.sha256
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/hive-darwin-amd64.tar.gz.sha256 -o darwin-amd64.sha256
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/hive-linux-arm64.tar.gz.sha256 -o linux-arm64.sha256
+          curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/hive-linux-amd64.tar.gz.sha256 -o linux-amd64.sha256
+
+          DARWIN_ARM64_SHA=$(cat darwin-arm64.sha256 | awk '{print $1}')
+          DARWIN_AMD64_SHA=$(cat darwin-amd64.sha256 | awk '{print $1}')
+          LINUX_ARM64_SHA=$(cat linux-arm64.sha256 | awk '{print $1}')
+          LINUX_AMD64_SHA=$(cat linux-amd64.sha256 | awk '{print $1}')
+
+          # Clone homebrew tap (existing repo: mbourmaud/homebrew-tap)
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/mbourmaud/homebrew-tap.git tap
+          cd tap
+
+          # Update formula (hive-ai.rb to match existing formula name)
+          cat > Formula/hive-ai.rb << 'FORMULA'
+          class HiveAi < Formula
+            desc "Orchestrate multiple Claude Code instances via git worktrees"
+            homepage "https://github.com/mbourmaud/hive"
+          FORMULA
+          echo "  version \"$VERSION\"" >> Formula/hive-ai.rb
+          cat >> Formula/hive-ai.rb << 'FORMULA'
+
+            on_macos do
+              if Hardware::CPU.arm?
+          FORMULA
+          echo "      url \"https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-darwin-arm64.tar.gz\"" >> Formula/hive-ai.rb
+          echo "      sha256 \"$DARWIN_ARM64_SHA\"" >> Formula/hive-ai.rb
+          cat >> Formula/hive-ai.rb << 'FORMULA'
+              else
+          FORMULA
+          echo "      url \"https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-darwin-amd64.tar.gz\"" >> Formula/hive-ai.rb
+          echo "      sha256 \"$DARWIN_AMD64_SHA\"" >> Formula/hive-ai.rb
+          cat >> Formula/hive-ai.rb << 'FORMULA'
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+          FORMULA
+          echo "      url \"https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-linux-arm64.tar.gz\"" >> Formula/hive-ai.rb
+          echo "      sha256 \"$LINUX_ARM64_SHA\"" >> Formula/hive-ai.rb
+          cat >> Formula/hive-ai.rb << 'FORMULA'
+              else
+          FORMULA
+          echo "      url \"https://github.com/mbourmaud/hive/releases/download/v$VERSION/hive-linux-amd64.tar.gz\"" >> Formula/hive-ai.rb
+          echo "      sha256 \"$LINUX_AMD64_SHA\"" >> Formula/hive-ai.rb
+          cat >> Formula/hive-ai.rb << 'FORMULA'
+              end
+            end
+
+            def install
+              # The tarball contains a binary named hive-{os}-{arch}
+              os = OS.mac? ? "darwin" : "linux"
+              arch = Hardware::CPU.arm? ? "arm64" : "amd64"
+              binary_name = "hive-#{os}-#{arch}"
+
+              bin.install binary_name => "hive"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/hive --version")
+            end
+          end
+          FORMULA
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Formula/hive-ai.rb
+          git commit -m "Update hive-ai to $VERSION" || echo "No changes to commit"
+          git push
