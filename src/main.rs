@@ -53,6 +53,9 @@ enum Commands {
         /// Show logs for specific story
         #[arg(long)]
         story: Option<String>,
+        /// Follow mode - continuously tail logs
+        #[arg(short, long)]
+        follow: bool,
     },
 
     /// Stop a running drone
@@ -157,8 +160,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Logs { name, lines, story } => {
-            if let Err(e) = commands::logs::run(name, lines, story) {
+        Commands::Logs { name, lines, story, follow } => {
+            if let Err(e) = commands::logs::run(name, lines, story, follow) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
