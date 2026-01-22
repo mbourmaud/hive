@@ -185,6 +185,7 @@ pub fn update() -> Result<()> {
 
     let client = reqwest::blocking::Client::builder()
         .user_agent("hive")
+        .redirect(reqwest::redirect::Policy::limited(10))
         .build()?;
 
     let response = client
