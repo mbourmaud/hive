@@ -640,15 +640,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
                 let empty = bar_width - filled;
 
-                let progress_bar = if status.status == DroneState::Completed {
-                    // Completed: dim bar
-                    "━".repeat(bar_width)
+                let (filled_bar, empty_bar) = if status.status == DroneState::Completed {
+                    // Completed: full green bar
+                    ("━".repeat(bar_width), String::new())
                 } else {
-                    format!("{}{}", "━".repeat(filled), "─".repeat(empty))
+                    ("━".repeat(filled), "─".repeat(empty))
                 };
 
-                let bar_color = match status.status {
-                    DroneState::Completed => Color::DarkGray,
+                let filled_color = match status.status {
+                    DroneState::Completed => Color::Green, // Full green when completed
                     DroneState::Blocked | DroneState::Error => Color::Rgb(255, 165, 0),
                     _ => Color::Green,
                 };
@@ -659,8 +659,36 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 // Selection indicator
                 let select_char = if is_selected { "▸" } else { " " };
 
-                // Elapsed time
-                let elapsed = elapsed_since(&status.started).unwrap_or_default();
+                // Elapsed time - stop timer if completed
+                let elapsed = if status.status == DroneState::Completed {
+                    // Find the last completed story time
+                    let last_completed = status
+                        .story_times
+                        .values()
+                        .filter_map(|t| t.completed.as_ref())
+                        .max();
+                    if let (Some(last), Some(start)) =
+                        (last_completed, parse_timestamp(&status.started))
+                    {
+                        if let Some(end) = parse_timestamp(last) {
+                            format_duration(end.signed_duration_since(start))
+                        } else {
+                            elapsed_since(&status.started).unwrap_or_default()
+                        }
+                    } else {
+                        elapsed_since(&status.started).unwrap_or_default()
+                    }
+                } else if status.status == DroneState::Stopped {
+                    // Stopped - show time at stop (use updated timestamp)
+                    if let Some(duration) = duration_between(&status.started, &status.updated) {
+                        format_duration(duration)
+                    } else {
+                        elapsed_since(&status.started).unwrap_or_default()
+                    }
+                } else {
+                    // In progress - show live elapsed time
+                    elapsed_since(&status.started).unwrap_or_default()
+                };
 
                 // Drone header line
                 let name_style = if is_selected {
@@ -680,7 +708,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     Span::styled(expand_indicator, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
                     Span::styled(format!("🐝 {:<16}", name), name_style),
-                    Span::styled(progress_bar, Style::default().fg(bar_color)),
+                    Span::styled(filled_bar, Style::default().fg(filled_color)),
+                    Span::styled(empty_bar, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
                     Span::styled(
                         format!("{:>3}/{:<3}", status.completed.len(), status.total),
@@ -1464,7 +1493,7 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     lines
 }
 
-// Show logs viewer in TUI
+// Show logs viewer in TUI with line selection and JSON pretty-print
 fn show_logs_viewer<B: ratatui::backend::Backend>(
     terminal: &mut ratatui::Terminal<B>,
     drone_name: &str,
@@ -1485,69 +1514,217 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
 
     let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| "No logs found".to_string());
 
-    let log_lines: Vec<&str> = log_content.lines().collect();
+    let log_lines: Vec<String> = log_content.lines().map(|s| s.to_string()).collect();
     let total_lines = log_lines.len();
-    let mut scroll_offset: usize = total_lines.saturating_sub(20); // Start at bottom
+    let mut selected_line: usize = total_lines.saturating_sub(1); // Start at last line
+    let mut scroll_offset: usize = total_lines.saturating_sub(20);
+    let mut detail_view: Option<String> = None; // Pretty-printed JSON for detail view
+    let mut detail_scroll: usize = 0;
 
     loop {
+        // Reload log file to get updates
+        let log_content =
+            fs::read_to_string(&log_path).unwrap_or_else(|_| "No logs found".to_string());
+        let log_lines: Vec<String> = log_content.lines().map(|s| s.to_string()).collect();
+        let total_lines = log_lines.len();
+
+        // Clamp selected line
+        if total_lines > 0 && selected_line >= total_lines {
+            selected_line = total_lines - 1;
+        }
+
         terminal.draw(|f| {
             let area = f.area();
 
+            // If showing detail view (pretty-printed JSON)
+            if let Some(ref detail) = detail_view {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(4), // Header
+                        Constraint::Min(0),    // Content
+                        Constraint::Length(1), // Footer
+                    ])
+                    .split(area);
+
+                // Header with HIVE ASCII art
+                let header_lines = vec![
+                    Line::from(vec![
+                        Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
+                        Span::styled("  Log Detail", Style::default().fg(Color::DarkGray)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            format!("  🐝 {}", drone_name),
+                            Style::default().fg(Color::Cyan),
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            format!("  Line {}/{}", selected_line + 1, total_lines),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]),
+                ];
+                f.render_widget(Paragraph::new(header_lines), chunks[0]);
+
+                // Detail content with word wrap
+                let content_width = chunks[1].width.saturating_sub(4) as usize;
+
+                // Wrap lines to fit screen width
+                let wrapped_lines: Vec<(String, Style)> = detail
+                    .lines()
+                    .flat_map(|line| {
+                        let style = if line.contains("\"error\"") || line.contains("ERROR") {
+                            Style::default().fg(Color::Red)
+                        } else if line.contains("\"type\"") {
+                            Style::default().fg(Color::Cyan)
+                        } else if line.contains("\"text\"") || line.contains("\"name\"") {
+                            Style::default().fg(Color::Green)
+                        } else if line.trim().starts_with("\"") {
+                            Style::default().fg(Color::Yellow)
+                        } else {
+                            Style::default().fg(Color::White)
+                        };
+
+                        // Wrap long lines
+                        if line.len() > content_width {
+                            let mut wrapped = Vec::new();
+                            let mut remaining = line;
+                            while !remaining.is_empty() {
+                                let (chunk, rest) = if remaining.len() > content_width {
+                                    remaining.split_at(content_width)
+                                } else {
+                                    (remaining, "")
+                                };
+                                wrapped.push((chunk.to_string(), style));
+                                remaining = rest;
+                            }
+                            wrapped
+                        } else {
+                            vec![(line.to_string(), style)]
+                        }
+                    })
+                    .collect();
+
+                let detail_total = wrapped_lines.len();
+                let content_height = chunks[1].height as usize;
+
+                let visible_detail: Vec<Line> = wrapped_lines
+                    .iter()
+                    .skip(detail_scroll)
+                    .take(content_height)
+                    .map(|(line, style)| Line::from(Span::styled(format!("  {}", line), *style)))
+                    .collect();
+
+                f.render_widget(Paragraph::new(visible_detail), chunks[1]);
+
+                // Scrollbar for detail view
+                if detail_total > content_height {
+                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(None)
+                        .end_symbol(None)
+                        .track_symbol(Some("│"))
+                        .thumb_symbol("█");
+
+                    let mut scrollbar_state = ScrollbarState::new(detail_total)
+                        .position(detail_scroll)
+                        .viewport_content_length(content_height);
+
+                    let scrollbar_area = ratatui::layout::Rect {
+                        x: chunks[1].x + chunks[1].width - 1,
+                        y: chunks[1].y,
+                        width: 1,
+                        height: chunks[1].height,
+                    };
+                    f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+                }
+
+                // Footer
+                let footer = Paragraph::new(Line::from(vec![Span::styled(
+                    " ↑↓ scroll  q/Esc back to list",
+                    Style::default().fg(Color::DarkGray),
+                )]));
+                f.render_widget(footer, chunks[2]);
+
+                return;
+            }
+
+            // Main log list view
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(2), // Header
+                    Constraint::Length(4), // Header with ASCII art
                     Constraint::Min(0),    // Content
                     Constraint::Length(1), // Footer
                 ])
                 .split(area);
 
-            // Header
-            let header = Paragraph::new(vec![
+            // Header with HIVE ASCII art
+            let header_lines = vec![
                 Line::from(vec![
+                    Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
+                    Span::styled("  Activity Logs", Style::default().fg(Color::DarkGray)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
                     Span::styled(
-                        "  📜 LOGS: ",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
+                        format!("  🐝 {}", drone_name),
+                        Style::default().fg(Color::Cyan),
                     ),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
                     Span::styled(
-                        drone_name,
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        format!("  ({} lines)", total_lines),
+                        format!("  {} entries", total_lines),
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]),
-                Line::styled(
-                    "  ─────────────────────────────────────────────────────────────",
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]);
-            f.render_widget(header, chunks[0]);
+            ];
+            f.render_widget(Paragraph::new(header_lines), chunks[0]);
 
-            // Content - log lines with syntax highlighting
+            // Content - log lines with selection
             let content_height = chunks[1].height as usize;
+            let content_width = chunks[1].width.saturating_sub(4) as usize;
+
+            // Ensure selected line is visible
+            if selected_line < scroll_offset {
+                scroll_offset = selected_line;
+            } else if selected_line >= scroll_offset + content_height {
+                scroll_offset = selected_line.saturating_sub(content_height - 1);
+            }
+
             let visible_lines: Vec<Line> = log_lines
                 .iter()
+                .enumerate()
                 .skip(scroll_offset)
                 .take(content_height)
-                .map(|line| {
-                    let style = if line.contains("ERROR") || line.contains("error") {
+                .map(|(idx, line)| {
+                    let is_selected = idx == selected_line;
+
+                    // Parse JSON to get summary
+                    let summary = parse_log_summary(line, content_width);
+
+                    let base_style = if line.contains("\"error\"") || line.contains("ERROR") {
                         Style::default().fg(Color::Red)
-                    } else if line.contains("BLOCKED") || line.contains("blocked") {
-                        Style::default().fg(Color::Rgb(255, 165, 0))
-                    } else if line.contains("Completed") || line.contains("passed") {
-                        Style::default().fg(Color::Green)
-                    } else if line.contains("Starting") || line.contains("===") {
+                    } else if line.contains("tool_use") || line.contains("\"name\"") {
                         Style::default().fg(Color::Cyan)
+                    } else if line.contains("\"text\"") {
+                        Style::default().fg(Color::Green)
                     } else {
                         Style::default().fg(Color::White)
                     };
-                    Line::from(vec![Span::raw("  "), Span::styled(*line, style)])
+
+                    let style = if is_selected {
+                        base_style.bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                    } else {
+                        base_style
+                    };
+
+                    let prefix = if is_selected { "▸ " } else { "  " };
+                    Line::from(Span::styled(format!("{}{}", prefix, summary), style))
                 })
                 .collect();
 
@@ -1576,45 +1753,313 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
 
             // Footer
             let footer = Paragraph::new(Line::from(vec![Span::styled(
-                " ↑↓ scroll  G end  g start  q back",
+                " ↑↓/jk navigate  ↵ expand  G end  g start  q back",
                 Style::default().fg(Color::DarkGray),
             )]));
             f.render_widget(footer, chunks[2]);
         })?;
 
         // Handle input
-        if event::poll(std::time::Duration::from_millis(100))? {
+        if event::poll(std::time::Duration::from_millis(500))? {
             if let Event::Key(key) = event::read()? {
-                let content_height = terminal.size()?.height.saturating_sub(3) as usize;
+                let content_height = terminal.size()?.height.saturating_sub(5) as usize;
 
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => break,
-                    KeyCode::Char('j') | KeyCode::Down => {
-                        if scroll_offset < total_lines.saturating_sub(content_height) {
-                            scroll_offset += 1;
+                if detail_view.is_some() {
+                    // Detail view controls
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                            detail_view = None;
+                            detail_scroll = 0;
                         }
+                        KeyCode::Char('j') | KeyCode::Down => {
+                            detail_scroll += 1;
+                        }
+                        KeyCode::Char('k') | KeyCode::Up => {
+                            detail_scroll = detail_scroll.saturating_sub(1);
+                        }
+                        KeyCode::PageDown => {
+                            detail_scroll += content_height;
+                        }
+                        KeyCode::PageUp => {
+                            detail_scroll = detail_scroll.saturating_sub(content_height);
+                        }
+                        KeyCode::Char('g') => {
+                            detail_scroll = 0;
+                        }
+                        KeyCode::Char('G') => {
+                            // Go to end - will be clamped in render
+                            detail_scroll = usize::MAX / 2;
+                        }
+                        _ => {}
                     }
-                    KeyCode::Char('k') | KeyCode::Up => {
-                        scroll_offset = scroll_offset.saturating_sub(1);
+                } else {
+                    // List view controls
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => break,
+                        KeyCode::Char('j') | KeyCode::Down => {
+                            if total_lines > 0 && selected_line < total_lines - 1 {
+                                selected_line += 1;
+                            }
+                        }
+                        KeyCode::Char('k') | KeyCode::Up => {
+                            selected_line = selected_line.saturating_sub(1);
+                        }
+                        KeyCode::Char('g') => {
+                            selected_line = 0;
+                            scroll_offset = 0;
+                        }
+                        KeyCode::Char('G') => {
+                            if total_lines > 0 {
+                                selected_line = total_lines - 1;
+                                scroll_offset = total_lines.saturating_sub(content_height);
+                            }
+                        }
+                        KeyCode::PageDown => {
+                            selected_line =
+                                (selected_line + content_height).min(total_lines.saturating_sub(1));
+                        }
+                        KeyCode::PageUp => {
+                            selected_line = selected_line.saturating_sub(content_height);
+                        }
+                        KeyCode::Enter => {
+                            // Pretty-print selected line
+                            if total_lines > 0 && selected_line < log_lines.len() {
+                                let line = &log_lines[selected_line];
+                                detail_view = Some(pretty_print_json(line));
+                                detail_scroll = 0;
+                            }
+                        }
+                        _ => {}
                     }
-                    KeyCode::Char('g') => {
-                        scroll_offset = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        scroll_offset = total_lines.saturating_sub(content_height);
-                    }
-                    KeyCode::PageDown => {
-                        scroll_offset = (scroll_offset + content_height)
-                            .min(total_lines.saturating_sub(content_height));
-                    }
-                    KeyCode::PageUp => {
-                        scroll_offset = scroll_offset.saturating_sub(content_height);
-                    }
-                    _ => {}
                 }
             }
         }
     }
 
     Ok(())
+}
+
+// Parse log line and return a summary for display
+fn parse_log_summary(line: &str, max_width: usize) -> String {
+    // Try to parse as JSON
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+        // Extract useful info from stream-json format
+        let msg_type = json.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+
+        let summary = match msg_type {
+            "assistant" => {
+                if let Some(content) = json
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_array())
+                {
+                    if let Some(first) = content.first() {
+                        if let Some(text) = first.get("text").and_then(|t| t.as_str()) {
+                            let short = text.chars().take(80).collect::<String>();
+                            format!("💬 {}", short.replace('\n', " "))
+                        } else if let Some(name) = first.get("name").and_then(|n| n.as_str()) {
+                            // Get tool input for more context
+                            let context = if let Some(input) = first.get("input") {
+                                if let Some(file) = input.get("file_path").and_then(|f| f.as_str())
+                                {
+                                    // Extract just filename
+                                    file.rsplit('/').next().unwrap_or(file).to_string()
+                                } else if let Some(cmd) =
+                                    input.get("command").and_then(|c| c.as_str())
+                                {
+                                    cmd.chars().take(40).collect::<String>()
+                                } else if let Some(pattern) =
+                                    input.get("pattern").and_then(|p| p.as_str())
+                                {
+                                    format!("/{}/", pattern.chars().take(30).collect::<String>())
+                                } else {
+                                    String::new()
+                                }
+                            } else {
+                                String::new()
+                            };
+                            if context.is_empty() {
+                                format!("🔧 {}", name)
+                            } else {
+                                format!("🔧 {} → {}", name, context)
+                            }
+                        } else {
+                            "💬 assistant".to_string()
+                        }
+                    } else {
+                        "💬 assistant".to_string()
+                    }
+                } else {
+                    "💬 assistant".to_string()
+                }
+            }
+            "user" => {
+                // User messages are typically tool results
+                if let Some(content) = json
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_array())
+                {
+                    if let Some(first) = content.first() {
+                        let tool_type = first.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                        if tool_type == "tool_result" {
+                            // Check tool_use_result for details
+                            if let Some(result) = json.get("tool_use_result") {
+                                // Edit result
+                                if let Some(file) = result.get("filePath").and_then(|f| f.as_str())
+                                {
+                                    let filename = file.rsplit('/').next().unwrap_or(file);
+                                    return truncate_summary(
+                                        &format!("✓ Edit → {}", filename),
+                                        max_width,
+                                    );
+                                }
+                                // Bash result
+                                if let Some(stdout) = result.get("stdout").and_then(|s| s.as_str())
+                                {
+                                    let short = stdout
+                                        .lines()
+                                        .next()
+                                        .unwrap_or("")
+                                        .chars()
+                                        .take(50)
+                                        .collect::<String>();
+                                    return truncate_summary(
+                                        &format!("✓ Bash → {}", short),
+                                        max_width,
+                                    );
+                                }
+                                // Read result
+                                if result.get("content").is_some() {
+                                    if let Some(file) =
+                                        result.get("filePath").and_then(|f| f.as_str())
+                                    {
+                                        let filename = file.rsplit('/').next().unwrap_or(file);
+                                        return truncate_summary(
+                                            &format!("✓ Read → {}", filename),
+                                            max_width,
+                                        );
+                                    }
+                                }
+                                // Glob/Grep result
+                                if let Some(files) = result.get("files").and_then(|f| f.as_array())
+                                {
+                                    return truncate_summary(
+                                        &format!("✓ Found {} files", files.len()),
+                                        max_width,
+                                    );
+                                }
+                            }
+                            // Fallback: get content text
+                            if let Some(content_text) =
+                                first.get("content").and_then(|c| c.as_str())
+                            {
+                                let short = content_text.chars().take(50).collect::<String>();
+                                return truncate_summary(
+                                    &format!("✓ {}", short.replace('\n', " ")),
+                                    max_width,
+                                );
+                            }
+                        }
+                    }
+                }
+                "👤 user".to_string()
+            }
+            "result" => {
+                if let Some(result) = json.get("result").and_then(|r| r.as_str()) {
+                    let short = result.chars().take(60).collect::<String>();
+                    format!("✓ {}", short.replace('\n', " "))
+                } else {
+                    "✓ result".to_string()
+                }
+            }
+            "system" => {
+                let subtype = json.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+                match subtype {
+                    "init" => "⚙ Session started".to_string(),
+                    _ => format!("⚙ {}", subtype),
+                }
+            }
+            "error" => {
+                if let Some(err) = json.get("error").and_then(|e| e.as_str()) {
+                    format!("❌ {}", err)
+                } else {
+                    "❌ error".to_string()
+                }
+            }
+            _ => format!("[{}]", msg_type),
+        };
+
+        truncate_summary(&summary, max_width)
+    } else {
+        // Not JSON, show raw line truncated
+        truncate_summary(line, max_width)
+    }
+}
+
+fn truncate_summary(s: &str, max_width: usize) -> String {
+    if s.len() > max_width {
+        format!("{}...", &s[..max_width.saturating_sub(3)])
+    } else {
+        s.to_string()
+    }
+}
+
+// Pretty-print JSON with indentation and word wrap
+fn pretty_print_json(line: &str) -> String {
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+        // Use custom formatting for better readability
+        format_json_value(&json, 0)
+    } else {
+        line.to_string()
+    }
+}
+
+// Recursively format JSON with proper indentation and no truncation
+fn format_json_value(value: &serde_json::Value, indent: usize) -> String {
+    let indent_str = "  ".repeat(indent);
+    let next_indent = "  ".repeat(indent + 1);
+
+    match value {
+        serde_json::Value::Null => "null".to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::String(s) => {
+            // For long strings, wrap them
+            if s.len() > 80 {
+                let escaped = s
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n");
+                format!("\"{}\"", escaped)
+            } else {
+                format!("{:?}", s)
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            if arr.is_empty() {
+                "[]".to_string()
+            } else {
+                let items: Vec<String> = arr
+                    .iter()
+                    .map(|v| format!("{}{}", next_indent, format_json_value(v, indent + 1)))
+                    .collect();
+                format!("[\n{}\n{}]", items.join(",\n"), indent_str)
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            if obj.is_empty() {
+                "{}".to_string()
+            } else {
+                let items: Vec<String> = obj
+                    .iter()
+                    .map(|(k, v)| {
+                        let formatted_value = format_json_value(v, indent + 1);
+                        format!("{}\"{}\": {}", next_indent, k, formatted_value)
+                    })
+                    .collect();
+                format!("{{\n{}\n{}}}", items.join(",\n"), indent_str)
+            }
+        }
+    }
 }
