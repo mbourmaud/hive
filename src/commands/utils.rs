@@ -207,10 +207,31 @@ pub fn update() -> Result<()> {
 
     println!("Latest version: {}", latest_version.bright_white());
 
-    // Compare versions
-    if current_version >= latest_version {
+    // Compare versions (simple lexicographic comparison works for most cases)
+    // Note: This doesn't handle all semver edge cases but works for our versioning scheme
+    if current_version == latest_version {
         println!("{}", "✓ You are already on the latest version".green());
         return Ok(());
+    }
+
+    // Parse versions for proper comparison
+    let parse_version =
+        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse().ok()).collect() };
+
+    let current_parts = parse_version(current_version);
+    let latest_parts = parse_version(latest_version);
+
+    // Compare version parts
+    for i in 0..current_parts.len().max(latest_parts.len()) {
+        let current_part = current_parts.get(i).copied().unwrap_or(0);
+        let latest_part = latest_parts.get(i).copied().unwrap_or(0);
+
+        if current_part > latest_part {
+            println!("{}", "✓ You are already on the latest version".green());
+            return Ok(());
+        } else if current_part < latest_part {
+            break;
+        }
     }
 
     println!(
