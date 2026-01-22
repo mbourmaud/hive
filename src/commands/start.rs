@@ -418,6 +418,7 @@ Start with the first story and work through them sequentially. After completing 
         .arg(model)
         .arg("--output-format")
         .arg("stream-json")
+        .arg("--verbose")
         .arg("--dangerously-skip-permissions")
         .current_dir(worktree)
         .stdin(Stdio::null())
