@@ -326,3 +326,4 @@ src/
   Made with 🍯 by <a href="https://github.com/mbourmaud">@mbourmaud</a><br>
   <sub>MIT License • Buzz responsibly</sub>
 </p>
+Testing auto-update
