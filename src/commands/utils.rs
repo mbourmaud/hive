@@ -254,7 +254,7 @@ pub fn update() -> Result<()> {
     let response = client
         .get(download_url)
         .send()
-        .context("Failed to download archive")?;
+        .with_context(|| format!("Failed to download archive from {}", download_url))?;
 
     if !response.status().is_success() {
         bail!("Failed to download archive: {}", response.status());
