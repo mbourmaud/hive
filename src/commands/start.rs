@@ -356,6 +356,7 @@ fn launch_claude(
     ProcessCommand::new("claude")
         .arg("--model")
         .arg(model)
+        .arg("--dangerously-skip-permissions")
         .arg(prompt)
         .current_dir(worktree)
         .stdin(Stdio::null())
