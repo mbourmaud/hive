@@ -186,6 +186,7 @@ pub fn update() -> Result<()> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("hive")
         .redirect(reqwest::redirect::Policy::limited(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
     let response = client
@@ -250,28 +251,58 @@ pub fn update() -> Result<()> {
 
     println!("{}", format!("Downloading {}...", asset_name).bright_cyan());
 
-    // Download the tar.gz archive
-    let response = client
-        .get(download_url)
-        .send()
-        .with_context(|| format!("Failed to download archive from {}", download_url))?;
+    // Create temporary directory for download
+    let temp_dir = std::env::temp_dir().join(format!("hive-update-{}", latest_version));
+    fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
 
-    if !response.status().is_success() {
-        bail!("Failed to download archive: {}", response.status());
+    let temp_archive = temp_dir.join(asset_name);
+
+    // Use gh CLI to download (more reliable than reqwest for GitHub releases)
+    let gh_output = std::process::Command::new("gh")
+        .args([
+            "release",
+            "download",
+            &format!("v{}", latest_version),
+            "--repo",
+            REPO,
+            "--pattern",
+            asset_name,
+            "--dir",
+            temp_dir.to_str().unwrap(),
+        ])
+        .output();
+
+    match gh_output {
+        Ok(output) if output.status.success() => {
+            // gh download succeeded
+        }
+        _ => {
+            // Fallback to direct download with reqwest
+            println!(
+                "{}",
+                "gh CLI not available, using direct download...".bright_black()
+            );
+            let response = client
+                .get(download_url)
+                .send()
+                .with_context(|| format!("Failed to download archive from {}", download_url))?;
+
+            if !response.status().is_success() {
+                bail!("Failed to download archive: {}", response.status());
+            }
+
+            let archive_data = response.bytes().context("Failed to read archive data")?;
+            fs::write(&temp_archive, &archive_data).context("Failed to write archive")?;
+        }
     }
-
-    let archive_data = response.bytes().context("Failed to read archive data")?;
 
     // Get current executable path
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
 
-    // Create temporary directory for extraction
-    let temp_dir = std::env::temp_dir().join(format!("hive-update-{}", latest_version));
-    fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
-
-    // Write archive to temp file
-    let temp_archive = temp_dir.join(asset_name);
-    fs::write(&temp_archive, &archive_data).context("Failed to write archive")?;
+    // Verify archive was downloaded
+    if !temp_archive.exists() {
+        bail!("Downloaded archive not found at {}", temp_archive.display());
+    }
 
     println!("{}", "Extracting archive...".bright_cyan());
 
