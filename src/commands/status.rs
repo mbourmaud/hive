@@ -226,19 +226,20 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
         .unwrap_or(false);
 
     // Determine status symbol based on actual state and process status
+    // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
     let status_symbol = match status.status {
         DroneState::Starting => "◐".yellow(),
         DroneState::Resuming => "◐".yellow(),
         DroneState::InProgress => {
             if process_running {
-                "●".green() // Actually running
+                "◐".green() // Half-full green = in progress
             } else {
-                "○".yellow() // Says in_progress but process is dead
+                "○".yellow() // Empty yellow = stalled
             }
         }
-        DroneState::Completed => "✓".bright_green().bold(),
-        DroneState::Error => "✗".red().bold(),
-        DroneState::Blocked => "⚠".red().bold(),
+        DroneState::Completed => "●".bright_green().bold(), // Full green = completed
+        DroneState::Error => "◐".red().bold(),              // Half-full red = error
+        DroneState::Blocked => "◐".red().bold(),            // Half-full red = blocked
         DroneState::Stopped => "○".bright_black(),
     };
 
@@ -308,12 +309,13 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
             let is_completed = status.completed.contains(&story.id);
             let is_current = status.current_story.as_ref() == Some(&story.id);
 
+            // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
             let (icon, color_fn): (_, fn(String) -> colored::ColoredString) = if is_completed {
-                ("✓", |s| s.green())
+                ("●", |s| s.green()) // Full green = completed
             } else if is_current {
-                ("▸", |s| s.yellow())
+                ("◐", |s| s.yellow()) // Half-full yellow = in progress
             } else {
-                ("○", |s| s.bright_black())
+                ("○", |s| s.bright_black()) // Empty = pending
             };
 
             // Calculate duration
@@ -609,18 +611,19 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     .unwrap_or(false);
 
                 // Status icon and color
+                // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
                 let (icon, status_color) = match status.status {
                     DroneState::Starting | DroneState::Resuming => ("◐", Color::Yellow),
                     DroneState::InProgress => {
                         if process_running {
-                            ("●", Color::Green)
+                            ("◐", Color::Green) // Half-full green = in progress
                         } else {
-                            ("○", Color::Yellow)
+                            ("○", Color::Yellow) // Empty yellow = stalled
                         }
                     }
-                    DroneState::Completed => ("✓", Color::Green),
-                    DroneState::Error => ("✗", Color::Red),
-                    DroneState::Blocked => ("⚠", Color::Rgb(255, 165, 0)), // Orange
+                    DroneState::Completed => ("●", Color::Green), // Full green = completed
+                    DroneState::Error => ("◐", Color::Red),       // Half-full red = error
+                    DroneState::Blocked => ("◐", Color::Red),     // Half-full red = blocked
                     DroneState::Stopped => ("○", Color::DarkGray),
                 };
 
@@ -707,14 +710,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             let is_story_selected =
                                 is_selected && selected_story_index == Some(story_idx);
 
+                            // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
                             let (story_icon, story_color) = if is_story_selected {
                                 ("▸", Color::Cyan)
                             } else if is_completed {
-                                ("✓", Color::Green)
+                                ("●", Color::Green) // Full green = completed
                             } else if is_current {
-                                ("●", Color::Yellow)
+                                ("◐", Color::Yellow) // Half-full yellow = in progress
                             } else {
-                                ("○", Color::DarkGray)
+                                ("○", Color::DarkGray) // Empty = pending
                             };
 
                             // Duration

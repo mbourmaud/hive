@@ -319,7 +319,14 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
     let symlink_path = worktree.join(".hive");
 
     if symlink_path.exists() {
-        fs::remove_file(&symlink_path)?;
+        // Check if it's a symlink or a directory
+        if symlink_path.is_symlink() {
+            fs::remove_file(&symlink_path)?;
+        } else if symlink_path.is_dir() {
+            fs::remove_dir_all(&symlink_path)?;
+        } else {
+            fs::remove_file(&symlink_path)?;
+        }
     }
 
     std::os::unix::fs::symlink(&hive_dir, &symlink_path)
@@ -343,13 +350,63 @@ fn launch_claude(
     // Read PRD content
     let prd_content = fs::read_to_string(prd_path)?;
 
-    // Create initial prompt with PRD
+    // Get the status file path (relative to worktree via symlink)
+    let status_file = format!(".hive/drones/{}/status.json", drone_name);
+
+    // Create initial prompt with PRD and status update instructions
     let prompt = format!(
-        "You are a Hive drone working on this PRD. Execute each story in order.\n\n\
-         PRD Content:\n{}\n\n\
-         Start with the first story and work through them sequentially. \
-         After completing each story, move to the next one automatically.",
-        prd_content
+        r#"You are a Hive drone working on this PRD. Execute each story in order.
+
+PRD Content:
+{}
+
+## CRITICAL: Status Updates
+
+You MUST update the status file at `{}` to track your progress. This is how the monitoring TUI knows what you're doing.
+
+### Before starting EACH story:
+Read the current status.json, then update it with:
+- `"status": "in_progress"`
+- `"current_story": "<story-id>"` (e.g., "US-0", "MON-001")
+- `"story_times".<story-id>.started`: current ISO timestamp
+- `"updated"`: current ISO timestamp
+
+Example command to start a story:
+```bash
+# Read current status
+cat .hive/drones/{}/status.json | jq '
+  .status = "in_progress" |
+  .current_story = "US-0" |
+  .story_times["US-0"] = {{"started": (now | todate)}} |
+  .updated = (now | todate)
+' > /tmp/status.json && mv /tmp/status.json .hive/drones/{}/status.json
+```
+
+### After completing EACH story:
+Update status.json with:
+- Add story ID to `"completed"` array
+- `"story_times".<story-id>.completed`: current ISO timestamp
+- `"updated"`: current ISO timestamp
+
+Example command to complete a story:
+```bash
+cat .hive/drones/{}/status.json | jq '
+  .completed += ["US-0"] |
+  .story_times["US-0"].completed = (now | todate) |
+  .updated = (now | todate)
+' > /tmp/status.json && mv /tmp/status.json .hive/drones/{}/status.json
+```
+
+### When ALL stories are done:
+Set `"status": "completed"` and `"current_story": null`
+
+### If you encounter an error:
+Set `"status": "error"` and increment `"error_count"`
+
+## Execution Instructions
+
+Start with the first story and work through them sequentially. After completing each story, move to the next one automatically. Always update status.json BEFORE starting and AFTER completing each story."#,
+        prd_content, status_file, drone_name, drone_name, drone_name, drone_name
     );
 
     // Launch claude in background with the PRD as initial prompt
