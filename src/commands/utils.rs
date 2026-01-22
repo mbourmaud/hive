@@ -220,13 +220,15 @@ pub fn update() -> Result<()> {
         .bright_yellow()
     );
 
-    // Detect platform
-    let platform = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
-        "aarch64-apple-darwin"
+    // Detect platform and map to asset naming convention
+    let asset_name = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        "hive-darwin-arm64.tar.gz"
     } else if cfg!(target_os = "macos") && cfg!(target_arch = "x86_64") {
-        "x86_64-apple-darwin"
+        "hive-darwin-amd64.tar.gz"
     } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
-        "x86_64-unknown-linux-gnu"
+        "hive-linux-amd64.tar.gz"
+    } else if cfg!(target_os = "linux") && cfg!(target_arch = "aarch64") {
+        "hive-linux-arm64.tar.gz"
     } else {
         bail!("Unsupported platform for auto-update. Please download manually from GitHub.");
     };
@@ -236,51 +238,83 @@ pub fn update() -> Result<()> {
         .as_array()
         .context("Missing assets in release")?;
 
-    let binary_name = format!("hive-{}", platform);
     let asset = assets
         .iter()
-        .find(|a| a["name"].as_str().is_some_and(|n| n.contains(platform)))
-        .context(format!("No binary found for platform '{}'", platform))?;
+        .find(|a| a["name"].as_str() == Some(asset_name))
+        .context(format!("No binary found for platform '{}'", asset_name))?;
 
     let download_url = asset["browser_download_url"]
         .as_str()
         .context("Missing download URL")?;
 
-    println!(
-        "{}",
-        format!("Downloading {}...", binary_name).bright_cyan()
-    );
+    println!("{}", format!("Downloading {}...", asset_name).bright_cyan());
 
-    // Download the binary
+    // Download the tar.gz archive
     let response = client
         .get(download_url)
         .send()
-        .context("Failed to download binary")?;
+        .context("Failed to download archive")?;
 
     if !response.status().is_success() {
-        bail!("Failed to download binary: {}", response.status());
+        bail!("Failed to download archive: {}", response.status());
     }
 
-    let binary_data = response.bytes().context("Failed to read binary data")?;
+    let archive_data = response.bytes().context("Failed to read archive data")?;
 
     // Get current executable path
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
 
-    // Write to temporary file
-    let temp_file = current_exe.with_extension("new");
-    fs::write(&temp_file, &binary_data).context("Failed to write new binary")?;
+    // Create temporary directory for extraction
+    let temp_dir = std::env::temp_dir().join(format!("hive-update-{}", latest_version));
+    fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
+
+    // Write archive to temp file
+    let temp_archive = temp_dir.join(asset_name);
+    fs::write(&temp_archive, &archive_data).context("Failed to write archive")?;
+
+    println!("{}", "Extracting archive...".bright_cyan());
+
+    // Extract using tar command
+    let output = std::process::Command::new("tar")
+        .args([
+            "-xzf",
+            temp_archive.to_str().unwrap(),
+            "-C",
+            temp_dir.to_str().unwrap(),
+        ])
+        .output()
+        .context("Failed to extract archive")?;
+
+    if !output.status.success() {
+        bail!(
+            "Failed to extract archive: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // Find the extracted binary
+    let extracted_binary = temp_dir.join("hive");
+    if !extracted_binary.exists() {
+        bail!(
+            "Extracted binary not found at {}",
+            extracted_binary.display()
+        );
+    }
 
     // Make executable (Unix only)
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&temp_file)?.permissions();
+        let mut perms = fs::metadata(&extracted_binary)?.permissions();
         perms.set_mode(0o755);
-        fs::set_permissions(&temp_file, perms)?;
+        fs::set_permissions(&extracted_binary, perms)?;
     }
 
     // Replace current binary
-    fs::rename(&temp_file, &current_exe).context("Failed to replace current binary")?;
+    fs::rename(&extracted_binary, &current_exe).context("Failed to replace current binary")?;
+
+    // Clean up temp directory
+    let _ = fs::remove_dir_all(&temp_dir);
 
     println!("{}", "✓ Binary updated successfully!".green().bold());
 
