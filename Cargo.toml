@@ -1,6 +1,6 @@
 [package]
 name = "hive"
-version = "2.3.12"
+version = "2.3.13"
 edition = "2021"
 authors = ["Mathieu Bourmaud <mathieu.bourmaud@gmail.com>"]
 description = "CLI tool for orchestrating multiple Claude Code instances via git worktrees"

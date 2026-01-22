@@ -612,10 +612,12 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                 // Status icon and color
                 // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
+                // Drone is "active" if process is running OR if there's a current story being worked on
+                let is_active = process_running || status.current_story.is_some();
                 let (icon, status_color) = match status.status {
                     DroneState::Starting | DroneState::Resuming => ("◐", Color::Yellow),
                     DroneState::InProgress => {
-                        if process_running {
+                        if is_active {
                             ("◐", Color::Green) // Half-full green = in progress
                         } else {
                             ("○", Color::Yellow) // Empty yellow = stalled
@@ -1479,7 +1481,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
     let log_path = PathBuf::from(".hive")
         .join("drones")
         .join(drone_name)
-        .join("drone.log");
+        .join("activity.log");
 
     let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| "No logs found".to_string());
 

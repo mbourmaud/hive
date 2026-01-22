@@ -410,11 +410,15 @@ Start with the first story and work through them sequentially. After completing 
     );
 
     // Launch claude in background with the PRD as initial prompt
+    // Use -p (print/non-interactive) with --output-format stream-json for structured logs
     ProcessCommand::new("claude")
+        .arg("-p")
+        .arg(&prompt)
         .arg("--model")
         .arg(model)
+        .arg("--output-format")
+        .arg("stream-json")
         .arg("--dangerously-skip-permissions")
-        .arg(prompt)
         .current_dir(worktree)
         .stdin(Stdio::null())
         .stdout(log_file.try_clone()?)
