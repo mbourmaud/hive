@@ -68,6 +68,11 @@ fn install_binary(home: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Install skills only (for auto-install on first run)
+pub fn install_skills_only(home: &Path) -> Result<()> {
+    install_skills(home)
+}
+
 fn install_skills(home: &Path) -> Result<()> {
     let skills_dir = home.join(".claude").join("commands");
     fs::create_dir_all(&skills_dir).context("Failed to create ~/.claude/commands directory")?;

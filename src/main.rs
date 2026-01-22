@@ -148,11 +148,32 @@ enum ProfileCommands {
     },
 }
 
+fn ensure_skills_installed() {
+    if let Some(home) = dirs::home_dir() {
+        let skills_dir = home.join(".claude").join("commands");
+        let has_skills = skills_dir.exists()
+            && std::fs::read_dir(&skills_dir)
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .any(|e| e.file_name().to_string_lossy().starts_with("hive:"))
+                })
+                .unwrap_or(false);
+
+        if !has_skills {
+            let _ = commands::install::install_skills_only(&home);
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
 
     // Check for updates in background (non-blocking, once per day)
     commands::utils::check_for_updates_background();
+
+    // Ensure skills are installed (first run)
+    ensure_skills_installed();
 
     match cli.command {
         Commands::Init => {
