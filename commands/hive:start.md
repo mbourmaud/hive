@@ -2,185 +2,123 @@
 
 Launch an autonomous drone on a PRD file.
 
-## Usage
+## CRITICAL: Command Syntax
 
-- `/hive:start` - Interactive wizard (asks all questions)
-- `/hive:start --prd .hive/prds/security.json` - Direct with PRD
-- `/hive:start --prd security.json --iterations 100 --model sonnet` - Full options
+The `hive start` CLI uses this syntax:
 
-## Arguments
-
-Parse arguments from the command if provided:
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--prd <file>` | PRD JSON file | (ask user) |
-| `--name <name>` | Drone name | (from PRD id) |
-| `--base <branch>` | Base branch | main |
-| `--iterations <n>` | Max iterations (each = full Claude session) | 15 |
-| `--model <model>` | Claude model (opus/sonnet) | opus |
-
-**Examples:**
+```bash
+hive start <NAME> [PROMPT] [OPTIONS]
 ```
-/hive:start --prd .hive/prds/prd-security.json
-/hive:start --prd security.json --name sec --iterations 100
-/hive:start --prd feature.json --model sonnet --base develop
+
+Where `<NAME>` **must match the PRD filename** (without `prd-` prefix and `.json` suffix).
+
+**Example:** For a PRD file `.hive/prds/prd-fix-auth-bug.json`, use:
+```bash
+hive start fix-auth-bug --model sonnet
+```
+
+**NOT** `--prd .hive/prds/prd-fix-auth-bug.json` (this flag doesn't exist!)
+
+## Quick Reference
+
+| PRD File | Launch Command |
+|----------|----------------|
+| `.hive/prds/prd-security-api.json` | `hive start security-api` |
+| `.hive/prds/prd-fix-login-bug.json` | `hive start fix-login-bug` |
+| `.hive/prds/prd-add-dark-mode.json` | `hive start add-dark-mode` |
+
+## Available Options
+
+```
+hive start [OPTIONS] <NAME> [PROMPT]
+
+Arguments:
+  <NAME>    Drone name (must match PRD id: prd-<NAME>.json)
+  [PROMPT]  Optional custom prompt to send to the drone
+
+Options:
+  --resume       Resume a blocked or stopped drone
+  --local        Run in current directory instead of worktree
+  --model MODEL  Model to use: sonnet (default), opus, haiku
+  --dry-run      Dry run - don't launch Claude
+```
+
+## Usage Examples
+
+```bash
+# Launch drone with default settings (sonnet model)
+hive start fix-auth-bug
+
+# Launch with specific model
+hive start security-api --model opus
+
+# Launch with custom prompt
+hive start my-feature "Focus on the authentication part first"
+
+# Resume a stopped drone
+hive start my-feature --resume
+
+# Run in current directory (no worktree)
+hive start quick-fix --local
+
+# Dry run to test
+hive start my-feature --dry-run
 ```
 
 ## Workflow
 
-### Step 0: Parse Arguments
-
-Check if user provided arguments. Extract:
-- `--prd` → prd_file
-- `--name` → drone_name
-- `--base` → base_branch
-- `--iterations` → iterations
-- `--model` → model
-
-For any argument NOT provided, ask the user interactively.
-
 ### Step 1: Check Hive Initialization
 
-First, check if `.hive/` exists in the project. If not, run `hive init`.
-
-### Step 2: Select PRD File (if not provided)
-
-If `--prd` was provided, use it directly. Otherwise:
-
-Search for PRD files in `.hive/prds/` and project root:
+First, check if `.hive/` exists in the project:
 ```bash
-find .hive/prds -name "*.json" 2>/dev/null
-find . -maxdepth 1 -name "prd*.json" -o -name "*-prd.json" 2>/dev/null
+ls -la .hive/prds/ 2>/dev/null || echo "Hive not initialized"
 ```
 
-Ask the user to select which PRD to use.
+If not initialized, run `hive init`.
 
-### Step 3: Execution Mode (if not obvious)
+### Step 2: Find Available PRDs
 
-If all args provided, assume worktree mode. Otherwise ask:
-
-**"Where should the drone work?"**
-
-Options:
-- **New worktree (Recommended)** - Isolated environment
-- **Current branch** - Work in current directory (risky)
-
-### Step 4: Drone Name (if not provided)
-
-If `--name` not provided, suggest from PRD's `id` field:
+List PRD files to find the correct name:
 ```bash
-jq -r '.id // .name // "drone"' <prd-file>
+ls .hive/prds/*.json 2>/dev/null
 ```
 
-### Step 5: Base Branch (if not provided)
+Extract the drone name from the filename:
+- `prd-fix-auth-bug.json` → drone name is `fix-auth-bug`
+- `prd-security-api.json` → drone name is `security-api`
 
-If `--base` not provided, ask:
+### Step 3: Launch the Drone
 
-**"Which branch should the drone start from?"**
-
-Options:
-- **main (Recommended)**
-- **develop**
-- **Current branch**
-- Other
-
-### Step 6: Iterations (if not provided)
-
-If `--iterations` not provided, ask:
-
-**"How many iterations?"**
-
-Options:
-- **15 (Recommended)** - Standard PRDs (each iteration = full Claude session)
-- **10** - Small PRDs (< 5 stories)
-- **25** - Large PRDs (> 15 stories)
-- **Unlimited** - Sets to 999
-
-### Step 7: Model (if not provided)
-
-If `--model` not provided, ask:
-
-**"Which Claude model?"**
-
-Options:
-- **opus (Recommended)** - Best quality
-- **sonnet** - Faster, cheaper
-
-### Step 8: Confirmation
-
-If ANY argument was missing (interactive mode), show summary:
-```
-Ready to launch drone:
-
-  PRD:        .hive/prds/prd-security.json (10 stories)
-  Drone:      security
-  Base:       main
-  Iterations: 50
-  Model:      opus
-
-Proceed? [Y/n]
-```
-
-If ALL arguments were provided, skip confirmation and launch directly.
-
-### Step 9: Launch
-
-Execute:
+Use the extracted name:
 ```bash
-hive start --prd <file> --name <name> --base <branch> --iterations <n> --model <model>
+hive start <drone-name> --model sonnet
 ```
 
-### Step 10: Post-launch Info
+### Step 4: Monitor Progress
 
+After launch, show:
 ```
 Drone launched successfully!
 
-Monitor:  hive status
+Monitor:  hive monitor <name>
 Logs:     hive logs <name>
-Stop:     hive kill <name>
-
-Statusline will show: 👑 Hive v0.2.0 | 🐝 security (0/10)
+Stop:     hive stop <name>
+Kill:     hive kill <name>
 ```
 
-## Quick Launch Examples
+## Important Notes
 
-```
-# Full interactive (no args)
-/hive:start
+1. **The drone name MUST match the PRD id** - `prd-<name>.json` → `hive start <name>`
+2. **Default model is sonnet** - Use `--model opus` for complex tasks
+3. **Worktree is created automatically** - Unless `--local` is specified
+4. **PRD must exist** - The command will error if no matching PRD is found
 
-# Just specify PRD, rest is interactive
-/hive:start --prd .hive/prds/prd-auth.json
+## Troubleshooting
 
-# Quick launch with all options (no questions asked)
-/hive:start --prd security.json --name sec --base main --iterations 50 --model opus
+**Error: "No PRD found for drone 'X'"**
+- Check the PRD filename matches: `ls .hive/prds/`
+- The name must match exactly (without `prd-` prefix and `.json` suffix)
 
-# Fast mode with sonnet
-/hive:start --prd small-task.json --model sonnet --iterations 25
-```
-
-## File Structure
-
-After launch:
-```
-your-project/                      # Queen
-├── .hive/
-│   ├── prds/
-│   │   └── prd-security.json
-│   └── drones/
-│       └── security/
-│           ├── status.json
-│           ├── drone.log
-│           └── .pid
-
-~/Projects/your-project-security/  # Drone worktree
-├── .hive -> ../your-project/.hive # Symlink!
-└── (project files)
-```
-
-## Notes
-
-- If all args provided → launch immediately without questions
-- If some args missing → only ask for missing ones
-- Always validate PRD file exists before launching
-- Check `hive` and `claude` CLI are available
+**Error: "unexpected argument '--prd' found"**
+- Don't use `--prd` flag - it doesn't exist
+- Use: `hive start <name>` where name matches the PRD id
