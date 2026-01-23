@@ -452,6 +452,9 @@ fn run_tui(_name: Option<String>) -> Result<()> {
         .map(|(name, _)| name.clone())
         .collect();
 
+    // Track drones that have been auto-resumed to avoid duplicate resumes
+    let mut auto_resumed_drones: HashSet<String> = HashSet::new();
+
     loop {
         let mut drones = list_drones()?;
 
@@ -476,6 +479,49 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 load_prd(&prd_path).map(|prd| (status.prd.clone(), prd))
             })
             .collect();
+
+        // Auto-resume drones with new stories (only once per drone)
+        for (name, status) in &drones {
+            if auto_resumed_drones.contains(name) {
+                continue;
+            }
+
+            // Check if drone has new stories
+            let prd_story_count = prd_cache
+                .get(&status.prd)
+                .map(|p| p.stories.len())
+                .unwrap_or(status.total);
+
+            if prd_story_count > status.total {
+                // Check if drone is not running
+                let process_running = read_drone_pid(name)
+                    .map(is_process_running)
+                    .unwrap_or(false);
+
+                if !process_running
+                    && matches!(
+                        status.status,
+                        DroneState::Completed | DroneState::Stopped | DroneState::InProgress
+                    )
+                {
+                    let new_count = prd_story_count - status.total;
+                    message = Some(format!(
+                        "🔄 Auto-resuming '{}' ({} new stor{})",
+                        name,
+                        new_count,
+                        if new_count == 1 { "y" } else { "ies" }
+                    ));
+                    message_color = Color::Cyan;
+                    auto_resumed_drones.insert(name.clone());
+
+                    // Resume the drone
+                    if let Err(e) = handle_resume_drone(name) {
+                        message = Some(format!("❌ Failed to resume: {}", e));
+                        message_color = Color::Red;
+                    }
+                }
+            }
+        }
 
         terminal.draw(|f| {
             let area = f.area();
@@ -841,7 +887,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         ]));
                     }
 
-                    // Show new stories indicator (press 'r' to resume)
+                    // Show new stories indicator (auto-resume pending)
                     if has_new_stories {
                         let new_count = prd_story_count - status.total;
                         lines.push(Line::from(vec![
@@ -857,7 +903,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                     .add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(
-                                " - press 'r' to resume",
+                                " - auto-resuming...",
                                 Style::default().fg(Color::DarkGray),
                             ),
                         ]));
@@ -922,7 +968,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             } else if selected_story_index.is_some() {
                 " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " ↵ expand  l logs  r resume  b blocked  x stop  c clean  q quit".to_string()
+                " ↵ expand  l logs  b blocked  x stop  c clean  q quit".to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(

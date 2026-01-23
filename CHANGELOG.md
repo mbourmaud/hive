@@ -5,11 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-01-23
+
+### Changed
+- **Auto-Resume**: Monitor now automatically resumes drones when new stories are detected
+  - No manual intervention required - drones resume as soon as new stories appear
+  - Shows `✨ X new stories - auto-resuming...` indicator during auto-resume
+  - Tracks which drones have been auto-resumed to avoid duplicate launches
+  - Manual 'r' shortcut still available as fallback
+
 ## [2.5.0] - 2026-01-23
 
 ### Added
 - **Hot Reload PRD Stories**: Monitor now detects when new stories are added to a PRD
-  - Shows `✨ X new stories - press 'r' to resume` indicator when PRD has more stories than status.total
+  - Shows `✨ X new stories` indicator when PRD has more stories than status.total
   - Progress bar and counter now use PRD as source of truth (not cached status.total)
   - New 'r' keyboard shortcut to resume drone with updated PRD
   - Automatically updates status.json with new story count on resume

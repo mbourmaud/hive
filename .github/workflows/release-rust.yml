@@ -54,13 +54,13 @@ jobs:
 
       - name: Strip binary (non-Windows)
         if: runner.os != 'Windows'
-        run: strip target/${{ matrix.target }}/release/hive-rust
+        run: strip target/${{ matrix.target }}/release/hive
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: target/${{ matrix.target }}/release/hive-rust
+          path: target/${{ matrix.target }}/release/hive
           retention-days: 1
 
   release:
