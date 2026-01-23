@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-23
+
+### Added
+- **Hot Reload PRD Stories**: Monitor now detects when new stories are added to a PRD
+  - Shows `✨ X new stories - press 'r' to resume` indicator when PRD has more stories than status.total
+  - Progress bar and counter now use PRD as source of truth (not cached status.total)
+  - New 'r' keyboard shortcut to resume drone with updated PRD
+  - Automatically updates status.json with new story count on resume
+
+### Fixed
+- **TUI Display**: Fixed spacing issues in monitor
+  - Drone name padding increased from 16 to 30 characters (fixes long names like `fix-buildings-listing-archived-error`)
+  - Story ID padding increased from 10 to 16 characters with trailing space (fixes IDs like `FIX-ARCHIVED-001`)
+  - Progress bar no longer appears full when new stories are pending
+
 ## [2.4.1] - 2026-01-23
 
 ### Fixed

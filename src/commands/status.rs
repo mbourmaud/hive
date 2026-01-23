@@ -629,8 +629,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     DroneState::Stopped => ("○", Color::DarkGray),
                 };
 
-                let percentage = if status.total > 0 {
-                    (status.completed.len() as f32 / status.total as f32 * 100.0) as u16
+                // Use PRD story count as source of truth (may differ from status.total if PRD was updated)
+                let prd_story_count = prd_cache
+                    .get(&status.prd)
+                    .map(|p| p.stories.len())
+                    .unwrap_or(status.total);
+                let has_new_stories = prd_story_count > status.total;
+
+                let percentage = if prd_story_count > 0 {
+                    (status.completed.len() as f32 / prd_story_count as f32 * 100.0) as u16
                 } else {
                     0
                 };
@@ -640,12 +647,13 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
                 let empty = bar_width - filled;
 
-                let (filled_bar, empty_bar) = if status.status == DroneState::Completed {
-                    // Completed: full green bar
-                    ("━".repeat(bar_width), String::new())
-                } else {
-                    ("━".repeat(filled), "─".repeat(empty))
-                };
+                let (filled_bar, empty_bar) =
+                    if status.status == DroneState::Completed && !has_new_stories {
+                        // Completed: full green bar
+                        ("━".repeat(bar_width), String::new())
+                    } else {
+                        ("━".repeat(filled), "─".repeat(empty))
+                    };
 
                 let filled_color = match status.status {
                     DroneState::Completed => Color::Green, // Full green when completed
@@ -707,17 +715,21 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     Span::raw(" "),
                     Span::styled(expand_indicator, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
-                    Span::styled(format!("🐝 {:<16}", name), name_style),
+                    Span::styled(format!("🐝 {:<30} ", name), name_style),
                     Span::styled(filled_bar, Style::default().fg(filled_color)),
                     Span::styled(empty_bar, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
                     Span::styled(
-                        format!("{:>3}/{:<3}", status.completed.len(), status.total),
-                        Style::default().fg(if status.status == DroneState::Completed {
-                            Color::DarkGray
-                        } else {
-                            Color::White
-                        }),
+                        format!("{:>3}/{:<3}", status.completed.len(), prd_story_count),
+                        Style::default().fg(
+                            if status.status == DroneState::Completed && !has_new_stories {
+                                Color::DarkGray
+                            } else if has_new_stories {
+                                Color::Cyan // Highlight when new stories available
+                            } else {
+                                Color::White
+                            },
+                        ),
                     ),
                     Span::styled(
                         format!(" {:>3}%", percentage),
@@ -793,7 +805,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 Span::styled(story_icon, line_style.fg(story_color)),
                                 Span::raw(" "),
                                 Span::styled(
-                                    format!("{:<10}", story.id),
+                                    format!("{:<16} ", story.id),
                                     line_style.fg(if is_story_selected {
                                         Color::Cyan
                                     } else {
@@ -824,6 +836,28 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             ),
                             Span::styled(
                                 " - press 'b' for details",
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]));
+                    }
+
+                    // Show new stories indicator (press 'r' to resume)
+                    if has_new_stories {
+                        let new_count = prd_story_count - status.total;
+                        lines.push(Line::from(vec![
+                            Span::raw("      "),
+                            Span::styled(
+                                format!(
+                                    "✨ {} new stor{}",
+                                    new_count,
+                                    if new_count == 1 { "y" } else { "ies" }
+                                ),
+                                Style::default()
+                                    .fg(Color::Cyan)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                " - press 'r' to resume",
                                 Style::default().fg(Color::DarkGray),
                             ),
                         ]));
@@ -888,7 +922,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             } else if selected_story_index.is_some() {
                 " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " ↵ expand  l logs  b blocked  x stop  c clean  q quit".to_string()
+                " ↵ expand  l logs  r resume  b blocked  x stop  c clean  q quit".to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -1162,6 +1196,38 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 message_color = Color::Yellow;
                             }
                         }
+                        KeyCode::Char('r') | KeyCode::Char('R') => {
+                            // Resume drone (especially useful when new stories added to PRD)
+                            if !drones.is_empty() {
+                                let drone_name = drones[selected_index].0.clone();
+                                let status = &drones[selected_index].1;
+                                let prd_story_count = prd_cache
+                                    .get(&status.prd)
+                                    .map(|p| p.stories.len())
+                                    .unwrap_or(status.total);
+                                let has_new_stories = prd_story_count > status.total;
+
+                                if has_new_stories
+                                    || status.status == DroneState::Completed
+                                    || status.status == DroneState::Stopped
+                                {
+                                    match handle_resume_drone(&drone_name) {
+                                        Ok(msg) => {
+                                            message = Some(msg);
+                                            message_color = Color::Green;
+                                        }
+                                        Err(e) => {
+                                            message = Some(format!("Error: {}", e));
+                                            message_color = Color::Red;
+                                        }
+                                    }
+                                } else {
+                                    message =
+                                        Some(format!("Drone {} is already running", drone_name));
+                                    message_color = Color::Yellow;
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -1285,6 +1351,46 @@ fn handle_stop_drone(drone_name: &str) -> Result<String> {
 fn handle_clean_drone(drone_name: &str) -> Result<String> {
     crate::commands::kill_clean::clean_background(drone_name.to_string());
     Ok(format!("🧹 Cleaning drone: {}", drone_name))
+}
+
+// Handler for 'Resume' action - resumes a drone with new stories or stopped drone
+fn handle_resume_drone(drone_name: &str) -> Result<String> {
+    // Update status.json to reflect new PRD story count
+    let status_path = PathBuf::from(".hive")
+        .join("drones")
+        .join(drone_name)
+        .join("status.json");
+    let prd_path_dir = PathBuf::from(".hive").join("prds");
+
+    if let Ok(status_content) = fs::read_to_string(&status_path) {
+        if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&status_content) {
+            // Find and load PRD to get new story count
+            let prd_path = prd_path_dir.join(&status.prd);
+            if let Some(prd) = load_prd(&prd_path) {
+                // Update total to match PRD
+                status.total = prd.stories.len();
+                // Reset status to in_progress
+                status.status = DroneState::InProgress;
+                status.updated = chrono::Utc::now().to_rfc3339();
+
+                // Write updated status
+                if let Ok(updated_json) = serde_json::to_string_pretty(&status) {
+                    let _ = fs::write(&status_path, updated_json);
+                }
+            }
+        }
+    }
+
+    // Launch drone with resume flag
+    crate::commands::start::run(
+        drone_name.to_string(),
+        None,
+        true,
+        false,
+        "sonnet".to_string(),
+        false,
+    )?;
+    Ok(format!("🔄 Resumed drone: {}", drone_name))
 }
 
 // Render the blocked detail view
