@@ -761,7 +761,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     Span::raw(" "),
                     Span::styled(expand_indicator, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
-                    Span::styled(format!("🐝 {:<30} ", name), name_style),
+                    Span::styled(format!("🐝 {} ", name), name_style),
                     Span::styled(filled_bar, Style::default().fg(filled_color)),
                     Span::styled(empty_bar, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
