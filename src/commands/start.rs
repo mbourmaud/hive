@@ -42,6 +42,12 @@ pub fn run(
     // 3. Determine branch and check for existing worktree
     let default_branch = format!("hive/{}", name);
     let branch = prd.target_branch.as_deref().unwrap_or(&default_branch);
+    let base_branch = prd.base_branch.as_deref();
+
+    // Log base branch info
+    if let Some(base) = base_branch {
+        println!("  {} Base branch: {}", "→".bright_blue(), base);
+    }
 
     let worktree_path = if local {
         std::env::current_dir()?
@@ -78,7 +84,7 @@ pub fn run(
                     let worktree_base = config::get_worktree_base()?;
                     let project_name = get_project_name()?;
                     let new_path = worktree_base.join(&project_name).join(&name);
-                    create_worktree(&new_path, branch)?;
+                    create_worktree(&new_path, branch, base_branch)?;
                     println!(
                         "  {} Created worktree at {}",
                         "✓".green(),
@@ -99,7 +105,7 @@ pub fn run(
                 let worktree_base = config::get_worktree_base()?;
                 let project_name = get_project_name()?;
                 let new_path = worktree_base.join(&project_name).join(&name);
-                create_worktree(&new_path, branch)?;
+                create_worktree(&new_path, branch, base_branch)?;
                 println!(
                     "  {} Created worktree at {}",
                     "✓".green(),
@@ -116,7 +122,7 @@ pub fn run(
 
         // Check if worktree already exists to avoid error
         if !new_path.exists() {
-            create_worktree(&new_path, branch)?;
+            create_worktree(&new_path, branch, base_branch)?;
             println!("  {} Created worktree", "✓".green());
         } else {
             println!("  {} Using existing worktree", "✓".green());
@@ -289,20 +295,79 @@ fn get_project_name() -> Result<String> {
         .context("Failed to get directory name")
 }
 
-fn create_worktree(path: &std::path::Path, branch: &str) -> Result<()> {
+fn create_worktree(
+    path: &std::path::Path,
+    branch: &str,
+    explicit_base: Option<&str>,
+) -> Result<()> {
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
 
-    // Try to create branch if it doesn't exist
-    let _ = ProcessCommand::new("git").args(["branch", branch]).output();
+    // Fetch latest from origin to ensure we have up-to-date refs
+    println!("  {} Fetching latest from origin...", "→".bright_blue());
+    let _ = ProcessCommand::new("git")
+        .args(["fetch", "origin"])
+        .output();
 
-    // Create worktree
-    let output = ProcessCommand::new("git")
-        .args(["worktree", "add", path.to_str().unwrap(), branch])
+    // Determine the base ref for the worktree
+    // Priority: explicit_base from PRD > auto-detect based on branch name
+    let base_ref = if let Some(base) = explicit_base {
+        // If explicit base is master/main, use origin/ version
+        if base == "master" || base == "main" {
+            let remote_ref = format!("origin/{}", base);
+            let exists = ProcessCommand::new("git")
+                .args(["rev-parse", "--verify", &remote_ref])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if exists {
+                remote_ref
+            } else {
+                base.to_string()
+            }
+        } else {
+            base.to_string()
+        }
+    } else {
+        get_worktree_base_ref(branch)?
+    };
+
+    // Create the worktree with the appropriate base
+    // If branch already exists, just use it; otherwise create from base_ref
+    let branch_exists = ProcessCommand::new("git")
+        .args(["rev-parse", "--verify", branch])
         .output()
-        .context("Failed to create worktree")?;
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let output = if branch_exists {
+        // Branch exists, create worktree pointing to it
+        ProcessCommand::new("git")
+            .args(["worktree", "add", path.to_str().unwrap(), branch])
+            .output()
+            .context("Failed to create worktree")?
+    } else {
+        // Branch doesn't exist, create it from base_ref
+        println!(
+            "  {} Creating branch '{}' from '{}'",
+            "→".bright_blue(),
+            branch,
+            base_ref
+        );
+        ProcessCommand::new("git")
+            .args([
+                "worktree",
+                "add",
+                "-b",
+                branch,
+                path.to_str().unwrap(),
+                &base_ref,
+            ])
+            .output()
+            .context("Failed to create worktree")?
+    };
 
     if !output.status.success() {
         bail!(
@@ -312,6 +377,69 @@ fn create_worktree(path: &std::path::Path, branch: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Determine the base ref for creating a worktree
+/// - For master/main: use origin/master or origin/main (remote, up-to-date)
+/// - For other branches: use local branch if exists, otherwise try origin/<branch>
+fn get_worktree_base_ref(branch: &str) -> Result<String> {
+    // Check if this is a standard main branch
+    let is_main_branch = branch == "master" || branch == "main";
+
+    if is_main_branch {
+        // For main branches, always use origin version to get latest
+        let remote_ref = format!("origin/{}", branch);
+        let exists = ProcessCommand::new("git")
+            .args(["rev-parse", "--verify", &remote_ref])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if exists {
+            return Ok(remote_ref);
+        }
+        // Fall back to local if remote doesn't exist
+        return Ok(branch.to_string());
+    }
+
+    // For other branches, check if local exists
+    let local_exists = ProcessCommand::new("git")
+        .args(["rev-parse", "--verify", branch])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if local_exists {
+        return Ok(branch.to_string());
+    }
+
+    // Check if remote version exists
+    let remote_ref = format!("origin/{}", branch);
+    let remote_exists = ProcessCommand::new("git")
+        .args(["rev-parse", "--verify", &remote_ref])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if remote_exists {
+        return Ok(remote_ref);
+    }
+
+    // Default: try to create from origin/master or origin/main
+    for default_branch in &["origin/master", "origin/main"] {
+        let exists = ProcessCommand::new("git")
+            .args(["rev-parse", "--verify", default_branch])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if exists {
+            return Ok(default_branch.to_string());
+        }
+    }
+
+    // Last resort: HEAD
+    Ok("HEAD".to_string())
 }
 
 fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {

@@ -17,6 +17,9 @@ pub struct Prd {
     pub created_at: String,
     pub target_platforms: Option<Vec<String>>,
     pub target_branch: Option<String>,
+    /// Base branch to create worktree from (defaults to origin/master or origin/main)
+    /// For master/main, always uses origin/ version (up-to-date remote)
+    pub base_branch: Option<String>,
     pub stories: Vec<Story>,
 }
 

@@ -24,6 +24,7 @@ fn create_test_prd(prds_dir: &Path, prd_name: &str) {
         created_at: "2024-01-01T00:00:00Z".to_string(),
         target_platforms: Some(vec!["macos".to_string(), "linux".to_string()]),
         target_branch: Some("main".to_string()),
+        base_branch: None,
         stories: vec![],
     };
 
