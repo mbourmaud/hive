@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.4] - 2026-01-23
+
+### Fixed
+- **Resume from correct story**: When PRD is updated, drones now check `status.json` for completed stories and resume from the first uncompleted story instead of restarting from step 0
+
 ## [2.5.3] - 2026-01-23
 
 ### Changed
