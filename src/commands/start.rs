@@ -533,8 +533,13 @@ Set `"status": "error"` and increment `"error_count"`
 
 ## Execution Instructions
 
-Start with the first story and work through them sequentially. After completing each story, move to the next one automatically. Always update status.json BEFORE starting and AFTER completing each story."#,
-        prd_content, status_file, drone_name, drone_name, drone_name, drone_name
+**IMPORTANT: Before starting work, read `{}` to check which stories are already completed.**
+- The `completed` array contains IDs of stories that are DONE - DO NOT redo them
+- Start with the FIRST story that is NOT in the `completed` array
+- If `current_story` is set and not in `completed`, resume that story first
+
+Work through stories sequentially. After completing each story, move to the next uncompleted one automatically. Always update status.json BEFORE starting and AFTER completing each story."#,
+        prd_content, status_file, drone_name, drone_name, drone_name, drone_name, status_file
     );
 
     // Launch claude in background with the PRD as initial prompt
