@@ -18,11 +18,11 @@ jobs:
         include:
           # macOS
           - target: x86_64-apple-darwin
-            os: macos-13  # Intel runner
+            os: macos-15  # Intel runner (Rosetta for x86_64)
             name: hive-darwin-amd64
             cross: false
           - target: aarch64-apple-darwin
-            os: macos-14  # Apple Silicon runner
+            os: macos-latest  # Apple Silicon runner
             name: hive-darwin-arm64
             cross: false
           # Linux (musl for portable static binaries)
