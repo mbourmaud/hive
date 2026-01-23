@@ -13,20 +13,27 @@ jobs:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
+          # macOS
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-13  # Intel runner
             name: hive-darwin-amd64
+            cross: false
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-14  # Apple Silicon runner
             name: hive-darwin-arm64
-          - target: x86_64-unknown-linux-gnu
+            cross: false
+          # Linux (musl for portable static binaries)
+          - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             name: hive-linux-amd64
-          - target: aarch64-unknown-linux-gnu
+            cross: true
+          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             name: hive-linux-arm64
+            cross: true
 
     steps:
       - uses: actions/checkout@v4
@@ -36,23 +43,33 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install cross
+        if: matrix.cross
+        uses: taiki-e/install-action@cross
 
-      - name: Build
+      - name: Build with cross
+        if: matrix.cross
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Build with cargo
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Strip binary (Linux)
+        if: contains(matrix.target, 'linux')
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          # cross container already strips, but ensure it's done
+          if command -v strip &> /dev/null; then
+            strip target/${{ matrix.target }}/release/hive 2>/dev/null || true
           fi
-          cargo build --release --target ${{ matrix.target }}
+
+      - name: Strip binary (macOS)
+        if: contains(matrix.target, 'darwin')
+        run: strip target/${{ matrix.target }}/release/hive
 
       - name: Package
         run: |
           mkdir -p dist
-          # Copy binary as 'hive' for install script, but archive with platform name
           cp target/${{ matrix.target }}/release/hive dist/hive
           cd dist
           tar -czvf ${{ matrix.name }}.tar.gz hive
@@ -118,7 +135,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.release_notes.outputs.version }}
           body_path: notes.md
@@ -222,12 +239,7 @@ jobs:
             end
 
             def install
-              # The tarball contains a binary named hive-{os}-{arch}
-              os = OS.mac? ? "darwin" : "linux"
-              arch = Hardware::CPU.arm? ? "arm64" : "amd64"
-              binary_name = "hive-#{os}-#{arch}"
-
-              bin.install binary_name => "hive"
+              bin.install "hive"
             end
 
             test do

@@ -1,0 +1,16 @@
+# Cross configuration for building portable Linux binaries
+# https://github.com/cross-rs/cross
+
+[build.env]
+passthrough = [
+    "RUST_BACKTRACE",
+    "CARGO_TERM_COLOR",
+]
+
+[target.x86_64-unknown-linux-musl]
+# Use pre-built image with musl toolchain
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:main"
+
+[target.aarch64-unknown-linux-musl]
+# Use pre-built image with musl toolchain
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:main"

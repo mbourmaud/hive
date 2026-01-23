@@ -109,11 +109,15 @@ else
   INSTALL_DIR="$HOME/.local/bin"
 fi
 
-# Download binary
+# Download binary and checksum
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/hive-$PLATFORM.tar.gz"
+CHECKSUM_URL="https://github.com/$REPO/releases/download/v$VERSION/hive-$PLATFORM.tar.gz.sha256"
 TEMP_DIR=$(mktemp -d)
+ARCHIVE="$TEMP_DIR/hive-$PLATFORM.tar.gz"
 
-if ! curl -sL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR" 2>/dev/null; then
+# Download archive
+echo -e "${DIM}Downloading from: $DOWNLOAD_URL${RESET}"
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE" 2>/dev/null; then
   echo -e "${RED}Error:${RESET} Failed to download binary"
   echo "URL: $DOWNLOAD_URL"
   echo ""
@@ -125,11 +129,40 @@ if ! curl -sL "$DOWNLOAD_URL" | tar -xz -C "$TEMP_DIR" 2>/dev/null; then
   exit 1
 fi
 
-# Find and install the binary
-BINARY=$(find "$TEMP_DIR" -name "hive*" -type f -perm +111 2>/dev/null | head -1)
-if [ -z "$BINARY" ]; then
-  BINARY=$(find "$TEMP_DIR" -name "hive*" -type f | head -1)
+# Verify checksum
+echo -e "${CYAN}Verifying checksum...${RESET}"
+if curl -fsSL "$CHECKSUM_URL" -o "$TEMP_DIR/checksum.sha256" 2>/dev/null; then
+  EXPECTED_SHA=$(awk '{print $1}' "$TEMP_DIR/checksum.sha256")
+  if command -v sha256sum &> /dev/null; then
+    ACTUAL_SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+  elif command -v shasum &> /dev/null; then
+    ACTUAL_SHA=$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')
+  else
+    echo -e "${YELLOW}Warning:${RESET} Could not verify checksum (no sha256sum/shasum found)"
+    ACTUAL_SHA="$EXPECTED_SHA"  # Skip verification
+  fi
+
+  if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+    echo -e "${RED}Error:${RESET} Checksum verification failed!"
+    echo "Expected: $EXPECTED_SHA"
+    echo "Got:      $ACTUAL_SHA"
+    rm -rf "$TEMP_DIR"
+    exit 1
+  fi
+  echo -e "${GREEN}✓${RESET} Checksum verified"
+else
+  echo -e "${YELLOW}Warning:${RESET} Could not download checksum file, skipping verification"
 fi
+
+# Extract archive
+if ! tar -xzf "$ARCHIVE" -C "$TEMP_DIR" 2>/dev/null; then
+  echo -e "${RED}Error:${RESET} Failed to extract archive"
+  rm -rf "$TEMP_DIR"
+  exit 1
+fi
+
+# Find and install the binary
+BINARY=$(find "$TEMP_DIR" -name "hive" -type f 2>/dev/null | head -1)
 
 if [ -z "$BINARY" ]; then
   echo -e "${RED}Error:${RESET} Could not find binary in downloaded archive"
