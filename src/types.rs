@@ -166,6 +166,9 @@ pub struct DroneStatus {
     pub branch: String,
     pub worktree: String,
     pub local_mode: bool,
+    /// Execution mode: worktree (isolated) or subagent (in-place)
+    #[serde(default)]
+    pub execution_mode: ExecutionMode,
     pub status: DroneState,
     pub current_story: Option<String>,
     pub completed: Vec<String>,
@@ -198,6 +201,26 @@ pub enum DroneState {
     Error,
     Blocked,
     Stopped,
+}
+
+/// Drone execution mode
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+    /// Traditional mode: isolated git worktree + symlink
+    #[default]
+    Worktree,
+    /// Subagent mode: spawns Claude in current directory, uses Task subagent pattern
+    Subagent,
+}
+
+impl std::fmt::Display for ExecutionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionMode::Worktree => write!(f, "worktree"),
+            ExecutionMode::Subagent => write!(f, "subagent"),
+        }
+    }
 }
 
 impl std::fmt::Display for DroneState {

@@ -1,4 +1,4 @@
-use hive_lib::types::{DroneState, DroneStatus};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode};
 use ratatui::{
     backend::TestBackend,
     layout::{Constraint, Direction, Layout},
@@ -56,6 +56,7 @@ fn create_mock_drone(
             branch: format!("hive/{}", name),
             worktree: format!("/tmp/hive/{}", name),
             local_mode: false,
+            execution_mode: ExecutionMode::Worktree,
             status,
             current_story: current_story.map(String::from),
             completed: completed.iter().map(|s| s.to_string()).collect(),

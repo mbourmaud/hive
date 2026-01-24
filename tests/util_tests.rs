@@ -1,4 +1,4 @@
-use hive_lib::types::{DroneState, DroneStatus, StoryTiming};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
@@ -48,6 +48,7 @@ fn create_test_drone(
         branch: format!("hive/{}", drone_name),
         worktree: format!("/tmp/{}", drone_name),
         local_mode: false,
+        execution_mode: ExecutionMode::Worktree,
         status,
         current_story: None,
         completed: completed_stories,

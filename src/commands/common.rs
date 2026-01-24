@@ -1,0 +1,281 @@
+//! Common utilities shared across command modules.
+//!
+//! This module extracts duplicated functionality from status.rs and utils.rs
+//! to provide a single source of truth for common operations.
+
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::types::{DroneStatus, Prd};
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// Default threshold in seconds for considering a drone inactive (1 hour)
+pub const DEFAULT_INACTIVE_THRESHOLD_SECS: i64 = 3600;
+
+/// Progress bar width in characters for TUI display
+pub const PROGRESS_BAR_WIDTH: usize = 10;
+
+/// Full progress bar width for simple mode display
+pub const FULL_PROGRESS_BAR_WIDTH: usize = 40;
+
+/// Maximum drone name length before truncation
+pub const MAX_DRONE_NAME_LEN: usize = 35;
+
+/// Maximum story title length before truncation
+pub const MAX_STORY_TITLE_LEN: usize = 40;
+
+/// Seconds in an hour
+pub const SECONDS_PER_HOUR: i64 = 3600;
+
+/// Seconds in a minute
+pub const SECONDS_PER_MINUTE: i64 = 60;
+
+// ============================================================================
+// Time Utilities
+// ============================================================================
+
+/// Parse an ISO8601/RFC3339 timestamp string into a DateTime.
+pub fn parse_timestamp(ts: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(ts)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+/// Calculate the duration between two timestamp strings.
+pub fn duration_between(start: &str, end: &str) -> Option<chrono::Duration> {
+    let start_dt = parse_timestamp(start)?;
+    let end_dt = parse_timestamp(end)?;
+    Some(end_dt.signed_duration_since(start_dt))
+}
+
+/// Format a duration as a human-readable string (e.g., "1h 23m" or "5m 30s").
+pub fn format_duration(duration: chrono::Duration) -> String {
+    let total_seconds = duration.num_seconds();
+    let hours = total_seconds / SECONDS_PER_HOUR;
+    let minutes = (total_seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE;
+    let seconds = total_seconds % SECONDS_PER_MINUTE;
+
+    if hours > 0 {
+        format!("{}h {}m", hours, minutes)
+    } else if minutes > 0 {
+        format!("{}m {}s", minutes, seconds)
+    } else {
+        format!("{}s", seconds)
+    }
+}
+
+/// Calculate and format elapsed time since a timestamp.
+pub fn elapsed_since(start: &str) -> Option<String> {
+    let start_dt = parse_timestamp(start)?;
+    let duration = Utc::now().signed_duration_since(start_dt);
+    Some(format_duration(duration))
+}
+
+// ============================================================================
+// PRD Utilities
+// ============================================================================
+
+/// Load a PRD from the given file path.
+pub fn load_prd(path: &Path) -> Option<Prd> {
+    let contents = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+/// Reconcile status with actual PRD, filtering out completed stories that no longer exist.
+///
+/// Returns (valid_completed_count, total_from_prd).
+pub fn reconcile_progress(status: &DroneStatus) -> (usize, usize) {
+    let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
+
+    load_prd(&prd_path)
+        .map(|prd| reconcile_progress_with_prd(status, &prd))
+        .unwrap_or((status.completed.len(), status.total))
+}
+
+/// Reconcile status with a provided PRD.
+///
+/// Returns (valid_completed_count, total_from_prd).
+pub fn reconcile_progress_with_prd(status: &DroneStatus, prd: &Prd) -> (usize, usize) {
+    let prd_story_ids: HashSet<&str> = prd.stories.iter().map(|s| s.id.as_str()).collect();
+
+    let valid_completed = status
+        .completed
+        .iter()
+        .filter(|id| prd_story_ids.contains(id.as_str()))
+        .count();
+
+    (valid_completed, prd.stories.len())
+}
+
+// ============================================================================
+// Process Utilities
+// ============================================================================
+
+/// Check if a process is running by PID.
+pub fn is_process_running(pid: i32) -> bool {
+    #[cfg(unix)]
+    {
+        use nix::sys::signal::kill;
+        use nix::unistd::Pid;
+
+        match kill(Pid::from_raw(pid), None) {
+            Ok(()) => true,
+            Err(nix::errno::Errno::ESRCH) => false,
+            Err(_) => true, // Process exists but we lack permission
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        Path::new(&format!("/proc/{}", pid)).exists()
+    }
+}
+
+/// Read the PID from a drone's .pid file.
+pub fn read_drone_pid(drone_name: &str) -> Option<i32> {
+    let pid_path = PathBuf::from(".hive")
+        .join("drones")
+        .join(drone_name)
+        .join(".pid");
+
+    fs::read_to_string(pid_path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+// ============================================================================
+// Drone Listing
+// ============================================================================
+
+/// List all drones with their status, sorted by most recently updated.
+pub fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
+    let drones_dir = PathBuf::from(".hive").join("drones");
+
+    if !drones_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut drones = Vec::new();
+
+    for entry in fs::read_dir(&drones_dir)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+
+        let drone_name = entry.file_name().to_string_lossy().into_owned();
+        let status_path = entry.path().join("status.json");
+
+        if status_path.exists() {
+            let contents = fs::read_to_string(&status_path)
+                .with_context(|| format!("Failed to read status for drone '{}'", drone_name))?;
+            let status: DroneStatus = serde_json::from_str(&contents)
+                .with_context(|| format!("Failed to parse status for drone '{}'", drone_name))?;
+            drones.push((drone_name, status));
+        }
+    }
+
+    drones.sort_by(|a, b| b.1.updated.cmp(&a.1.updated));
+
+    Ok(drones)
+}
+
+// ============================================================================
+// String Utilities
+// ============================================================================
+
+/// Truncate a string with ellipsis if it exceeds max_len.
+pub fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else if max_len > 3 {
+        format!("{}...", &s[..max_len - 3])
+    } else {
+        s[..max_len].to_string()
+    }
+}
+
+/// Word-wrap text to fit within max_width.
+pub fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+
+    for word in text.split_whitespace() {
+        if current_line.is_empty() {
+            current_line = word.to_string();
+        } else if current_line.len() + 1 + word.len() <= max_width {
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            lines.push(current_line);
+            current_line = word.to_string();
+        }
+    }
+
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+
+    lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_duration_seconds() {
+        let duration = chrono::Duration::seconds(45);
+        assert_eq!(format_duration(duration), "45s");
+    }
+
+    #[test]
+    fn test_format_duration_minutes() {
+        let duration = chrono::Duration::seconds(125);
+        assert_eq!(format_duration(duration), "2m 5s");
+    }
+
+    #[test]
+    fn test_format_duration_hours() {
+        let duration = chrono::Duration::seconds(3725);
+        assert_eq!(format_duration(duration), "1h 2m");
+    }
+
+    #[test]
+    fn test_truncate_with_ellipsis_short() {
+        assert_eq!(truncate_with_ellipsis("hello", 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_with_ellipsis_long() {
+        assert_eq!(truncate_with_ellipsis("hello world", 8), "hello...");
+    }
+
+    #[test]
+    fn test_wrap_text_single_line() {
+        let result = wrap_text("hello world", 20);
+        assert_eq!(result, vec!["hello world"]);
+    }
+
+    #[test]
+    fn test_wrap_text_multiple_lines() {
+        let result = wrap_text("hello world foo bar", 10);
+        assert_eq!(result, vec!["hello", "world foo", "bar"]);
+    }
+
+    #[test]
+    fn test_wrap_text_empty() {
+        let result = wrap_text("", 10);
+        assert_eq!(result, vec![""]);
+    }
+}

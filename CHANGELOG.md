@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-01-24
+
+### Added
+- **ACTIVE/ARCHIVED Sections**: Monitor TUI now groups drones into 🍯 ACTIVE and 🐻 ARCHIVED sections
+- **Smart Archive Logic**: Drones move to ARCHIVED only after completing all tasks AND being inactive for 1 hour
+- **Shared Common Module**: New `common.rs` with reusable utilities, constants, and helper functions
+- **PRD/Status Reconciliation**: Completed stories are validated against actual PRD to handle modified PRDs correctly
+
+### Changed
+- **Smaller Progress Bar**: Reduced from 20 to 10 characters for cleaner display
+- **Simplified Progress Display**: Removed percentage, shows just X/Y and elapsed time
+- **Word Wrap for Long Titles**: Story titles now wrap properly with aligned indentation
+- **Improved Navigation**: Centralized index management for reliable up/down navigation across sections
+- **Statusline Update**: Only shows active drones (excludes archived ones)
+
+### Fixed
+- **Progress Count Bug**: Fixed issue where modified PRDs showed incorrect counts (e.g., 3/2)
+- **Navigation Across Sections**: Fixed navigation between ACTIVE and ARCHIVED sections
+
 ## [2.5.5] - 2026-01-23
 
 ### Fixed

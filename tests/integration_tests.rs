@@ -1,4 +1,4 @@
-use hive_lib::types::{DroneState, DroneStatus, HiveConfig, Prd, StoryTiming};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, HiveConfig, Prd, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -43,6 +43,7 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         branch: format!("hive/{}", drone_name),
         worktree: format!("/tmp/{}", drone_name),
         local_mode: false,
+        execution_mode: ExecutionMode::Worktree,
         status: DroneState::InProgress,
         current_story: Some("STORY-001".to_string()),
         completed: vec![],
@@ -271,6 +272,7 @@ fn test_drone_state_transitions() {
             branch: "hive/test".to_string(),
             worktree: "/tmp/test".to_string(),
             local_mode: false,
+            execution_mode: ExecutionMode::Worktree,
             status: state.clone(),
             current_story: None,
             completed: vec![],

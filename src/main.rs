@@ -35,6 +35,9 @@ enum Commands {
         /// Dry run - don't launch Claude
         #[arg(long)]
         dry_run: bool,
+        /// Use subagent mode (spawns Claude Task subagent instead of worktree)
+        #[arg(long)]
+        subagent: bool,
     },
 
     /// Monitor drone status with auto-refreshing TUI dashboard
@@ -168,8 +171,11 @@ fn main() {
             local,
             model,
             dry_run,
+            subagent,
         } => {
-            if let Err(e) = commands::start::run(name, prompt, resume, local, model, dry_run) {
+            if let Err(e) =
+                commands::start::run(name, prompt, resume, local, model, dry_run, subagent)
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

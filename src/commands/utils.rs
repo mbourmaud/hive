@@ -1,10 +1,10 @@
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::fs;
-use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-use crate::types::{DroneState, DroneStatus};
+use super::common::reconcile_progress;
+use crate::types::{DroneState, DroneStatus, ExecutionMode};
 
 /// List all drones with compact output
 pub fn list() -> Result<()> {
@@ -40,21 +40,30 @@ pub fn list() -> Result<()> {
             DroneState::Stopped => "stopped".bright_black(),
         };
 
-        let progress = if status.total > 0 {
-            format!("{}/{}", status.completed.len(), status.total)
+        // Reconcile progress with actual PRD (filters out old completed stories)
+        let (valid_completed, total_stories) = reconcile_progress(&status);
+
+        let progress = if total_stories > 0 {
+            format!("{}/{}", valid_completed, total_stories)
         } else {
             "0/0".to_string()
         };
 
-        let percentage = if status.total > 0 {
-            (status.completed.len() as f32 / status.total as f32 * 100.0) as u32
+        let percentage = if total_stories > 0 {
+            (valid_completed as f32 / total_stories as f32 * 100.0) as u32
         } else {
             0
         };
 
+        // Use different emoji for subagent mode
+        let mode_emoji = match status.execution_mode {
+            ExecutionMode::Subagent => "🤖",
+            ExecutionMode::Worktree => "🐝",
+        };
+
         println!(
             "{:<20} {:<15} {:<10}",
-            format!("🐝 {}", name).yellow().bold(),
+            format!("{} {}", mode_emoji, name).yellow().bold(),
             status_str,
             format!("{} ({}%)", progress, percentage).bright_white()
         );
@@ -64,37 +73,7 @@ pub fn list() -> Result<()> {
 }
 
 fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
-    let hive_dir = PathBuf::from(".hive");
-    let drones_dir = hive_dir.join("drones");
-
-    if !drones_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut drones = Vec::new();
-
-    for entry in fs::read_dir(&drones_dir)? {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-
-        let drone_name = entry.file_name().to_string_lossy().to_string();
-        let status_path = entry.path().join("status.json");
-
-        if status_path.exists() {
-            let contents = fs::read_to_string(&status_path)
-                .context(format!("Failed to read status for drone '{}'", drone_name))?;
-            let status: DroneStatus = serde_json::from_str(&contents)
-                .context(format!("Failed to parse status for drone '{}'", drone_name))?;
-            drones.push((drone_name, status));
-        }
-    }
-
-    // Sort by updated timestamp (most recent first)
-    drones.sort_by(|a, b| b.1.updated.cmp(&a.1.updated));
-
-    Ok(drones)
+    super::common::list_drones()
 }
 
 /// Check for updates silently (called on every command)

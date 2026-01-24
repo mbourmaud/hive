@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::{Command as ProcessCommand, Stdio};
 
 use crate::config;
-use crate::types::{DroneState, DroneStatus, Prd};
+use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 
 #[derive(Debug)]
 struct WorktreeInfo {
@@ -21,10 +21,13 @@ pub fn run(
     local: bool,
     model: String,
     dry_run: bool,
+    subagent: bool,
 ) -> Result<()> {
+    let mode_label = if subagent { "subagent" } else { "drone" };
     println!(
-        "{} Launching drone '{}'...",
+        "{} Launching {} '{}'...",
         "→".bright_blue(),
+        mode_label,
         name.bright_cyan()
     );
 
@@ -49,7 +52,15 @@ pub fn run(
         println!("  {} Base branch: {}", "→".bright_blue(), base);
     }
 
-    let worktree_path = if local {
+    // Determine execution mode
+    let execution_mode = if subagent {
+        ExecutionMode::Subagent
+    } else {
+        ExecutionMode::Worktree
+    };
+
+    let worktree_path = if subagent || local {
+        // Subagent mode: work in current directory, no worktree
         std::env::current_dir()?
     } else if resume {
         // On resume, check if worktree already exists for this branch
@@ -131,10 +142,18 @@ pub fn run(
         new_path
     };
 
-    println!("  {} Worktree: {}", "✓".green(), worktree_path.display());
+    if subagent {
+        println!(
+            "  {} Working directory: {}",
+            "✓".green(),
+            worktree_path.display()
+        );
+    } else {
+        println!("  {} Worktree: {}", "✓".green(), worktree_path.display());
+    }
 
-    // 5. Create .hive symlink in worktree
-    if !local {
+    // 5. Create .hive symlink in worktree (not needed for subagent mode)
+    if !local && !subagent {
         create_hive_symlink(&worktree_path)?;
         println!("  {} Symlinked .hive", "✓".green());
     }
@@ -146,7 +165,8 @@ pub fn run(
         prd: prd_path.file_name().unwrap().to_string_lossy().to_string(),
         branch: branch.to_string(),
         worktree: worktree_path.to_string_lossy().to_string(),
-        local_mode: local,
+        local_mode: local || subagent,
+        execution_mode: execution_mode.clone(),
         status: DroneState::Starting,
         current_story: None,
         completed: Vec::new(),
@@ -169,6 +189,13 @@ pub fn run(
     // 7. Launch Claude
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
+    } else if subagent {
+        launch_claude_subagent(&worktree_path, &model, &name, &prd_path)?;
+        println!(
+            "  {} Launched Claude subagent (model: {})",
+            "✓".green(),
+            model.bright_cyan()
+        );
     } else {
         launch_claude(&worktree_path, &model, &name, &prd_path)?;
         println!(
@@ -179,18 +206,24 @@ pub fn run(
     }
 
     // 8. Send notification
+    let mode_emoji = if subagent { "🤖" } else { "🐝" };
     crate::notifications::notify(
-        &format!("🐝 {}", name),
-        &format!("started ({} stories)", prd.stories.len()),
+        &format!("{} {}", mode_emoji, name),
+        &format!(
+            "started ({} stories, {} mode)",
+            prd.stories.len(),
+            execution_mode
+        ),
     );
 
     println!(
-        "\n{} Drone '{}' is running!",
+        "\n{} {} '{}' is running!",
         "✓".green().bold(),
+        if subagent { "Subagent" } else { "Drone" },
         name.bright_cyan()
     );
     println!("\nMonitor progress:");
-    println!("  hive status {}", name);
+    println!("  hive monitor {}", name);
     println!("  hive logs {}", name);
 
     Ok(())
@@ -559,6 +592,95 @@ Work through stories sequentially. After completing each story, move to the next
         .stderr(log_file)
         .spawn()
         .context("Failed to spawn claude process")?;
+
+    Ok(())
+}
+
+/// Launch Claude in subagent mode - optimized for in-place execution without worktree
+/// Uses a lighter prompt that leverages Claude Code's native Task subagent capabilities
+fn launch_claude_subagent(
+    working_dir: &PathBuf,
+    model: &str,
+    drone_name: &str,
+    prd_path: &PathBuf,
+) -> Result<()> {
+    // Create log file
+    let log_path = PathBuf::from(".hive/drones")
+        .join(drone_name)
+        .join("activity.log");
+    let log_file = fs::File::create(&log_path)?;
+
+    // Read PRD content
+    let prd_content = fs::read_to_string(prd_path)?;
+
+    // Get the status file path
+    let status_file = format!(".hive/drones/{}/status.json", drone_name);
+
+    // Create subagent-optimized prompt - leverages Claude Code's native capabilities
+    let prompt = format!(
+        r#"You are a Hive subagent working on this PRD. Execute each story in order.
+
+PRD Content:
+{}
+
+## Execution Mode: SUBAGENT
+
+You are running in **subagent mode** - working directly in the current repository without a separate worktree.
+This means:
+- You work on the CURRENT branch (create a new branch if needed for the PRD)
+- Use TodoWrite to track your progress through stories
+- Commit changes incrementally as you complete each story
+
+## Status Tracking
+
+Update `{}` to track progress:
+
+1. **Before each story**: Set `current_story` and `status: "in_progress"`
+2. **After each story**: Add story ID to `completed` array
+3. **When done**: Set `status: "completed"`
+
+Use this pattern to update status:
+```bash
+cat {} | jq '.status = "in_progress" | .current_story = "STORY-ID" | .updated = (now | todate)' > /tmp/s.json && mv /tmp/s.json {}
+```
+
+## Execution Instructions
+
+1. Read `{}` to check which stories are already completed
+2. Start with the FIRST story NOT in `completed` array
+3. Use TodoWrite to break down each story into tasks
+4. Execute each story fully before moving to the next
+5. Commit your changes after each story with: `git commit -m "feat(<scope>): <story-title>"`
+6. Update status.json after completing each story
+
+## Git Workflow
+
+Since you're in subagent mode on the main repo:
+- Check current branch: `git branch --show-current`
+- If not on target branch, create it: `git checkout -b <target-branch>`
+- Commit changes incrementally
+- DO NOT push without explicit instruction
+
+Work through all stories. After completing each, update status and continue to the next."#,
+        prd_content, status_file, status_file, status_file, status_file
+    );
+
+    // Launch claude in background
+    ProcessCommand::new("claude")
+        .arg("-p")
+        .arg(&prompt)
+        .arg("--model")
+        .arg(model)
+        .arg("--output-format")
+        .arg("stream-json")
+        .arg("--verbose")
+        .arg("--dangerously-skip-permissions")
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
+        .stdout(log_file.try_clone()?)
+        .stderr(log_file)
+        .spawn()
+        .context("Failed to spawn claude subagent process")?;
 
     Ok(())
 }

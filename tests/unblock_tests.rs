@@ -1,4 +1,4 @@
-use hive_lib::types::{DroneState, DroneStatus, StoryTiming};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -58,6 +58,7 @@ fn create_blocked_drone(temp_dir: &TempDir, drone_name: &str) {
         branch: "hive/test".to_string(),
         worktree: "/tmp/test".to_string(),
         local_mode: false,
+        execution_mode: ExecutionMode::Worktree,
         status: DroneState::Blocked,
         current_story: Some("TEST-001".to_string()),
         completed: vec![],

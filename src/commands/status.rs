@@ -1,12 +1,30 @@
-use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use anyhow::Result;
+use chrono::Utc;
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::{DroneState, DroneStatus, Prd};
+use super::common::{
+    duration_between, elapsed_since, format_duration, is_process_running, list_drones, load_prd,
+    parse_timestamp, read_drone_pid, reconcile_progress, reconcile_progress_with_prd,
+    truncate_with_ellipsis, wrap_text, DEFAULT_INACTIVE_THRESHOLD_SECS, FULL_PROGRESS_BAR_WIDTH,
+    MAX_DRONE_NAME_LEN, MAX_STORY_TITLE_LEN,
+};
+use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 
-// New monitor command - auto-refresh TUI by default, simple mode for scripts/CI
+/// Refresh interval for follow mode in seconds
+const FOLLOW_REFRESH_SECS: u64 = 30;
+
+/// Event poll timeout in milliseconds for TUI
+const TUI_POLL_TIMEOUT_MS: u64 = 100;
+
+/// Log viewer poll timeout in milliseconds
+const LOG_POLL_TIMEOUT_MS: u64 = 500;
+
+/// ANSI escape sequence to clear screen and move cursor to top-left
+const CLEAR_SCREEN: &str = "\x1B[2J\x1B[1;1H";
+
+/// Run the monitor command with auto-refresh TUI by default, simple mode for scripts/CI.
 pub fn run_monitor(name: Option<String>, simple: bool) -> Result<()> {
     if simple {
         run_simple(name, false)
@@ -15,7 +33,7 @@ pub fn run_monitor(name: Option<String>, simple: bool) -> Result<()> {
     }
 }
 
-// Legacy run function for backward compatibility (can be removed later)
+/// Legacy run function for backward compatibility (can be removed later).
 pub fn run(name: Option<String>, interactive: bool, follow: bool) -> Result<()> {
     if interactive {
         run_tui(name)
@@ -26,9 +44,8 @@ pub fn run(name: Option<String>, interactive: bool, follow: bool) -> Result<()> 
 
 fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
     loop {
-        // Clear screen in follow mode
         if follow {
-            print!("\x1B[2J\x1B[1;1H");
+            print!("{}", CLEAR_SCREEN);
         }
 
         let drones = list_drones()?;
@@ -39,14 +56,12 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
             return Ok(());
         }
 
-        // Filter by name if provided
-        let filtered: Vec<_> = if let Some(ref n) = name {
-            drones
+        let filtered: Vec<_> = match name {
+            Some(ref n) => drones
                 .into_iter()
                 .filter(|(drone_name, _)| drone_name == n)
-                .collect()
-        } else {
-            drones
+                .collect(),
+            None => drones,
         };
 
         if filtered.is_empty() {
@@ -54,7 +69,6 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
             return Ok(());
         }
 
-        // Use yellow/gold for the header with crown emoji
         println!(
             "  {} v{}",
             "👑 hive".yellow().bold(),
@@ -62,147 +76,51 @@ fn run_simple(name: Option<String>, follow: bool) -> Result<()> {
         );
         println!();
 
-        // Sort: active drones first, completed last
         let mut sorted = filtered;
-        sorted.sort_by_key(|(_, status)| {
-            match status.status {
-                DroneState::Completed => 1, // Completed last
-                _ => 0,                     // Everything else first
-            }
+        sorted.sort_by_key(|(_, status)| match status.status {
+            DroneState::Completed => 1,
+            _ => 0,
         });
 
         for (drone_name, status) in &sorted {
-            // Use collapsed view for completed drones
             let collapsed = status.status == DroneState::Completed;
             print_drone_status(drone_name, status, collapsed);
             println!();
         }
 
-        // Check for inactive completed drones and suggest cleanup (only once per session)
         if !follow {
             suggest_cleanup_for_inactive(&sorted);
             break;
         }
 
-        // Sleep 30 seconds before refresh
-        std::thread::sleep(std::time::Duration::from_secs(30));
+        std::thread::sleep(std::time::Duration::from_secs(FOLLOW_REFRESH_SECS));
     }
 
     Ok(())
 }
 
-// Helper function to parse ISO8601 timestamp
-fn parse_timestamp(ts: &str) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(ts)
-        .ok()
-        .map(|dt| dt.with_timezone(&Utc))
-}
-
-// Helper function to calculate duration between two timestamps
-fn duration_between(start: &str, end: &str) -> Option<chrono::Duration> {
-    let start_dt = parse_timestamp(start)?;
-    let end_dt = parse_timestamp(end)?;
-    Some(end_dt.signed_duration_since(start_dt))
-}
-
-// Helper function to format duration as "Xh Ym" or "Xm Ys"
-fn format_duration(duration: chrono::Duration) -> String {
-    let total_seconds = duration.num_seconds();
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-
-    if hours > 0 {
-        format!("{}h {}m", hours, minutes)
-    } else if minutes > 0 {
-        format!("{}m {}s", minutes, seconds)
-    } else {
-        format!("{}s", seconds)
-    }
-}
-
-// Calculate elapsed time since a timestamp
-fn elapsed_since(start: &str) -> Option<String> {
-    let start_dt = parse_timestamp(start)?;
-    let now = Utc::now();
-    let duration = now.signed_duration_since(start_dt);
-    Some(format_duration(duration))
-}
-
-// Load PRD from path
-fn load_prd(path: &PathBuf) -> Option<Prd> {
-    let contents = fs::read_to_string(path).ok()?;
-    serde_json::from_str(&contents).ok()
-}
-
-// Check if a process is running by PID
-fn is_process_running(pid: i32) -> bool {
-    #[cfg(unix)]
-    {
-        // On Unix, send signal 0 to check if process exists
-        // This doesn't actually send a signal, just checks permission
-        match nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None) {
-            Ok(_) => true,
-            Err(nix::errno::Errno::ESRCH) => false, // No such process
-            Err(_) => true, // Process exists but we don't have permission (still running)
-        }
-    }
-
-    #[cfg(not(unix))]
-    {
-        // On non-Unix systems, check if /proc/<pid> exists
-        std::path::Path::new(&format!("/proc/{}", pid)).exists()
-    }
-}
-
-// Read PID from drone's .pid file
-fn read_drone_pid(drone_name: &str) -> Option<i32> {
-    let pid_path = PathBuf::from(".hive")
-        .join("drones")
-        .join(drone_name)
-        .join(".pid");
-
-    let pid_str = fs::read_to_string(pid_path).ok()?;
-    pid_str.trim().parse().ok()
-}
-
-// Suggest cleanup for inactive completed drones
 fn suggest_cleanup_for_inactive(drones: &[(String, DroneStatus)]) {
-    use std::env;
-
-    // Get threshold from env var or use default (3600 seconds = 1 hour)
-    let threshold_seconds = env::var("HIVE_INACTIVE_THRESHOLD")
+    let threshold_seconds = std::env::var("HIVE_INACTIVE_THRESHOLD")
         .ok()
         .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(3600);
+        .unwrap_or(DEFAULT_INACTIVE_THRESHOLD_SECS);
 
     let now = Utc::now();
 
     for (name, status) in drones {
-        // Only check completed drones
         if status.status != DroneState::Completed {
             continue;
         }
 
-        // Parse updated timestamp
-        let updated = match parse_timestamp(&status.updated) {
-            Some(dt) => dt,
-            None => continue,
+        let Some(updated) = parse_timestamp(&status.updated) else {
+            continue;
         };
 
-        // Calculate inactive duration
         let inactive_seconds = now.signed_duration_since(updated).num_seconds();
 
         if inactive_seconds > threshold_seconds {
-            // Calculate human-readable duration
-            let hours = inactive_seconds / 3600;
-            let minutes = (inactive_seconds % 3600) / 60;
-
-            let duration_str = if hours > 0 {
-                format!("{}h {}m", hours, minutes)
-            } else {
-                format!("{}m", minutes)
-            };
+            let duration = chrono::Duration::seconds(inactive_seconds);
+            let duration_str = format_duration(duration);
 
             println!();
             println!(
@@ -213,7 +131,6 @@ fn suggest_cleanup_for_inactive(drones: &[(String, DroneStatus)]) {
                 format!("(hive clean {})", name).bright_black()
             );
 
-            // Only suggest one cleanup per run to avoid spam
             break;
         }
     }
@@ -248,10 +165,19 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
         .map(|e| format!("  {}", e))
         .unwrap_or_default();
 
+    // Determine emoji based on execution mode
+    let mode_emoji = match status.execution_mode {
+        ExecutionMode::Subagent => "🤖",
+        ExecutionMode::Worktree => "🐝",
+    };
+
+    // Reconcile progress with actual PRD (filters out old completed stories)
+    let (valid_completed, total_stories) = reconcile_progress(status);
+
     // If collapsed view (completed drones), show single line
     if collapsed {
-        let progress = if status.total > 0 {
-            format!("{}/{}", status.completed.len(), status.total)
+        let progress = if total_stories > 0 {
+            format!("{}/{}", valid_completed, total_stories)
         } else {
             "0/0".to_string()
         };
@@ -259,7 +185,7 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
         println!(
             "  {} {}{}  {}",
             status_symbol,
-            format!("🐝 {}", name).bright_black(),
+            format!("{} {}", mode_emoji, name).bright_black(),
             elapsed.bright_black(),
             progress.bright_black()
         );
@@ -270,30 +196,28 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     println!(
         "  {} {}{}  {}",
         status_symbol,
-        format!("🐝 {}", name).yellow().bold(),
+        format!("{} {}", mode_emoji, name).yellow().bold(),
         elapsed.bright_black(),
         format!("[{}]", status.status).bright_black()
     );
 
-    // Print progress
-    let progress = if status.total > 0 {
-        format!("{}/{}", status.completed.len(), status.total)
+    // Print progress using reconciled values
+    let progress = if total_stories > 0 {
+        format!("{}/{}", valid_completed, total_stories)
     } else {
         "0/0".to_string()
     };
 
-    let percentage = if status.total > 0 {
-        (status.completed.len() as f32 / status.total as f32 * 100.0) as u32
+    let percentage = if total_stories > 0 {
+        (valid_completed as f32 / total_stories as f32 * 100.0) as u32
     } else {
         0
     };
 
     println!("  Progress: {} ({}%)", progress.bright_white(), percentage);
 
-    // Print progress bar with honey theme (━ filled, ─ empty)
-    let bar_width = 40;
-    let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
-    let empty = bar_width - filled;
+    let filled = (FULL_PROGRESS_BAR_WIDTH as f32 * percentage as f32 / 100.0) as usize;
+    let empty = FULL_PROGRESS_BAR_WIDTH - filled;
     let bar = format!(
         "[{}{}]",
         "━".repeat(filled).green(),
@@ -341,7 +265,11 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
                 String::new()
             };
 
-            let story_line = format!("    {} {} {}{}", icon, story.id, story.title, duration_str);
+            let title_display = truncate_with_ellipsis(&story.title, MAX_STORY_TITLE_LEN);
+            let story_line = format!(
+                "    {} {} {}{}",
+                icon, story.id, title_display, duration_str
+            );
             println!("{}", color_fn(story_line));
         }
     } else {
@@ -369,40 +297,6 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     // Print metadata
     println!("  Branch: {}", status.branch.bright_black());
     println!("  PRD: {}", status.prd.bright_black());
-}
-
-fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
-    let hive_dir = PathBuf::from(".hive");
-    let drones_dir = hive_dir.join("drones");
-
-    if !drones_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut drones = Vec::new();
-
-    for entry in fs::read_dir(&drones_dir)? {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-
-        let drone_name = entry.file_name().to_string_lossy().to_string();
-        let status_path = entry.path().join("status.json");
-
-        if status_path.exists() {
-            let contents = fs::read_to_string(&status_path)
-                .context(format!("Failed to read status for drone '{}'", drone_name))?;
-            let status: DroneStatus = serde_json::from_str(&contents)
-                .context(format!("Failed to parse status for drone '{}'", drone_name))?;
-            drones.push((drone_name, status));
-        }
-    }
-
-    // Sort by updated timestamp (most recent first)
-    drones.sort_by(|a, b| b.1.updated.cmp(&a.1.updated));
-
-    Ok(drones)
 }
 
 fn run_tui(_name: Option<String>) -> Result<()> {
@@ -466,12 +360,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             DroneState::Completed => 3,
         });
 
-        // Clamp selected index
-        if !drones.is_empty() && selected_index >= drones.len() {
-            selected_index = drones.len() - 1;
-        }
-
-        // Load PRDs for story info
+        // Load PRDs for story info (needed for archive calculation)
         let prd_cache: std::collections::HashMap<String, Prd> = drones
             .iter()
             .filter_map(|(_, status)| {
@@ -479,6 +368,39 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 load_prd(&prd_path).map(|prd| (status.prd.clone(), prd))
             })
             .collect();
+
+        // Build display order: active drones first, then archived
+        // A drone is archived if: completed + all stories done + inactive > 1h
+        let now = Utc::now();
+        let mut display_order: Vec<usize> = Vec::new();
+        let mut archived_order: Vec<usize> = Vec::new();
+
+        for (idx, (_, status)) in drones.iter().enumerate() {
+            if status.status == DroneState::Completed {
+                let (valid_completed, prd_story_count) = prd_cache
+                    .get(&status.prd)
+                    .map(|prd| reconcile_progress_with_prd(status, prd))
+                    .unwrap_or((status.completed.len(), status.total));
+
+                if valid_completed >= prd_story_count {
+                    let inactive_secs = parse_timestamp(&status.updated)
+                        .map(|updated| now.signed_duration_since(updated).num_seconds())
+                        .unwrap_or(0);
+
+                    if inactive_secs >= DEFAULT_INACTIVE_THRESHOLD_SECS {
+                        archived_order.push(idx);
+                        continue;
+                    }
+                }
+            }
+            display_order.push(idx);
+        }
+        display_order.extend(archived_order);
+
+        // Clamp selected index to display order
+        if !display_order.is_empty() && selected_index >= display_order.len() {
+            selected_index = display_order.len() - 1;
+        }
 
         // Auto-resume drones with new stories (only once per drone)
         for (name, status) in &drones {
@@ -541,14 +463,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(4), // Header with ASCII art
+                    Constraint::Length(5), // Header with ASCII art + padding
                     Constraint::Min(0),    // Content
                     Constraint::Length(1), // Footer
                 ])
                 .split(area);
 
-            // Header with ASCII art
+            // Header with ASCII art (with top padding)
             let header_lines = vec![
+                Line::raw(""), // Top padding
                 Line::from(vec![
                     Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
                     Span::styled(
@@ -647,49 +570,111 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 ]));
             }
 
-            for (idx, (name, status)) in drones.iter().enumerate() {
+            // Use pre-computed display_order for rendering
+            // display_order contains: [active indices..., archived indices...]
+            let active_count = display_order
+                .iter()
+                .take_while(|&&idx| {
+                    let status = &drones[idx].1;
+                    if status.status != DroneState::Completed {
+                        return true;
+                    }
+                    let (valid_completed, prd_story_count) = prd_cache
+                        .get(&status.prd)
+                        .map(|prd| reconcile_progress_with_prd(status, prd))
+                        .unwrap_or((status.completed.len(), status.total));
+                    if valid_completed < prd_story_count {
+                        return true;
+                    }
+                    let inactive_secs = parse_timestamp(&status.updated)
+                        .map(|updated| now.signed_duration_since(updated).num_seconds())
+                        .unwrap_or(0);
+                    inactive_secs < DEFAULT_INACTIVE_THRESHOLD_SECS
+                })
+                .count();
+
+            // Render ACTIVE section
+            if active_count > 0 {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        "  🍯 ACTIVE",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!(" ({})", active_count),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+                lines.push(Line::raw(""));
+            }
+
+            for (display_idx, &drone_idx) in display_order.iter().enumerate() {
+                // Add ARCHIVED header before first archived drone
+                if display_idx == active_count && active_count < display_order.len() {
+                    lines.push(Line::styled(
+                        "  ─────────────────────────────────────────────────────",
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                    lines.push(Line::raw(""));
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            "  🐻 ARCHIVED",
+                            Style::default()
+                                .fg(Color::DarkGray)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            format!(" ({})", display_order.len() - active_count),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]));
+                    lines.push(Line::raw(""));
+                }
+
+                let _is_archived = display_idx >= active_count;
+                let (name, status) = &drones[drone_idx];
                 drone_line_indices.push(lines.len());
 
-                let is_selected = idx == selected_index;
+                let is_selected = display_idx == selected_index;
                 let is_expanded = expanded_drones.contains(name);
                 let process_running = read_drone_pid(name)
                     .map(is_process_running)
                     .unwrap_or(false);
 
                 // Status icon and color
-                // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
-                // Drone is "active" if process is running OR if there's a current story being worked on
-                let is_active = process_running || status.current_story.is_some();
+                let is_active_process = process_running || status.current_story.is_some();
                 let (icon, status_color) = match status.status {
                     DroneState::Starting | DroneState::Resuming => ("◐", Color::Yellow),
                     DroneState::InProgress => {
-                        if is_active {
-                            ("◐", Color::Green) // Half-full green = in progress
+                        if is_active_process {
+                            ("◐", Color::Green)
                         } else {
-                            ("○", Color::Yellow) // Empty yellow = stalled
+                            ("○", Color::Yellow)
                         }
                     }
-                    DroneState::Completed => ("●", Color::Green), // Full green = completed
-                    DroneState::Error => ("◐", Color::Red),       // Half-full red = error
-                    DroneState::Blocked => ("◐", Color::Red),     // Half-full red = blocked
+                    DroneState::Completed => ("●", Color::Green),
+                    DroneState::Error => ("◐", Color::Red),
+                    DroneState::Blocked => ("◐", Color::Red),
                     DroneState::Stopped => ("○", Color::DarkGray),
                 };
 
-                // Use PRD story count as source of truth (may differ from status.total if PRD was updated)
-                let prd_story_count = prd_cache
+                // Use reconciled progress to filter out old completed stories
+                let (valid_completed, prd_story_count) = prd_cache
                     .get(&status.prd)
-                    .map(|p| p.stories.len())
-                    .unwrap_or(status.total);
+                    .map(|prd| reconcile_progress_with_prd(status, prd))
+                    .unwrap_or((status.completed.len(), status.total));
                 let has_new_stories = prd_story_count > status.total;
 
                 let percentage = if prd_story_count > 0 {
-                    (status.completed.len() as f32 / prd_story_count as f32 * 100.0) as u16
+                    (valid_completed as f32 / prd_story_count as f32 * 100.0) as u16
                 } else {
                     0
                 };
 
-                // Build progress bar (20 chars wide)
-                let bar_width = 20;
+                // Build progress bar (10 chars wide - compact)
+                let bar_width = 10;
                 let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
                 let empty = bar_width - filled;
 
@@ -755,18 +740,26 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     Style::default().fg(Color::Yellow)
                 };
 
+                // Use different emoji based on execution mode
+                let mode_emoji = match status.execution_mode {
+                    ExecutionMode::Subagent => "🤖",
+                    ExecutionMode::Worktree => "🐝",
+                };
+
+                let name_display = truncate_with_ellipsis(name, MAX_DRONE_NAME_LEN);
+
                 let header_line = Line::from(vec![
                     Span::raw(format!(" {} ", select_char)),
                     Span::styled(icon, Style::default().fg(status_color)),
                     Span::raw(" "),
                     Span::styled(expand_indicator, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
-                    Span::styled(format!("🐝 {} ", name), name_style),
+                    Span::styled(format!("{} {} ", mode_emoji, name_display), name_style),
                     Span::styled(filled_bar, Style::default().fg(filled_color)),
                     Span::styled(empty_bar, Style::default().fg(Color::DarkGray)),
                     Span::raw(" "),
                     Span::styled(
-                        format!("{:>3}/{:<3}", status.completed.len(), prd_story_count),
+                        format!("{}/{}", valid_completed, prd_story_count),
                         Style::default().fg(
                             if status.status == DroneState::Completed && !has_new_stories {
                                 Color::DarkGray
@@ -776,14 +769,6 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 Color::White
                             },
                         ),
-                    ),
-                    Span::styled(
-                        format!(" {:>3}%", percentage),
-                        Style::default().fg(if status.status == DroneState::Completed {
-                            Color::DarkGray
-                        } else {
-                            Color::White
-                        }),
                     ),
                     Span::raw("  "),
                     Span::styled(elapsed, Style::default().fg(Color::DarkGray)),
@@ -834,40 +819,102 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                     String::new()
                                 };
 
-                            let title_short = if story.title.len() > 40 {
-                                format!("{}...", &story.title[..37])
-                            } else {
-                                story.title.clone()
-                            };
-
                             let line_style = if is_story_selected {
                                 Style::default().add_modifier(Modifier::BOLD)
                             } else {
                                 Style::default()
                             };
 
-                            lines.push(Line::from(vec![
-                                Span::styled("      ", line_style),
-                                Span::styled(story_icon, line_style.fg(story_color)),
-                                Span::raw(" "),
-                                Span::styled(
-                                    format!("{:<16} ", story.id),
-                                    line_style.fg(if is_story_selected {
-                                        Color::Cyan
+                            let title_color = if is_story_selected {
+                                Color::Cyan
+                            } else {
+                                story_color
+                            };
+
+                            // Calculate max title width (terminal width - prefix - duration)
+                            // Prefix: "      ● STORY-ID         " = ~26 chars
+                            let prefix_len = 26;
+                            let duration_len = duration_str.len();
+                            let available_width = area.width as usize;
+                            let max_title_width =
+                                available_width.saturating_sub(prefix_len + duration_len + 2);
+
+                            if story.title.len() <= max_title_width || max_title_width < 20 {
+                                // Title fits on one line or terminal too narrow
+                                lines.push(Line::from(vec![
+                                    Span::styled("      ", line_style),
+                                    Span::styled(story_icon, line_style.fg(story_color)),
+                                    Span::raw(" "),
+                                    Span::styled(
+                                        format!("{:<16} ", story.id),
+                                        line_style.fg(title_color),
+                                    ),
+                                    Span::styled(story.title.clone(), line_style.fg(title_color)),
+                                    Span::styled(
+                                        duration_str.clone(),
+                                        line_style.fg(Color::DarkGray),
+                                    ),
+                                ]));
+                            } else {
+                                // Title needs to wrap - split into lines
+                                let title_indent = "                         "; // 25 spaces to align with title start
+                                let mut remaining = story.title.as_str();
+                                let mut first_line = true;
+
+                                while !remaining.is_empty() {
+                                    let (chunk, rest) = if remaining.len() <= max_title_width {
+                                        (remaining, "")
                                     } else {
-                                        story_color
-                                    }),
-                                ),
-                                Span::styled(
-                                    title_short,
-                                    line_style.fg(if is_story_selected {
-                                        Color::Cyan
+                                        // Try to break at word boundary
+                                        let break_at = remaining[..max_title_width]
+                                            .rfind(' ')
+                                            .unwrap_or(max_title_width);
+                                        (&remaining[..break_at], remaining[break_at..].trim_start())
+                                    };
+
+                                    if first_line {
+                                        lines.push(Line::from(vec![
+                                            Span::styled("      ", line_style),
+                                            Span::styled(story_icon, line_style.fg(story_color)),
+                                            Span::raw(" "),
+                                            Span::styled(
+                                                format!("{:<16} ", story.id),
+                                                line_style.fg(title_color),
+                                            ),
+                                            Span::styled(
+                                                chunk.to_string(),
+                                                line_style.fg(title_color),
+                                            ),
+                                            if rest.is_empty() {
+                                                Span::styled(
+                                                    duration_str.clone(),
+                                                    line_style.fg(Color::DarkGray),
+                                                )
+                                            } else {
+                                                Span::raw("")
+                                            },
+                                        ]));
+                                        first_line = false;
                                     } else {
-                                        story_color
-                                    }),
-                                ),
-                                Span::styled(duration_str, line_style.fg(Color::DarkGray)),
-                            ]));
+                                        lines.push(Line::from(vec![
+                                            Span::styled(title_indent, line_style),
+                                            Span::styled(
+                                                chunk.to_string(),
+                                                line_style.fg(title_color),
+                                            ),
+                                            if rest.is_empty() {
+                                                Span::styled(
+                                                    duration_str.clone(),
+                                                    line_style.fg(Color::DarkGray),
+                                                )
+                                            } else {
+                                                Span::raw("")
+                                            },
+                                        ]));
+                                    }
+                                    remaining = rest;
+                                }
+                            }
                         }
                     }
 
@@ -910,11 +957,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     }
                 }
 
-                // Add separator between drones
-                lines.push(Line::styled(
-                    "  ─────────────────────────────────────────────────────",
-                    Style::default().fg(Color::DarkGray),
-                ));
+                // Add separator between drones with spacing
+                lines.push(Line::raw(""));
             }
 
             // Calculate visible area and scroll
@@ -988,28 +1032,38 @@ fn run_tui(_name: Option<String>) -> Result<()> {
         }
 
         // Handle input (including resize events)
-        if event::poll(std::time::Duration::from_millis(100))? {
+        if event::poll(std::time::Duration::from_millis(TUI_POLL_TIMEOUT_MS))? {
             match event::read()? {
                 Event::Resize(_, _) => {
                     // Terminal resized, just continue to redraw
                     continue;
                 }
                 Event::Key(key) => {
-                    // Get story count for current drone if expanded
-                    let current_story_count = if !drones.is_empty() {
-                        let drone_name = &drones[selected_index].0;
-                        let status = &drones[selected_index].1;
-                        if expanded_drones.contains(drone_name) {
-                            prd_cache
-                                .get(&status.prd)
-                                .map(|p| p.stories.len())
-                                .unwrap_or(0)
+                    // Convert display index to actual drone index
+                    // selected_index is position in display_order, we need actual index in drones
+                    let current_drone_idx =
+                        if !display_order.is_empty() && selected_index < display_order.len() {
+                            display_order[selected_index]
                         } else {
                             0
-                        }
-                    } else {
-                        0
-                    };
+                        };
+
+                    // Get story count for current drone if expanded
+                    let current_story_count =
+                        if !drones.is_empty() && current_drone_idx < drones.len() {
+                            let drone_name = &drones[current_drone_idx].0;
+                            let status = &drones[current_drone_idx].1;
+                            if expanded_drones.contains(drone_name) {
+                                prd_cache
+                                    .get(&status.prd)
+                                    .map(|p| p.stories.len())
+                                    .unwrap_or(0)
+                            } else {
+                                0
+                            }
+                        } else {
+                            0
+                        };
 
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
@@ -1027,8 +1081,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         KeyCode::Char('b') | KeyCode::Char('B') => {
                             // Open blocked detail view for current drone if it's blocked
                             if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
-                                let status = &drones[selected_index].1;
+                                let drone_name = &drones[current_drone_idx].0;
+                                let status = &drones[current_drone_idx].1;
                                 if status.status == DroneState::Blocked {
                                     blocked_view = Some(drone_name.clone());
                                 } else {
@@ -1067,11 +1121,11 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
                         KeyCode::Enter => {
                             if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
+                                let drone_name = &drones[current_drone_idx].0;
                                 if selected_story_index.is_some() {
                                     // Enter on story = show story details
                                     if let Some(story_idx) = selected_story_index {
-                                        let status = &drones[selected_index].1;
+                                        let status = &drones[current_drone_idx].1;
                                         if let Some(prd) = prd_cache.get(&status.prd) {
                                             if let Some(story) = prd.stories.get(story_idx) {
                                                 message =
@@ -1098,7 +1152,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         KeyCode::Left => {
                             // Collapse current drone
                             if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
+                                let drone_name = &drones[current_drone_idx].0;
                                 expanded_drones.remove(drone_name);
                                 selected_story_index = None;
                             }
@@ -1106,7 +1160,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         KeyCode::Right => {
                             // Expand current drone or enter stories
                             if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
+                                let drone_name = &drones[current_drone_idx].0;
                                 if !expanded_drones.contains(drone_name) {
                                     expanded_drones.insert(drone_name.clone());
                                 } else if current_story_count > 0 && selected_story_index.is_none()
@@ -1132,7 +1186,13 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             // Open logs viewer
                             if let Some(ref drone_name) = blocked_view {
                                 // In blocked view - open logs for this drone
-                                match show_logs_viewer(&mut terminal, drone_name) {
+                                // Find the execution mode for this drone
+                                let exec_mode = drones
+                                    .iter()
+                                    .find(|(name, _)| name == drone_name)
+                                    .map(|(_, s)| &s.execution_mode)
+                                    .unwrap_or(&ExecutionMode::Worktree);
+                                match show_logs_viewer(&mut terminal, drone_name, exec_mode) {
                                     Ok(_) => {}
                                     Err(e) => {
                                         message = Some(format!("Error: {}", e));
@@ -1140,8 +1200,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                     }
                                 }
                             } else if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
-                                let status = &drones[selected_index].1;
+                                let drone_name = &drones[current_drone_idx].0;
+                                let status = &drones[current_drone_idx].1;
                                 if let Some(story_idx) = selected_story_index {
                                     // Show logs for specific story
                                     if let Some(prd) = prd_cache.get(&status.prd) {
@@ -1155,7 +1215,11 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                     }
                                 } else {
                                     // Open logs viewer for selected drone
-                                    match show_logs_viewer(&mut terminal, drone_name) {
+                                    match show_logs_viewer(
+                                        &mut terminal,
+                                        drone_name,
+                                        &status.execution_mode,
+                                    ) {
                                         Ok(_) => {}
                                         Err(e) => {
                                             message = Some(format!("Error: {}", e));
@@ -1169,7 +1233,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             // Show story details
                             if !drones.is_empty() {
                                 if let Some(story_idx) = selected_story_index {
-                                    let status = &drones[selected_index].1;
+                                    let status = &drones[current_drone_idx].1;
                                     if let Some(prd) = prd_cache.get(&status.prd) {
                                         if let Some(story) = prd.stories.get(story_idx) {
                                             // Show full story info
@@ -1194,7 +1258,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
                         KeyCode::Char('x') | KeyCode::Char('X') => {
                             if !drones.is_empty() {
-                                let drone_name = drones[selected_index].0.clone();
+                                let drone_name = drones[current_drone_idx].0.clone();
                                 match handle_stop_drone(&drone_name) {
                                     Ok(msg) => {
                                         message = Some(msg);
@@ -1209,7 +1273,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
                         KeyCode::Char('c') | KeyCode::Char('C') => {
                             if !drones.is_empty() {
-                                let drone_name = drones[selected_index].0.clone();
+                                let drone_name = drones[current_drone_idx].0.clone();
                                 match handle_clean_drone(&drone_name) {
                                     Ok(msg) => {
                                         message = Some(msg);
@@ -1224,8 +1288,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
                         KeyCode::Char('u') | KeyCode::Char('U') => {
                             if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
-                                let status = &drones[selected_index].1;
+                                let drone_name = &drones[current_drone_idx].0;
+                                let status = &drones[current_drone_idx].1;
                                 if status.status == DroneState::Blocked {
                                     message = Some(format!("Use: hive unblock {}", drone_name));
                                     message_color = Color::Yellow;
@@ -1237,7 +1301,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
                         KeyCode::Char('s') | KeyCode::Char('S') => {
                             if !drones.is_empty() {
-                                let drone_name = &drones[selected_index].0;
+                                let drone_name = &drones[current_drone_idx].0;
                                 message = Some(format!("Use: hive sessions {}", drone_name));
                                 message_color = Color::Yellow;
                             }
@@ -1245,8 +1309,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         KeyCode::Char('r') | KeyCode::Char('R') => {
                             // Resume drone (especially useful when new stories added to PRD)
                             if !drones.is_empty() {
-                                let drone_name = drones[selected_index].0.clone();
-                                let status = &drones[selected_index].1;
+                                let drone_name = drones[current_drone_idx].0.clone();
+                                let status = &drones[current_drone_idx].1;
                                 let prd_story_count = prd_cache
                                     .get(&status.prd)
                                     .map(|p| p.stories.len())
@@ -1343,8 +1407,8 @@ fn handle_new_drone<B: ratatui::backend::Backend>(
             .interact()?;
         let model = models[model_idx].to_string();
 
-        // Launch drone using start command
-        crate::commands::start::run(drone_name.clone(), None, false, false, model, false)?;
+        // Launch drone using start command (default to worktree mode, not subagent)
+        crate::commands::start::run(drone_name.clone(), None, false, false, model, false, false)?;
 
         Ok(Some(format!("🐝 Launched drone: {}", drone_name)))
     })();
@@ -1427,7 +1491,7 @@ fn handle_resume_drone(drone_name: &str) -> Result<String> {
         }
     }
 
-    // Launch drone with resume flag
+    // Launch drone with resume flag (preserve original mode, default to worktree)
     crate::commands::start::run(
         drone_name.to_string(),
         None,
@@ -1435,6 +1499,7 @@ fn handle_resume_drone(drone_name: &str) -> Result<String> {
         false,
         "sonnet".to_string(),
         false,
+        false, // subagent mode - TODO: could read from status.json to preserve mode
     )?;
     Ok(format!("🔄 Resumed drone: {}", drone_name))
 }
@@ -1501,11 +1566,17 @@ fn render_blocked_detail_view(
         .map(|s| s.title.as_str())
         .unwrap_or("");
 
+    // Use different emoji based on execution mode
+    let mode_emoji = match status.execution_mode {
+        ExecutionMode::Subagent => "🤖",
+        ExecutionMode::Worktree => "🐝",
+    };
+
     let subheader_lines = vec![
         Line::from(vec![
             Span::styled("  ⚠ ", Style::default().fg(orange)),
             Span::styled(
-                format!("🐝 {}", drone_name),
+                format!("{} {}", mode_emoji, drone_name),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
@@ -1617,38 +1688,11 @@ fn render_blocked_detail_view(
     f.render_widget(footer, chunks[3]);
 }
 
-// Word wrap helper function
-fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut current_line = String::new();
-
-    for word in text.split_whitespace() {
-        if current_line.is_empty() {
-            current_line = word.to_string();
-        } else if current_line.len() + 1 + word.len() <= max_width {
-            current_line.push(' ');
-            current_line.push_str(word);
-        } else {
-            lines.push(current_line);
-            current_line = word.to_string();
-        }
-    }
-
-    if !current_line.is_empty() {
-        lines.push(current_line);
-    }
-
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-
-    lines
-}
-
 // Show logs viewer in TUI with line selection and JSON pretty-print
 fn show_logs_viewer<B: ratatui::backend::Backend>(
     terminal: &mut ratatui::Terminal<B>,
     drone_name: &str,
+    execution_mode: &ExecutionMode,
 ) -> Result<()> {
     use crossterm::event::{self, Event, KeyCode};
     use ratatui::{
@@ -1699,6 +1743,12 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                     ])
                     .split(area);
 
+                // Use different emoji based on execution mode
+                let mode_emoji = match execution_mode {
+                    ExecutionMode::Subagent => "🤖",
+                    ExecutionMode::Worktree => "🐝",
+                };
+
                 // Header with HIVE ASCII art
                 let header_lines = vec![
                     Line::from(vec![
@@ -1708,7 +1758,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                     Line::from(vec![
                         Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
                         Span::styled(
-                            format!("  🐝 {}", drone_name),
+                            format!("  {} {}", mode_emoji, drone_name),
                             Style::default().fg(Color::Cyan),
                         ),
                     ]),
@@ -1814,6 +1864,12 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                 ])
                 .split(area);
 
+            // Use different emoji based on execution mode
+            let mode_emoji = match execution_mode {
+                ExecutionMode::Subagent => "🤖",
+                ExecutionMode::Worktree => "🐝",
+            };
+
             // Header with HIVE ASCII art
             let header_lines = vec![
                 Line::from(vec![
@@ -1823,7 +1879,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                 Line::from(vec![
                     Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
                     Span::styled(
-                        format!("  🐝 {}", drone_name),
+                        format!("  {} {}", mode_emoji, drone_name),
                         Style::default().fg(Color::Cyan),
                     ),
                 ]),
@@ -1912,7 +1968,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
         })?;
 
         // Handle input
-        if event::poll(std::time::Duration::from_millis(500))? {
+        if event::poll(std::time::Duration::from_millis(LOG_POLL_TIMEOUT_MS))? {
             if let Event::Key(key) = event::read()? {
                 let content_height = terminal.size()?.height.saturating_sub(5) as usize;
 
