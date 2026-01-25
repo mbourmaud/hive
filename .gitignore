@@ -19,6 +19,9 @@ Thumbs.db
 # IDE and editor files
 .vscode/
 .idea/
+
+# Claude Code local settings
+.claude/
 *.swp
 *.swo
 *~
