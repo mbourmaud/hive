@@ -154,7 +154,7 @@ hive logs -f <name>     # Follow mode
 
 Use the interactive TUI for the best experience:
 ```bash
-hive status -i
+hive monitor
 # Select drone → "📊 View story logs"
 ```
 
