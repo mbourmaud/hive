@@ -38,6 +38,9 @@ enum Commands {
         /// Use subagent mode (spawns Claude Task subagent instead of worktree)
         #[arg(long)]
         subagent: bool,
+        /// Wait for subagent to complete before returning (implies --subagent)
+        #[arg(long)]
+        wait: bool,
     },
 
     /// Monitor drone status with auto-refreshing TUI dashboard
@@ -172,10 +175,20 @@ fn main() {
             model,
             dry_run,
             subagent,
+            wait,
         } => {
-            if let Err(e) =
-                commands::start::run(name, prompt, resume, local, model, dry_run, subagent)
-            {
+            // --wait implies --subagent
+            let use_subagent = subagent || wait;
+            if let Err(e) = commands::start::run(
+                name,
+                prompt,
+                resume,
+                local,
+                model,
+                dry_run,
+                use_subagent,
+                wait,
+            ) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

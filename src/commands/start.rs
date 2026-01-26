@@ -14,6 +14,7 @@ struct WorktreeInfo {
     prunable: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     name: String,
     _prompt: Option<String>,
@@ -22,6 +23,7 @@ pub fn run(
     model: String,
     dry_run: bool,
     subagent: bool,
+    wait: bool,
 ) -> Result<()> {
     let mode_label = if subagent { "subagent" } else { "drone" };
     println!(
@@ -190,12 +192,22 @@ pub fn run(
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else if subagent {
-        launch_claude_subagent(&worktree_path, &model, &name, &prd_path)?;
-        println!(
-            "  {} Launched Claude subagent (model: {})",
-            "✓".green(),
-            model.bright_cyan()
-        );
+        if wait {
+            println!(
+                "  {} Running Claude subagent synchronously (model: {})",
+                "→".bright_blue(),
+                model.bright_cyan()
+            );
+            launch_claude_subagent_sync(&worktree_path, &model, &name, &prd_path)?;
+            println!("  {} Claude subagent completed", "✓".green());
+        } else {
+            launch_claude_subagent(&worktree_path, &model, &name, &prd_path)?;
+            println!(
+                "  {} Launched Claude subagent (model: {})",
+                "✓".green(),
+                model.bright_cyan()
+            );
+        }
     } else {
         launch_claude(&worktree_path, &model, &name, &prd_path)?;
         println!(
@@ -681,6 +693,97 @@ Work through all stories. After completing each, update status and continue to t
         .stderr(log_file)
         .spawn()
         .context("Failed to spawn claude subagent process")?;
+
+    Ok(())
+}
+
+/// Launch Claude in subagent mode synchronously - waits for completion
+/// Use this with --wait flag to run subagents one at a time
+fn launch_claude_subagent_sync(
+    working_dir: &PathBuf,
+    model: &str,
+    drone_name: &str,
+    prd_path: &PathBuf,
+) -> Result<()> {
+    // Create log file
+    let log_path = PathBuf::from(".hive/drones")
+        .join(drone_name)
+        .join("activity.log");
+    let log_file = fs::File::create(&log_path)?;
+
+    // Read PRD content
+    let prd_content = fs::read_to_string(prd_path)?;
+
+    // Get the status file path
+    let status_file = format!(".hive/drones/{}/status.json", drone_name);
+
+    // Create subagent-optimized prompt
+    let prompt = format!(
+        r#"You are a Hive subagent working on this PRD. Execute each story in order.
+
+PRD Content:
+{}
+
+## Execution Mode: SUBAGENT (Synchronous)
+
+You are running in **subagent mode** - working directly in the current repository.
+- Work on the CURRENT branch (create a new branch if needed)
+- Use TodoWrite to track progress
+- Commit changes incrementally
+
+## Status Tracking
+
+Update `{}` to track progress:
+1. **Before each story**: Set `current_story` and `status: "in_progress"`
+2. **After each story**: Add story ID to `completed` array
+3. **When done**: Set `status: "completed"`
+
+## Execution Instructions
+
+1. Read `{}` to check completed stories
+2. Start with FIRST story NOT in `completed` array
+3. Execute each story fully before moving to next
+4. Commit changes after each story
+5. Update status.json after each story
+
+Work through all stories sequentially."#,
+        prd_content, status_file, status_file
+    );
+
+    // Launch claude synchronously - WAIT for it to complete
+    let status = ProcessCommand::new("claude")
+        .arg("-p")
+        .arg(&prompt)
+        .arg("--model")
+        .arg(model)
+        .arg("--output-format")
+        .arg("stream-json")
+        .arg("--verbose")
+        .arg("--dangerously-skip-permissions")
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
+        .stdout(log_file.try_clone()?)
+        .stderr(log_file)
+        .status() // Use status() instead of spawn() to wait
+        .context("Failed to run claude subagent process")?;
+
+    if !status.success() {
+        bail!("Claude subagent exited with error: {:?}", status.code());
+    }
+
+    // Update status to completed
+    let status_path = PathBuf::from(".hive/drones")
+        .join(drone_name)
+        .join("status.json");
+    if let Ok(contents) = fs::read_to_string(&status_path) {
+        if let Ok(mut status_obj) = serde_json::from_str::<serde_json::Value>(&contents) {
+            status_obj["status"] = serde_json::json!("completed");
+            status_obj["updated"] = serde_json::json!(chrono::Utc::now().to_rfc3339());
+            if let Ok(updated) = serde_json::to_string_pretty(&status_obj) {
+                let _ = fs::write(&status_path, updated);
+            }
+        }
+    }
 
     Ok(())
 }

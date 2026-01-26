@@ -862,13 +862,20 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 let mut first_line = true;
 
                                 while !remaining.is_empty() {
-                                    let (chunk, rest) = if remaining.len() <= max_title_width {
+                                    let char_count = remaining.chars().count();
+                                    let (chunk, rest) = if char_count <= max_title_width {
                                         (remaining, "")
                                     } else {
-                                        // Try to break at word boundary
-                                        let break_at = remaining[..max_title_width]
+                                        // Find byte index for max_title_width characters
+                                        let byte_limit: usize = remaining
+                                            .char_indices()
+                                            .nth(max_title_width)
+                                            .map(|(i, _)| i)
+                                            .unwrap_or(remaining.len());
+                                        // Try to break at word boundary within the safe range
+                                        let break_at = remaining[..byte_limit]
                                             .rfind(' ')
-                                            .unwrap_or(max_title_width);
+                                            .unwrap_or(byte_limit);
                                         (&remaining[..break_at], remaining[break_at..].trim_start())
                                     };
 
@@ -1408,7 +1415,16 @@ fn handle_new_drone<B: ratatui::backend::Backend>(
         let model = models[model_idx].to_string();
 
         // Launch drone using start command (default to worktree mode, not subagent)
-        crate::commands::start::run(drone_name.clone(), None, false, false, model, false, false)?;
+        crate::commands::start::run(
+            drone_name.clone(),
+            None,
+            false,
+            false,
+            model,
+            false,
+            false,
+            false,
+        )?;
 
         Ok(Some(format!("🐝 Launched drone: {}", drone_name)))
     })();
@@ -1500,6 +1516,7 @@ fn handle_resume_drone(drone_name: &str) -> Result<String> {
         "sonnet".to_string(),
         false,
         false, // subagent mode - TODO: could read from status.json to preserve mode
+        false, // wait
     )?;
     Ok(format!("🔄 Resumed drone: {}", drone_name))
 }
