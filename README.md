@@ -218,8 +218,8 @@ hive start --resume <drone-name>
 ```
 
 **Blocked drone indicators**:
-- `hive status` - Shows ⚠ in RED
-- `hive status -i` - Highlights in TUI
+- `hive monitor --simple` - Shows ⚠ in RED
+- `hive monitor` - Highlights in TUI
 - Desktop notification
 
 ---
