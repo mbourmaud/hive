@@ -10,7 +10,7 @@ fn get_binary_path() -> PathBuf {
     path
 }
 
-fn setup_test_env() -> PathBuf {
+fn setup_test_env(test_name: &str) -> PathBuf {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -18,7 +18,8 @@ fn setup_test_env() -> PathBuf {
         .as_nanos();
 
     let temp_dir = std::env::temp_dir().join(format!(
-        "hive-test-kill-{}-{}",
+        "hive-test-kill-{}-{}-{}",
+        test_name,
         std::process::id(),
         timestamp
     ));
@@ -112,7 +113,7 @@ fn cleanup(path: &PathBuf) {
 #[test]
 fn test_kill_nonexistent_drone() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("nonexistent");
 
     let output = Command::new(&binary)
         .args(["kill", "nonexistent"])
@@ -132,7 +133,7 @@ fn test_kill_nonexistent_drone() {
 #[test]
 fn test_kill_stopped_drone() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("stopped");
 
     let output = Command::new(&binary)
         .args(["kill", "test-drone"])
@@ -152,7 +153,7 @@ fn test_kill_stopped_drone() {
 #[test]
 fn test_clean_requires_confirmation() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("confirm");
 
     // Without --force, clean should prompt (but will fail in non-interactive mode)
     let output = Command::new(&binary)
@@ -171,7 +172,7 @@ fn test_clean_requires_confirmation() {
 #[test]
 fn test_clean_with_force() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("force");
 
     let output = Command::new(&binary)
         .args(["clean", "test-drone", "--force"])
@@ -180,9 +181,15 @@ fn test_clean_with_force() {
         .unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     println!("stdout: {}", stdout);
+    println!("stderr: {}", stderr);
 
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "clean --force failed with stderr: {}",
+        stderr
+    );
     assert!(stdout.contains("cleaned up") || stdout.contains("Cleaning"));
 
     // Verify drone directory was removed

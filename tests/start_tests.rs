@@ -10,7 +10,7 @@ fn get_binary_path() -> PathBuf {
     path
 }
 
-fn setup_test_env() -> PathBuf {
+fn setup_test_env(test_name: &str) -> PathBuf {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -18,7 +18,8 @@ fn setup_test_env() -> PathBuf {
         .as_nanos();
 
     let temp_dir = std::env::temp_dir().join(format!(
-        "hive-test-start-{}-{}",
+        "hive-test-start-{}-{}-{}",
+        test_name,
         std::process::id(),
         timestamp
     ));
@@ -109,7 +110,7 @@ fn cleanup(path: &PathBuf) {
 #[test]
 fn test_start_local_mode() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("local");
 
     let output = Command::new(&binary)
         .args(["start", "test-drone", "--local", "--dry-run"])
@@ -137,7 +138,7 @@ fn test_start_local_mode() {
 #[test]
 fn test_start_no_prd() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("noprd");
 
     // Remove PRD
     fs::remove_file(temp_dir.join(".hive/prds/prd-test-drone.json")).unwrap();
@@ -160,7 +161,7 @@ fn test_start_no_prd() {
 #[test]
 fn test_start_creates_status() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("status");
 
     let output = Command::new(&binary)
         .args(["start", "test-drone", "--local", "--dry-run"])

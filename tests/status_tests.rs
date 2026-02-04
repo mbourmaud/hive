@@ -10,7 +10,7 @@ fn get_binary_path() -> PathBuf {
     path
 }
 
-fn setup_test_env() -> PathBuf {
+fn setup_test_env(test_name: &str) -> PathBuf {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -18,7 +18,8 @@ fn setup_test_env() -> PathBuf {
         .as_nanos();
 
     let temp_dir = std::env::temp_dir().join(format!(
-        "hive-test-status-{}-{}",
+        "hive-test-status-{}-{}-{}",
+        test_name,
         std::process::id(),
         timestamp
     ));
@@ -82,7 +83,7 @@ fn cleanup(path: &PathBuf) {
 #[test]
 fn test_status_shows_drones() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("shows");
 
     let output = Command::new(&binary)
         .args(["monitor", "--simple"])
@@ -104,7 +105,7 @@ fn test_status_shows_drones() {
 #[test]
 fn test_status_specific_drone() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("specific");
 
     let output = Command::new(&binary)
         .args(["monitor", "--simple", "test-drone"])
@@ -124,7 +125,7 @@ fn test_status_specific_drone() {
 #[test]
 fn test_status_nonexistent_drone() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("noexist");
 
     let output = Command::new(&binary)
         .args(["monitor", "--simple", "nonexistent"])

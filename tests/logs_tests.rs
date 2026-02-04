@@ -11,7 +11,7 @@ fn get_binary_path() -> PathBuf {
     path
 }
 
-fn setup_test_env() -> PathBuf {
+fn setup_test_env(test_name: &str) -> PathBuf {
     use std::time::SystemTime;
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -19,7 +19,8 @@ fn setup_test_env() -> PathBuf {
         .as_nanos();
 
     let temp_dir = std::env::temp_dir().join(format!(
-        "hive-test-logs-{}-{}",
+        "hive-test-logs-{}-{}-{}",
+        test_name,
         std::process::id(),
         timestamp
     ));
@@ -68,7 +69,7 @@ fn cleanup(path: &PathBuf) {
 #[test]
 fn test_logs_show_activity() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("show");
 
     let output = Command::new(&binary)
         .args(["logs", "test-drone"])
@@ -90,7 +91,7 @@ fn test_logs_show_activity() {
 #[test]
 fn test_logs_with_lines_limit() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("lines");
 
     let output = Command::new(&binary)
         .args(["logs", "test-drone", "--lines", "2"])
@@ -110,7 +111,7 @@ fn test_logs_with_lines_limit() {
 #[test]
 fn test_logs_nonexistent_drone() {
     let binary = get_binary_path();
-    let temp_dir = setup_test_env();
+    let temp_dir = setup_test_env("noexist");
 
     let output = Command::new(&binary)
         .args(["logs", "nonexistent"])
