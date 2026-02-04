@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use rust_embed::RustEmbed;
+use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
@@ -16,9 +17,10 @@ pub fn run(skills_only: bool, bin_only: bool) -> Result<()> {
         install_binary(&home)?;
     }
 
-    // Install skills unless --bin-only
+    // Install skills and MCP server unless --bin-only
     if !bin_only {
         install_skills(&home)?;
+        install_mcp_server(&home)?;
     }
 
     println!("\n{} Hive installation complete!", "✓".green().bold());
@@ -94,6 +96,60 @@ fn install_skills(home: &Path) -> Result<()> {
         "✓".green().bold(),
         installed_count,
         skills_dir.display().to_string().cyan()
+    );
+
+    Ok(())
+}
+
+fn install_mcp_server(home: &Path) -> Result<()> {
+    let settings_path = home.join(".claude").join("settings.json");
+
+    // Read existing settings or create a new object
+    let mut settings: Value = if settings_path.exists() {
+        let content =
+            fs::read_to_string(&settings_path).context("Failed to read ~/.claude/settings.json")?;
+        serde_json::from_str(&content).context("Failed to parse ~/.claude/settings.json")?
+    } else {
+        serde_json::json!({})
+    };
+
+    // Ensure mcpServers object exists
+    if settings.get("mcpServers").is_none() {
+        settings["mcpServers"] = serde_json::json!({});
+    }
+
+    let mcp_servers = settings["mcpServers"]
+        .as_object_mut()
+        .context("mcpServers is not an object")?;
+
+    // Check if hive MCP server is already registered
+    if mcp_servers.contains_key("hive") {
+        println!(
+            "{} MCP server already registered in {}",
+            "✓".green().bold(),
+            "~/.claude/settings.json".cyan()
+        );
+        return Ok(());
+    }
+
+    // Add hive MCP server
+    mcp_servers.insert(
+        "hive".to_string(),
+        serde_json::json!({
+            "command": "hive",
+            "args": ["mcp-server"]
+        }),
+    );
+
+    // Write back settings with pretty formatting
+    let formatted =
+        serde_json::to_string_pretty(&settings).context("Failed to serialize settings")?;
+    fs::write(&settings_path, formatted).context("Failed to write ~/.claude/settings.json")?;
+
+    println!(
+        "{} MCP server registered in {}",
+        "✓".green().bold(),
+        "~/.claude/settings.json".cyan()
     );
 
     Ok(())
