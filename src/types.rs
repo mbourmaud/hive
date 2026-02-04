@@ -60,6 +60,14 @@ pub struct Story {
     /// Communication templates for commits and PRs
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub communication: Option<Communication>,
+
+    /// Story IDs that must complete before this one can start
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub depends_on: Vec<String>,
+
+    /// Whether this story can run in parallel with others (no shared file conflicts)
+    #[serde(default)]
+    pub parallel: bool,
 }
 
 /// Context and dependencies for a story
@@ -169,6 +177,9 @@ pub struct DroneStatus {
     /// Execution mode: worktree (isolated) or subagent (in-place)
     #[serde(default)]
     pub execution_mode: ExecutionMode,
+    /// Execution backend: "native" or "swarm"
+    #[serde(default = "default_backend")]
+    pub backend: String,
     pub status: DroneState,
     pub current_story: Option<String>,
     pub completed: Vec<String>,
@@ -181,6 +192,10 @@ pub struct DroneStatus {
     pub blocked_reason: Option<String>,
     pub blocked_questions: Vec<String>,
     pub awaiting_human: bool,
+}
+
+fn default_backend() -> String {
+    "native".to_string()
 }
 
 /// Story timing information
@@ -212,6 +227,8 @@ pub enum ExecutionMode {
     Worktree,
     /// Subagent mode: spawns Claude in current directory, uses Task subagent pattern
     Subagent,
+    /// Future: backed by Claude Swarm Mode when officially available
+    Swarm,
 }
 
 impl std::fmt::Display for ExecutionMode {
@@ -219,6 +236,7 @@ impl std::fmt::Display for ExecutionMode {
         match self {
             ExecutionMode::Worktree => write!(f, "worktree"),
             ExecutionMode::Subagent => write!(f, "subagent"),
+            ExecutionMode::Swarm => write!(f, "swarm"),
         }
     }
 }
@@ -244,6 +262,9 @@ pub struct HiveConfig {
     pub project: Option<String>,
     pub worktree_base: Option<String>,
     pub default_model: Option<String>,
+    /// Default execution backend: "native", "swarm", or "auto"
+    #[serde(default)]
+    pub default_backend: Option<String>,
     pub timestamp: String,
 }
 
@@ -254,6 +275,7 @@ impl Default for HiveConfig {
             project: None,
             worktree_base: None,
             default_model: Some("sonnet".to_string()),
+            default_backend: None,
             timestamp: Utc::now().to_rfc3339(),
         }
     }

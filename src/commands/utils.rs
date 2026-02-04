@@ -59,6 +59,7 @@ pub fn list() -> Result<()> {
         let mode_emoji = match status.execution_mode {
             ExecutionMode::Subagent => "🤖",
             ExecutionMode::Worktree => "🐝",
+            ExecutionMode::Swarm => "🐝",
         };
 
         println!(

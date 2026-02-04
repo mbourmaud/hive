@@ -10,6 +10,7 @@ use super::common::{
     truncate_with_ellipsis, wrap_text, DEFAULT_INACTIVE_THRESHOLD_SECS, FULL_PROGRESS_BAR_WIDTH,
     MAX_DRONE_NAME_LEN, MAX_STORY_TITLE_LEN,
 };
+use crate::communication::MessageBus;
 use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 
 /// Refresh interval for follow mode in seconds
@@ -169,6 +170,7 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     let mode_emoji = match status.execution_mode {
         ExecutionMode::Subagent => "🤖",
         ExecutionMode::Worktree => "🐝",
+        ExecutionMode::Swarm => "🐝",
     };
 
     // Reconcile progress with actual PRD (filters out old completed stories)
@@ -744,9 +746,35 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 let mode_emoji = match status.execution_mode {
                     ExecutionMode::Subagent => "🤖",
                     ExecutionMode::Worktree => "🐝",
+                    ExecutionMode::Swarm => "🐝",
                 };
 
                 let name_display = truncate_with_ellipsis(name, MAX_DRONE_NAME_LEN);
+
+                // Backend tag: [worktree|native], [subagent|swarm], etc.
+                let mode_tag = format!("[{}|{}]", status.execution_mode, status.backend);
+
+                // Check inbox for pending messages
+                let inbox_dir = PathBuf::from(".hive/drones").join(name).join("inbox");
+                let inbox_count = if inbox_dir.exists() {
+                    fs::read_dir(&inbox_dir)
+                        .map(|entries| {
+                            entries
+                                .filter_map(|e| e.ok())
+                                .filter(|e| {
+                                    e.path().extension().and_then(|s| s.to_str()) == Some("json")
+                                })
+                                .count()
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                let inbox_indicator = if inbox_count > 0 {
+                    format!(" ✉{}", inbox_count)
+                } else {
+                    String::new()
+                };
 
                 let header_line = Line::from(vec![
                     Span::raw(format!(" {} ", select_char)),
@@ -764,12 +792,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             if status.status == DroneState::Completed && !has_new_stories {
                                 Color::DarkGray
                             } else if has_new_stories {
-                                Color::Cyan // Highlight when new stories available
+                                Color::Cyan
                             } else {
                                 Color::White
                             },
                         ),
                     ),
+                    Span::raw("  "),
+                    Span::styled(mode_tag.clone(), Style::default().fg(Color::DarkGray)),
+                    Span::styled(inbox_indicator.clone(), Style::default().fg(Color::Cyan)),
                     Span::raw("  "),
                     Span::styled(elapsed, Style::default().fg(Color::DarkGray)),
                 ]);
@@ -784,15 +815,41 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             let is_story_selected =
                                 is_selected && selected_story_index == Some(story_idx);
 
-                            // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
+                            // Check if story has unsatisfied dependencies
+                            let has_blocked_deps = if !story.depends_on.is_empty() && !is_completed
+                            {
+                                story
+                                    .depends_on
+                                    .iter()
+                                    .any(|dep_id| !status.completed.contains(dep_id))
+                            } else {
+                                false
+                            };
+
+                            // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending), ⏳ = blocked by deps
                             let (story_icon, story_color) = if is_story_selected {
                                 ("▸", Color::Cyan)
                             } else if is_completed {
                                 ("●", Color::Green) // Full green = completed
+                            } else if has_blocked_deps {
+                                ("⏳", Color::Yellow) // Waiting for dependency
                             } else if is_current {
                                 ("◐", Color::Yellow) // Half-full yellow = in progress
                             } else {
                                 ("○", Color::DarkGray) // Empty = pending
+                            };
+
+                            // Dependency info suffix
+                            let dep_info = if has_blocked_deps {
+                                let missing: Vec<&str> = story
+                                    .depends_on
+                                    .iter()
+                                    .filter(|dep_id| !status.completed.contains(dep_id))
+                                    .map(|s| s.as_str())
+                                    .collect();
+                                format!(" ⏳ waiting: {}", missing.join(", "))
+                            } else {
+                                String::new()
                             };
 
                             // Duration
@@ -841,7 +898,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                             if story.title.len() <= max_title_width || max_title_width < 20 {
                                 // Title fits on one line or terminal too narrow
-                                lines.push(Line::from(vec![
+                                let mut spans = vec![
                                     Span::styled("      ", line_style),
                                     Span::styled(story_icon, line_style.fg(story_color)),
                                     Span::raw(" "),
@@ -854,7 +911,14 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                         duration_str.clone(),
                                         line_style.fg(Color::DarkGray),
                                     ),
-                                ]));
+                                ];
+                                if !dep_info.is_empty() {
+                                    spans.push(Span::styled(
+                                        dep_info.clone(),
+                                        Style::default().fg(Color::Yellow),
+                                    ));
+                                }
+                                lines.push(Line::from(spans));
                             } else {
                                 // Title needs to wrap - split into lines
                                 let title_indent = "                         "; // 25 spaces to align with title start
@@ -1019,7 +1083,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             } else if selected_story_index.is_some() {
                 " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " ↵ expand  l logs  b blocked  x stop  c clean  q quit".to_string()
+                " ↵ expand  l logs  b blocked  m msgs  x stop  c clean  q quit".to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -1095,6 +1159,33 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 } else {
                                     message = Some("Drone is not blocked".to_string());
                                     message_color = Color::Yellow;
+                                }
+                            }
+                        }
+                        KeyCode::Char('m') | KeyCode::Char('M') => {
+                            // Show messages for current drone
+                            if !drones.is_empty() {
+                                let drone_name = &drones[current_drone_idx].0;
+                                let bus = crate::communication::file_bus::FileBus::new();
+                                let inbox = bus.peek(drone_name).unwrap_or_default();
+                                let outbox = bus.list_outbox(drone_name).unwrap_or_default();
+                                if inbox.is_empty() && outbox.is_empty() {
+                                    message = Some(format!("No messages for '{}'", drone_name));
+                                    message_color = Color::DarkGray;
+                                } else {
+                                    let mut msg_parts = Vec::new();
+                                    if !inbox.is_empty() {
+                                        msg_parts.push(format!("📥 {} inbox", inbox.len()));
+                                    }
+                                    if !outbox.is_empty() {
+                                        msg_parts.push(format!("📤 {} outbox", outbox.len()));
+                                    }
+                                    message = Some(format!(
+                                        "✉ '{}': {}",
+                                        drone_name,
+                                        msg_parts.join(", ")
+                                    ));
+                                    message_color = Color::Cyan;
                                 }
                             }
                         }
@@ -1587,6 +1678,7 @@ fn render_blocked_detail_view(
     let mode_emoji = match status.execution_mode {
         ExecutionMode::Subagent => "🤖",
         ExecutionMode::Worktree => "🐝",
+        ExecutionMode::Swarm => "🐝",
     };
 
     let subheader_lines = vec![
@@ -1764,6 +1856,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                 let mode_emoji = match execution_mode {
                     ExecutionMode::Subagent => "🤖",
                     ExecutionMode::Worktree => "🐝",
+                    ExecutionMode::Swarm => "🐝",
                 };
 
                 // Header with HIVE ASCII art
@@ -1885,6 +1978,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
             let mode_emoji = match execution_mode {
                 ExecutionMode::Subagent => "🤖",
                 ExecutionMode::Worktree => "🐝",
+                ExecutionMode::Swarm => "🐝",
             };
 
             // Header with HIVE ASCII art

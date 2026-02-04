@@ -59,6 +59,7 @@ fn create_blocked_drone(temp_dir: &TempDir, drone_name: &str) {
         worktree: "/tmp/test".to_string(),
         local_mode: false,
         execution_mode: ExecutionMode::Worktree,
+        backend: "native".to_string(),
         status: DroneState::Blocked,
         current_story: Some("TEST-001".to_string()),
         completed: vec![],

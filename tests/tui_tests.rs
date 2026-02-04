@@ -57,6 +57,7 @@ fn create_mock_drone(
             worktree: format!("/tmp/hive/{}", name),
             local_mode: false,
             execution_mode: ExecutionMode::Worktree,
+            backend: "native".to_string(),
             status,
             current_story: current_story.map(String::from),
             completed: completed.iter().map(|s| s.to_string()).collect(),

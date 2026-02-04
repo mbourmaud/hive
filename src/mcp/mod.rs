@@ -1,0 +1,542 @@
+//! MCP (Model Context Protocol) server for Hive.
+//!
+//! Exposes Hive drone state and messaging as MCP tools that Claude Code
+//! (and future Swarm agents) can call to query and interact with drones.
+//!
+//! Launch via: `hive mcp-server`
+//! Configure in `.mcp.json` or `~/.claude/settings.json`:
+//! ```json
+//! { "mcpServers": { "hive": { "command": "hive", "args": ["mcp-server"] } } }
+//! ```
+
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashSet;
+use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
+
+use crate::commands::common::{list_drones, load_prd, reconcile_progress_with_prd};
+use crate::communication::file_bus::FileBus;
+use crate::communication::{DroneMessage, MessageBus, MessageTarget, MessageType};
+
+// ============================================================================
+// JSON-RPC types
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+struct JsonRpcRequest {
+    #[allow(dead_code)]
+    jsonrpc: String,
+    id: Option<Value>,
+    method: String,
+    #[serde(default)]
+    params: Value,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcResponse {
+    jsonrpc: String,
+    id: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<JsonRpcError>,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcError {
+    code: i64,
+    message: String,
+}
+
+// ============================================================================
+// MCP types
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+struct ToolInfo {
+    name: String,
+    description: String,
+    #[serde(rename = "inputSchema")]
+    input_schema: Value,
+}
+
+#[derive(Debug, Serialize)]
+struct ToolResult {
+    content: Vec<ToolContent>,
+    #[serde(rename = "isError", skip_serializing_if = "std::ops::Not::not")]
+    is_error: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ToolContent {
+    #[serde(rename = "type")]
+    content_type: String,
+    text: String,
+}
+
+// ============================================================================
+// Server
+// ============================================================================
+
+/// Run the MCP server on stdio.
+pub fn run_server() -> Result<()> {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+
+    for line in stdin.lock().lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let request: JsonRpcRequest = match serde_json::from_str(&line) {
+            Ok(req) => req,
+            Err(e) => {
+                let error_response = JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: Value::Null,
+                    result: None,
+                    error: Some(JsonRpcError {
+                        code: -32700,
+                        message: format!("Parse error: {}", e),
+                    }),
+                };
+                writeln!(stdout, "{}", serde_json::to_string(&error_response)?)?;
+                stdout.flush()?;
+                continue;
+            }
+        };
+
+        let response = handle_request(&request);
+        writeln!(stdout, "{}", serde_json::to_string(&response)?)?;
+        stdout.flush()?;
+    }
+
+    Ok(())
+}
+
+fn handle_request(request: &JsonRpcRequest) -> JsonRpcResponse {
+    let id = request.id.clone().unwrap_or(Value::Null);
+
+    match request.method.as_str() {
+        "initialize" => JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: Some(serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {}
+                },
+                "serverInfo": {
+                    "name": "hive",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
+            })),
+            error: None,
+        },
+
+        "notifications/initialized" => JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: Some(Value::Null),
+            error: None,
+        },
+
+        "tools/list" => {
+            let tools = list_tools();
+            JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id,
+                result: Some(serde_json::json!({ "tools": tools })),
+                error: None,
+            }
+        }
+
+        "tools/call" => {
+            let tool_name = request
+                .params
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let arguments = request
+                .params
+                .get("arguments")
+                .cloned()
+                .unwrap_or(Value::Object(Default::default()));
+            let result = call_tool(tool_name, &arguments);
+            JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id,
+                result: Some(serde_json::to_value(result).unwrap_or(Value::Null)),
+                error: None,
+            }
+        }
+
+        _ => JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: None,
+            error: Some(JsonRpcError {
+                code: -32601,
+                message: format!("Method not found: {}", request.method),
+            }),
+        },
+    }
+}
+
+// ============================================================================
+// Tool definitions
+// ============================================================================
+
+fn list_tools() -> Vec<ToolInfo> {
+    vec![
+        ToolInfo {
+            name: "hive_list_drones".to_string(),
+            description: "List all Hive drones with their current status, progress, and execution mode.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
+        ToolInfo {
+            name: "hive_drone_status".to_string(),
+            description: "Get detailed status of a specific drone including current story, completed stories, timing, and error info.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "drone_name": {
+                        "type": "string",
+                        "description": "Name of the drone to query"
+                    }
+                },
+                "required": ["drone_name"]
+            }),
+        },
+        ToolInfo {
+            name: "hive_drone_progress".to_string(),
+            description: "Get the progress (completed/total stories) of a drone, reconciled with the current PRD.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "drone_name": {
+                        "type": "string",
+                        "description": "Name of the drone to query"
+                    }
+                },
+                "required": ["drone_name"]
+            }),
+        },
+        ToolInfo {
+            name: "hive_send_message".to_string(),
+            description: "Send an inter-drone message via the Hive message bus. Useful for sharing context, requesting dependencies, or escalating to humans.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "description": "Name of the sending drone"
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "Target drone name, 'all' for broadcast, or 'orchestrator'"
+                    },
+                    "message_type": {
+                        "type": "string",
+                        "enum": ["status_update", "blocked_notification", "completion_notification", "dependency_request", "context_share", "human_escalation"],
+                        "description": "Type of message"
+                    },
+                    "payload": {
+                        "type": "object",
+                        "description": "JSON payload for the message"
+                    }
+                },
+                "required": ["from", "to", "message_type", "payload"]
+            }),
+        },
+        ToolInfo {
+            name: "hive_query_dependencies".to_string(),
+            description: "Check if the dependencies of a specific story are satisfied (all depended-on stories are completed).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "drone_name": {
+                        "type": "string",
+                        "description": "Name of the drone"
+                    },
+                    "story_id": {
+                        "type": "string",
+                        "description": "ID of the story to check dependencies for"
+                    }
+                },
+                "required": ["drone_name", "story_id"]
+            }),
+        },
+        ToolInfo {
+            name: "hive_list_messages".to_string(),
+            description: "Read the inbox and/or outbox messages for a drone.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "drone_name": {
+                        "type": "string",
+                        "description": "Name of the drone"
+                    },
+                    "box_type": {
+                        "type": "string",
+                        "enum": ["inbox", "outbox", "both"],
+                        "description": "Which mailbox to read (default: both)"
+                    }
+                },
+                "required": ["drone_name"]
+            }),
+        },
+    ]
+}
+
+// ============================================================================
+// Tool implementations
+// ============================================================================
+
+fn call_tool(name: &str, arguments: &Value) -> ToolResult {
+    let result = match name {
+        "hive_list_drones" => tool_list_drones(),
+        "hive_drone_status" => tool_drone_status(arguments),
+        "hive_drone_progress" => tool_drone_progress(arguments),
+        "hive_send_message" => tool_send_message(arguments),
+        "hive_query_dependencies" => tool_query_dependencies(arguments),
+        "hive_list_messages" => tool_list_messages(arguments),
+        _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
+    };
+
+    match result {
+        Ok(text) => ToolResult {
+            content: vec![ToolContent {
+                content_type: "text".to_string(),
+                text,
+            }],
+            is_error: false,
+        },
+        Err(e) => ToolResult {
+            content: vec![ToolContent {
+                content_type: "text".to_string(),
+                text: format!("Error: {}", e),
+            }],
+            is_error: true,
+        },
+    }
+}
+
+fn tool_list_drones() -> Result<String> {
+    let drones = list_drones()?;
+
+    if drones.is_empty() {
+        return Ok("No drones found. Run 'hive start <name>' to launch a drone.".to_string());
+    }
+
+    let mut entries = Vec::new();
+    for (name, status) in &drones {
+        let (completed, total) = crate::commands::common::reconcile_progress(status);
+        entries.push(serde_json::json!({
+            "name": name,
+            "status": status.status.to_string(),
+            "execution_mode": status.execution_mode.to_string(),
+            "backend": status.backend,
+            "progress": format!("{}/{}", completed, total),
+            "current_story": status.current_story,
+            "branch": status.branch,
+            "updated": status.updated,
+        }));
+    }
+
+    Ok(serde_json::to_string_pretty(&entries)?)
+}
+
+fn tool_drone_status(args: &Value) -> Result<String> {
+    let drone_name = args
+        .get("drone_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
+
+    let drones = list_drones()?;
+    let (_, status) = drones
+        .iter()
+        .find(|(name, _)| name == drone_name)
+        .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
+
+    Ok(serde_json::to_string_pretty(status)?)
+}
+
+fn tool_drone_progress(args: &Value) -> Result<String> {
+    let drone_name = args
+        .get("drone_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
+
+    let drones = list_drones()?;
+    let (_, status) = drones
+        .iter()
+        .find(|(name, _)| name == drone_name)
+        .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
+
+    let prd_path = PathBuf::from(".hive/prds").join(&status.prd);
+    let (completed, total) = if let Some(prd) = load_prd(&prd_path) {
+        reconcile_progress_with_prd(status, &prd)
+    } else {
+        (status.completed.len(), status.total)
+    };
+
+    let result = serde_json::json!({
+        "drone": drone_name,
+        "completed": completed,
+        "total": total,
+        "percentage": if total > 0 { (completed as f64 / total as f64 * 100.0).round() as u32 } else { 0 },
+        "completed_stories": status.completed,
+        "current_story": status.current_story,
+        "status": status.status.to_string(),
+    });
+
+    Ok(serde_json::to_string_pretty(&result)?)
+}
+
+fn tool_send_message(args: &Value) -> Result<String> {
+    let from = args
+        .get("from")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: from"))?;
+    let to_str = args
+        .get("to")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: to"))?;
+    let msg_type_str = args
+        .get("message_type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: message_type"))?;
+    let payload = args
+        .get("payload")
+        .cloned()
+        .unwrap_or(Value::Object(Default::default()));
+
+    let target = match to_str {
+        "all" => MessageTarget::AllDrones,
+        "orchestrator" => MessageTarget::Orchestrator,
+        name => MessageTarget::Drone(name.to_string()),
+    };
+
+    let message_type = match msg_type_str {
+        "status_update" => MessageType::StatusUpdate,
+        "blocked_notification" => MessageType::BlockedNotification,
+        "completion_notification" => MessageType::CompletionNotification,
+        "dependency_request" => MessageType::DependencyRequest,
+        "context_share" => MessageType::ContextShare,
+        "human_escalation" => MessageType::HumanEscalation,
+        _ => return Err(anyhow::anyhow!("Unknown message type: {}", msg_type_str)),
+    };
+
+    let message = DroneMessage {
+        id: uuid::Uuid::new_v4().to_string(),
+        from: from.to_string(),
+        to: target,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        message_type,
+        payload,
+    };
+
+    let bus = FileBus::new();
+    bus.send(&message)?;
+
+    Ok(format!("Message sent successfully (id: {})", message.id))
+}
+
+fn tool_query_dependencies(args: &Value) -> Result<String> {
+    let drone_name = args
+        .get("drone_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
+    let story_id = args
+        .get("story_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: story_id"))?;
+
+    let drones = list_drones()?;
+    let (_, status) = drones
+        .iter()
+        .find(|(name, _)| name == drone_name)
+        .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
+
+    let prd_path = PathBuf::from(".hive/prds").join(&status.prd);
+    let prd =
+        load_prd(&prd_path).ok_or_else(|| anyhow::anyhow!("Failed to load PRD: {}", status.prd))?;
+
+    let story = prd
+        .stories
+        .iter()
+        .find(|s| s.id == story_id)
+        .ok_or_else(|| anyhow::anyhow!("Story '{}' not found in PRD", story_id))?;
+
+    if story.depends_on.is_empty() {
+        return Ok(serde_json::to_string_pretty(&serde_json::json!({
+            "story_id": story_id,
+            "has_dependencies": false,
+            "all_satisfied": true,
+            "message": "No dependencies declared"
+        }))?);
+    }
+
+    // Check all drones for completed stories
+    let mut all_completed: HashSet<String> = HashSet::new();
+    for (_, drone_status) in &drones {
+        for completed_id in &drone_status.completed {
+            all_completed.insert(completed_id.clone());
+        }
+    }
+
+    let mut missing = Vec::new();
+    let mut satisfied = Vec::new();
+    for dep in &story.depends_on {
+        if all_completed.contains(dep) {
+            satisfied.push(dep.clone());
+        } else {
+            missing.push(dep.clone());
+        }
+    }
+
+    let all_satisfied = missing.is_empty();
+
+    Ok(serde_json::to_string_pretty(&serde_json::json!({
+        "story_id": story_id,
+        "has_dependencies": true,
+        "depends_on": story.depends_on,
+        "satisfied": satisfied,
+        "missing": missing,
+        "all_satisfied": all_satisfied,
+    }))?)
+}
+
+fn tool_list_messages(args: &Value) -> Result<String> {
+    let drone_name = args
+        .get("drone_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
+    let box_type = args
+        .get("box_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("both");
+
+    let bus = FileBus::new();
+    let mut result = serde_json::Map::new();
+
+    if box_type == "inbox" || box_type == "both" {
+        let inbox = bus.peek(drone_name)?;
+        result.insert("inbox".to_string(), serde_json::to_value(&inbox)?);
+    }
+
+    if box_type == "outbox" || box_type == "both" {
+        let outbox = bus.list_outbox(drone_name)?;
+        result.insert("outbox".to_string(), serde_json::to_value(&outbox)?);
+    }
+
+    Ok(serde_json::to_string_pretty(&result)?)
+}

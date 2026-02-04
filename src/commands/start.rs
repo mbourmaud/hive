@@ -2,8 +2,9 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
-use std::process::{Command as ProcessCommand, Stdio};
+use std::process::Command as ProcessCommand;
 
+use crate::backend::{self, SpawnConfig};
 use crate::config;
 use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 
@@ -169,6 +170,7 @@ pub fn run(
         worktree: worktree_path.to_string_lossy().to_string(),
         local_mode: local || subagent,
         execution_mode: execution_mode.clone(),
+        backend: "native".to_string(),
         status: DroneState::Starting,
         current_story: None,
         completed: Vec::new(),
@@ -188,33 +190,51 @@ pub fn run(
     fs::write(&status_path, status_json)?;
     println!("  {} Created status.json", "✓".green());
 
-    // 7. Launch Claude
+    // Ensure inbox/outbox directories exist for inter-drone messaging
+    let inbox_dir = drone_dir.join("inbox");
+    let outbox_dir = drone_dir.join("outbox");
+    fs::create_dir_all(&inbox_dir)?;
+    fs::create_dir_all(&outbox_dir)?;
+
+    // 7. Launch Claude via ExecutionBackend
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
-    } else if subagent {
-        if wait {
+    } else {
+        let backend = backend::resolve_backend(None);
+        let spawn_config = SpawnConfig {
+            drone_name: name.clone(),
+            prd_path: prd_path.clone(),
+            model: model.clone(),
+            worktree_path: worktree_path.clone(),
+            status_file: status_path.clone(),
+            working_dir: worktree_path.clone(),
+            execution_mode: execution_mode.clone(),
+            wait,
+        };
+
+        if subagent && wait {
             println!(
                 "  {} Running Claude subagent synchronously (model: {})",
                 "→".bright_blue(),
                 model.bright_cyan()
             );
-            launch_claude_subagent_sync(&worktree_path, &model, &name, &prd_path)?;
+            backend.spawn(&spawn_config)?;
             println!("  {} Claude subagent completed", "✓".green());
-        } else {
-            launch_claude_subagent(&worktree_path, &model, &name, &prd_path)?;
+        } else if subagent {
+            backend.spawn(&spawn_config)?;
             println!(
                 "  {} Launched Claude subagent (model: {})",
                 "✓".green(),
                 model.bright_cyan()
             );
+        } else {
+            backend.spawn(&spawn_config)?;
+            println!(
+                "  {} Launched Claude (model: {})",
+                "✓".green(),
+                model.bright_cyan()
+            );
         }
-    } else {
-        launch_claude(&worktree_path, &model, &name, &prd_path)?;
-        println!(
-            "  {} Launched Claude (model: {})",
-            "✓".green(),
-            model.bright_cyan()
-        );
     }
 
     // 8. Send notification
@@ -504,286 +524,6 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
 
     std::os::unix::fs::symlink(&hive_dir, &symlink_path)
         .context("Failed to create .hive symlink")?;
-
-    Ok(())
-}
-
-fn launch_claude(
-    worktree: &PathBuf,
-    model: &str,
-    drone_name: &str,
-    prd_path: &PathBuf,
-) -> Result<()> {
-    // Create log file
-    let log_path = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("activity.log");
-    let log_file = fs::File::create(&log_path)?;
-
-    // Read PRD content
-    let prd_content = fs::read_to_string(prd_path)?;
-
-    // Get the status file path (relative to worktree via symlink)
-    let status_file = format!(".hive/drones/{}/status.json", drone_name);
-
-    // Create initial prompt with PRD and status update instructions
-    let prompt = format!(
-        r#"You are a Hive drone working on this PRD. Execute each story in order.
-
-PRD Content:
-{}
-
-## CRITICAL: Status Updates
-
-You MUST update the status file at `{}` to track your progress. This is how the monitoring TUI knows what you're doing.
-
-### Before starting EACH story:
-Read the current status.json, then update it with:
-- `"status": "in_progress"`
-- `"current_story": "<story-id>"` (e.g., "US-0", "MON-001")
-- `"story_times".<story-id>.started`: current ISO timestamp
-- `"updated"`: current ISO timestamp
-
-Example command to start a story:
-```bash
-# Read current status
-cat .hive/drones/{}/status.json | jq '
-  .status = "in_progress" |
-  .current_story = "US-0" |
-  .story_times["US-0"] = {{"started": (now | todate)}} |
-  .updated = (now | todate)
-' > /tmp/status.json && mv /tmp/status.json .hive/drones/{}/status.json
-```
-
-### After completing EACH story:
-Update status.json with:
-- Add story ID to `"completed"` array
-- `"story_times".<story-id>.completed`: current ISO timestamp
-- `"updated"`: current ISO timestamp
-
-Example command to complete a story:
-```bash
-cat .hive/drones/{}/status.json | jq '
-  .completed += ["US-0"] |
-  .story_times["US-0"].completed = (now | todate) |
-  .updated = (now | todate)
-' > /tmp/status.json && mv /tmp/status.json .hive/drones/{}/status.json
-```
-
-### When ALL stories are done:
-Set `"status": "completed"` and `"current_story": null`
-
-### If you encounter an error:
-Set `"status": "error"` and increment `"error_count"`
-
-## Execution Instructions
-
-**IMPORTANT: Before starting work, read `{}` to check which stories are already completed.**
-- The `completed` array contains IDs of stories that are DONE - DO NOT redo them
-- Start with the FIRST story that is NOT in the `completed` array
-- If `current_story` is set and not in `completed`, resume that story first
-
-Work through stories sequentially. After completing each story, move to the next uncompleted one automatically. Always update status.json BEFORE starting and AFTER completing each story."#,
-        prd_content, status_file, drone_name, drone_name, drone_name, drone_name, status_file
-    );
-
-    // Launch claude in background with the PRD as initial prompt
-    // Use -p (print/non-interactive) with --output-format stream-json for structured logs
-    ProcessCommand::new("claude")
-        .arg("-p")
-        .arg(&prompt)
-        .arg("--model")
-        .arg(model)
-        .arg("--output-format")
-        .arg("stream-json")
-        .arg("--verbose")
-        .arg("--dangerously-skip-permissions")
-        .current_dir(worktree)
-        .stdin(Stdio::null())
-        .stdout(log_file.try_clone()?)
-        .stderr(log_file)
-        .spawn()
-        .context("Failed to spawn claude process")?;
-
-    Ok(())
-}
-
-/// Launch Claude in subagent mode - optimized for in-place execution without worktree
-/// Uses a lighter prompt that leverages Claude Code's native Task subagent capabilities
-fn launch_claude_subagent(
-    working_dir: &PathBuf,
-    model: &str,
-    drone_name: &str,
-    prd_path: &PathBuf,
-) -> Result<()> {
-    // Create log file
-    let log_path = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("activity.log");
-    let log_file = fs::File::create(&log_path)?;
-
-    // Read PRD content
-    let prd_content = fs::read_to_string(prd_path)?;
-
-    // Get the status file path
-    let status_file = format!(".hive/drones/{}/status.json", drone_name);
-
-    // Create subagent-optimized prompt - leverages Claude Code's native capabilities
-    let prompt = format!(
-        r#"You are a Hive subagent working on this PRD. Execute each story in order.
-
-PRD Content:
-{}
-
-## Execution Mode: SUBAGENT
-
-You are running in **subagent mode** - working directly in the current repository without a separate worktree.
-This means:
-- You work on the CURRENT branch (create a new branch if needed for the PRD)
-- Use TodoWrite to track your progress through stories
-- Commit changes incrementally as you complete each story
-
-## Status Tracking
-
-Update `{}` to track progress:
-
-1. **Before each story**: Set `current_story` and `status: "in_progress"`
-2. **After each story**: Add story ID to `completed` array
-3. **When done**: Set `status: "completed"`
-
-Use this pattern to update status:
-```bash
-cat {} | jq '.status = "in_progress" | .current_story = "STORY-ID" | .updated = (now | todate)' > /tmp/s.json && mv /tmp/s.json {}
-```
-
-## Execution Instructions
-
-1. Read `{}` to check which stories are already completed
-2. Start with the FIRST story NOT in `completed` array
-3. Use TodoWrite to break down each story into tasks
-4. Execute each story fully before moving to the next
-5. Commit your changes after each story with: `git commit -m "feat(<scope>): <story-title>"`
-6. Update status.json after completing each story
-
-## Git Workflow
-
-Since you're in subagent mode on the main repo:
-- Check current branch: `git branch --show-current`
-- If not on target branch, create it: `git checkout -b <target-branch>`
-- Commit changes incrementally
-- DO NOT push without explicit instruction
-
-Work through all stories. After completing each, update status and continue to the next."#,
-        prd_content, status_file, status_file, status_file, status_file
-    );
-
-    // Launch claude in background
-    ProcessCommand::new("claude")
-        .arg("-p")
-        .arg(&prompt)
-        .arg("--model")
-        .arg(model)
-        .arg("--output-format")
-        .arg("stream-json")
-        .arg("--verbose")
-        .arg("--dangerously-skip-permissions")
-        .current_dir(working_dir)
-        .stdin(Stdio::null())
-        .stdout(log_file.try_clone()?)
-        .stderr(log_file)
-        .spawn()
-        .context("Failed to spawn claude subagent process")?;
-
-    Ok(())
-}
-
-/// Launch Claude in subagent mode synchronously - waits for completion
-/// Use this with --wait flag to run subagents one at a time
-fn launch_claude_subagent_sync(
-    working_dir: &PathBuf,
-    model: &str,
-    drone_name: &str,
-    prd_path: &PathBuf,
-) -> Result<()> {
-    // Create log file
-    let log_path = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("activity.log");
-    let log_file = fs::File::create(&log_path)?;
-
-    // Read PRD content
-    let prd_content = fs::read_to_string(prd_path)?;
-
-    // Get the status file path
-    let status_file = format!(".hive/drones/{}/status.json", drone_name);
-
-    // Create subagent-optimized prompt
-    let prompt = format!(
-        r#"You are a Hive subagent working on this PRD. Execute each story in order.
-
-PRD Content:
-{}
-
-## Execution Mode: SUBAGENT (Synchronous)
-
-You are running in **subagent mode** - working directly in the current repository.
-- Work on the CURRENT branch (create a new branch if needed)
-- Use TodoWrite to track progress
-- Commit changes incrementally
-
-## Status Tracking
-
-Update `{}` to track progress:
-1. **Before each story**: Set `current_story` and `status: "in_progress"`
-2. **After each story**: Add story ID to `completed` array
-3. **When done**: Set `status: "completed"`
-
-## Execution Instructions
-
-1. Read `{}` to check completed stories
-2. Start with FIRST story NOT in `completed` array
-3. Execute each story fully before moving to next
-4. Commit changes after each story
-5. Update status.json after each story
-
-Work through all stories sequentially."#,
-        prd_content, status_file, status_file
-    );
-
-    // Launch claude synchronously - WAIT for it to complete
-    let status = ProcessCommand::new("claude")
-        .arg("-p")
-        .arg(&prompt)
-        .arg("--model")
-        .arg(model)
-        .arg("--output-format")
-        .arg("stream-json")
-        .arg("--verbose")
-        .arg("--dangerously-skip-permissions")
-        .current_dir(working_dir)
-        .stdin(Stdio::null())
-        .stdout(log_file.try_clone()?)
-        .stderr(log_file)
-        .status() // Use status() instead of spawn() to wait
-        .context("Failed to run claude subagent process")?;
-
-    if !status.success() {
-        bail!("Claude subagent exited with error: {:?}", status.code());
-    }
-
-    // Update status to completed
-    let status_path = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("status.json");
-    if let Ok(contents) = fs::read_to_string(&status_path) {
-        if let Ok(mut status_obj) = serde_json::from_str::<serde_json::Value>(&contents) {
-            status_obj["status"] = serde_json::json!("completed");
-            status_obj["updated"] = serde_json::json!(chrono::Utc::now().to_rfc3339());
-            if let Ok(updated) = serde_json::to_string_pretty(&status_obj) {
-                let _ = fs::write(&status_path, updated);
-            }
-        }
-    }
 
     Ok(())
 }

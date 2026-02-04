@@ -49,6 +49,7 @@ fn create_test_drone(
         worktree: format!("/tmp/{}", drone_name),
         local_mode: false,
         execution_mode: ExecutionMode::Worktree,
+        backend: "native".to_string(),
         status,
         current_story: None,
         completed: completed_stories,

@@ -131,6 +131,10 @@ enum Commands {
         #[arg(long)]
         bin_only: bool,
     },
+
+    /// Start MCP server (stdio) for Claude Code integration
+    #[command(name = "mcp-server")]
+    McpServer,
 }
 
 #[derive(Subcommand)]
@@ -279,6 +283,12 @@ fn main() {
         } => {
             if let Err(e) = commands::install::run(skills_only, bin_only) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::McpServer => {
+            if let Err(e) = hive_lib::mcp::run_server() {
+                eprintln!("MCP Server error: {}", e);
                 std::process::exit(1);
             }
         }

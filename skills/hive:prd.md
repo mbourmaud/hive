@@ -85,7 +85,45 @@ The user might say:
 
 Update the DoD based on feedback, then move to next story.
 
-### Step 7: Intelligently Determine US-0 Environment Setup
+### Step 7: Add MR/CI Story (Standard)
+
+**ALWAYS** add a final story for creating and managing the Merge Request / Pull Request. This is a standard story that should be included in every PRD.
+
+Ask the user: **"Should I include a story for creating the MR and monitoring the CI pipeline?"**
+
+Options:
+- **Yes (Recommended)** - Include MR-001 story
+- **No** - Skip (rare cases like documentation-only PRDs)
+
+If yes, add this standard story at the END of the stories array:
+
+```json
+{
+  "id": "MR-001",
+  "title": "Create MR and ensure CI passes",
+  "description": "Create the Merge Request on GitLab/GitHub, monitor the CI pipeline, fix any failures, and ensure the MR is ready for review",
+  "definition_of_done": [
+    "A MR/PR is created with a clear title and description",
+    "The CI pipeline passes (lint, tests, build)",
+    "If pipeline fails, errors are analyzed, fixed, and pipeline re-run",
+    "The MR is ready for review (no conflicts, green pipeline)"
+  ],
+  "verification_commands": [
+    "glab ci status || gh pr checks",
+    "git status"
+  ],
+  "actions": [
+    "Create MR with 'glab mr create' or PR with 'gh pr create'",
+    "Monitor pipeline status",
+    "If pipeline fails: analyze logs, fix issues, commit, push",
+    "Rebase on target branch if needed to resolve conflicts"
+  ]
+}
+```
+
+**Note**: Adapt the commands based on the project's Git platform (GitLab → `glab`, GitHub → `gh`).
+
+### Step 8: Intelligently Determine US-0 Environment Setup
 
 **IMPORTANT**: After defining all feature stories (US-1, US-2, etc.), analyze whether a **US-0: Environment Setup** story is needed.
 
@@ -182,12 +220,12 @@ Verification commands:
 
 **IMPORTANT**: US-0 goes FIRST in the stories array, even though you define it last. The drone will execute stories in array order.
 
-### Step 8: Review Complete PRD
+### Step 9: Review Complete PRD
 
 Once all stories (including US-0 if applicable) have validated DoDs, present the full PRD:
 ```
 PRD: security-api-protection
-"Secure API Routes" - 4 stories
+"Secure API Routes" - 5 stories
 
 US-0: Environment Setup
   ✅ DoD validated (auto-discovered)
@@ -200,11 +238,14 @@ SEC-002: Protect /api/users/*
 
 SEC-003: Add auth logging
   ✅ DoD validated
+
+MR-001: Create MR and ensure CI passes
+  ✅ DoD validated (standard)
 ```
 
 Ask: **"Does the complete PRD look good? Should I generate the file?"**
 
-### Step 9: Generate PRD File
+### Step 10: Generate PRD File
 
 Write the JSON file to `.hive/prds/prd-<id>.json` using the **current v2.x enhanced schema**:
 
@@ -275,6 +316,27 @@ Write the JSON file to `.hive/prds/prd-<id>.json` using the **current v2.x enhan
         "jest",
         "pnpm"
       ]
+    },
+    {
+      "id": "MR-001",
+      "title": "Create MR and ensure CI passes",
+      "description": "Create the Merge Request, monitor CI pipeline, fix failures, ensure MR is ready for review",
+      "definition_of_done": [
+        "A MR/PR is created with a clear title and description",
+        "The CI pipeline passes (lint, tests, build)",
+        "If pipeline fails, errors are analyzed, fixed, and pipeline re-run",
+        "The MR is ready for review (no conflicts, green pipeline)"
+      ],
+      "verification_commands": [
+        "glab ci status || gh pr checks",
+        "git status"
+      ],
+      "actions": [
+        "Create MR with 'glab mr create' or PR with 'gh pr create'",
+        "Monitor pipeline status",
+        "If pipeline fails: analyze logs, fix issues, commit, push",
+        "Rebase on target branch if needed to resolve conflicts"
+      ]
     }
   ]
 }
@@ -292,7 +354,7 @@ Write the JSON file to `.hive/prds/prd-<id>.json` using the **current v2.x enhan
 
 See the full schema reference in `docs/PRD_GUIDE.md` or the example at `examples/prd-enhanced-example.json`.
 
-### Step 10: Next Steps
+### Step 11: Next Steps
 
 Tell the user:
 ```
@@ -323,6 +385,8 @@ interface Story {
   description?: string;          // What to implement
   definition_of_done: string[];  // Clear, validated DoD statements
   verification_commands: string[]; // Commands drone MUST run to prove completion
+  depends_on?: string[];         // Story IDs that must complete before this one starts
+  parallel?: boolean;            // Whether this story can run in parallel with others
 }
 ```
 
@@ -392,8 +456,50 @@ interface Story {
     docs_to_update?: string[];         // Documentation to update
     changelog_entry?: string;          // CHANGELOG.md entry
   };
+
+  // Dependency & parallelism fields
+  depends_on?: string[];               // Story IDs that must complete first
+  parallel?: boolean;                  // Can run in parallel with other stories
 }
 ```
+
+### Dependency Graph Example
+
+Stories can declare dependencies on other stories for proper ordering:
+
+```json
+{
+  "stories": [
+    {
+      "id": "DB-001",
+      "title": "Create database schema",
+      "parallel": false
+    },
+    {
+      "id": "API-001",
+      "title": "Implement REST endpoints",
+      "depends_on": ["DB-001"],
+      "parallel": true
+    },
+    {
+      "id": "API-002",
+      "title": "Add authentication middleware",
+      "depends_on": ["DB-001"],
+      "parallel": true
+    },
+    {
+      "id": "INT-001",
+      "title": "Integration tests",
+      "depends_on": ["API-001", "API-002"]
+    }
+  ]
+}
+```
+
+In this example:
+- `DB-001` runs first (no dependencies)
+- `API-001` and `API-002` can run in parallel after `DB-001` completes
+- `INT-001` waits for both API stories to complete
 
 ## Definition of Done Guidelines
 
