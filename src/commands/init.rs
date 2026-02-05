@@ -3,6 +3,7 @@ use colored::Colorize;
 use dialoguer::Confirm;
 use std::path::PathBuf;
 
+use crate::commands::install;
 use crate::config;
 use crate::types::HiveConfig;
 
@@ -81,14 +82,26 @@ pub fn run() -> Result<()> {
         );
     }
 
+    // 7. Install skills and MCP server for Claude Code integration
+    println!("\n{}", "Setting up Claude Code integration...".bright_blue());
+    if let Err(e) = install::run(true, false) {
+        println!(
+            "  {} Failed to install skills: {}",
+            "⚠".yellow(),
+            e
+        );
+        println!("    Run 'hive install --skills-only' manually to retry");
+    }
+
     println!(
         "\n{} Hive initialized successfully for project '{}'",
         "✓".green().bold(),
         project_name.bright_cyan()
     );
-    println!("\nNext steps:");
-    println!("  1. Create a PRD file in .hive/prds/");
-    println!("  2. Run 'hive start <drone-name>' to launch a drone");
+    println!("\n{}", "Next steps:".bright_yellow());
+    println!("  1. Restart Claude Code to load the skills");
+    println!("  2. Use /hive:prd to create a PRD");
+    println!("  3. Use /hive:start to launch a drone");
 
     Ok(())
 }

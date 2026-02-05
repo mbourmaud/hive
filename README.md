@@ -27,7 +27,7 @@
 ```bash
 brew tap mbourmaud/tap
 brew install hive-ai
-hive install --skills-only  # Install Claude Code skills
+hive init  # Initialize + install Claude Code skills
 ```
 
 ### Direct Download
@@ -45,8 +45,8 @@ sudo mv hive /usr/local/bin/
 curl -fsSL https://github.com/mbourmaud/hive/releases/latest/download/hive-linux-amd64.tar.gz | tar xz
 sudo mv hive /usr/local/bin/
 
-# Then install skills
-hive install --skills-only
+# Then initialize
+hive init
 ```
 
 ### From Source
@@ -56,22 +56,10 @@ git clone https://github.com/mbourmaud/hive.git
 cd hive
 cargo build --release
 sudo cp target/release/hive /usr/local/bin/
-hive install --skills-only
+hive init
 ```
 
-### ⚠️ Important: Install Skills for Claude Code
-
-After installing the binary, run this command to enable `/hive:*` slash commands in Claude Code:
-
-```bash
-hive install --skills-only
-```
-
-This will:
-- Install slash commands to `~/.claude/commands/`
-- Register the Hive MCP server in `~/.claude/settings.json`
-
-**Restart Claude Code** after running this command.
+> **Note:** `hive init` automatically installs Claude Code skills and the MCP server. **Restart Claude Code** after initialization to load the `/hive:*` commands.
 
 ---
 
