@@ -27,6 +27,7 @@
 ```bash
 brew tap mbourmaud/tap
 brew install hive-ai
+hive install --skills-only  # Install Claude Code skills
 ```
 
 ### Direct Download
@@ -43,6 +44,9 @@ sudo mv hive /usr/local/bin/
 # Linux (x86_64)
 curl -fsSL https://github.com/mbourmaud/hive/releases/latest/download/hive-linux-amd64.tar.gz | tar xz
 sudo mv hive /usr/local/bin/
+
+# Then install skills
+hive install --skills-only
 ```
 
 ### From Source
@@ -52,7 +56,22 @@ git clone https://github.com/mbourmaud/hive.git
 cd hive
 cargo build --release
 sudo cp target/release/hive /usr/local/bin/
+hive install --skills-only
 ```
+
+### ⚠️ Important: Install Skills for Claude Code
+
+After installing the binary, run this command to enable `/hive:*` slash commands in Claude Code:
+
+```bash
+hive install --skills-only
+```
+
+This will:
+- Install slash commands to `~/.claude/commands/`
+- Register the Hive MCP server in `~/.claude/settings.json`
+
+**Restart Claude Code** after running this command.
 
 ---
 
@@ -225,6 +244,26 @@ hive start --resume <drone-name>
 ---
 
 ## ⚙️ Configuration
+
+### Model Selection
+
+By default, drones use **Sonnet** for cost-efficiency. You can change the model:
+
+```bash
+# Use Opus for complex tasks
+hive start my-drone --model opus
+
+# Use Haiku for simple/fast tasks
+hive start my-drone --model haiku
+
+# Default (Sonnet)
+hive start my-drone
+```
+
+**Recommended usage:**
+- **Sonnet** (default): Best balance of speed/cost/quality for most tasks
+- **Opus**: Complex architectural changes, nuanced refactoring
+- **Haiku**: Simple repetitive tasks, quick fixes
 
 ### Worktree Location
 
