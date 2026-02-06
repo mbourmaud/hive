@@ -135,6 +135,9 @@ enum Commands {
     /// Start MCP server (stdio) for Claude Code integration
     #[command(name = "mcp-server")]
     McpServer,
+
+    /// Launch unified TUI chat interface
+    Tui,
 }
 
 #[derive(Subcommand)]
@@ -289,6 +292,12 @@ fn main() {
         Commands::McpServer => {
             if let Err(e) = hive_lib::mcp::run_server() {
                 eprintln!("MCP Server error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Tui => {
+            if let Err(e) = hive_lib::tui::run_tui() {
+                eprintln!("TUI error: {}", e);
                 std::process::exit(1);
             }
         }
