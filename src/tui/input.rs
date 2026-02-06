@@ -17,8 +17,10 @@ pub struct InputState {
 impl InputState {
     pub fn new() -> Self {
         let mut textarea = TextArea::default();
-        textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)");
-        
+        textarea.set_placeholder_text(
+            "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
+        );
+
         Self {
             textarea,
             history: Vec::new(),
@@ -100,7 +102,9 @@ impl InputState {
 
             // Clear the input
             self.textarea = TextArea::default();
-            self.textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)");
+            self.textarea.set_placeholder_text(
+                "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
+            );
 
             // Reset history navigation
             self.history_index = None;
@@ -158,7 +162,9 @@ impl InputState {
     fn set_textarea_content(&mut self, content: &str) {
         let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
         self.textarea = TextArea::new(lines);
-        self.textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)");
+        self.textarea.set_placeholder_text(
+            "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
+        );
     }
 
     /// Get the current input text

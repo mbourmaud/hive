@@ -21,8 +21,8 @@ impl AppLayout {
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),      // Main area
-                Constraint::Length(3),   // Footer
+                Constraint::Min(0),    // Main area
+                Constraint::Length(3), // Footer
             ])
             .split(area);
 
@@ -34,8 +34,8 @@ impl AppLayout {
             let horizontal_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(20),  // Sidebar (20%)
-                    Constraint::Percentage(80),  // Content (80%)
+                    Constraint::Percentage(20), // Sidebar (20%)
+                    Constraint::Percentage(80), // Content (80%)
                 ])
                 .split(main_area);
 
@@ -48,8 +48,8 @@ impl AppLayout {
             let horizontal_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(20),  // Sidebar (20%)
-                    Constraint::Percentage(80),  // Content (80%)
+                    Constraint::Percentage(20), // Sidebar (20%)
+                    Constraint::Percentage(80), // Content (80%)
                 ])
                 .split(main_area);
             horizontal_chunks[0]
@@ -66,8 +66,8 @@ impl AppLayout {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),      // Messages area
-                Constraint::Length(5),   // Input area (multiline)
+                Constraint::Min(0),    // Messages area
+                Constraint::Length(5), // Input area (multiline)
             ])
             .split(content_area);
 

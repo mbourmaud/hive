@@ -47,7 +47,8 @@ impl Message {
         match event {
             ClaudeEvent::Assistant { text } => Message::Assistant(text),
             ClaudeEvent::ToolUse { name, input } => {
-                let args = serde_json::to_string_pretty(&input).unwrap_or_else(|_| "{}".to_string());
+                let args =
+                    serde_json::to_string_pretty(&input).unwrap_or_else(|_| "{}".to_string());
                 Message::ToolUse { tool: name, args }
             }
             ClaudeEvent::ToolResult { content, is_error } => Message::ToolResult {
