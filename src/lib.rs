@@ -4,4 +4,5 @@ pub mod communication;
 pub mod config;
 pub mod mcp;
 pub mod notifications;
+pub mod tui;
 pub mod types;
