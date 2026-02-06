@@ -67,7 +67,7 @@ fn cleanup(path: &PathBuf) {
 }
 
 #[test]
-fn test_logs_show_activity() {
+fn test_logs_show_team_conversation() {
     let binary = get_binary_path();
     let temp_dir = setup_test_env("show");
 
@@ -81,29 +81,8 @@ fn test_logs_show_activity() {
     println!("stdout: {}", stdout);
 
     assert!(output.status.success());
-    assert!(stdout.contains("Activity Log"));
-    assert!(stdout.contains("TEST-001"));
-    assert!(stdout.contains("TEST-002"));
-
-    cleanup(&temp_dir);
-}
-
-#[test]
-fn test_logs_with_lines_limit() {
-    let binary = get_binary_path();
-    let temp_dir = setup_test_env("lines");
-
-    let output = Command::new(&binary)
-        .args(["logs", "test-drone", "--lines", "2"])
-        .current_dir(&temp_dir)
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let line_count = stdout.lines().filter(|l| l.contains("TEST")).count();
-
-    assert!(output.status.success());
-    assert_eq!(line_count, 2);
+    // Now always shows team conversation
+    assert!(stdout.contains("Team Conversation"));
 
     cleanup(&temp_dir);
 }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
 use crate::backend::{self, SpawnHandle};
-use crate::types::{DroneStatus, ExecutionMode};
+use crate::types::DroneStatus;
 
 /// Stop a drone by name. If `quiet` is true, no output is printed (for TUI use).
 pub fn kill(name: String) -> Result<()> {
@@ -43,7 +43,7 @@ fn kill_impl(name: String, quiet: bool) -> Result<()> {
     };
 
     // Use the backend to stop the drone process
-    let backend = backend::resolve_backend(None);
+    let backend = backend::resolve_agent_team_backend();
     let handle = SpawnHandle {
         pid: None,
         backend_id: status.worktree.clone(),
@@ -193,19 +193,17 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
         }
     }
 
-    // Clean up Agent Teams directories if in team mode
-    if status.execution_mode == ExecutionMode::AgentTeam {
-        if let Err(e) = crate::agent_teams::cleanup_team(&name) {
-            if !quiet {
-                println!(
-                    "  {} Failed to clean Agent Teams dirs: {}",
-                    "⚠".yellow(),
-                    e
-                );
-            }
-        } else if !quiet {
-            println!("  {} Cleaned Agent Teams directories", "✓".green());
+    // Clean up Agent Teams directories
+    if let Err(e) = crate::agent_teams::cleanup_team(&name) {
+        if !quiet {
+            println!(
+                "  {} Failed to clean Agent Teams dirs: {}",
+                "⚠".yellow(),
+                e
+            );
         }
+    } else if !quiet {
+        println!("  {} Cleaned Agent Teams directories", "✓".green());
     }
 
     if !quiet {

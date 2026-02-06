@@ -17,8 +17,6 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use crate::commands::common::{list_drones, load_prd, reconcile_progress_with_prd};
-use crate::communication::file_bus::FileBus;
-use crate::communication::{DroneMessage, MessageBus, MessageTarget, MessageType};
 
 // ============================================================================
 // JSON-RPC types
@@ -230,33 +228,6 @@ fn list_tools() -> Vec<ToolInfo> {
             }),
         },
         ToolInfo {
-            name: "hive_send_message".to_string(),
-            description: "Send an inter-drone message via the Hive message bus. Useful for sharing context, requesting dependencies, or escalating to humans.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "from": {
-                        "type": "string",
-                        "description": "Name of the sending drone"
-                    },
-                    "to": {
-                        "type": "string",
-                        "description": "Target drone name, 'all' for broadcast, or 'orchestrator'"
-                    },
-                    "message_type": {
-                        "type": "string",
-                        "enum": ["status_update", "blocked_notification", "completion_notification", "dependency_request", "context_share", "human_escalation"],
-                        "description": "Type of message"
-                    },
-                    "payload": {
-                        "type": "object",
-                        "description": "JSON payload for the message"
-                    }
-                },
-                "required": ["from", "to", "message_type", "payload"]
-            }),
-        },
-        ToolInfo {
             name: "hive_query_dependencies".to_string(),
             description: "Check if the dependencies of a specific story are satisfied (all depended-on stories are completed).".to_string(),
             input_schema: serde_json::json!({
@@ -275,27 +246,8 @@ fn list_tools() -> Vec<ToolInfo> {
             }),
         },
         ToolInfo {
-            name: "hive_list_messages".to_string(),
-            description: "Read the inbox and/or outbox messages for a drone.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "drone_name": {
-                        "type": "string",
-                        "description": "Name of the drone"
-                    },
-                    "box_type": {
-                        "type": "string",
-                        "enum": ["inbox", "outbox", "both"],
-                        "description": "Which mailbox to read (default: both)"
-                    }
-                },
-                "required": ["drone_name"]
-            }),
-        },
-        ToolInfo {
             name: "hive_team_status".to_string(),
-            description: "Get Agent Teams status for a drone running in team mode. Returns task progress and teammate information.".to_string(),
+            description: "Get Agent Teams status for a drone. Returns task progress and teammate information.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -319,9 +271,7 @@ fn call_tool(name: &str, arguments: &Value) -> ToolResult {
         "hive_list_drones" => tool_list_drones(),
         "hive_drone_status" => tool_drone_status(arguments),
         "hive_drone_progress" => tool_drone_progress(arguments),
-        "hive_send_message" => tool_send_message(arguments),
         "hive_query_dependencies" => tool_query_dependencies(arguments),
-        "hive_list_messages" => tool_list_messages(arguments),
         "hive_team_status" => tool_team_status(arguments),
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     };
@@ -416,55 +366,6 @@ fn tool_drone_progress(args: &Value) -> Result<String> {
     Ok(serde_json::to_string_pretty(&result)?)
 }
 
-fn tool_send_message(args: &Value) -> Result<String> {
-    let from = args
-        .get("from")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: from"))?;
-    let to_str = args
-        .get("to")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: to"))?;
-    let msg_type_str = args
-        .get("message_type")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: message_type"))?;
-    let payload = args
-        .get("payload")
-        .cloned()
-        .unwrap_or(Value::Object(Default::default()));
-
-    let target = match to_str {
-        "all" => MessageTarget::AllDrones,
-        "orchestrator" => MessageTarget::Orchestrator,
-        name => MessageTarget::Drone(name.to_string()),
-    };
-
-    let message_type = match msg_type_str {
-        "status_update" => MessageType::StatusUpdate,
-        "blocked_notification" => MessageType::BlockedNotification,
-        "completion_notification" => MessageType::CompletionNotification,
-        "dependency_request" => MessageType::DependencyRequest,
-        "context_share" => MessageType::ContextShare,
-        "human_escalation" => MessageType::HumanEscalation,
-        _ => return Err(anyhow::anyhow!("Unknown message type: {}", msg_type_str)),
-    };
-
-    let message = DroneMessage {
-        id: uuid::Uuid::new_v4().to_string(),
-        from: from.to_string(),
-        to: target,
-        timestamp: chrono::Utc::now().to_rfc3339(),
-        message_type,
-        payload,
-    };
-
-    let bus = FileBus::new();
-    bus.send(&message)?;
-
-    Ok(format!("Message sent successfully (id: {})", message.id))
-}
-
 fn tool_query_dependencies(args: &Value) -> Result<String> {
     let drone_name = args
         .get("drone_name")
@@ -530,51 +431,11 @@ fn tool_query_dependencies(args: &Value) -> Result<String> {
     }))?)
 }
 
-fn tool_list_messages(args: &Value) -> Result<String> {
-    let drone_name = args
-        .get("drone_name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
-    let box_type = args
-        .get("box_type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("both");
-
-    let bus = FileBus::new();
-    let mut result = serde_json::Map::new();
-
-    if box_type == "inbox" || box_type == "both" {
-        let inbox = bus.peek(drone_name)?;
-        result.insert("inbox".to_string(), serde_json::to_value(&inbox)?);
-    }
-
-    if box_type == "outbox" || box_type == "both" {
-        let outbox = bus.list_outbox(drone_name)?;
-        result.insert("outbox".to_string(), serde_json::to_value(&outbox)?);
-    }
-
-    Ok(serde_json::to_string_pretty(&result)?)
-}
-
 fn tool_team_status(args: &Value) -> Result<String> {
     let drone_name = args
         .get("drone_name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
-
-    let drones = list_drones()?;
-    let (_, status) = drones
-        .iter()
-        .find(|(name, _)| name == drone_name)
-        .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
-
-    if status.execution_mode != crate::types::ExecutionMode::AgentTeam {
-        return Ok(serde_json::to_string_pretty(&serde_json::json!({
-            "drone": drone_name,
-            "is_team": false,
-            "message": "This drone is not running in Agent Teams mode"
-        }))?);
-    }
 
     // Read Agent Teams task list
     let tasks = crate::agent_teams::read_task_list(drone_name)?;

@@ -4,7 +4,7 @@ use std::fs;
 use std::time::{Duration, SystemTime};
 
 use super::common::reconcile_progress;
-use crate::types::{DroneState, DroneStatus, ExecutionMode};
+use crate::types::{DroneState, DroneStatus};
 
 /// List all drones with compact output
 pub fn list() -> Result<()> {
@@ -55,10 +55,7 @@ pub fn list() -> Result<()> {
             0
         };
 
-        let mode_emoji = match status.execution_mode {
-            ExecutionMode::Worktree => "🐝",
-            ExecutionMode::AgentTeam => "🤝",
-        };
+        let mode_emoji = "🐝";
 
         println!(
             "{:<20} {:<15} {:<10}",

@@ -7,14 +7,12 @@ use std::thread;
 use std::time::Duration;
 
 use crate::agent_teams::task_sync;
-use crate::types::{DroneStatus, ExecutionMode};
 
 pub fn run(
     name: String,
     lines: Option<usize>,
     story: Option<String>,
     follow: bool,
-    team: bool,
 ) -> Result<()> {
     let drone_dir = PathBuf::from(".hive/drones").join(&name);
 
@@ -22,10 +20,8 @@ pub fn run(
         bail!("Drone '{}' not found", name);
     }
 
-    // Auto-detect Agent Teams mode or use --team flag
-    let is_team = team || is_agent_team_drone(&drone_dir);
-
-    if is_team && story.is_none() {
+    // Always show team conversation unless a specific story is requested
+    if story.is_none() {
         return show_team_conversation(&name, lines, follow);
     }
 
@@ -42,17 +38,6 @@ pub fn run(
     }
 }
 
-/// Check if a drone is running in Agent Teams mode
-fn is_agent_team_drone(drone_dir: &std::path::Path) -> bool {
-    let status_path = drone_dir.join("status.json");
-    if let Ok(contents) = fs::read_to_string(&status_path) {
-        if let Ok(status) = serde_json::from_str::<DroneStatus>(&contents) {
-            return status.execution_mode == ExecutionMode::AgentTeam;
-        }
-    }
-    false
-}
-
 /// Show the team conversation: inbox messages, task state changes, agent activity
 fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -> Result<()> {
     loop {
@@ -62,7 +47,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
 
         println!(
             "  {} {} Team Conversation",
-            "🤝".to_string(),
+            "🐝".to_string(),
             team_name.bright_cyan().bold()
         );
         println!();

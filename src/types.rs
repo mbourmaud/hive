@@ -174,10 +174,10 @@ pub struct DroneStatus {
     pub branch: String,
     pub worktree: String,
     pub local_mode: bool,
-    /// Execution mode: worktree (isolated) or agent_team (multi-agent)
+    /// Execution mode (always AgentTeam, kept for backwards compat)
     #[serde(default)]
     pub execution_mode: ExecutionMode,
-    /// Execution backend: "native" or "agent_team"
+    /// Execution backend: always "agent_team"
     #[serde(default = "default_backend")]
     pub backend: String,
     pub status: DroneState,
@@ -198,7 +198,7 @@ pub struct DroneStatus {
 }
 
 fn default_backend() -> String {
-    "native".to_string()
+    "agent_team".to_string()
 }
 
 /// Story timing information
@@ -221,23 +221,45 @@ pub enum DroneState {
     Stopped,
 }
 
-/// Drone execution mode
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
+/// Drone execution mode (always AgentTeam; Worktree kept as alias for backwards compat)
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionMode {
-    /// Traditional mode: isolated git worktree + symlink
-    #[default]
-    Worktree,
     /// Agent Teams mode: Claude Code native multi-agent coordination
     AgentTeam,
 }
 
+impl Default for ExecutionMode {
+    fn default() -> Self {
+        ExecutionMode::AgentTeam
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ExecutionMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        // Map old "worktree" values to AgentTeam for backwards compat
+        match s.as_str() {
+            "agent_team" | "worktree" => Ok(ExecutionMode::AgentTeam),
+            _ => Ok(ExecutionMode::AgentTeam),
+        }
+    }
+}
+
+impl serde::Serialize for ExecutionMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str("agent_team")
+    }
+}
+
 impl std::fmt::Display for ExecutionMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExecutionMode::Worktree => write!(f, "worktree"),
-            ExecutionMode::AgentTeam => write!(f, "agent_team"),
-        }
+        write!(f, "agent_team")
     }
 }
 
@@ -262,18 +284,6 @@ pub struct HiveConfig {
     pub project: Option<String>,
     pub worktree_base: Option<String>,
     pub default_model: Option<String>,
-    /// Default execution backend: "native", "agent_team", or "auto"
-    #[serde(default)]
-    pub default_backend: Option<String>,
-    /// Enable Agent Teams mode for multi-agent coordination
-    #[serde(default)]
-    pub agent_teams_enabled: Option<bool>,
-    /// Teammate spawning mode: "in-process", "tmux", or "auto"
-    #[serde(default)]
-    pub teammate_mode: Option<String>,
-    /// Maximum number of teammates (default 5)
-    #[serde(default)]
-    pub max_teammates: Option<usize>,
     pub timestamp: String,
 }
 
@@ -284,10 +294,6 @@ impl Default for HiveConfig {
             project: None,
             worktree_base: None,
             default_model: Some("sonnet".to_string()),
-            default_backend: None,
-            agent_teams_enabled: None,
-            teammate_mode: None,
-            max_teammates: None,
             timestamp: Utc::now().to_rfc3339(),
         }
     }
