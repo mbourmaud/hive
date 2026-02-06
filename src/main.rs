@@ -6,10 +6,13 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Parser)]
 #[command(name = "hive")]
 #[command(about = "High-performance CLI tool for orchestrating multiple Claude Code instances")]
-#[command(version = VERSION)]
 struct Cli {
+    /// Print version information
+    #[arg(short = 'v', short_alias = 'V', long = "version", action = clap::ArgAction::SetTrue)]
+    version: bool,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -161,10 +164,21 @@ enum ProfileCommands {
 fn main() {
     let cli = Cli::parse();
 
+    // Handle --version / -v flag
+    if cli.version {
+        println!("hive {}", VERSION);
+        return;
+    }
+
     // Check for updates in background (non-blocking, once per day)
     commands::utils::check_for_updates_background();
 
-    match cli.command {
+    let Some(command) = cli.command else {
+        eprintln!("Error: No command provided. Use --help for usage information.");
+        std::process::exit(1);
+    };
+
+    match command {
         Commands::Init => {
             if let Err(e) = commands::init::run() {
                 eprintln!("Error: {}", e);
