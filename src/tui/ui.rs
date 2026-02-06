@@ -25,6 +25,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     // Render footer
     render_footer(f, footer, app);
+
+    // Render permission dialog overlay if active
+    if let Some(dialog) = app.permission_state.build_dialog() {
+        f.render_widget(dialog, size);
+    }
+
+    // Render session list overlay if visible
+    app.session_list.render(f, size, &app.theme);
 }
 
 /// Render the sidebar
@@ -323,7 +331,21 @@ fn render_footer(f: &mut Frame, area: Rect, app: &App) {
                 .fg(theme.footer_key_fg)
                 .bg(theme.footer_key_bg),
         ),
-        Span::raw(" Submit "),
+        Span::raw(" Submit  "),
+        Span::styled(
+            " Ctrl+N ",
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
+        ),
+        Span::raw(" New Session  "),
+        Span::styled(
+            " Ctrl+L ",
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
+        ),
+        Span::raw(" Sessions "),
     ];
 
     let footer = Paragraph::new(Line::from(hints))

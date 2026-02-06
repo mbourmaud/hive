@@ -15,6 +15,9 @@ use super::commands::CommandResult;
 use super::input::InputState;
 use super::layout::AppLayout;
 use super::messages::Message;
+use super::permissions::{ApprovalResponse, PermissionDialogState, ToolApprovalRequest};
+use super::session_store::SessionStore;
+use super::sessions::{SessionAction, SessionList};
 use super::theme::Theme;
 use super::ui;
 
@@ -42,10 +45,21 @@ pub struct App {
     pub messages: Vec<Message>,
     /// Current theme
     pub theme: Theme,
+    /// Permission dialog state for tool approvals
+    pub permission_state: PermissionDialogState,
+    /// Session persistence store
+    pub session_store: SessionStore,
+    /// Session list overlay
+    pub session_list: SessionList,
+    /// Current active session ID
+    pub current_session_id: Option<String>,
 }
 
 impl App {
     pub fn new() -> Self {
+        let session_store = SessionStore::default();
+        // Create initial session
+        let current_session_id = session_store.create_session().ok().map(|s| s.id);
         Self {
             should_quit: false,
             sidebar_visible: true,
@@ -55,6 +69,10 @@ impl App {
             claude_rx: None,
             messages: Vec::new(),
             theme: Theme::default(),
+            permission_state: PermissionDialogState::new(),
+            session_store,
+            session_list: SessionList::new(),
+            current_session_id,
         }
     }
 
@@ -62,6 +80,42 @@ impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Key(key) => {
+                // If permission dialog is active, intercept all key events
+                if self.permission_state.is_active() {
+                    if let KeyCode::Char(c) = key.code {
+                        if let Some(response) = self.permission_state.handle_key(c) {
+                            let tool_name = self
+                                .permission_state
+                                .request
+                                .as_ref()
+                                .map(|r| r.tool_name.clone())
+                                .unwrap_or_default();
+                            let msg = match response {
+                                ApprovalResponse::Accept => {
+                                    format!("Approved tool: {}", tool_name)
+                                }
+                                ApprovalResponse::Reject => {
+                                    format!("Rejected tool: {}", tool_name)
+                                }
+                                ApprovalResponse::AlwaysAllow => {
+                                    format!("Always allowed tool: {}", tool_name)
+                                }
+                            };
+                            self.messages.push(Message::system(msg));
+                            self.permission_state.clear();
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // If session list is visible, route keys to it
+                if self.session_list.visible {
+                    if let Some(action) = self.session_list.handle_key(key.code) {
+                        self.handle_session_action(action);
+                    }
+                    return Ok(());
+                }
+
                 // Global shortcuts
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     match key.code {
@@ -75,6 +129,14 @@ impl App {
                         }
                         KeyCode::Char('t') => {
                             self.theme = self.theme.toggle();
+                            return Ok(());
+                        }
+                        KeyCode::Char('n') => {
+                            self.create_new_session();
+                            return Ok(());
+                        }
+                        KeyCode::Char('l') => {
+                            self.session_list.toggle(&self.session_store);
                             return Ok(());
                         }
                         _ => {}
@@ -142,6 +204,11 @@ impl App {
         // Add user message to history
         self.messages.push(Message::user(prompt.clone()));
 
+        // Persist to session store
+        if let Some(ref session_id) = self.current_session_id {
+            let _ = self.session_store.add_message(session_id, "user", &prompt);
+        }
+
         // Spawn Claude backend if not already running
         if self.claude.is_none() {
             let mut backend = ClaudeBackend::new();
@@ -186,14 +253,10 @@ impl App {
     fn handle_command_result(&mut self, result: CommandResult) {
         match result {
             CommandResult::NewSession => {
-                self.messages
-                    .push(Message::system("Starting new session...".to_string()));
-                // Actual session logic will be wired by session management
+                self.create_new_session();
             }
             CommandResult::ResumeSession => {
-                self.messages
-                    .push(Message::system("Select a session to resume".to_string()));
-                // Actual session selection will be wired by session management
+                self.session_list.show(&self.session_store);
             }
             CommandResult::ShowHelp(text) => {
                 self.messages.push(Message::assistant(text));
@@ -203,6 +266,96 @@ impl App {
                 self.messages
                     .push(Message::system("Chat cleared".to_string()));
             }
+        }
+    }
+
+    /// Create a new session: save current, kill claude, clear messages.
+    fn create_new_session(&mut self) {
+        // Save current session before switching
+        self.save_current_session();
+
+        // Kill current Claude process
+        if let Some(ref mut claude) = self.claude {
+            let _ = claude.kill();
+        }
+        self.claude = None;
+        self.claude_rx = None;
+
+        // Create new session
+        match self.session_store.create_session() {
+            Ok(session) => {
+                self.current_session_id = Some(session.id);
+                self.messages.clear();
+                self.messages
+                    .push(Message::system("New session started.".to_string()));
+            }
+            Err(e) => {
+                self.messages
+                    .push(Message::error(format!("Failed to create session: {}", e)));
+            }
+        }
+    }
+
+    /// Switch to an existing session by ID.
+    fn switch_to_session(&mut self, session_id: &str) {
+        // Don't switch to the same session
+        if self.current_session_id.as_deref() == Some(session_id) {
+            return;
+        }
+
+        // Save current session
+        self.save_current_session();
+
+        // Kill current Claude process
+        if let Some(ref mut claude) = self.claude {
+            let _ = claude.kill();
+        }
+        self.claude = None;
+        self.claude_rx = None;
+
+        // Load the selected session
+        match self.session_store.get_session(session_id) {
+            Ok(Some(session)) => {
+                let title = session.title.clone();
+                self.current_session_id = Some(session.id.clone());
+                self.messages.clear();
+                self.messages.push(Message::system(format!(
+                    "Resumed session: {}. Use /resume to reconnect to Claude.",
+                    title
+                )));
+                // Mark as active
+                let _ = self.session_store.set_active(session_id);
+            }
+            Ok(None) => {
+                self.messages
+                    .push(Message::error("Session not found.".to_string()));
+            }
+            Err(e) => {
+                self.messages
+                    .push(Message::error(format!("Failed to load session: {}", e)));
+            }
+        }
+    }
+
+    /// Save current session metadata to the store.
+    fn save_current_session(&self) {
+        let Some(ref session_id) = self.current_session_id else {
+            return;
+        };
+        // Update message count in the session
+        for msg in &self.messages {
+            if let Message::User { ref content, .. } = msg {
+                let _ = self.session_store.add_message(session_id, "user", content);
+            }
+        }
+    }
+
+    /// Handle a session action from the session list overlay.
+    fn handle_session_action(&mut self, action: SessionAction) {
+        match action {
+            SessionAction::NewSession => self.create_new_session(),
+            SessionAction::Select(id) => self.switch_to_session(&id),
+            SessionAction::Close => {}
         }
     }
 
@@ -269,6 +422,21 @@ impl App {
         if let Some(rx) = &self.claude_rx {
             // Collect all pending messages
             while let Ok(message) = rx.try_recv() {
+                // Check if this is a ToolUse message that needs approval
+                if let Message::ToolUse {
+                    ref tool_name,
+                    ref args_summary,
+                    ..
+                } = message
+                {
+                    self.permission_state.set_request(ToolApprovalRequest {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        tool_name: tool_name.clone(),
+                        args: serde_json::from_str(args_summary)
+                            .unwrap_or(serde_json::Value::String(args_summary.clone())),
+                        file_diff: None,
+                    });
+                }
                 self.messages.push(message);
             }
         }

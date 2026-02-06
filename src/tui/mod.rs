@@ -1,3 +1,6 @@
+// Unified TUI module for Hive
+// Provides Claude Code chat interface and drone monitoring dashboard
+
 mod app;
 pub mod chat;
 mod claude;
@@ -12,6 +15,7 @@ pub mod messages;
 pub mod monitor;
 pub mod permissions;
 pub mod session_store;
+pub mod sessions;
 pub mod sidebar;
 mod theme;
 mod ui;

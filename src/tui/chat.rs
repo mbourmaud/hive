@@ -1,7 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
@@ -11,6 +11,7 @@ use ratatui::{
 
 use super::markdown::render_markdown;
 use super::messages::Message;
+use super::theme::Theme;
 
 /// Chat panel state managing message history and scrolling
 pub struct ChatState {
@@ -90,59 +91,57 @@ impl ChatState {
         }
     }
 
-    /// Count total lines needed to render all messages
+    /// Count total lines needed to render all messages.
+    /// Uses default theme for line counting (line count is theme-independent).
     fn count_total_lines(&self) -> usize {
+        let theme = Theme::default();
         self.messages
             .iter()
-            .map(|msg| self.message_to_lines(msg).len())
+            .map(|msg| self.message_to_lines(msg, &theme).len())
             .sum()
     }
 
-    /// Convert a message to rendered lines
-    fn message_to_lines(&self, message: &Message) -> Vec<Line<'static>> {
+    /// Convert a message to rendered lines using theme colors
+    fn message_to_lines(&self, message: &Message, theme: &Theme) -> Vec<Line<'static>> {
         match message {
             Message::User { content, timestamp } => {
                 let mut lines = Vec::new();
-                // Header with timestamp
                 lines.push(Line::from(vec![
                     Span::styled(
                         "You",
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(theme.msg_user)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(" "),
                     Span::styled(
                         format!("{}", timestamp.format("%H:%M:%S")),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(theme.fg_muted),
                     ),
                 ]));
-                // Content (plain text for user messages)
                 for line in content.lines() {
                     lines.push(Line::from(Span::raw(line.to_string())));
                 }
-                lines.push(Line::from("")); // Spacing
+                lines.push(Line::from(""));
                 lines
             }
             Message::Assistant { content, timestamp } => {
                 let mut lines = Vec::new();
-                // Header
                 lines.push(Line::from(vec![
                     Span::styled(
                         "Assistant",
                         Style::default()
-                            .fg(Color::Blue)
+                            .fg(theme.msg_assistant)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(" "),
                     Span::styled(
                         format!("{}", timestamp.format("%H:%M:%S")),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(theme.fg_muted),
                     ),
                 ]));
-                // Content (markdown rendered)
-                lines.extend(render_markdown(content));
-                lines.push(Line::from("")); // Spacing
+                lines.extend(render_markdown(content, theme));
+                lines.push(Line::from(""));
                 lines
             }
             Message::ToolUse {
@@ -155,20 +154,26 @@ impl ChatState {
                         Span::styled(
                             "Tool Use",
                             Style::default()
-                                .fg(Color::Yellow)
+                                .fg(theme.accent_warning)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default().fg(theme.fg_muted),
                         ),
                     ]),
                     Line::from(vec![
                         Span::styled("  ", Style::default()),
-                        Span::styled(tool_name.clone(), Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            tool_name.clone(),
+                            Style::default().fg(theme.accent_warning),
+                        ),
                         Span::raw(": "),
-                        Span::styled(args_summary.clone(), Style::default().fg(Color::Gray)),
+                        Span::styled(
+                            args_summary.clone(),
+                            Style::default().fg(theme.fg_secondary),
+                        ),
                     ]),
                     Line::from(""),
                 ]
@@ -179,9 +184,9 @@ impl ChatState {
                 timestamp,
             } => {
                 let status_style = if *success {
-                    Style::default().fg(Color::Green)
+                    Style::default().fg(theme.accent_success)
                 } else {
-                    Style::default().fg(Color::Red)
+                    Style::default().fg(theme.accent_error)
                 };
                 let status_text = if *success { "Success" } else { "Failed" };
 
@@ -190,20 +195,23 @@ impl ChatState {
                         Span::styled(
                             "Tool Result",
                             Style::default()
-                                .fg(Color::Magenta)
+                                .fg(theme.tool_result_header)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default().fg(theme.fg_muted),
                         ),
                     ]),
                     Line::from(vec![
                         Span::raw("  "),
                         Span::styled(status_text, status_style),
                         Span::raw(": "),
-                        Span::styled(output_summary.clone(), Style::default().fg(Color::Gray)),
+                        Span::styled(
+                            output_summary.clone(),
+                            Style::default().fg(theme.fg_secondary),
+                        ),
                     ]),
                     Line::from(""),
                 ]
@@ -213,17 +221,19 @@ impl ChatState {
                     Line::from(vec![
                         Span::styled(
                             "Error",
-                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                            Style::default()
+                                .fg(theme.accent_error)
+                                .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default().fg(theme.fg_muted),
                         ),
                     ]),
                     Line::from(vec![Span::styled(
                         format!("  {}", content),
-                        Style::default().fg(Color::Red),
+                        Style::default().fg(theme.accent_error),
                     )]),
                     Line::from(""),
                 ]
@@ -234,13 +244,13 @@ impl ChatState {
                         Span::styled(
                             "System",
                             Style::default()
-                                .fg(Color::Yellow)
+                                .fg(theme.msg_system)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default().fg(theme.fg_muted),
                         ),
                     ]),
                     Line::from(vec![Span::raw(format!("  {}", content))]),
@@ -266,25 +276,20 @@ impl Default for ChatState {
     }
 }
 
-/// Chat panel widget
+/// Chat panel widget with theme support
 pub struct ChatPanel<'a> {
     block: Option<Block<'a>>,
+    theme: Theme,
 }
 
 impl<'a> ChatPanel<'a> {
-    pub fn new() -> Self {
-        Self { block: None }
+    pub fn new(theme: Theme) -> Self {
+        Self { block: None, theme }
     }
 
     pub fn block(mut self, block: Block<'a>) -> Self {
         self.block = Some(block);
         self
-    }
-}
-
-impl<'a> Default for ChatPanel<'a> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -299,7 +304,7 @@ impl<'a> StatefulWidget for ChatPanel<'a> {
         // Collect all lines from all messages
         let mut all_lines: Vec<Line<'static>> = Vec::new();
         for message in &state.messages {
-            all_lines.extend(state.message_to_lines(message));
+            all_lines.extend(state.message_to_lines(message, &self.theme));
         }
 
         // Apply scroll offset
@@ -321,8 +326,8 @@ impl<'a> StatefulWidget for ChatPanel<'a> {
         if state.count_total_lines() > state.viewport_height {
             let scrollbar = Scrollbar::default()
                 .orientation(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("↑"))
-                .end_symbol(Some("↓"));
+                .begin_symbol(Some("\u{2191}"))
+                .end_symbol(Some("\u{2193}"));
 
             let mut scrollbar_state = state.scrollbar_state();
             scrollbar.render(area, buf, &mut scrollbar_state);

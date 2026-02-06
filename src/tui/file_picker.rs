@@ -16,6 +16,12 @@ pub struct FilePicker {
     pub visible: bool,
 }
 
+impl Default for FilePicker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FilePicker {
     /// Create a new file picker
     pub fn new() -> Self {

@@ -27,6 +27,20 @@ impl SidebarState {
             scroll_offset: 0,
         }
     }
+
+    /// Returns the name of the currently selected drone.
+    /// Uses `display_order` to map `selected_index` to the actual drone entry.
+    pub fn selected_drone_name(
+        &self,
+        drones: &[(String, DroneStatus)],
+        display_order: &[usize],
+    ) -> Option<String> {
+        if display_order.is_empty() || self.selected_index >= display_order.len() {
+            return None;
+        }
+        let drone_idx = display_order[self.selected_index];
+        drones.get(drone_idx).map(|(name, _)| name.clone())
+    }
 }
 
 impl Default for SidebarState {

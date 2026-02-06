@@ -8,7 +8,6 @@ pub enum ThemeVariant {
 }
 
 /// Theme configuration for the TUI
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Theme {
     /// Theme variant (dark or light)
@@ -56,6 +55,31 @@ pub struct Theme {
     pub footer_fg: Color,
     pub footer_key_bg: Color,
     pub footer_key_fg: Color,
+
+    // Code block colors (markdown)
+    pub code_border: Color,
+    pub code_fg: Color,
+    pub inline_code_fg: Color,
+
+    // Tool result colors
+    pub tool_result_header: Color,
+
+    // Dialog colors
+    pub dialog_border: Color,
+    pub dialog_bg: Color,
+    pub dialog_footer_border: Color,
+
+    // Drone state colors
+    pub drone_starting: Color,
+    pub drone_active: Color,
+    pub drone_completed: Color,
+    pub drone_error: Color,
+    pub drone_stopped: Color,
+    pub drone_name: Color,
+    pub drone_name_completed: Color,
+    pub drone_progress_blocked: Color,
+    pub drone_progress_count: Color,
+    pub drone_progress_new_stories: Color,
 }
 
 impl Theme {
@@ -106,6 +130,31 @@ impl Theme {
             footer_fg: Color::Rgb(200, 200, 200),
             footer_key_bg: Color::Gray,
             footer_key_fg: Color::Black,
+
+            // Code blocks
+            code_border: Color::DarkGray,
+            code_fg: Color::Cyan,
+            inline_code_fg: Color::Cyan,
+
+            // Tool results
+            tool_result_header: Color::Magenta,
+
+            // Dialogs
+            dialog_border: Color::Yellow,
+            dialog_bg: Color::Black,
+            dialog_footer_border: Color::DarkGray,
+
+            // Drone states
+            drone_starting: Color::Yellow,
+            drone_active: Color::Green,
+            drone_completed: Color::Green,
+            drone_error: Color::Red,
+            drone_stopped: Color::DarkGray,
+            drone_name: Color::Yellow,
+            drone_name_completed: Color::DarkGray,
+            drone_progress_blocked: Color::Rgb(255, 165, 0),
+            drone_progress_count: Color::White,
+            drone_progress_new_stories: Color::Cyan,
         }
     }
 
@@ -156,6 +205,31 @@ impl Theme {
             footer_fg: Color::Rgb(50, 50, 50),
             footer_key_bg: Color::Rgb(180, 180, 190),
             footer_key_fg: Color::White,
+
+            // Code blocks
+            code_border: Color::Gray,
+            code_fg: Color::Rgb(0, 100, 200),
+            inline_code_fg: Color::Red,
+
+            // Tool results
+            tool_result_header: Color::Rgb(170, 0, 170),
+
+            // Dialogs
+            dialog_border: Color::Rgb(200, 150, 0),
+            dialog_bg: Color::White,
+            dialog_footer_border: Color::Gray,
+
+            // Drone states
+            drone_starting: Color::Rgb(200, 140, 0),
+            drone_active: Color::Rgb(0, 150, 0),
+            drone_completed: Color::Rgb(0, 150, 0),
+            drone_error: Color::Rgb(200, 0, 0),
+            drone_stopped: Color::Gray,
+            drone_name: Color::Rgb(180, 100, 0),
+            drone_name_completed: Color::Gray,
+            drone_progress_blocked: Color::Rgb(200, 140, 0),
+            drone_progress_count: Color::Rgb(40, 40, 40),
+            drone_progress_new_stories: Color::Rgb(0, 140, 180),
         }
     }
 
