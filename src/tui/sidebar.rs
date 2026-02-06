@@ -17,15 +17,19 @@ pub struct SidebarState {
     snapshot: DroneSnapshot,
 }
 
+impl Default for SidebarState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SidebarState {
     pub fn new() -> Self {
         Self {
             selected_index: 0,
             expanded_drone: None,
             list_state: ListState::default(),
-            snapshot: DroneSnapshot {
-                drones: Vec::new(),
-            },
+            snapshot: DroneSnapshot { drones: Vec::new() },
         }
     }
 
@@ -33,8 +37,7 @@ impl SidebarState {
         if let Ok(snap) = DroneSnapshot::refresh() {
             self.snapshot = snap;
             // Clamp selected index
-            if !self.snapshot.drones.is_empty()
-                && self.selected_index >= self.snapshot.drones.len()
+            if !self.snapshot.drones.is_empty() && self.selected_index >= self.snapshot.drones.len()
             {
                 self.selected_index = self.snapshot.drones.len() - 1;
             }
@@ -107,18 +110,14 @@ impl SidebarState {
             .iter()
             .enumerate()
             .flat_map(|(idx, (name, status))| {
-                let mut items =
-                    vec![render_drone_item(name, status, idx == self.selected_index)];
+                let mut items = vec![render_drone_item(name, status, idx == self.selected_index)];
 
                 // If this drone is expanded, show its stories
                 if self.expanded_drone.as_ref() == Some(name) {
                     for story_id in &status.completed {
                         items.push(ListItem::new(Line::from(vec![
                             Span::raw("  "),
-                            Span::styled(
-                                "\u{2713} ",
-                                Style::default().fg(Color::Green),
-                            ),
+                            Span::styled("\u{2713} ", Style::default().fg(Color::Green)),
                             Span::styled(
                                 truncate(story_id, 15),
                                 Style::default().fg(Color::DarkGray),
@@ -128,14 +127,8 @@ impl SidebarState {
                     if let Some(ref current) = status.current_story {
                         items.push(ListItem::new(Line::from(vec![
                             Span::raw("  "),
-                            Span::styled(
-                                "\u{25b8} ",
-                                Style::default().fg(Color::Yellow),
-                            ),
-                            Span::styled(
-                                truncate(current, 15),
-                                Style::default().fg(Color::Yellow),
-                            ),
+                            Span::styled("\u{25b8} ", Style::default().fg(Color::Yellow)),
+                            Span::styled(truncate(current, 15), Style::default().fg(Color::Yellow)),
                         ])));
                     }
                 }
@@ -160,11 +153,7 @@ impl SidebarState {
     }
 }
 
-fn render_drone_item(
-    name: &str,
-    status: &DroneStatus,
-    _is_selected: bool,
-) -> ListItem<'static> {
+fn render_drone_item(name: &str, status: &DroneStatus, _is_selected: bool) -> ListItem<'static> {
     let status_icon = match status.status {
         DroneState::Starting | DroneState::Resuming => "\u{25cc}",
         DroneState::InProgress => "\u{25cf}",

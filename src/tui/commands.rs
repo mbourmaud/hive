@@ -74,6 +74,12 @@ pub struct CommandPalette {
     filtered_commands: Vec<&'static SlashCommand>,
 }
 
+impl Default for CommandPalette {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandPalette {
     pub fn new() -> Self {
         Self {
@@ -103,7 +109,8 @@ impl CommandPalette {
         self.filtered_commands = SLASH_COMMANDS
             .iter()
             .filter(|c| {
-                c.name.contains(&filter_lower) || c.description.to_lowercase().contains(&filter_lower)
+                c.name.contains(&filter_lower)
+                    || c.description.to_lowercase().contains(&filter_lower)
             })
             .collect();
         if self.selected >= self.filtered_commands.len() {
@@ -192,7 +199,10 @@ mod tests {
 
     #[test]
     fn test_execute_clear() {
-        assert!(matches!(execute_command("/clear"), CommandResult::ClearChat));
+        assert!(matches!(
+            execute_command("/clear"),
+            CommandResult::ClearChat
+        ));
     }
 
     #[test]
@@ -218,10 +228,7 @@ mod tests {
         palette.show("/n");
         assert!(!palette.filtered_commands.is_empty());
         // Should include /new
-        assert!(palette
-            .filtered_commands
-            .iter()
-            .any(|c| c.name == "/new"));
+        assert!(palette.filtered_commands.iter().any(|c| c.name == "/new"));
     }
 
     #[test]

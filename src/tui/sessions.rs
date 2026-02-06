@@ -24,6 +24,12 @@ pub enum SessionAction {
     Close,
 }
 
+impl Default for SessionList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionList {
     pub fn new() -> Self {
         Self {
@@ -100,7 +106,7 @@ impl SessionList {
             .constraints([
                 Constraint::Length(1), // Title
                 Constraint::Length(1), // Blank
-                Constraint::Min(0),   // List
+                Constraint::Min(0),    // List
                 Constraint::Length(1), // Hints
             ])
             .split(dialog_area);
@@ -138,10 +144,7 @@ impl SessionList {
                 };
                 ListItem::new(Line::from(vec![
                     Span::styled(resumable.to_string(), Style::default().fg(Color::Green)),
-                    Span::styled(
-                        truncate(&s.title, 30),
-                        Style::default().fg(Color::White),
-                    ),
+                    Span::styled(truncate(&s.title, 30), Style::default().fg(Color::White)),
                     Span::styled(
                         format!("  {}", time_str),
                         Style::default().fg(Color::DarkGray),
@@ -154,12 +157,11 @@ impl SessionList {
             })
             .collect();
 
-        let list = List::new(items)
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            );
+        let list = List::new(items).highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
 
         f.render_stateful_widget(list, chunks[2], &mut self.list_state);
 

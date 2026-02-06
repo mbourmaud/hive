@@ -19,6 +19,12 @@ fn make_textarea() -> TextArea<'static> {
     textarea
 }
 
+impl Default for ChatInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChatInput {
     pub fn new() -> Self {
         Self {
@@ -49,9 +55,9 @@ impl ChatInput {
                 None
             }
             // Up arrow navigates history when textarea is empty or at first line
-            Input {
-                key: Key::Up, ..
-            } if self.textarea.lines().len() <= 1 && !self.history.is_empty() => {
+            Input { key: Key::Up, .. }
+                if self.textarea.lines().len() <= 1 && !self.history.is_empty() =>
+            {
                 let new_index = match self.history_index {
                     None => self.history.len() - 1,
                     Some(i) if i > 0 => i - 1,
@@ -63,9 +69,7 @@ impl ChatInput {
                 None
             }
             // Down arrow goes forward in history
-            Input {
-                key: Key::Down, ..
-            } if self.history_index.is_some() => {
+            Input { key: Key::Down, .. } if self.history_index.is_some() => {
                 let new_index = self.history_index.unwrap() + 1;
                 if new_index < self.history.len() {
                     self.history_index = Some(new_index);
@@ -143,7 +147,7 @@ impl ChatInput {
         self.textarea
             .lines()
             .first()
-            .map_or(false, |l| l.starts_with('@'))
+            .is_some_and(|l| l.starts_with('@'))
     }
 
     /// Get current text content

@@ -215,15 +215,12 @@ mod tests {
         let json =
             r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hello world"}]}}"#;
         let event = parse_stream_event(json);
-        assert!(
-            matches!(event, Some(ClaudeEvent::AssistantText(ref s)) if s == "Hello world")
-        );
+        assert!(matches!(event, Some(ClaudeEvent::AssistantText(ref s)) if s == "Hello world"));
     }
 
     #[test]
     fn test_parse_text_delta() {
-        let json =
-            r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"chunk"}}"#;
+        let json = r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"chunk"}}"#;
         let event = parse_stream_event(json);
         assert!(matches!(event, Some(ClaudeEvent::AssistantText(ref s)) if s == "chunk"));
     }
@@ -297,16 +294,14 @@ mod tests {
 
     #[test]
     fn test_parse_assistant_no_text_block() {
-        let json =
-            r#"{"type":"assistant","message":{"content":[{"type":"image","data":"abc"}]}}"#;
+        let json = r#"{"type":"assistant","message":{"content":[{"type":"image","data":"abc"}]}}"#;
         let event = parse_stream_event(json);
         assert!(event.is_none());
     }
 
     #[test]
     fn test_parse_content_block_delta_non_text() {
-        let json =
-            r#"{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{}"}}"#;
+        let json = r#"{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{}"}}"#;
         let event = parse_stream_event(json);
         assert!(event.is_none());
     }

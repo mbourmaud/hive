@@ -27,7 +27,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 Tag::CodeBlock(kind) => {
                     // Flush current line
                     if !current_spans.is_empty() {
-                        lines.push(Line::from(current_spans.drain(..).collect::<Vec<_>>()));
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
                     }
                     in_code_block = true;
                     code_lang = match kind {
@@ -87,18 +87,18 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 TagEnd::Heading(_) => {
                     in_heading = false;
                     if !current_spans.is_empty() {
-                        lines.push(Line::from(current_spans.drain(..).collect::<Vec<_>>()));
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
                     }
                 }
                 TagEnd::Paragraph => {
                     if !current_spans.is_empty() {
-                        lines.push(Line::from(current_spans.drain(..).collect::<Vec<_>>()));
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
                     }
                     lines.push(Line::from(""));
                 }
                 TagEnd::Item => {
                     if !current_spans.is_empty() {
-                        lines.push(Line::from(current_spans.drain(..).collect::<Vec<_>>()));
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
                     }
                 }
                 TagEnd::List(_) => {
@@ -115,10 +115,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                                 "  \u{2502} ".to_string(),
                                 Style::default().fg(Color::DarkGray),
                             ),
-                            Span::styled(
-                                code_line.to_string(),
-                                Style::default().fg(Color::Yellow),
-                            ),
+                            Span::styled(code_line.to_string(), Style::default().fg(Color::Yellow)),
                         ]));
                     }
                 } else {
@@ -145,7 +142,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             }
             Event::SoftBreak | Event::HardBreak => {
                 if !current_spans.is_empty() {
-                    lines.push(Line::from(current_spans.drain(..).collect::<Vec<_>>()));
+                    lines.push(Line::from(std::mem::take(&mut current_spans)));
                 }
             }
             _ => {}
@@ -158,7 +155,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     }
 
     // Remove trailing empty lines
-    while lines.last().map_or(false, |l| l.spans.is_empty()) {
+    while lines.last().is_some_and(|l| l.spans.is_empty()) {
         lines.pop();
     }
 
@@ -208,11 +205,9 @@ mod tests {
     fn test_inline_code() {
         let lines = render_markdown("Use `foo()` here");
         assert!(!lines.is_empty());
-        let has_code = lines.iter().any(|l| {
-            l.spans
-                .iter()
-                .any(|s| s.content.contains("`foo()`"))
-        });
+        let has_code = lines
+            .iter()
+            .any(|l| l.spans.iter().any(|s| s.content.contains("`foo()`")));
         assert!(has_code);
     }
 

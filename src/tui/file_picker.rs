@@ -19,6 +19,12 @@ pub struct FilePicker {
     matcher: SkimMatcherV2,
 }
 
+impl Default for FilePicker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FilePicker {
     pub fn new() -> Self {
         Self {
@@ -60,12 +66,7 @@ impl FilePicker {
 
     fn update_filter(&mut self) {
         if self.query.is_empty() {
-            self.filtered = self
-                .files
-                .iter()
-                .take(20)
-                .map(|f| (0, f.clone()))
-                .collect();
+            self.filtered = self.files.iter().take(20).map(|f| (0, f.clone())).collect();
         } else {
             let mut scored: Vec<(i64, String)> = self
                 .files
@@ -159,11 +160,7 @@ fn scan_project_files(dir: &str, max: usize) -> Vec<String> {
     {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return stdout
-                .lines()
-                .take(max)
-                .map(String::from)
-                .collect();
+            return stdout.lines().take(max).map(String::from).collect();
         }
     }
 

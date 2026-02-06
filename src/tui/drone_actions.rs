@@ -29,7 +29,12 @@ pub fn read_drone_logs(name: &str, max_lines: usize) -> Result<Vec<String>> {
     }
 
     let content = fs::read_to_string(&log_path)?;
-    let lines: Vec<String> = content.lines().rev().take(max_lines).map(String::from).collect();
+    let lines: Vec<String> = content
+        .lines()
+        .rev()
+        .take(max_lines)
+        .map(String::from)
+        .collect();
     let mut lines = lines;
     lines.reverse();
     Ok(lines)
@@ -44,7 +49,7 @@ pub fn list_prds() -> Result<Vec<String>> {
         for entry in fs::read_dir(&prds_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "json") {
+            if path.extension().is_some_and(|e| e == "json") {
                 if let Some(stem) = path.file_stem() {
                     prds.push(stem.to_string_lossy().to_string());
                 }

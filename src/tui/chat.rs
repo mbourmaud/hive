@@ -20,6 +20,12 @@ pub struct ChatPanel {
     last_visible_height: u16,
 }
 
+impl Default for ChatPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChatPanel {
     pub fn new() -> Self {
         Self {
@@ -67,7 +73,13 @@ impl ChatPanel {
         self.scroll_down(self.last_visible_height.saturating_sub(2));
     }
 
-    pub fn render(&mut self, f: &mut Frame, area: Rect, messages: &[ChatMessage], is_focused: bool) {
+    pub fn render(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        messages: &[ChatMessage],
+        is_focused: bool,
+    ) {
         let border_style = if is_focused {
             Style::default().fg(Color::Yellow)
         } else {
@@ -99,14 +111,9 @@ impl ChatPanel {
                     all_lines.push(Line::from(vec![
                         Span::styled(
                             format!("{} ", prefix),
-                            Style::default()
-                                .fg(color)
-                                .add_modifier(Modifier::BOLD),
+                            Style::default().fg(color).add_modifier(Modifier::BOLD),
                         ),
-                        Span::styled(
-                            time_str,
-                            Style::default().fg(Color::DarkGray),
-                        ),
+                        Span::styled(time_str, Style::default().fg(Color::DarkGray)),
                     ]));
 
                     // Render content - use markdown for assistant, plain for others
@@ -137,10 +144,7 @@ impl ChatPanel {
                         ToolStatus::Error => ("\u{2717}", Color::Red),
                     };
                     all_lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("  {} ", icon),
-                            Style::default().fg(color),
-                        ),
+                        Span::styled(format!("  {} ", icon), Style::default().fg(color)),
                         Span::styled(
                             tool_name.clone(),
                             Style::default()
@@ -165,10 +169,7 @@ impl ChatPanel {
                         ("\u{2717}", Color::Red)
                     };
                     all_lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("  {} ", icon),
-                            Style::default().fg(color),
-                        ),
+                        Span::styled(format!("  {} ", icon), Style::default().fg(color)),
                         Span::styled(
                             format!("{}: ", tool_name),
                             Style::default().fg(Color::DarkGray),
@@ -214,10 +215,7 @@ impl ChatPanel {
 
         // Scroll indicator
         if content_height > inner_height && !self.auto_scroll {
-            let indicator = format!(
-                " \u{2191}{} ",
-                self.scroll_offset
-            );
+            let indicator = format!(" \u{2191}{} ", self.scroll_offset);
             let indicator_area = Rect {
                 x: area.x + area.width - indicator.len() as u16 - 1,
                 y: area.y,
@@ -225,10 +223,7 @@ impl ChatPanel {
                 height: 1,
             };
             f.render_widget(
-                Paragraph::new(Span::styled(
-                    indicator,
-                    Style::default().fg(Color::Yellow),
-                )),
+                Paragraph::new(Span::styled(indicator, Style::default().fg(Color::Yellow))),
                 indicator_area,
             );
         }

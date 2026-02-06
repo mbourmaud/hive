@@ -7,6 +7,12 @@ pub struct PermissionManager {
     pub active_dialog: Option<PermissionDialog>,
 }
 
+impl Default for PermissionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PermissionManager {
     pub fn new() -> Self {
         Self {

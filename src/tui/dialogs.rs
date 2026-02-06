@@ -34,7 +34,11 @@ impl PermissionDialog {
     }
 
     pub fn prev_option(&mut self) {
-        self.selected = if self.selected == 0 { 2 } else { self.selected - 1 };
+        self.selected = if self.selected == 0 {
+            2
+        } else {
+            self.selected - 1
+        };
     }
 
     pub fn confirm(&self) -> DialogAction {
@@ -59,7 +63,7 @@ impl PermissionDialog {
                 Constraint::Length(1), // Title
                 Constraint::Length(1), // Blank
                 Constraint::Length(1), // Tool name
-                Constraint::Min(3),   // Args
+                Constraint::Min(3),    // Args
                 Constraint::Length(1), // Blank
                 Constraint::Length(1), // Options
             ])
@@ -99,7 +103,11 @@ impl PermissionDialog {
         f.render_widget(args, chunks[3]);
 
         // Options
-        let options = vec![("y", "Accept", 0), ("n", "Reject", 1), ("a", "Always Allow", 2)];
+        let options = [
+            ("y", "Accept", 0),
+            ("n", "Reject", 1),
+            ("a", "Always Allow", 2),
+        ];
 
         let option_spans: Vec<Span> = options
             .iter()

@@ -51,6 +51,12 @@ pub struct TuiApp {
     theme: Theme,
 }
 
+impl Default for TuiApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TuiApp {
     pub fn new() -> Self {
         let session_store = SessionStore::new().ok();
@@ -251,10 +257,8 @@ impl TuiApp {
                             self.claude_process = Some(process);
                         }
                         Err(e) => {
-                            self.messages.push(ChatMessage::error(format!(
-                                "Failed to resume: {}",
-                                e
-                            )));
+                            self.messages
+                                .push(ChatMessage::error(format!("Failed to resume: {}", e)));
                         }
                     }
                 }
@@ -377,15 +381,15 @@ impl TuiApp {
                         let name = name.clone();
                         match super::drone_actions::read_drone_logs(&name, 50) {
                             Ok(lines) => {
-                                self.messages.push(ChatMessage::system(
-                                    format!("--- Logs for '{}' ---", name),
-                                ));
+                                self.messages.push(ChatMessage::system(format!(
+                                    "--- Logs for '{}' ---",
+                                    name
+                                )));
                                 for line in lines {
                                     self.messages.push(ChatMessage::system(line));
                                 }
-                                self.messages.push(ChatMessage::system(
-                                    "--- End of logs ---".to_string(),
-                                ));
+                                self.messages
+                                    .push(ChatMessage::system("--- End of logs ---".to_string()));
                             }
                             Err(e) => self.messages.push(ChatMessage::error(e.to_string())),
                         }
@@ -425,13 +429,11 @@ impl TuiApp {
             KeyCode::Char('y') => Some(DialogAction::Accept),
             KeyCode::Char('n') => Some(DialogAction::Reject),
             KeyCode::Char('a') => Some(DialogAction::AlwaysAllow),
-            KeyCode::Enter => {
-                if let Some(ref dialog) = self.permission_manager.active_dialog {
-                    Some(dialog.confirm())
-                } else {
-                    None
-                }
-            }
+            KeyCode::Enter => self
+                .permission_manager
+                .active_dialog
+                .as_ref()
+                .map(|dialog| dialog.confirm()),
             KeyCode::Esc => Some(DialogAction::Reject),
             KeyCode::Left => {
                 if let Some(ref mut dialog) = self.permission_manager.active_dialog {
@@ -451,13 +453,11 @@ impl TuiApp {
         if let Some(action) = action {
             let approved = self.permission_manager.handle_action(action);
             if approved {
-                self.messages.push(ChatMessage::system(
-                    "Permission granted.".to_string(),
-                ));
+                self.messages
+                    .push(ChatMessage::system("Permission granted.".to_string()));
             } else {
-                self.messages.push(ChatMessage::system(
-                    "Permission denied.".to_string(),
-                ));
+                self.messages
+                    .push(ChatMessage::system("Permission denied.".to_string()));
             }
         }
     }
@@ -481,7 +481,8 @@ impl TuiApp {
 
         // Render main chat panel with messages (markdown rendering + scrolling)
         let is_chat_focused = self.active_pane == ActivePane::Chat;
-        self.chat_panel.render(f, messages_area, &self.messages, is_chat_focused);
+        self.chat_panel
+            .render(f, messages_area, &self.messages, is_chat_focused);
 
         // Render chat input widget
         f.render_widget(self.chat_input.widget(), input_area);
