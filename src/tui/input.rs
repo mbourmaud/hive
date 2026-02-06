@@ -1,6 +1,10 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
+use std::env;
 use tui_textarea::TextArea;
+
+use super::commands::{CommandAutocomplete, SlashCommand};
+use super::file_picker::FilePicker;
 
 /// State for the chat input widget
 pub struct InputState {
@@ -12,42 +16,74 @@ pub struct InputState {
     pub history_index: Option<usize>,
     /// Temporary storage for current input when navigating history
     pub temp_input: String,
+    /// Command autocomplete state
+    pub command_autocomplete: CommandAutocomplete,
+    /// File picker state
+    pub file_picker: FilePicker,
+    /// Pending command result to be processed
+    pub pending_command: Option<SlashCommand>,
+    /// Pending submitted text (regular message or bash command)
+    pub pending_message: Option<String>,
 }
 
 impl InputState {
     pub fn new() -> Self {
         let mut textarea = TextArea::default();
-        textarea.set_placeholder_text(
-            "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
-        );
+        textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file, / for commands, ! for bash)");
 
         Self {
             textarea,
             history: Vec::new(),
             history_index: None,
             temp_input: String::new(),
+            command_autocomplete: CommandAutocomplete::new(),
+            file_picker: FilePicker::new(),
+            pending_command: None,
+            pending_message: None,
         }
     }
 
     /// Handle keyboard events for the input area
-    /// Returns Some(message) if user submitted a message
-    pub fn handle_event(&mut self, event: Event) -> Result<Option<String>> {
+    pub fn handle_event(&mut self, event: Event) -> Result<()> {
         if let Event::Key(key) = event {
-            // Handle Ctrl+Enter for submit
-            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Enter {
-                return self.submit();
+            // Handle file picker navigation if active
+            if self.file_picker.visible {
+                return self.handle_file_picker_event(key);
             }
 
-            // Handle history navigation with Up/Down
+            // Handle command autocomplete if active
+            if self.command_autocomplete.visible {
+                return self.handle_command_autocomplete_event(key);
+            }
+
+            // Handle Ctrl+Enter for submit
+            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Enter {
+                self.submit()?;
+                return Ok(());
+            }
+
+            // Handle Tab for autocomplete acceptance
+            if key.code == KeyCode::Tab && key.modifiers.is_empty() {
+                let text = self.get_text();
+                if text.starts_with('/') {
+                    self.trigger_command_autocomplete();
+                    return Ok(());
+                } else if text.contains('@') {
+                    self.trigger_file_picker()?;
+                    return Ok(());
+                }
+            }
+
+            // Handle history navigation with Up/Down (only when no autocomplete is active)
             if key.modifiers.is_empty() {
                 match key.code {
                     KeyCode::Up => {
                         self.navigate_history_up();
-                        return Ok(None);
+                        return Ok(());
                     }
                     KeyCode::Down => {
                         self.navigate_history_down();
-                        return Ok(None);
+                        return Ok(());
                     }
                     _ => {}
                 }
@@ -59,22 +95,22 @@ impl InputState {
                     KeyCode::Char('a') => {
                         // Move to start of line
                         self.textarea.move_cursor(tui_textarea::CursorMove::Head);
-                        return Ok(None);
+                        return Ok(());
                     }
                     KeyCode::Char('e') => {
                         // Move to end of line
                         self.textarea.move_cursor(tui_textarea::CursorMove::End);
-                        return Ok(None);
+                        return Ok(());
                     }
                     KeyCode::Char('k') => {
                         // Delete from cursor to end of line
                         self.textarea.delete_line_by_end();
-                        return Ok(None);
+                        return Ok(());
                     }
                     KeyCode::Char('u') => {
                         // Delete from cursor to start of line
                         self.textarea.delete_line_by_head();
-                        return Ok(None);
+                        return Ok(());
                     }
                     _ => {}
                 }
@@ -83,37 +119,54 @@ impl InputState {
             // Pass event to textarea for normal editing
             self.textarea.input(event);
 
+            // Check if we need to trigger autocomplete
+            let text = self.get_text();
+            if text.starts_with('/') {
+                self.trigger_command_autocomplete();
+            }
+
             // Reset history navigation if user types something
             if !matches!(key.code, KeyCode::Up | KeyCode::Down) {
                 self.history_index = None;
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
     /// Submit the current input
-    fn submit(&mut self) -> Result<Option<String>> {
+    fn submit(&mut self) -> Result<()> {
         let text = self.textarea.lines().join("\n");
 
         if !text.trim().is_empty() {
+            // Check if it's a slash command
+            if text.trim().starts_with('/') {
+                if let Some(cmd) = SlashCommand::from_str(text.trim()) {
+                    self.pending_command = Some(cmd);
+                }
+            } else {
+                // Store the submitted text for app.rs to process (regular message or bash command)
+                self.pending_message = Some(text.clone());
+            }
+
             // Add to history
             self.history.push(text.clone());
 
             // Clear the input
             self.textarea = TextArea::default();
-            self.textarea.set_placeholder_text(
-                "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
-            );
+            self.textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file, / for commands, ! for bash)");
 
             // Reset history navigation
             self.history_index = None;
             self.temp_input.clear();
-
-            return Ok(Some(text));
         }
 
-        Ok(None)
+        Ok(())
+    }
+
+    /// Take and consume the pending submitted message
+    pub fn take_pending_message(&mut self) -> Option<String> {
+        self.pending_message.take()
     }
 
     /// Navigate up in history
@@ -162,14 +215,133 @@ impl InputState {
     fn set_textarea_content(&mut self, content: &str) {
         let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
         self.textarea = TextArea::new(lines);
-        self.textarea.set_placeholder_text(
-            "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
-        );
+        self.textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)");
     }
 
     /// Get the current input text
-    #[allow(dead_code)]
     pub fn get_text(&self) -> String {
         self.textarea.lines().join("\n")
+    }
+
+    /// Trigger command autocomplete
+    fn trigger_command_autocomplete(&mut self) {
+        let text = self.get_text();
+        if text.starts_with('/') {
+            self.command_autocomplete.update(&text);
+        }
+    }
+
+    /// Trigger file picker
+    fn trigger_file_picker(&mut self) -> Result<()> {
+        let current_dir = env::current_dir()?;
+        self.file_picker.show(&current_dir)?;
+        Ok(())
+    }
+
+    /// Handle keyboard events when file picker is active
+    fn handle_file_picker_event(&mut self, key: crossterm::event::KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Esc => {
+                self.file_picker.hide();
+            }
+            KeyCode::Enter => {
+                if let Some(path) = self.file_picker.accept() {
+                    // Insert the file path at cursor position
+                    let path_str = path.to_string_lossy().to_string();
+                    self.insert_at_cursor(&path_str);
+                }
+            }
+            KeyCode::Up => {
+                self.file_picker.select_prev();
+            }
+            KeyCode::Down => {
+                self.file_picker.select_next();
+            }
+            KeyCode::Char(c) => {
+                // Update filter as user types
+                let mut query = self.file_picker.query.clone();
+                query.push(c);
+                self.file_picker.update_filter(&query);
+            }
+            KeyCode::Backspace => {
+                // Remove last character from filter
+                let mut query = self.file_picker.query.clone();
+                query.pop();
+                self.file_picker.update_filter(&query);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Handle keyboard events when command autocomplete is active
+    fn handle_command_autocomplete_event(&mut self, key: crossterm::event::KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Esc => {
+                self.command_autocomplete.hide();
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                if let Some(cmd) = self.command_autocomplete.accept() {
+                    // Replace the current input with the command
+                    let cmd_text = format!("/{}", cmd.name());
+                    self.set_textarea_content(&cmd_text);
+                    // Store the command for execution
+                    self.pending_command = Some(cmd);
+                }
+            }
+            KeyCode::Up => {
+                self.command_autocomplete.select_prev();
+            }
+            KeyCode::Down => {
+                self.command_autocomplete.select_next();
+            }
+            _ => {
+                // Allow typing to continue filtering
+                self.command_autocomplete.hide();
+                self.textarea.input(Event::Key(key));
+                let text = self.get_text();
+                if text.starts_with('/') {
+                    self.trigger_command_autocomplete();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Insert text at the current cursor position
+    fn insert_at_cursor(&mut self, text: &str) {
+        // Get current content
+        let current = self.get_text();
+
+        // Find @ symbol and replace it with the file path
+        let new_content = if let Some(pos) = current.rfind('@') {
+            format!("{}{}", &current[..pos], text)
+        } else {
+            format!("{}{}", current, text)
+        };
+
+        self.set_textarea_content(&new_content);
+    }
+
+    /// Check if input is a bash command (starts with !)
+    pub fn is_bash_command(&self) -> bool {
+        let text = self.get_text();
+        text.trim().starts_with('!')
+    }
+
+    /// Get the bash command (without the ! prefix)
+    pub fn get_bash_command(&self) -> Option<String> {
+        let text = self.get_text();
+        let trimmed = text.trim();
+        if trimmed.starts_with('!') {
+            Some(trimmed[1..].trim().to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Execute and consume the pending command
+    pub fn take_pending_command(&mut self) -> Option<SlashCommand> {
+        self.pending_command.take()
     }
 }
