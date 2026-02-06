@@ -162,6 +162,7 @@ impl InputState {
     }
 
     /// Get the current input text
+    #[allow(dead_code)]
     pub fn get_text(&self) -> String {
         self.textarea.lines().join("\n")
     }

@@ -84,6 +84,7 @@ impl App {
     }
 
     /// Get keybinding hints for the footer
+    #[allow(dead_code)]
     pub fn get_keybindings(&self) -> Vec<(&'static str, &'static str)> {
         vec![
             ("q", "quit"),
