@@ -1,7 +1,6 @@
 /// Drone action handlers for the TUI sidebar.
 /// Provides stop, clean, log viewing, and new drone launch capabilities
 /// triggered by keyboard shortcuts (x, c, l, n).
-
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::io::BufRead;
@@ -79,8 +78,7 @@ impl LogViewerState {
         self.scroll_offset = 0;
 
         if log_path.exists() {
-            let file = fs::File::open(&log_path)
-                .context("Failed to open activity log")?;
+            let file = fs::File::open(&log_path).context("Failed to open activity log")?;
             let reader = std::io::BufReader::new(file);
             self.lines = reader.lines().map_while(Result::ok).collect();
 
@@ -113,13 +111,11 @@ impl LogViewerState {
             .join("activity.log");
 
         if log_path.exists() {
-            let file = fs::File::open(&log_path)
-                .context("Failed to open activity log")?;
+            let file = fs::File::open(&log_path).context("Failed to open activity log")?;
             let reader = std::io::BufReader::new(file);
             let new_lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
-            let was_at_bottom = self.scroll_offset
-                >= self.lines.len().saturating_sub(20);
+            let was_at_bottom = self.scroll_offset >= self.lines.len().saturating_sub(20);
 
             self.lines = new_lines;
 
@@ -302,11 +298,13 @@ pub fn get_drone_logs(drone_name: &str) -> Result<Vec<String>> {
         .join("activity.log");
 
     if !log_path.exists() {
-        return Ok(vec![format!("No activity log found for drone '{}'", drone_name)]);
+        return Ok(vec![format!(
+            "No activity log found for drone '{}'",
+            drone_name
+        )]);
     }
 
-    let file = fs::File::open(&log_path)
-        .context("Failed to open activity log")?;
+    let file = fs::File::open(&log_path).context("Failed to open activity log")?;
     let reader = std::io::BufReader::new(file);
     let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
@@ -375,7 +373,10 @@ pub fn key_to_action(key: char) -> Option<DroneAction> {
 /// Check whether a drone action requires a selected drone.
 /// Launch ('n') does not require a selected drone.
 pub fn requires_selected_drone(action: &DroneAction) -> bool {
-    matches!(action, DroneAction::Stop | DroneAction::Clean | DroneAction::ViewLogs)
+    matches!(
+        action,
+        DroneAction::Stop | DroneAction::Clean | DroneAction::ViewLogs
+    )
 }
 
 /// Check whether an action needs confirmation before execution.

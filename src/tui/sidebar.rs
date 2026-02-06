@@ -1,6 +1,5 @@
 /// Sidebar widget for the Hive TUI
 /// Displays drone list with status, progress bars, and story details
-
 use crate::tui::monitor;
 use crate::types::{DroneStatus, Prd};
 use ratatui::{
@@ -114,7 +113,8 @@ pub fn render_sidebar(
         let prd = prd_cache.get(&status.prd);
 
         // Render drone header line
-        let drone_lines = monitor::render_drone_line(name, status, is_selected, is_expanded, prd, &area);
+        let drone_lines =
+            monitor::render_drone_line(name, status, is_selected, is_expanded, prd, &area);
         lines.extend(drone_lines);
 
         // Render stories if expanded
@@ -190,11 +190,12 @@ pub fn handle_navigation(
     prd_cache: &HashMap<String, Prd>,
     display_order: &[usize],
 ) {
-    let current_drone_idx = if !display_order.is_empty() && state.selected_index < display_order.len() {
-        display_order[state.selected_index]
-    } else {
-        0
-    };
+    let current_drone_idx =
+        if !display_order.is_empty() && state.selected_index < display_order.len() {
+            display_order[state.selected_index]
+        } else {
+            0
+        };
 
     let current_story_count = if !drones.is_empty() && current_drone_idx < drones.len() {
         let drone_name = &drones[current_drone_idx].0;

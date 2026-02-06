@@ -141,7 +141,7 @@ impl InputState {
         if !text.trim().is_empty() {
             // Check if it's a slash command
             if text.trim().starts_with('/') {
-                if let Some(cmd) = SlashCommand::from_str(text.trim()) {
+                if let Some(cmd) = SlashCommand::parse_command(text.trim()) {
                     self.pending_command = Some(cmd);
                 }
             } else {
@@ -215,7 +215,9 @@ impl InputState {
     fn set_textarea_content(&mut self, content: &str) {
         let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
         self.textarea = TextArea::new(lines);
-        self.textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)");
+        self.textarea.set_placeholder_text(
+            "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
+        );
     }
 
     /// Get the current input text
@@ -324,20 +326,20 @@ impl InputState {
     }
 
     /// Check if input is a bash command (starts with !)
+    #[allow(dead_code)]
     pub fn is_bash_command(&self) -> bool {
         let text = self.get_text();
         text.trim().starts_with('!')
     }
 
     /// Get the bash command (without the ! prefix)
+    #[allow(dead_code)]
     pub fn get_bash_command(&self) -> Option<String> {
         let text = self.get_text();
         let trimmed = text.trim();
-        if trimmed.starts_with('!') {
-            Some(trimmed[1..].trim().to_string())
-        } else {
-            None
-        }
+        trimmed
+            .strip_prefix('!')
+            .map(|stripped| stripped.trim().to_string())
     }
 
     /// Execute and consume the pending command

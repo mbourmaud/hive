@@ -145,9 +145,7 @@ pub fn confirmation_dialog<'a>(
             Span::raw("  "),
             Span::styled(
                 format!("[{}]", no_label),
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ),
         ]),
     ];

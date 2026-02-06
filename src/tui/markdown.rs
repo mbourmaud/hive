@@ -1,4 +1,4 @@
-use pulldown_cmark::{Event, Parser, Tag, CodeBlockKind};
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -51,31 +51,29 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 Tag::CodeBlock(_) => {
                     // Finish code block
                     if !code_block_lang.is_empty() {
-                        lines.push(Line::from(vec![
-                            Span::styled(
-                                format!("┌─ {} ", code_block_lang),
-                                Style::default().fg(Color::DarkGray),
-                            ),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            format!("┌─ {} ", code_block_lang),
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     } else {
-                        lines.push(Line::from(vec![
-                            Span::styled("┌─", Style::default().fg(Color::DarkGray)),
-                        ]));
+                        lines.push(Line::from(vec![Span::styled(
+                            "┌─",
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
                     for code_line in &code_block_lines {
                         lines.push(Line::from(vec![
                             Span::styled("│ ", Style::default().fg(Color::DarkGray)),
                             Span::styled(
                                 code_line.clone(),
-                                Style::default()
-                                    .fg(Color::Cyan)
-                                    .add_modifier(Modifier::DIM),
+                                Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
                             ),
                         ]));
                     }
-                    lines.push(Line::from(vec![
-                        Span::styled("└─", Style::default().fg(Color::DarkGray)),
-                    ]));
+                    lines.push(Line::from(vec![Span::styled(
+                        "└─",
+                        Style::default().fg(Color::DarkGray),
+                    )]));
                     in_code_block = false;
                     code_block_lang.clear();
                     code_block_lines.clear();

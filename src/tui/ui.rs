@@ -11,10 +11,10 @@ use super::app::App;
 /// Render the entire UI
 pub fn render(f: &mut Frame, app: &mut App) {
     let size = f.area();
-    
+
     // Calculate layout
     let (sidebar, content, footer) = app.layout.calculate(size, app.sidebar_visible);
-    
+
     // Render sidebar if visible
     if app.sidebar_visible {
         render_sidebar(f, sidebar, app);
@@ -35,7 +35,9 @@ fn render_sidebar(f: &mut Frame, area: Rect, app: &App) {
     let logo = vec![
         Line::from(Span::styled(
             "  \u{1f41d} HIVE",
-            Style::default().fg(theme.accent_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent_primary)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}",
@@ -122,15 +124,16 @@ fn render_messages(f: &mut Frame, area: Rect, app: &App) {
             .collect()
     };
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
 
     f.render_widget(paragraph, area);
 }
 
 /// Render a single message
-fn render_message(message: &super::messages::Message, theme: &super::theme::Theme) -> Vec<Line<'static>> {
+fn render_message(
+    message: &super::messages::Message,
+    theme: &super::theme::Theme,
+) -> Vec<Line<'static>> {
     use super::messages::Message;
 
     match message {
@@ -211,17 +214,15 @@ fn render_message(message: &super::messages::Message, theme: &super::theme::Them
             } else {
                 output_summary.clone()
             };
-            vec![
-                Line::from(vec![
-                    Span::styled(icon, Style::default().fg(color)),
-                    Span::raw(": "),
-                    Span::styled(result_display, Style::default().fg(theme.fg_secondary)),
-                    Span::styled(
-                        format!("  {}", timestamp.format("%H:%M:%S")),
-                        Style::default().fg(theme.fg_muted),
-                    ),
-                ]),
-            ]
+            vec![Line::from(vec![
+                Span::styled(icon, Style::default().fg(color)),
+                Span::raw(": "),
+                Span::styled(result_display, Style::default().fg(theme.fg_secondary)),
+                Span::styled(
+                    format!("  {}", timestamp.format("%H:%M:%S")),
+                    Style::default().fg(theme.fg_muted),
+                ),
+            ])]
         }
         Message::Error { content, timestamp } => vec![
             Line::from(""),
@@ -297,22 +298,30 @@ fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let hints = vec![
         Span::styled(
             " q ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(" Quit  "),
         Span::styled(
             " Ctrl+B ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(format!(" {}  ", sidebar_hint)),
         Span::styled(
             " Ctrl+T ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(" Theme  "),
         Span::styled(
             " Ctrl+Enter ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(" Submit "),
     ];

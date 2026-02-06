@@ -1,6 +1,5 @@
 /// Hive Monitor TUI Component
 /// Renders drone status, progress bars, story lists in the sidebar
-
 use crate::commands::common::{
     duration_between, elapsed_since, format_duration, is_process_running, load_prd,
     parse_timestamp, read_drone_pid, reconcile_progress_with_prd, truncate_with_ellipsis,
@@ -136,9 +135,7 @@ pub fn render_drone_line(
     let mode_tag = format!("[{}|{}]", status.execution_mode, status.backend);
 
     // Check inbox for pending messages
-    let inbox_dir = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("inbox");
+    let inbox_dir = PathBuf::from(".hive/drones").join(drone_name).join("inbox");
     let inbox_count = if inbox_dir.exists() {
         fs::read_dir(&inbox_dir)
             .map(|entries| {
@@ -286,10 +283,7 @@ pub fn render_drone_stories(
                 Span::styled("      ", line_style),
                 Span::styled(story_icon, line_style.fg(story_color)),
                 Span::raw(" "),
-                Span::styled(
-                    format!("{:<16} ", story.id),
-                    line_style.fg(title_color),
-                ),
+                Span::styled(format!("{:<16} ", story.id), line_style.fg(title_color)),
                 Span::styled(story.title.clone(), line_style.fg(title_color)),
                 Span::styled(duration_str.clone(), line_style.fg(Color::DarkGray)),
             ];
@@ -307,10 +301,7 @@ pub fn render_drone_stories(
                 Span::styled("      ", line_style),
                 Span::styled(story_icon, line_style.fg(story_color)),
                 Span::raw(" "),
-                Span::styled(
-                    format!("{:<16} ", story.id),
-                    line_style.fg(title_color),
-                ),
+                Span::styled(format!("{:<16} ", story.id), line_style.fg(title_color)),
                 Span::styled(truncated_title, line_style.fg(title_color)),
                 Span::styled(duration_str.clone(), line_style.fg(Color::DarkGray)),
             ];

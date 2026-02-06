@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use serde_json::Value;
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command as ProcessCommand, Stdio};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
-use std::io::{BufRead, BufReader, Write};
-use serde_json::Value;
 
 use super::messages::Message;
 
@@ -15,6 +15,7 @@ pub struct ClaudeBackend {
 }
 
 /// Stream event types from Claude's stream-json output
+#[allow(dead_code)]
 #[derive(Debug)]
 enum StreamEvent {
     Assistant(String),
@@ -61,7 +62,8 @@ impl ClaudeBackend {
                 match line {
                     Ok(line_content) => {
                         if let Err(e) = Self::parse_and_send_event(&line_content, &msg_tx_clone) {
-                            let _ = msg_tx_clone.send(Message::error(format!("Parse error: {}", e)));
+                            let _ =
+                                msg_tx_clone.send(Message::error(format!("Parse error: {}", e)));
                         }
                     }
                     Err(e) => {
@@ -108,20 +110,22 @@ impl ClaudeBackend {
             return Ok(());
         }
 
-        let event: Value = serde_json::from_str(line)
-            .context("Failed to parse JSON line")?;
+        let event: Value = serde_json::from_str(line).context("Failed to parse JSON line")?;
 
         // Extract event type
-        let event_type = event.get("type")
+        let event_type = event
+            .get("type")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
 
         match event_type {
             "assistant" | "content_block_delta" => {
                 // Assistant text delta
-                if let Some(text) = event.get("delta")
+                if let Some(text) = event
+                    .get("delta")
                     .and_then(|d| d.get("text"))
-                    .and_then(|t| t.as_str()) {
+                    .and_then(|t| t.as_str())
+                {
                     tx.send(Message::assistant(text.to_string()))?;
                 } else if let Some(text) = event.get("text").and_then(|t| t.as_str()) {
                     tx.send(Message::assistant(text.to_string()))?;
@@ -129,17 +133,19 @@ impl ClaudeBackend {
             }
             "tool_use" => {
                 // Tool use event
-                let name = event.get("name")
+                let name = event
+                    .get("name")
                     .and_then(|n| n.as_str())
                     .unwrap_or("unknown")
                     .to_string();
 
-                let args = event.get("input")
+                let args = event
+                    .get("input")
                     .or_else(|| event.get("args"))
                     .cloned()
                     .unwrap_or(Value::Null);
 
-                let args_summary = format!("{}", serde_json::to_string(&args)?);
+                let args_summary = serde_json::to_string(&args)?;
                 let truncated = if args_summary.len() > 100 {
                     format!("{}...", &args_summary[..100])
                 } else {
@@ -150,12 +156,14 @@ impl ClaudeBackend {
             }
             "tool_result" => {
                 // Tool result event
-                let success = event.get("is_error")
+                let success = event
+                    .get("is_error")
                     .and_then(|e| e.as_bool())
                     .map(|e| !e)
                     .unwrap_or(true);
 
-                let output = event.get("content")
+                let output = event
+                    .get("content")
                     .or_else(|| event.get("output"))
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
@@ -171,7 +179,8 @@ impl ClaudeBackend {
             }
             "error" => {
                 // Error event
-                let error_msg = event.get("message")
+                let error_msg = event
+                    .get("message")
                     .or_else(|| event.get("error"))
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown error")
@@ -215,6 +224,7 @@ impl ClaudeBackend {
     }
 
     /// Restart the Claude process
+    #[allow(dead_code)]
     pub fn restart(&mut self, model: &str) -> Result<Receiver<Message>> {
         self.kill()?;
         self.spawn(model)

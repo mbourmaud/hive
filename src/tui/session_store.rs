@@ -1,6 +1,5 @@
 /// Session storage and management for the Hive TUI
 /// Persists chat sessions to .hive/sessions/
-
 use anyhow::{Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};

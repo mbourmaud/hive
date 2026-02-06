@@ -92,12 +92,13 @@ impl PermissionDialogState {
         content.push(Line::from(""));
 
         // Arguments
-        content.push(Line::from(
-            Span::styled("Arguments:", Style::default().add_modifier(Modifier::BOLD)),
-        ));
+        content.push(Line::from(Span::styled(
+            "Arguments:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
 
-        let args_str = serde_json::to_string_pretty(&request.args)
-            .unwrap_or_else(|_| "{}".to_string());
+        let args_str =
+            serde_json::to_string_pretty(&request.args).unwrap_or_else(|_| "{}".to_string());
 
         for line in args_str.lines().take(10) {
             content.push(Line::from(Span::styled(
@@ -118,9 +119,10 @@ impl PermissionDialogState {
 
         // File diff preview if available
         if let Some(ref diff) = request.file_diff {
-            content.push(Line::from(
-                Span::styled("File Changes:", Style::default().add_modifier(Modifier::BOLD)),
-            ));
+            content.push(Line::from(Span::styled(
+                "File Changes:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
 
             for line in diff.lines().take(5) {
                 let style = if line.starts_with('+') {
@@ -156,9 +158,7 @@ impl PermissionDialogState {
                 Span::raw(" Accept  "),
                 Span::styled(
                     "[N]",
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Reject  "),
                 Span::styled(

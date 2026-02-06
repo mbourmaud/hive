@@ -82,8 +82,7 @@ impl App {
                 }
 
                 // Handle 'q' for quit
-                if key.code == KeyCode::Char('q')
-                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                if key.code == KeyCode::Char('q') && !key.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     self.should_quit = true;
                     return Ok(());
@@ -98,8 +97,8 @@ impl App {
                 // Process any pending submitted messages (regular or bash)
                 if let Some(text) = self.input_state.take_pending_message() {
                     let trimmed = text.trim().to_string();
-                    if trimmed.starts_with('!') {
-                        let cmd = trimmed[1..].trim().to_string();
+                    if let Some(stripped) = trimmed.strip_prefix('!') {
+                        let cmd = stripped.trim().to_string();
                         if !cmd.is_empty() {
                             self.execute_bash_command(&cmd);
                         }
@@ -209,8 +208,7 @@ impl App {
 
     /// Execute a bash command and push the output as a system message
     fn execute_bash_command(&mut self, cmd: &str) {
-        self.messages
-            .push(Message::system(format!("$ {}", cmd)));
+        self.messages.push(Message::system(format!("$ {}", cmd)));
 
         match Command::new("sh").arg("-c").arg(cmd).output() {
             Ok(output) => {
@@ -227,7 +225,10 @@ impl App {
                 }
 
                 if !stderr.is_empty() {
-                    for line in stderr.lines().take(MAX_LINES.saturating_sub(result_lines.len())) {
+                    for line in stderr
+                        .lines()
+                        .take(MAX_LINES.saturating_sub(result_lines.len()))
+                    {
                         result_lines.push(line);
                     }
                 }

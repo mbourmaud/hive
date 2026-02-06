@@ -15,7 +15,7 @@ pub enum SlashCommand {
 
 impl SlashCommand {
     /// Parse a string into a slash command
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_command(s: &str) -> Option<Self> {
         let s = s.trim_start_matches('/').to_lowercase();
         match s.as_str() {
             "new" => Some(SlashCommand::New),
@@ -136,6 +136,12 @@ pub struct CommandAutocomplete {
     pub visible: bool,
 }
 
+impl Default for CommandAutocomplete {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandAutocomplete {
     pub fn new() -> Self {
         Self {
@@ -199,10 +205,13 @@ mod tests {
 
     #[test]
     fn test_slash_command_from_str() {
-        assert_eq!(SlashCommand::from_str("/new"), Some(SlashCommand::New));
-        assert_eq!(SlashCommand::from_str("new"), Some(SlashCommand::New));
-        assert_eq!(SlashCommand::from_str("/help"), Some(SlashCommand::Help));
-        assert_eq!(SlashCommand::from_str("/invalid"), None);
+        assert_eq!(SlashCommand::parse_command("/new"), Some(SlashCommand::New));
+        assert_eq!(SlashCommand::parse_command("new"), Some(SlashCommand::New));
+        assert_eq!(
+            SlashCommand::parse_command("/help"),
+            Some(SlashCommand::Help)
+        );
+        assert_eq!(SlashCommand::parse_command("/invalid"), None);
     }
 
     #[test]

@@ -8,6 +8,7 @@ pub enum ThemeVariant {
 }
 
 /// Theme configuration for the TUI
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Theme {
     /// Theme variant (dark or light)

@@ -3,7 +3,10 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget, Widget},
+    widgets::{
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Widget,
+    },
 };
 
 use super::markdown::render_markdown;
@@ -102,7 +105,12 @@ impl ChatState {
                 let mut lines = Vec::new();
                 // Header with timestamp
                 lines.push(Line::from(vec![
-                    Span::styled("You", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "You",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw(" "),
                     Span::styled(
                         format!("{}", timestamp.format("%H:%M:%S")),
@@ -120,7 +128,12 @@ impl ChatState {
                 let mut lines = Vec::new();
                 // Header
                 lines.push(Line::from(vec![
-                    Span::styled("Assistant", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "Assistant",
+                        Style::default()
+                            .fg(Color::Blue)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw(" "),
                     Span::styled(
                         format!("{}", timestamp.format("%H:%M:%S")),
@@ -139,7 +152,12 @@ impl ChatState {
             } => {
                 vec![
                     Line::from(vec![
-                        Span::styled("Tool Use", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            "Tool Use",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
@@ -169,7 +187,12 @@ impl ChatState {
 
                 vec![
                     Line::from(vec![
-                        Span::styled("Tool Result", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            "Tool Result",
+                            Style::default()
+                                .fg(Color::Magenta)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
@@ -188,21 +211,32 @@ impl ChatState {
             Message::Error { content, timestamp } => {
                 vec![
                     Line::from(vec![
-                        Span::styled("Error", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            "Error",
+                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                        ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
                             Style::default().fg(Color::DarkGray),
                         ),
                     ]),
-                    Line::from(vec![Span::styled(format!("  {}", content), Style::default().fg(Color::Red))]),
+                    Line::from(vec![Span::styled(
+                        format!("  {}", content),
+                        Style::default().fg(Color::Red),
+                    )]),
                     Line::from(""),
                 ]
             }
             Message::System { content, timestamp } => {
                 vec![
                     Line::from(vec![
-                        Span::styled("System", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            "System",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                         Span::raw(" "),
                         Span::styled(
                             format!("{}", timestamp.format("%H:%M:%S")),
@@ -276,11 +310,10 @@ impl<'a> StatefulWidget for ChatPanel<'a> {
             .collect();
 
         // Render paragraph
-        let paragraph = Paragraph::new(visible_lines).block(self.block.unwrap_or_else(|| {
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Chat")
-        }));
+        let paragraph = Paragraph::new(visible_lines).block(
+            self.block
+                .unwrap_or_else(|| Block::default().borders(Borders::ALL).title("Chat")),
+        );
 
         paragraph.render(area, buf);
 
