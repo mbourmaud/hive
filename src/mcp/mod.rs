@@ -1,7 +1,7 @@
 //! MCP (Model Context Protocol) server for Hive.
 //!
 //! Exposes Hive drone state and messaging as MCP tools that Claude Code
-//! (and future Swarm agents) can call to query and interact with drones.
+//! (and Agent Teams teammates) can call to query and interact with drones.
 //!
 //! Launch via: `hive mcp-server`
 //! Configure in `.mcp.json` or `~/.claude/settings.json`:
@@ -293,6 +293,20 @@ fn list_tools() -> Vec<ToolInfo> {
                 "required": ["drone_name"]
             }),
         },
+        ToolInfo {
+            name: "hive_team_status".to_string(),
+            description: "Get Agent Teams status for a drone running in team mode. Returns task progress and teammate information.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "drone_name": {
+                        "type": "string",
+                        "description": "Name of the drone/team to query"
+                    }
+                },
+                "required": ["drone_name"]
+            }),
+        },
     ]
 }
 
@@ -308,6 +322,7 @@ fn call_tool(name: &str, arguments: &Value) -> ToolResult {
         "hive_send_message" => tool_send_message(arguments),
         "hive_query_dependencies" => tool_query_dependencies(arguments),
         "hive_list_messages" => tool_list_messages(arguments),
+        "hive_team_status" => tool_team_status(arguments),
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     };
 
@@ -539,4 +554,57 @@ fn tool_list_messages(args: &Value) -> Result<String> {
     }
 
     Ok(serde_json::to_string_pretty(&result)?)
+}
+
+fn tool_team_status(args: &Value) -> Result<String> {
+    let drone_name = args
+        .get("drone_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
+
+    let drones = list_drones()?;
+    let (_, status) = drones
+        .iter()
+        .find(|(name, _)| name == drone_name)
+        .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
+
+    if status.execution_mode != crate::types::ExecutionMode::AgentTeam {
+        return Ok(serde_json::to_string_pretty(&serde_json::json!({
+            "drone": drone_name,
+            "is_team": false,
+            "message": "This drone is not running in Agent Teams mode"
+        }))?);
+    }
+
+    // Read Agent Teams task list
+    let tasks = crate::agent_teams::read_task_list(drone_name)?;
+
+    let completed = tasks.iter().filter(|t| t.status == "completed").count();
+    let in_progress = tasks.iter().filter(|t| t.status == "in_progress").count();
+    let pending = tasks.iter().filter(|t| t.status == "pending").count();
+
+    let task_details: Vec<serde_json::Value> = tasks
+        .iter()
+        .map(|t| {
+            serde_json::json!({
+                "id": t.id,
+                "subject": t.subject,
+                "status": t.status,
+                "blocked_by": t.blocked_by,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::to_string_pretty(&serde_json::json!({
+        "drone": drone_name,
+        "is_team": true,
+        "backend": "agent_team",
+        "task_summary": {
+            "total": tasks.len(),
+            "completed": completed,
+            "in_progress": in_progress,
+            "pending": pending,
+        },
+        "tasks": task_details,
+    }))?)
 }

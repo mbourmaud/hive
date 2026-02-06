@@ -1,3 +1,4 @@
+pub mod agent_team;
 pub mod native;
 
 use anyhow::Result;
@@ -15,6 +16,20 @@ pub struct SpawnConfig {
     pub working_dir: PathBuf,
     pub execution_mode: ExecutionMode,
     pub wait: bool,
+    /// Team name for Agent Teams mode
+    pub team_name: Option<String>,
+    /// Teammate spawning mode: "in-process", "tmux", or "auto"
+    pub teammate_mode: Option<String>,
+    /// Worktree assignments for each teammate in Agent Teams mode
+    pub worktree_assignments: Option<Vec<WorktreeAssignment>>,
+}
+
+/// Worktree assignment for a teammate in Agent Teams mode.
+pub struct WorktreeAssignment {
+    pub teammate_name: String,
+    pub worktree_path: PathBuf,
+    pub branch: String,
+    pub story_ids: Vec<String>,
 }
 
 /// Handle returned by a backend after spawning a drone.
@@ -45,8 +60,12 @@ pub trait ExecutionBackend {
     fn is_available(&self) -> bool;
 }
 
-/// Resolve which backend to use based on configuration.
-/// Currently always returns NativeBackend.
+/// Resolve which backend to use based on configuration and execution mode.
 pub fn resolve_backend(_default_backend: Option<&str>) -> Box<dyn ExecutionBackend> {
     Box::new(native::NativeBackend)
+}
+
+/// Resolve backend specifically for Agent Teams mode.
+pub fn resolve_agent_team_backend() -> Box<dyn ExecutionBackend> {
+    Box::new(agent_team::AgentTeamBackend)
 }

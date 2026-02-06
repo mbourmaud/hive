@@ -70,6 +70,7 @@ fn create_mock_drone(
             blocked_reason: None,
             blocked_questions: Vec::new(),
             awaiting_human: false,
+            active_agents: HashMap::new(),
         },
     )
 }

@@ -57,6 +57,7 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         blocked_reason: None,
         blocked_questions: vec![],
         awaiting_human: false,
+        active_agents: HashMap::new(),
     };
 
     let status_json = serde_json::to_string_pretty(&status).unwrap();
@@ -287,6 +288,7 @@ fn test_drone_state_transitions() {
             blocked_reason: None,
             blocked_questions: vec![],
             awaiting_human: false,
+            active_agents: HashMap::new(),
         };
 
         let json = serde_json::to_string(&status).unwrap();

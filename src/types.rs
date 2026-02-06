@@ -174,10 +174,10 @@ pub struct DroneStatus {
     pub branch: String,
     pub worktree: String,
     pub local_mode: bool,
-    /// Execution mode: worktree (isolated) or subagent (in-place)
+    /// Execution mode: worktree (isolated) or agent_team (multi-agent)
     #[serde(default)]
     pub execution_mode: ExecutionMode,
-    /// Execution backend: "native" or "swarm"
+    /// Execution backend: "native" or "agent_team"
     #[serde(default = "default_backend")]
     pub backend: String,
     pub status: DroneState,
@@ -192,6 +192,9 @@ pub struct DroneStatus {
     pub blocked_reason: Option<String>,
     pub blocked_questions: Vec<String>,
     pub awaiting_human: bool,
+    /// Active agents and their current story (for Agent Teams mode)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub active_agents: HashMap<String, String>,
 }
 
 fn default_backend() -> String {
@@ -225,18 +228,15 @@ pub enum ExecutionMode {
     /// Traditional mode: isolated git worktree + symlink
     #[default]
     Worktree,
-    /// Subagent mode: spawns Claude in current directory, uses Task subagent pattern
-    Subagent,
-    /// Future: backed by Claude Swarm Mode when officially available
-    Swarm,
+    /// Agent Teams mode: Claude Code native multi-agent coordination
+    AgentTeam,
 }
 
 impl std::fmt::Display for ExecutionMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExecutionMode::Worktree => write!(f, "worktree"),
-            ExecutionMode::Subagent => write!(f, "subagent"),
-            ExecutionMode::Swarm => write!(f, "swarm"),
+            ExecutionMode::AgentTeam => write!(f, "agent_team"),
         }
     }
 }
@@ -262,9 +262,18 @@ pub struct HiveConfig {
     pub project: Option<String>,
     pub worktree_base: Option<String>,
     pub default_model: Option<String>,
-    /// Default execution backend: "native", "swarm", or "auto"
+    /// Default execution backend: "native", "agent_team", or "auto"
     #[serde(default)]
     pub default_backend: Option<String>,
+    /// Enable Agent Teams mode for multi-agent coordination
+    #[serde(default)]
+    pub agent_teams_enabled: Option<bool>,
+    /// Teammate spawning mode: "in-process", "tmux", or "auto"
+    #[serde(default)]
+    pub teammate_mode: Option<String>,
+    /// Maximum number of teammates (default 5)
+    #[serde(default)]
+    pub max_teammates: Option<usize>,
     pub timestamp: String,
 }
 
@@ -276,6 +285,9 @@ impl Default for HiveConfig {
             worktree_base: None,
             default_model: Some("sonnet".to_string()),
             default_backend: None,
+            agent_teams_enabled: None,
+            teammate_mode: None,
+            max_teammates: None,
             timestamp: Utc::now().to_rfc3339(),
         }
     }

@@ -29,7 +29,15 @@ Before writing stories, explore the codebase to understand:
 - Environment configuration needs
 - Pre-commit hooks and linters
 
-Use Glob, Grep, and Read tools to gather context.
+**If Agent Teams is available** (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in settings), use teammates to parallelize the exploration for large/complex projects. Spawn multiple teammates to investigate different aspects simultaneously:
+
+- **Teammate 1**: Project structure & architecture (scan directories, read config files, understand module layout)
+- **Teammate 2**: Dependencies & build system (package.json, Cargo.toml, Makefile, CI config, env files, git hooks)
+- **Teammate 3**: Affected code areas (search for files/patterns related to the feature the user described)
+
+Use the Task tool with `subagent_type: "Explore"` to spawn parallel exploration agents. Each teammate reports back findings that inform the story breakdown.
+
+**If Agent Teams is not available**, or for simpler projects/small features, use sequential exploration with Glob, Grep, and Read tools as before.
 
 ### Step 4: PRD Metadata
 
@@ -47,43 +55,50 @@ For **EACH story**, follow the interactive DoD process described in Step 6 below
 
 ### Step 6: Interactive DoD for Each Story
 
-For **EACH story**, follow this process:
+For **EACH story**, present a **compact card** using the format below. The goal is to make each story scannable in under 10 seconds.
 
-#### 6a. Propose the story
+#### 6a. Present the story card
+
+Use this exact format - a single compact block with clear visual sections:
+
 ```
-📋 Story: SEC-001 - Protect /api/accounts/*
-
-Description: Add requireAuth() middleware to account routes
-
-Files concerned:
-- src/app/api/accounts/route.ts
-```
-
-#### 6b. Propose Definition of Done and ASK for validation
-```
-🎯 Proposed Definition of Done:
-
-This story is COMPLETE when:
-1. requireAuth() middleware is added to GET and POST routes
-2. A test verifies that GET /api/accounts returns 401 without auth
-3. A test verifies that GET /api/accounts returns 200 with auth
-
-Verification commands (the drone MUST execute these):
-- `grep -r "requireAuth" src/app/api/accounts/` → must match
-- `pnpm test --filter=accounts` → must pass
-
-❓ Is this Definition of Done correct?
-   - Is anything missing?
-   - Should we add other verifications?
+┌─────────────────────────────────────────────────┐
+│ SEC-001 · Protect /api/accounts/*               │
+├─────────────────────────────────────────────────┤
+│ Add requireAuth() middleware to account routes   │
+│                                                  │
+│ Files: src/app/api/accounts/route.ts             │
+│        src/app/api/accounts/__tests__/auth.test  │
+│ Deps:  none                                      │
+│                                                  │
+│ Definition of Done:                              │
+│  1. requireAuth() added to GET and POST routes   │
+│  2. Test: GET /api/accounts → 401 without auth   │
+│  3. Test: GET /api/accounts → 200 with auth      │
+│                                                  │
+│ Verify:                                          │
+│  $ grep -r "requireAuth" src/app/api/accounts/   │
+│  $ pnpm test --filter=accounts                   │
+└─────────────────────────────────────────────────┘
+❓ DoD OK? (anything to add/change/remove?)
 ```
 
-#### 6c. Iterate until user validates
+**Card rules:**
+- **Line 1**: `{ID} · {Title}` - always on one line
+- **Description**: 1-2 sentences max. If longer, you're putting too much detail in the description - move it to actions
+- **Files**: List affected files, one per line. Use short paths (trim common prefix if obvious)
+- **Deps**: Show `depends_on` story IDs, or `none`
+- **DoD**: Numbered list. Each item must be **verifiable** - something you can check with a command or grep. Keep items short (one line each). Aim for 2-5 items
+- **Verify**: Actual shell commands the drone will run. Prefix with `$`
+- **Question**: Short, one-line prompt
+
+#### 6b. Iterate until user validates
 The user might say:
 - "Need to also log unauthenticated attempts"
 - "Add an e2e test"
 - "OK looks good"
 
-Update the DoD based on feedback, then move to next story.
+Update the card based on feedback. Re-display the full updated card so the user can see the final state, then move to next story.
 
 ### Step 7: Add MR/CI Story (Standard)
 
@@ -182,68 +197,106 @@ Intelligently determine if US-0 is needed by checking:
 
 #### If US-0 is Needed:
 
-Generate the US-0 story with intelligent actions based on what you discovered:
+Generate the US-0 story using the **same card format** as Step 6:
 
 ```
-📋 Story: US-0 - Environment Setup
-
-Description: Prepare worktree environment for autonomous development
-
-🎯 Proposed Definition of Done:
-
-This story is COMPLETE when:
-1. All dependencies are installed successfully
-2. Build commands execute without errors
-3. Environment files are configured (if needed)
-4. Pre-commit hooks are installed (if applicable)
-5. LSP servers are functional
-6. All verification commands for US-1+ stories will work
-
-Actions (auto-discovered based on codebase + stories):
-- Run `pnpm install` (found package.json, stories need node_modules)
-- Copy `.env.example` to `.env` (found .env.example, stories use env vars)
-- Run `pnpm build` to verify tooling works (stories verify builds)
-- Install husky hooks with `pnpm prepare` (found .husky/, will block commits)
-- Test that `pnpm test` works (US-1 and US-2 run tests as verification)
-
-Verification commands:
-- `test -d node_modules && echo "Dependencies OK"`
-- `test -f .env && echo "Environment OK"`
-- `pnpm build` → must succeed
-- `pnpm test` → should find tests and run (or report no tests found)
-- `git diff --exit-code` → should be clean after installs
-
-❓ Does this environment setup look correct for your project?
-   - Is anything missing?
-   - Are there other setup steps needed?
+┌─────────────────────────────────────────────────┐
+│ US-0 · Environment Setup                        │
+├─────────────────────────────────────────────────┤
+│ Prepare worktree for autonomous development     │
+│                                                  │
+│ Files: (none — environment only)                 │
+│ Deps:  none (runs first)                         │
+│                                                  │
+│ Definition of Done:                              │
+│  1. Dependencies installed (pnpm install)        │
+│  2. Build passes (pnpm build)                    │
+│  3. .env configured (from .env.example)          │
+│  4. Husky hooks installed (pnpm prepare)         │
+│  5. Tests can run (pnpm test finds tests)        │
+│                                                  │
+│ Verify:                                          │
+│  $ test -d node_modules && echo "OK"             │
+│  $ test -f .env && echo "OK"                     │
+│  $ pnpm build                                    │
+│  $ pnpm test                                     │
+│  $ git diff --exit-code                          │
+└─────────────────────────────────────────────────┘
+❓ DoD OK? (anything to add/change/remove?)
 ```
+
+Only include DoD items that are actually relevant (discovered in Step 3). Don't add generic items - each item should be justified by what you found in the codebase.
 
 **IMPORTANT**: US-0 goes FIRST in the stories array, even though you define it last. The drone will execute stories in array order.
 
 ### Step 9: Review Complete PRD
 
-Once all stories (including US-0 if applicable) have validated DoDs, present the full PRD:
+Once all stories (including US-0 if applicable) have validated DoDs, present a **full summary table** followed by a **dependency graph**. This is the user's last chance to review before generation - make it count.
+
+#### 9a. Summary table
+
 ```
-PRD: security-api-protection
-"Secure API Routes" - 5 stories
-
-US-0: Environment Setup
-  ✅ DoD validated (auto-discovered)
-
-SEC-001: Protect /api/accounts/*
-  ✅ DoD validated
-
-SEC-002: Protect /api/users/*
-  ✅ DoD validated
-
-SEC-003: Add auth logging
-  ✅ DoD validated
-
-MR-001: Create MR and ensure CI passes
-  ✅ DoD validated (standard)
+╔══════════════════════════════════════════════════════════════════════╗
+║  PRD: security-api-protection                                       ║
+║  "Secure API Routes" — 5 stories                                    ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  #   │ Story                        │ Files │ DoD │ Deps             ║
+║  ────┼──────────────────────────────┼───────┼─────┼────────────────  ║
+║  US-0│ Environment Setup            │   0   │  5  │ —                ║
+║  S-01│ Protect /api/accounts/*      │   2   │  3  │ US-0             ║
+║  S-02│ Protect /api/users/*         │   2   │  3  │ US-0             ║
+║  S-03│ Add auth logging             │   3   │  4  │ S-01, S-02       ║
+║  MR-1│ Create MR & CI              │   0   │  4  │ S-03             ║
+║                                                                      ║
+║  Parallelism: S-01 ‖ S-02 (can run together)                       ║
+║  Total files affected: 7 unique files                                ║
+║  Estimated drone stories: 5                                          ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
 ```
 
-Ask: **"Does the complete PRD look good? Should I generate the file?"**
+**Table rules:**
+- **#**: Story ID (shortened if long, e.g., SEC-001 → S-01 for readability)
+- **Story**: Title only, kept short
+- **Files**: Count of files affected (not the list - that's in the cards)
+- **DoD**: Count of DoD items
+- **Deps**: Story IDs this depends on, or `—` for none
+- **Parallelism line**: Clearly show which stories can run in parallel (indicated by `‖`)
+- **Total files**: De-duplicated count across all stories
+
+#### 9b. Dependency flow (if >2 stories)
+
+Show the execution order visually:
+
+```
+Execution flow:
+  US-0 → ┬─ S-01 ─┬─ S-03 → MR-1
+         └─ S-02 ─┘
+```
+
+This makes it immediately clear: what runs first, what's parallel, what's sequential.
+
+#### 9c. Quick DoD recap (optional, for complex PRDs with 5+ stories)
+
+If the PRD has many stories, add a collapsed view the user can mentally scan:
+
+```
+DoD recap:
+  US-0: deps installed, build works, env ready, hooks installed, tests run
+  S-01: middleware added, 401 test, 200 test
+  S-02: middleware added, 401 test, 200 test
+  S-03: logger created, logs on 401, log format valid, log rotation configured
+  MR-1: PR created, CI green, no conflicts, ready for review
+```
+
+Each line is a **one-line summary** of the DoD items (not the full text - just the essence).
+
+#### 9d. Ask for final validation
+
+Ask: **"Does this PRD look good? Should I generate the file?"**
+
+If the user wants to change something, go back to the relevant story card (Step 6) and iterate. Do NOT regenerate the entire PRD review for a single story change - just show the updated card, then re-show the summary table with the change highlighted.
 
 ### Step 10: Generate PRD File
 

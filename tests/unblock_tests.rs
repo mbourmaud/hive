@@ -72,6 +72,7 @@ fn create_blocked_drone(temp_dir: &TempDir, drone_name: &str) {
         blocked_reason: Some("Test blocked reason".to_string()),
         blocked_questions: vec!["Question 1?".to_string(), "Question 2?".to_string()],
         awaiting_human: true,
+        active_agents: HashMap::new(),
     };
 
     let status_json = serde_json::to_string_pretty(&status).unwrap();

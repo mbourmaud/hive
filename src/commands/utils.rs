@@ -55,11 +55,9 @@ pub fn list() -> Result<()> {
             0
         };
 
-        // Use different emoji for subagent mode
         let mode_emoji = match status.execution_mode {
-            ExecutionMode::Subagent => "🤖",
             ExecutionMode::Worktree => "🐝",
-            ExecutionMode::Swarm => "🐝",
+            ExecutionMode::AgentTeam => "🤝",
         };
 
         println!(

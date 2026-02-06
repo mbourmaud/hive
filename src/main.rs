@@ -35,12 +35,12 @@ enum Commands {
         /// Dry run - don't launch Claude
         #[arg(long)]
         dry_run: bool,
-        /// Use subagent mode (spawns Claude Task subagent instead of worktree)
+        /// Use Agent Teams mode (multi-agent coordination with Claude Code)
         #[arg(long)]
-        subagent: bool,
-        /// Wait for subagent to complete before returning (implies --subagent)
-        #[arg(long)]
-        wait: bool,
+        team: bool,
+        /// Teammate spawning mode: in-process, tmux, or auto (default: auto)
+        #[arg(long, default_value = "auto")]
+        teammate_mode: String,
     },
 
     /// Monitor drone status with auto-refreshing TUI dashboard
@@ -65,6 +65,9 @@ enum Commands {
         /// Follow mode - continuously tail logs
         #[arg(short, long)]
         follow: bool,
+        /// Show Agent Teams conversation view (auto-detected for team drones)
+        #[arg(long)]
+        team: bool,
     },
 
     /// Stop a running drone
@@ -178,11 +181,9 @@ fn main() {
             local,
             model,
             dry_run,
-            subagent,
-            wait,
+            team,
+            teammate_mode,
         } => {
-            // --wait implies --subagent
-            let use_subagent = subagent || wait;
             if let Err(e) = commands::start::run(
                 name,
                 prompt,
@@ -190,8 +191,8 @@ fn main() {
                 local,
                 model,
                 dry_run,
-                use_subagent,
-                wait,
+                team,
+                teammate_mode,
             ) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -208,8 +209,9 @@ fn main() {
             lines,
             story,
             follow,
+            team,
         } => {
-            if let Err(e) = commands::logs::run(name, lines, story, follow) {
+            if let Err(e) = commands::logs::run(name, lines, story, follow, team) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

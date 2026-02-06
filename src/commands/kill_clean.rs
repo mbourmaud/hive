@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
 use crate::backend::{self, SpawnHandle};
-use crate::types::DroneStatus;
+use crate::types::{DroneStatus, ExecutionMode};
 
 /// Stop a drone by name. If `quiet` is true, no output is printed (for TUI use).
 pub fn kill(name: String) -> Result<()> {
@@ -190,6 +190,21 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
 
         if !quiet {
             println!("  {} Deleted branch {}", "✓".green(), status.branch);
+        }
+    }
+
+    // Clean up Agent Teams directories if in team mode
+    if status.execution_mode == ExecutionMode::AgentTeam {
+        if let Err(e) = crate::agent_teams::cleanup_team(&name) {
+            if !quiet {
+                println!(
+                    "  {} Failed to clean Agent Teams dirs: {}",
+                    "⚠".yellow(),
+                    e
+                );
+            }
+        } else if !quiet {
+            println!("  {} Cleaned Agent Teams directories", "✓".green());
         }
     }
 

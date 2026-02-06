@@ -10,6 +10,7 @@ use super::common::{
     truncate_with_ellipsis, wrap_text, DEFAULT_INACTIVE_THRESHOLD_SECS, FULL_PROGRESS_BAR_WIDTH,
     MAX_DRONE_NAME_LEN, MAX_STORY_TITLE_LEN,
 };
+use crate::agent_teams::task_sync;
 use crate::communication::MessageBus;
 use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 
@@ -168,9 +169,8 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
 
     // Determine emoji based on execution mode
     let mode_emoji = match status.execution_mode {
-        ExecutionMode::Subagent => "🤖",
+        ExecutionMode::AgentTeam => "🤝",
         ExecutionMode::Worktree => "🐝",
-        ExecutionMode::Swarm => "🐝",
     };
 
     // Reconcile progress with actual PRD (filters out old completed stories)
@@ -227,18 +227,74 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     );
     println!("  {}", bar);
 
+    // Agent Teams: show active agents
+    if status.execution_mode == ExecutionMode::AgentTeam {
+        if let Ok(task_states) = task_sync::read_team_task_states(name) {
+            let active: Vec<_> = task_states.values()
+                .filter(|t| t.status == "in_progress" && t.owner.is_some())
+                .collect();
+            if !active.is_empty() {
+                println!(
+                    "\n  {} Active agents ({}):",
+                    "🤝".to_string(),
+                    active.len().to_string().bright_white()
+                );
+                for task in &active {
+                    let agent = task.owner.as_deref().unwrap_or("?");
+                    let story = task.story_id.as_deref().unwrap_or(&task.id);
+                    let form = task.active_form.as_deref().unwrap_or(&task.subject);
+                    println!(
+                        "    {} {}: {} ({})",
+                        "→".bright_blue(),
+                        agent.bright_cyan(),
+                        form,
+                        story.bright_yellow()
+                    );
+                }
+            }
+
+            // Also show team members count
+            if let Ok(members) = task_sync::read_team_members(name) {
+                if !members.is_empty() {
+                    println!(
+                        "  {} {} teammates spawned",
+                        "👥".to_string(),
+                        members.len().to_string().bright_white()
+                    );
+                }
+            }
+        }
+    }
+
     // Load PRD to get story titles
     let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
     if let Some(prd) = load_prd(&prd_path) {
         println!("\n  Stories:");
+
+        // For Agent Teams mode, build a map of story_id -> agent_name from active tasks
+        let agent_map: std::collections::HashMap<String, String> = if status.execution_mode == ExecutionMode::AgentTeam {
+            task_sync::read_team_task_states(name)
+                .unwrap_or_default()
+                .values()
+                .filter_map(|t| {
+                    let story_id = t.story_id.clone().unwrap_or_else(|| t.id.clone());
+                    t.owner.clone().map(|owner| (story_id, owner))
+                })
+                .collect()
+        } else {
+            std::collections::HashMap::new()
+        };
+
         for story in &prd.stories {
             let is_completed = status.completed.contains(&story.id);
             let is_current = status.current_story.as_ref() == Some(&story.id);
+            let is_active = status.active_agents.values().any(|s| s == &story.id)
+                || agent_map.contains_key(&story.id);
 
             // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
             let (icon, color_fn): (_, fn(String) -> colored::ColoredString) = if is_completed {
                 ("●", |s| s.green()) // Full green = completed
-            } else if is_current {
+            } else if is_current || is_active {
                 ("◐", |s| s.yellow()) // Half-full yellow = in progress
             } else {
                 ("○", |s| s.bright_black()) // Empty = pending
@@ -267,10 +323,19 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
                 String::new()
             };
 
+            // Show agent name for active stories in Agent Teams mode
+            let agent_suffix = if is_active || is_current {
+                agent_map.get(&story.id)
+                    .map(|a| format!(" [{}]", a))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+
             let title_display = truncate_with_ellipsis(&story.title, MAX_STORY_TITLE_LEN);
             let story_line = format!(
-                "    {} {} {}{}",
-                icon, story.id, title_display, duration_str
+                "    {} {} {}{}{}",
+                icon, story.id, title_display, duration_str, agent_suffix
             );
             println!("{}", color_fn(story_line));
         }
@@ -303,7 +368,7 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
 
 fn run_tui(_name: Option<String>) -> Result<()> {
     use crossterm::{
-        event::{self, Event, KeyCode},
+        event::{self, Event, KeyCode, KeyModifiers},
         execute,
         terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     };
@@ -315,7 +380,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
         widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
         Terminal,
     };
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use std::io;
 
     // Install panic hook to restore terminal before printing panic info
@@ -359,8 +424,54 @@ fn run_tui(_name: Option<String>) -> Result<()> {
     // Track drones that have been auto-resumed to avoid duplicate resumes
     let mut auto_resumed_drones: HashSet<String> = HashSet::new();
 
+    // Track completed story counts for desktop notifications
+    let mut last_completed_counts: HashMap<String, usize> = HashMap::new();
+    let mut last_drone_states: HashMap<String, DroneState> = HashMap::new();
+
     loop {
         let mut drones = list_drones()?;
+
+        // Desktop notifications for state changes
+        for (name, status) in &drones {
+            let completed_count = status.completed.len();
+            let prev_count = last_completed_counts.get(name).copied().unwrap_or(0);
+            let prev_state = last_drone_states.get(name).cloned();
+
+            // Story completed
+            if completed_count > prev_count && prev_count > 0 {
+                if completed_count >= status.total && status.total > 0 {
+                    send_desktop_notification(
+                        &format!("Hive - {}", name),
+                        &format!("Done! {}/{} stories", completed_count, status.total),
+                    );
+                } else {
+                    send_desktop_notification(
+                        &format!("Hive - {}", name),
+                        &format!("Story completed ({}/{})", completed_count, status.total),
+                    );
+                }
+            }
+
+            // Blocked or error
+            if let Some(prev) = prev_state {
+                if prev != DroneState::Blocked && status.status == DroneState::Blocked {
+                    let reason = status.blocked_reason.as_deref().unwrap_or("Unknown");
+                    send_desktop_notification(
+                        &format!("Hive - {} BLOCKED", name),
+                        reason,
+                    );
+                }
+                if prev != DroneState::Error && status.status == DroneState::Error {
+                    send_desktop_notification(
+                        &format!("Hive - {} ERROR", name),
+                        &format!("Error in {}", status.last_error_story.as_deref().unwrap_or("?")),
+                    );
+                }
+            }
+
+            last_completed_counts.insert(name.clone(), completed_count);
+            last_drone_states.insert(name.clone(), status.status.clone());
+        }
 
         // Sort: in_progress first, then blocked, then completed
         drones.sort_by_key(|(_, status)| match status.status {
@@ -752,31 +863,54 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                 // Use different emoji based on execution mode
                 let mode_emoji = match status.execution_mode {
-                    ExecutionMode::Subagent => "🤖",
+                    ExecutionMode::AgentTeam => "🤝",
                     ExecutionMode::Worktree => "🐝",
-                    ExecutionMode::Swarm => "🐝",
-                };
+                            };
 
                 let name_display = truncate_with_ellipsis(name, MAX_DRONE_NAME_LEN);
 
-                // Backend tag: [worktree|native], [subagent|swarm], etc.
-                let mode_tag = format!("[{}|{}]", status.execution_mode, status.backend);
+                // Backend tag: show teammate count for Agent Teams, mode for others
+                let mode_tag = if status.execution_mode == ExecutionMode::AgentTeam {
+                    let member_count = task_sync::read_team_members(name)
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    if member_count > 0 {
+                        format!("[{} agents]", member_count)
+                    } else {
+                        "[team]".to_string()
+                    }
+                } else {
+                    format!("[{}]", status.backend)
+                };
 
                 // Check inbox for pending messages
-                let inbox_dir = PathBuf::from(".hive/drones").join(name).join("inbox");
-                let inbox_count = if inbox_dir.exists() {
-                    fs::read_dir(&inbox_dir)
-                        .map(|entries| {
-                            entries
-                                .filter_map(|e| e.ok())
-                                .filter(|e| {
-                                    e.path().extension().and_then(|s| s.to_str()) == Some("json")
-                                })
+                let inbox_count = if status.execution_mode == ExecutionMode::AgentTeam {
+                    // Agent Teams: count unread messages across all inboxes
+                    task_sync::read_team_inboxes(name)
+                        .map(|inboxes| {
+                            inboxes.values()
+                                .flat_map(|v| v.iter())
+                                .filter(|m| !m.read)
                                 .count()
                         })
                         .unwrap_or(0)
                 } else {
-                    0
+                    // Worktree: check file bus inbox
+                    let inbox_dir = PathBuf::from(".hive/drones").join(name).join("inbox");
+                    if inbox_dir.exists() {
+                        fs::read_dir(&inbox_dir)
+                            .map(|entries| {
+                                entries
+                                    .filter_map(|e| e.ok())
+                                    .filter(|e| {
+                                        e.path().extension().and_then(|s| s.to_str()) == Some("json")
+                                    })
+                                    .count()
+                            })
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    }
                 };
                 let inbox_indicator = if inbox_count > 0 {
                     format!(" ✉{}", inbox_count)
@@ -816,10 +950,58 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                 // Expanded: show stories (works for all drones including completed)
                 if is_expanded {
+                    // For Agent Teams drones, build a map of story_id -> agent_name
+                    let agent_map: HashMap<String, String> = if status.execution_mode == ExecutionMode::AgentTeam {
+                        let mut map = HashMap::new();
+
+                        // Method 1: from task states (storyId in metadata)
+                        if let Ok(task_states) = task_sync::read_team_task_states(name) {
+                            for t in task_states.values() {
+                                if t.status != "in_progress" { continue; }
+                                if let Some(ref story_id) = t.story_id {
+                                    if let Some(ref owner) = t.owner {
+                                        map.insert(story_id.clone(), owner.clone());
+                                    }
+                                }
+                            }
+                        }
+
+                        // Method 2: from teammate names matching story IDs
+                        // Agent Teams creates internal tasks named like "worker-us0"
+                        // We match these to story IDs like "US-0"
+                        if map.is_empty() {
+                            if let Ok(task_states) = task_sync::read_team_task_states(name) {
+                                for t in task_states.values() {
+                                    if t.status != "in_progress" { continue; }
+                                    // Parse subject like "worker-us2" -> "US-2"
+                                    let subj = t.subject.to_lowercase();
+                                    if let Some(prd) = prd_cache.get(&status.prd) {
+                                        for story in &prd.stories {
+                                            let sid = story.id.to_lowercase().replace("-", "");
+                                            if subj.contains(&sid) {
+                                                map.insert(story.id.clone(), t.subject.clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Method 3: from active_agents in status.json
+                        for (agent, story_id) in &status.active_agents {
+                            map.entry(story_id.clone()).or_insert_with(|| agent.clone());
+                        }
+
+                        map
+                    } else {
+                        HashMap::new()
+                    };
+
                     if let Some(prd) = prd_cache.get(&status.prd) {
                         for (story_idx, story) in prd.stories.iter().enumerate() {
                             let is_completed = status.completed.contains(&story.id);
                             let is_current = status.current_story.as_ref() == Some(&story.id);
+                            let is_agent_active = agent_map.contains_key(&story.id);
                             let is_story_selected =
                                 is_selected && selected_story_index == Some(story_idx);
 
@@ -841,21 +1023,15 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 ("●", Color::Green) // Full green = completed
                             } else if has_blocked_deps {
                                 ("⏳", Color::Yellow) // Waiting for dependency
-                            } else if is_current {
+                            } else if is_current || is_agent_active {
                                 ("◐", Color::Yellow) // Half-full yellow = in progress
                             } else {
                                 ("○", Color::DarkGray) // Empty = pending
                             };
 
-                            // Dependency info suffix
+                            // Dependency info suffix - just show lock icon, no verbose list
                             let dep_info = if has_blocked_deps {
-                                let missing: Vec<&str> = story
-                                    .depends_on
-                                    .iter()
-                                    .filter(|dep_id| !status.completed.contains(dep_id))
-                                    .map(|s| s.as_str())
-                                    .collect();
-                                format!(" ⏳ waiting: {}", missing.join(", "))
+                                " 🔒".to_string()
                             } else {
                                 String::new()
                             };
@@ -904,6 +1080,10 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             let max_title_width =
                                 available_width.saturating_sub(prefix_len + duration_len + 2);
 
+                            // Agent badge for Agent Teams mode
+                            let agent_badge = agent_map.get(&story.id)
+                                .map(|a| format!(" @{}", a));
+
                             if story.title.len() <= max_title_width || max_title_width < 20 {
                                 // Title fits on one line or terminal too narrow
                                 let mut spans = vec![
@@ -920,6 +1100,12 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                         line_style.fg(Color::DarkGray),
                                     ),
                                 ];
+                                if let Some(ref badge) = agent_badge {
+                                    spans.push(Span::styled(
+                                        badge.clone(),
+                                        Style::default().fg(Color::Cyan),
+                                    ));
+                                }
                                 if !dep_info.is_empty() {
                                     spans.push(Span::styled(
                                         dep_info.clone(),
@@ -1091,7 +1277,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
             } else if selected_story_index.is_some() {
                 " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " ↵ expand  l logs  b blocked  m msgs  x stop  c clean  q quit".to_string()
+                " ↵ expand  l logs  b blocked  m msgs  x stop  D clean  q quit".to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -1144,6 +1330,13 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             0
                         };
 
+                    // Ctrl+C always quits immediately (never triggers clean)
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('c')
+                    {
+                        break;
+                    }
+
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
                             // If in blocked view, go back to main view
@@ -1174,26 +1367,40 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             // Show messages for current drone
                             if !drones.is_empty() {
                                 let drone_name = &drones[current_drone_idx].0;
-                                let bus = crate::communication::file_bus::FileBus::new();
-                                let inbox = bus.peek(drone_name).unwrap_or_default();
-                                let outbox = bus.list_outbox(drone_name).unwrap_or_default();
-                                if inbox.is_empty() && outbox.is_empty() {
-                                    message = Some(format!("No messages for '{}'", drone_name));
-                                    message_color = Color::DarkGray;
+                                let drone_status = &drones[current_drone_idx].1;
+
+                                if drone_status.execution_mode == ExecutionMode::AgentTeam {
+                                    // Agent Teams mode: open full message viewer
+                                    match show_team_messages_viewer(&mut terminal, drone_name) {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            message = Some(format!("Error: {}", e));
+                                            message_color = Color::Red;
+                                        }
+                                    }
                                 } else {
-                                    let mut msg_parts = Vec::new();
-                                    if !inbox.is_empty() {
-                                        msg_parts.push(format!("📥 {} inbox", inbox.len()));
+                                    // Worktree mode: show file bus messages summary
+                                    let bus = crate::communication::file_bus::FileBus::new();
+                                    let inbox = bus.peek(drone_name).unwrap_or_default();
+                                    let outbox = bus.list_outbox(drone_name).unwrap_or_default();
+                                    if inbox.is_empty() && outbox.is_empty() {
+                                        message = Some(format!("No messages for '{}'", drone_name));
+                                        message_color = Color::DarkGray;
+                                    } else {
+                                        let mut msg_parts = Vec::new();
+                                        if !inbox.is_empty() {
+                                            msg_parts.push(format!("📥 {} inbox", inbox.len()));
+                                        }
+                                        if !outbox.is_empty() {
+                                            msg_parts.push(format!("📤 {} outbox", outbox.len()));
+                                        }
+                                        message = Some(format!(
+                                            "✉ '{}': {}",
+                                            drone_name,
+                                            msg_parts.join(", ")
+                                        ));
+                                        message_color = Color::Cyan;
                                     }
-                                    if !outbox.is_empty() {
-                                        msg_parts.push(format!("📤 {} outbox", outbox.len()));
-                                    }
-                                    message = Some(format!(
-                                        "✉ '{}': {}",
-                                        drone_name,
-                                        msg_parts.join(", ")
-                                    ));
-                                    message_color = Color::Cyan;
                                 }
                             }
                         }
@@ -1377,7 +1584,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 }
                             }
                         }
-                        KeyCode::Char('c') | KeyCode::Char('C') => {
+                        KeyCode::Char('D') => {
+                            // Shift+D = clean (destructive, requires shift to prevent accidental use)
                             if !drones.is_empty() {
                                 let drone_name = drones[current_drone_idx].0.clone();
                                 match handle_clean_drone(&drone_name) {
@@ -1513,7 +1721,7 @@ fn handle_new_drone<B: ratatui::backend::Backend>(
             .interact()?;
         let model = models[model_idx].to_string();
 
-        // Launch drone using start command (default to worktree mode, not subagent)
+        // Launch drone using start command (default to worktree mode)
         crate::commands::start::run(
             drone_name.clone(),
             None,
@@ -1522,7 +1730,7 @@ fn handle_new_drone<B: ratatui::backend::Backend>(
             model,
             false,
             false,
-            false,
+            "auto".to_string(),
         )?;
 
         Ok(Some(format!("🐝 Launched drone: {}", drone_name)))
@@ -1533,6 +1741,33 @@ fn handle_new_drone<B: ratatui::backend::Backend>(
     crossterm::terminal::enable_raw_mode()?;
 
     result
+}
+
+/// Send a macOS/Linux desktop notification
+fn send_desktop_notification(title: &str, body: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "display notification \"{}\" with title \"{}\" sound name \"Glass\"",
+            body.replace('\"', "\\\"").replace('\n', " "),
+            title.replace('\"', "\\\""),
+        );
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("notify-send")
+            .arg(title)
+            .arg(body)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
 }
 
 // Find all PRD files in .hive/prds/ and project root
@@ -1614,8 +1849,8 @@ fn handle_resume_drone(drone_name: &str) -> Result<String> {
         false,
         "sonnet".to_string(),
         false,
-        false, // subagent mode - TODO: could read from status.json to preserve mode
-        false, // wait
+        false,
+        "auto".to_string(),
     )?;
     Ok(format!("🔄 Resumed drone: {}", drone_name))
 }
@@ -1684,9 +1919,8 @@ fn render_blocked_detail_view(
 
     // Use different emoji based on execution mode
     let mode_emoji = match status.execution_mode {
-        ExecutionMode::Subagent => "🤖",
+        ExecutionMode::AgentTeam => "🤝",
         ExecutionMode::Worktree => "🐝",
-        ExecutionMode::Swarm => "🐝",
     };
 
     let subheader_lines = vec![
@@ -1805,6 +2039,220 @@ fn render_blocked_detail_view(
     f.render_widget(footer, chunks[3]);
 }
 
+// Show Agent Teams messages in a full-screen TUI view
+fn show_team_messages_viewer<B: ratatui::backend::Backend>(
+    terminal: &mut ratatui::Terminal<B>,
+    drone_name: &str,
+) -> Result<()> {
+    use crossterm::event::{self, Event, KeyCode};
+    use ratatui::{
+        layout::{Constraint, Direction, Layout},
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    };
+
+    let mut scroll_offset: usize = 0;
+
+    loop {
+        // Read inboxes
+        let inboxes = task_sync::read_team_inboxes(drone_name).unwrap_or_default();
+        let members = task_sync::read_team_members(drone_name).unwrap_or_default();
+
+        // Collect all messages with recipient info, sorted by timestamp
+        let mut all_msgs: Vec<(String, String, String, bool)> = Vec::new(); // (timestamp, from, text, read)
+        for (recipient, msgs) in &inboxes {
+            for m in msgs {
+                // Parse JSON messages to get a clean display
+                let display_text = if m.text.starts_with('{') {
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&m.text) {
+                        let msg_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                        match msg_type {
+                            "idle_notification" => format!("[idle] {}", m.from),
+                            "shutdown_request" => format!("[shutdown request] {}", parsed.get("content").and_then(|v| v.as_str()).unwrap_or("")),
+                            "shutdown_response" => {
+                                let approved = parsed.get("approve").and_then(|v| v.as_bool()).unwrap_or(false);
+                                format!("[shutdown {}]", if approved { "approved" } else { "rejected" })
+                            }
+                            "task_completed" | "task_assignment" => {
+                                let content = parsed.get("content").and_then(|v| v.as_str()).unwrap_or(&m.text);
+                                content.to_string()
+                            }
+                            _ => {
+                                parsed.get("content").and_then(|v| v.as_str())
+                                    .unwrap_or(&m.text).to_string()
+                            }
+                        }
+                    } else {
+                        m.text.clone()
+                    }
+                } else {
+                    m.text.clone()
+                };
+
+                all_msgs.push((
+                    m.timestamp.clone(),
+                    format!("{} → {}", m.from, recipient),
+                    display_text,
+                    m.read,
+                ));
+            }
+        }
+        all_msgs.sort_by(|a, b| a.0.cmp(&b.0));
+
+        terminal.draw(|f| {
+            let area = f.area();
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(4),
+                    Constraint::Min(0),
+                    Constraint::Length(1),
+                ])
+                .split(area);
+
+            // Header
+            let header_lines = vec![
+                Line::from(vec![
+                    Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
+                    Span::styled("  Team Messages", Style::default().fg(Color::DarkGray)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("  🤝 {}", drone_name),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
+                    Span::styled(
+                        format!("  {} msgs, {} teammates", all_msgs.len(), members.len()),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]),
+            ];
+            f.render_widget(Paragraph::new(header_lines), chunks[0]);
+
+            // Messages
+            let mut lines: Vec<Line> = Vec::new();
+
+            if all_msgs.is_empty() {
+                lines.push(Line::raw(""));
+                lines.push(Line::styled(
+                    "  No messages yet",
+                    Style::default().fg(Color::DarkGray),
+                ));
+            } else {
+                // Prefix: " * HH:MM:SS from → to: " ~35 chars
+                let prefix_len: usize = 35;
+                let wrap_width = (area.width as usize).saturating_sub(prefix_len + 2);
+                let wrap_indent = " ".repeat(prefix_len);
+
+                for (ts, route, text, read) in &all_msgs {
+                    let time_str = if ts.len() >= 19 { &ts[11..19] } else { ts };
+                    let unread_marker = if !read { "*" } else { " " };
+
+                    // Word-wrap the text
+                    let wrapped = wrap_text(text, wrap_width.max(20));
+
+                    for (i, chunk) in wrapped.iter().enumerate() {
+                        if i == 0 {
+                            // First line: show header + text
+                            lines.push(Line::from(vec![
+                                Span::styled(
+                                    format!(" {} ", unread_marker),
+                                    Style::default().fg(if !read { Color::Cyan } else { Color::DarkGray }),
+                                ),
+                                Span::styled(
+                                    format!("{} ", time_str),
+                                    Style::default().fg(Color::DarkGray),
+                                ),
+                                Span::styled(
+                                    format!("{}: ", route),
+                                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(chunk.clone(), Style::default().fg(Color::White)),
+                            ]));
+                        } else {
+                            // Continuation lines: indent to align with text
+                            lines.push(Line::from(vec![
+                                Span::raw(wrap_indent.clone()),
+                                Span::styled(chunk.clone(), Style::default().fg(Color::White)),
+                            ]));
+                        }
+                    }
+                }
+            }
+
+            let content_height = chunks[1].height as usize;
+            let total_lines = lines.len();
+
+            // Auto-scroll to bottom
+            if scroll_offset == 0 && total_lines > content_height {
+                scroll_offset = total_lines.saturating_sub(content_height);
+            }
+
+            let visible: Vec<Line> = lines
+                .into_iter()
+                .skip(scroll_offset)
+                .take(content_height)
+                .collect();
+            f.render_widget(Paragraph::new(visible), chunks[1]);
+
+            // Scrollbar
+            if total_lines > content_height {
+                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(Some("│"))
+                    .thumb_symbol("█");
+                let mut state = ScrollbarState::new(total_lines)
+                    .position(scroll_offset)
+                    .viewport_content_length(content_height);
+                let sb_area = ratatui::layout::Rect {
+                    x: chunks[1].x + chunks[1].width - 1,
+                    y: chunks[1].y,
+                    width: 1,
+                    height: chunks[1].height,
+                };
+                f.render_stateful_widget(scrollbar, sb_area, &mut state);
+            }
+
+            // Footer
+            let footer = Paragraph::new(Line::from(vec![Span::styled(
+                " ↑↓ scroll  q back",
+                Style::default().fg(Color::DarkGray),
+            )]));
+            f.render_widget(footer, chunks[2]);
+        })?;
+
+        // Input
+        if crossterm::event::poll(std::time::Duration::from_millis(500))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        scroll_offset = scroll_offset.saturating_add(1);
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        scroll_offset = scroll_offset.saturating_sub(1);
+                    }
+                    KeyCode::PageDown => {
+                        scroll_offset = scroll_offset.saturating_add(20);
+                    }
+                    KeyCode::PageUp => {
+                        scroll_offset = scroll_offset.saturating_sub(20);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // Show logs viewer in TUI with line selection and JSON pretty-print
 fn show_logs_viewer<B: ratatui::backend::Backend>(
     terminal: &mut ratatui::Terminal<B>,
@@ -1862,10 +2310,9 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
 
                 // Use different emoji based on execution mode
                 let mode_emoji = match execution_mode {
-                    ExecutionMode::Subagent => "🤖",
+                    ExecutionMode::AgentTeam => "🤝",
                     ExecutionMode::Worktree => "🐝",
-                    ExecutionMode::Swarm => "🐝",
-                };
+                            };
 
                 // Header with HIVE ASCII art
                 let header_lines = vec![
@@ -1984,10 +2431,9 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
 
             // Use different emoji based on execution mode
             let mode_emoji = match execution_mode {
-                ExecutionMode::Subagent => "🤖",
+                ExecutionMode::AgentTeam => "🤝",
                 ExecutionMode::Worktree => "🐝",
-                ExecutionMode::Swarm => "🐝",
-            };
+                    };
 
             // Header with HIVE ASCII art
             let header_lines = vec![

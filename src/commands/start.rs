@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
+use crate::agent_teams;
 use crate::backend::{self, SpawnConfig};
 use crate::config;
 use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
@@ -23,10 +24,10 @@ pub fn run(
     local: bool,
     model: String,
     dry_run: bool,
-    subagent: bool,
-    wait: bool,
+    team: bool,
+    teammate_mode: String,
 ) -> Result<()> {
-    let mode_label = if subagent { "subagent" } else { "drone" };
+    let mode_label = if team { "team" } else { "drone" };
     println!(
         "{} Launching {} '{}'...",
         "→".bright_blue(),
@@ -56,15 +57,41 @@ pub fn run(
     }
 
     // Determine execution mode
-    let execution_mode = if subagent {
-        ExecutionMode::Subagent
+    // --team forces Opus model for best multi-agent coordination
+    let model = if team && model == "sonnet" {
+        println!(
+            "  {} Team mode: auto-switching to {} for multi-agent coordination",
+            "→".bright_blue(),
+            "opus".bright_cyan()
+        );
+        "opus".to_string()
+    } else {
+        model
+    };
+
+    let execution_mode = if team {
+        ExecutionMode::AgentTeam
     } else {
         ExecutionMode::Worktree
     };
 
-    let worktree_path = if subagent || local {
-        // Subagent mode: work in current directory, no worktree
+    // 4. Handle worktree creation
+    let worktree_path = if local {
         std::env::current_dir()?
+    } else if team {
+        // Agent Teams mode: single worktree, Opus handles parallelization via Agent Teams
+        let worktree_base = config::get_worktree_base()?;
+        let project_name = get_project_name()?;
+        let new_path = worktree_base.join(&project_name).join(&name);
+
+        if !new_path.exists() {
+            create_worktree(&new_path, branch, base_branch)?;
+            println!("  {} Created worktree", "✓".green());
+        } else {
+            println!("  {} Using existing worktree", "✓".green());
+        }
+
+        new_path
     } else if resume {
         // On resume, check if worktree already exists for this branch
         match find_existing_worktree(branch)? {
@@ -77,7 +104,6 @@ pub fn run(
                     );
                     println!("  {} Pruning and recreating...", "→".bright_blue());
 
-                    // Prune the worktree
                     let output = ProcessCommand::new("git")
                         .args([
                             "worktree",
@@ -94,7 +120,6 @@ pub fn run(
                         );
                     }
 
-                    // Now create new one
                     let worktree_base = config::get_worktree_base()?;
                     let project_name = get_project_name()?;
                     let new_path = worktree_base.join(&project_name).join(&name);
@@ -115,7 +140,6 @@ pub fn run(
                 }
             }
             None => {
-                // No existing worktree, create new one
                 let worktree_base = config::get_worktree_base()?;
                 let project_name = get_project_name()?;
                 let new_path = worktree_base.join(&project_name).join(&name);
@@ -129,12 +153,10 @@ pub fn run(
             }
         }
     } else {
-        // Not local, not resume - use standard path
         let worktree_base = config::get_worktree_base()?;
         let project_name = get_project_name()?;
         let new_path = worktree_base.join(&project_name).join(&name);
 
-        // Check if worktree already exists to avoid error
         if !new_path.exists() {
             create_worktree(&new_path, branch, base_branch)?;
             println!("  {} Created worktree", "✓".green());
@@ -145,32 +167,36 @@ pub fn run(
         new_path
     };
 
-    if subagent {
-        println!(
-            "  {} Working directory: {}",
-            "✓".green(),
-            worktree_path.display()
-        );
-    } else {
-        println!("  {} Worktree: {}", "✓".green(), worktree_path.display());
-    }
+    println!("  {} Worktree: {}", "✓".green(), worktree_path.display());
 
-    // 5. Create .hive symlink in worktree (not needed for subagent mode)
-    if !local && !subagent {
+    // 5. Create .hive symlink in worktree
+    if !local {
         create_hive_symlink(&worktree_path)?;
         println!("  {} Symlinked .hive", "✓".green());
     }
 
-    // 6. Create drone status
+    // 6. Agent Teams: seed task list for Opus to parallelize
+    if team {
+        let tasks = agent_teams::translate_stories_to_tasks(&prd);
+        agent_teams::seed_task_list(&name, &tasks)?;
+        println!(
+            "  {} Seeded {} tasks for Agent Teams",
+            "✓".green(),
+            tasks.len()
+        );
+    }
+
+    // 7. Create drone status
+    let backend_name = if team { "agent_team" } else { "native" };
     fs::create_dir_all(&drone_dir)?;
     let status = DroneStatus {
         drone: name.clone(),
         prd: prd_path.file_name().unwrap().to_string_lossy().to_string(),
         branch: branch.to_string(),
         worktree: worktree_path.to_string_lossy().to_string(),
-        local_mode: local || subagent,
+        local_mode: local,
         execution_mode: execution_mode.clone(),
-        backend: "native".to_string(),
+        backend: backend_name.to_string(),
         status: DroneState::Starting,
         current_story: None,
         completed: Vec::new(),
@@ -183,6 +209,7 @@ pub fn run(
         blocked_reason: None,
         blocked_questions: Vec::new(),
         awaiting_human: false,
+        active_agents: std::collections::HashMap::new(),
     };
 
     let status_path = drone_dir.join("status.json");
@@ -196,11 +223,16 @@ pub fn run(
     fs::create_dir_all(&inbox_dir)?;
     fs::create_dir_all(&outbox_dir)?;
 
-    // 7. Launch Claude via ExecutionBackend
+    // 8. Launch Claude via ExecutionBackend
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {
-        let backend = backend::resolve_backend(None);
+        let backend: Box<dyn crate::backend::ExecutionBackend> = if team {
+            backend::resolve_agent_team_backend()
+        } else {
+            backend::resolve_backend(None)
+        };
+
         let spawn_config = SpawnConfig {
             drone_name: name.clone(),
             prd_path: prd_path.clone(),
@@ -209,26 +241,25 @@ pub fn run(
             status_file: status_path.clone(),
             working_dir: worktree_path.clone(),
             execution_mode: execution_mode.clone(),
-            wait,
+            wait: false,
+            team_name: if team { Some(name.clone()) } else { None },
+            teammate_mode: if team {
+                Some(teammate_mode.clone())
+            } else {
+                None
+            },
+            worktree_assignments: None,
         };
 
-        if subagent && wait {
+        backend.spawn(&spawn_config)?;
+
+        if team {
             println!(
-                "  {} Running Claude subagent synchronously (model: {})",
-                "→".bright_blue(),
-                model.bright_cyan()
-            );
-            backend.spawn(&spawn_config)?;
-            println!("  {} Claude subagent completed", "✓".green());
-        } else if subagent {
-            backend.spawn(&spawn_config)?;
-            println!(
-                "  {} Launched Claude subagent (model: {})",
+                "  {} Launched Agent Teams lead (model: {})",
                 "✓".green(),
                 model.bright_cyan()
             );
         } else {
-            backend.spawn(&spawn_config)?;
             println!(
                 "  {} Launched Claude (model: {})",
                 "✓".green(),
@@ -237,8 +268,8 @@ pub fn run(
         }
     }
 
-    // 8. Send notification
-    let mode_emoji = if subagent { "🤖" } else { "🐝" };
+    // 9. Send notification
+    let mode_emoji = if team { "🤝" } else { "🐝" };
     crate::notifications::notify(
         &format!("{} {}", mode_emoji, name),
         &format!(
@@ -251,7 +282,7 @@ pub fn run(
     println!(
         "\n{} {} '{}' is running!",
         "✓".green().bold(),
-        if subagent { "Subagent" } else { "Drone" },
+        if team { "Team" } else { "Drone" },
         name.bright_cyan()
     );
     println!("\nMonitor progress:");
@@ -360,7 +391,7 @@ fn get_project_name() -> Result<String> {
         .context("Failed to get directory name")
 }
 
-fn create_worktree(
+pub fn create_worktree(
     path: &std::path::Path,
     branch: &str,
     explicit_base: Option<&str>,
@@ -377,9 +408,7 @@ fn create_worktree(
         .output();
 
     // Determine the base ref for the worktree
-    // Priority: explicit_base from PRD > auto-detect based on branch name
     let base_ref = if let Some(base) = explicit_base {
-        // If explicit base is master/main, use origin/ version
         if base == "master" || base == "main" {
             let remote_ref = format!("origin/{}", base);
             let exists = ProcessCommand::new("git")
@@ -399,8 +428,6 @@ fn create_worktree(
         get_worktree_base_ref(branch)?
     };
 
-    // Create the worktree with the appropriate base
-    // If branch already exists, just use it; otherwise create from base_ref
     let branch_exists = ProcessCommand::new("git")
         .args(["rev-parse", "--verify", branch])
         .output()
@@ -408,13 +435,11 @@ fn create_worktree(
         .unwrap_or(false);
 
     let output = if branch_exists {
-        // Branch exists, create worktree pointing to it
         ProcessCommand::new("git")
             .args(["worktree", "add", path.to_str().unwrap(), branch])
             .output()
             .context("Failed to create worktree")?
     } else {
-        // Branch doesn't exist, create it from base_ref
         println!(
             "  {} Creating branch '{}' from '{}'",
             "→".bright_blue(),
@@ -444,15 +469,10 @@ fn create_worktree(
     Ok(())
 }
 
-/// Determine the base ref for creating a worktree
-/// - For master/main: use origin/master or origin/main (remote, up-to-date)
-/// - For other branches: use local branch if exists, otherwise try origin/<branch>
 fn get_worktree_base_ref(branch: &str) -> Result<String> {
-    // Check if this is a standard main branch
     let is_main_branch = branch == "master" || branch == "main";
 
     if is_main_branch {
-        // For main branches, always use origin version to get latest
         let remote_ref = format!("origin/{}", branch);
         let exists = ProcessCommand::new("git")
             .args(["rev-parse", "--verify", &remote_ref])
@@ -463,11 +483,9 @@ fn get_worktree_base_ref(branch: &str) -> Result<String> {
         if exists {
             return Ok(remote_ref);
         }
-        // Fall back to local if remote doesn't exist
         return Ok(branch.to_string());
     }
 
-    // For other branches, check if local exists
     let local_exists = ProcessCommand::new("git")
         .args(["rev-parse", "--verify", branch])
         .output()
@@ -478,7 +496,6 @@ fn get_worktree_base_ref(branch: &str) -> Result<String> {
         return Ok(branch.to_string());
     }
 
-    // Check if remote version exists
     let remote_ref = format!("origin/{}", branch);
     let remote_exists = ProcessCommand::new("git")
         .args(["rev-parse", "--verify", &remote_ref])
@@ -490,7 +507,6 @@ fn get_worktree_base_ref(branch: &str) -> Result<String> {
         return Ok(remote_ref);
     }
 
-    // Default: try to create from origin/master or origin/main
     for default_branch in &["origin/master", "origin/main"] {
         let exists = ProcessCommand::new("git")
             .args(["rev-parse", "--verify", default_branch])
@@ -503,7 +519,6 @@ fn get_worktree_base_ref(branch: &str) -> Result<String> {
         }
     }
 
-    // Last resort: HEAD
     Ok("HEAD".to_string())
 }
 
@@ -512,7 +527,6 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
     let symlink_path = worktree.join(".hive");
 
     if symlink_path.exists() {
-        // Check if it's a symlink or a directory
         if symlink_path.is_symlink() {
             fs::remove_file(&symlink_path)?;
         } else if symlink_path.is_dir() {

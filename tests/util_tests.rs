@@ -62,6 +62,7 @@ fn create_test_drone(
         blocked_reason: None,
         blocked_questions: vec![],
         awaiting_human: false,
+        active_agents: HashMap::new(),
     };
 
     let status_json = serde_json::to_string_pretty(&drone_status).unwrap();
