@@ -134,9 +134,7 @@ pub fn render(frame: &mut Frame, sidebar: &SidebarState, focused: bool, area: Re
         ];
 
         let name_style = if is_selected {
-            Style::default()
-                .fg(theme.fg)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(theme.muted)
         };
