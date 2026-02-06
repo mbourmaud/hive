@@ -1,10 +1,11 @@
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 use serde::{Deserialize, Serialize};
 
 use super::dialogs::ModalDialog;
+use super::theme::Theme;
 
 /// Tool approval request from Claude
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,8 +74,8 @@ impl PermissionDialogState {
         }
     }
 
-    /// Build the permission dialog widget
-    pub fn build_dialog(&self) -> Option<ModalDialog<'static>> {
+    /// Build the permission dialog widget using theme colors
+    pub fn build_dialog(&self, theme: &Theme) -> Option<ModalDialog<'static>> {
         let request = self.request.as_ref()?;
 
         let mut content = Vec::new();
@@ -85,7 +86,7 @@ impl PermissionDialogState {
             Span::styled(
                 request.tool_name.clone(),
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent_warning)
                     .add_modifier(Modifier::BOLD),
             ),
         ]));
@@ -103,7 +104,7 @@ impl PermissionDialogState {
         for line in args_str.lines().take(10) {
             content.push(Line::from(Span::styled(
                 format!("  {}", line),
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(theme.accent_primary),
             )));
         }
 
@@ -111,7 +112,7 @@ impl PermissionDialogState {
         if args_str.lines().count() > 10 {
             content.push(Line::from(Span::styled(
                 "  ... (truncated)",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.fg_muted),
             )));
         }
 
@@ -126,11 +127,11 @@ impl PermissionDialogState {
 
             for line in diff.lines().take(5) {
                 let style = if line.starts_with('+') {
-                    Style::default().fg(Color::Green)
+                    Style::default().fg(theme.accent_success)
                 } else if line.starts_with('-') {
-                    Style::default().fg(Color::Red)
+                    Style::default().fg(theme.accent_error)
                 } else {
-                    Style::default().fg(Color::Gray)
+                    Style::default().fg(theme.fg_secondary)
                 };
                 content.push(Line::from(Span::styled(format!("  {}", line), style)));
             }
@@ -138,7 +139,7 @@ impl PermissionDialogState {
             if diff.lines().count() > 5 {
                 content.push(Line::from(Span::styled(
                     "  ... (truncated)",
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(theme.fg_muted),
                 )));
             }
 
@@ -152,19 +153,21 @@ impl PermissionDialogState {
                 Span::styled(
                     "[Y]",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.accent_success)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Accept  "),
                 Span::styled(
                     "[N]",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(theme.accent_error)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Reject  "),
                 Span::styled(
                     "[A]",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.accent_warning)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Always Allow"),
@@ -172,7 +175,7 @@ impl PermissionDialogState {
         ];
 
         Some(
-            ModalDialog::new(" Tool Approval Required ")
+            ModalDialog::new(" Tool Approval Required ", theme)
                 .content(content)
                 .footer(footer)
                 .width_percent(70)
@@ -226,10 +229,11 @@ mod tests {
         });
 
         assert!(state.is_active());
-        assert!(state.build_dialog().is_some());
+        let theme = Theme::dark();
+        assert!(state.build_dialog(&theme).is_some());
 
         state.clear();
         assert!(!state.is_active());
-        assert!(state.build_dialog().is_none());
+        assert!(state.build_dialog(&theme).is_none());
     }
 }

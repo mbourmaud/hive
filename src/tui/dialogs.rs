@@ -1,10 +1,12 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Widget},
 };
+
+use super::theme::Theme;
 
 /// Generic centered modal dialog widget
 pub struct ModalDialog<'a> {
@@ -13,16 +15,22 @@ pub struct ModalDialog<'a> {
     footer: Option<Vec<Line<'a>>>,
     width_percent: u16,
     height_percent: u16,
+    border_color: ratatui::style::Color,
+    bg_color: ratatui::style::Color,
+    footer_border_color: ratatui::style::Color,
 }
 
 impl<'a> ModalDialog<'a> {
-    pub fn new(title: impl Into<String>) -> Self {
+    pub fn new(title: impl Into<String>, theme: &Theme) -> Self {
         Self {
             title: title.into(),
             content: Vec::new(),
             footer: None,
             width_percent: 60,
             height_percent: 50,
+            border_color: theme.dialog_border,
+            bg_color: theme.dialog_bg,
+            footer_border_color: theme.dialog_footer_border,
         }
     }
 
@@ -83,8 +91,8 @@ impl<'a> Widget for ModalDialog<'a> {
             .title(self.title.clone())
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow))
-            .style(Style::default().bg(Color::Black));
+            .border_style(Style::default().fg(self.border_color))
+            .style(Style::default().bg(self.bg_color));
 
         let inner = block.inner(dialog_area);
         block.render(dialog_area, buf);
@@ -110,7 +118,7 @@ impl<'a> Widget for ModalDialog<'a> {
         if let Some(footer_lines) = self.footer {
             let footer_block = Block::default()
                 .borders(Borders::TOP)
-                .border_style(Style::default().fg(Color::DarkGray));
+                .border_style(Style::default().fg(self.footer_border_color));
             let footer_inner = footer_block.inner(chunks[1]);
             footer_block.render(chunks[1], buf);
 
@@ -126,6 +134,7 @@ pub fn confirmation_dialog<'a>(
     message: impl Into<String>,
     yes_label: &str,
     no_label: &str,
+    theme: &Theme,
 ) -> ModalDialog<'a> {
     let content = vec![
         Line::from(""),
@@ -139,18 +148,20 @@ pub fn confirmation_dialog<'a>(
             Span::styled(
                 format!("[{}] ", yes_label),
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(theme.accent_success)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
             Span::styled(
                 format!("[{}]", no_label),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme.accent_error)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
     ];
 
-    ModalDialog::new(title)
+    ModalDialog::new(title, theme)
         .content(content)
         .footer(footer)
         .width_percent(50)

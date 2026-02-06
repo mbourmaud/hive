@@ -65,10 +65,7 @@ pub fn render_markdown(text: &str, theme: &Theme) -> Vec<Line<'static>> {
                     }
                     for code_line in &code_block_lines {
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                "\u{2502} ",
-                                Style::default().fg(theme.code_border),
-                            ),
+                            Span::styled("\u{2502} ", Style::default().fg(theme.code_border)),
                             Span::styled(
                                 code_line.clone(),
                                 Style::default()

@@ -165,10 +165,7 @@ impl ChatState {
                     ]),
                     Line::from(vec![
                         Span::styled("  ", Style::default()),
-                        Span::styled(
-                            tool_name.clone(),
-                            Style::default().fg(theme.accent_warning),
-                        ),
+                        Span::styled(tool_name.clone(), Style::default().fg(theme.accent_warning)),
                         Span::raw(": "),
                         Span::styled(
                             args_summary.clone(),

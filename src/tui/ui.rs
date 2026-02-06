@@ -27,7 +27,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     render_footer(f, footer, app);
 
     // Render permission dialog overlay if active
-    if let Some(dialog) = app.permission_state.build_dialog() {
+    if let Some(dialog) = app.permission_state.build_dialog(&app.theme) {
         f.render_widget(dialog, size);
     }
 
@@ -35,52 +35,38 @@ pub fn render(f: &mut Frame, app: &mut App) {
     app.session_list.render(f, size, &app.theme);
 }
 
-/// Render the sidebar
-fn render_sidebar(f: &mut Frame, area: Rect, app: &App) {
+/// Render the sidebar with drone list
+fn render_sidebar(f: &mut Frame, area: Rect, app: &mut App) {
     let theme = &app.theme;
+    let is_focused = app.focused_pane == FocusedPane::Sidebar;
 
-    // Hive ASCII logo
-    let logo = vec![
-        Line::from(Span::styled(
-            "  \u{1f41d} HIVE",
-            Style::default()
-                .fg(theme.accent_primary)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            "  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}",
-            Style::default().fg(theme.accent_primary),
-        )),
-        Line::from(""),
-    ];
+    let border_color = if is_focused {
+        theme.border_focused
+    } else {
+        theme.border_sidebar
+    };
+
+    let title = format!(" Drones ({}) ", app.drones.len());
 
     let block = Block::default()
+        .title(title)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.border_sidebar))
+        .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.bg_sidebar));
 
-    let mut content = logo;
-    content.push(Line::from(Span::styled(
-        "  📋 Conversations",
-        Style::default().fg(theme.fg_primary),
-    )));
-    content.push(Line::from(""));
-    content.push(Line::from(Span::styled(
-        "  📁 Files",
-        Style::default().fg(theme.fg_muted),
-    )));
-    content.push(Line::from(""));
-    content.push(Line::from(Span::styled(
-        "  ⚙️  Settings",
-        Style::default().fg(theme.fg_muted),
-    )));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
 
-    let paragraph = Paragraph::new(content)
-        .block(block)
-        .wrap(Wrap { trim: true });
-
-    f.render_widget(paragraph, area);
+    super::sidebar::render_sidebar(
+        f,
+        inner,
+        &mut app.sidebar_state,
+        &app.drones,
+        &app.prd_cache,
+        &app.display_order,
+        app.active_count,
+    );
 }
 
 /// Render the main content area (chat messages + input)
@@ -294,59 +280,43 @@ fn render_input(f: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
-/// Render the footer with keybinding hints
+/// Render the footer with keybinding hints and status messages
 fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
-    let sidebar_hint = if app.sidebar_visible {
-        "Hide Sidebar"
-    } else {
-        "Show Sidebar"
-    };
 
-    let hints = vec![
-        Span::styled(
-            " q ",
+    // If there's a status message, show it prominently
+    if let Some((ref msg, _)) = app.status_message {
+        let status_spans = vec![
+            Span::styled(
+                " STATUS ",
+                Style::default()
+                    .fg(theme.footer_key_fg)
+                    .bg(theme.footer_key_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {} ", msg),
+                Style::default().fg(theme.accent_warning),
+            ),
+        ];
+        let footer = Paragraph::new(Line::from(status_spans))
+            .style(Style::default().fg(theme.footer_fg).bg(theme.footer_bg));
+        f.render_widget(footer, area);
+        return;
+    }
+
+    // Build dynamic keybinding hints based on current pane focus
+    let keybindings = app.get_keybindings();
+    let mut hints: Vec<Span> = Vec::new();
+    for (key, desc) in &keybindings {
+        hints.push(Span::styled(
+            format!(" {} ", key),
             Style::default()
                 .fg(theme.footer_key_fg)
                 .bg(theme.footer_key_bg),
-        ),
-        Span::raw(" Quit  "),
-        Span::styled(
-            " Ctrl+B ",
-            Style::default()
-                .fg(theme.footer_key_fg)
-                .bg(theme.footer_key_bg),
-        ),
-        Span::raw(format!(" {}  ", sidebar_hint)),
-        Span::styled(
-            " Ctrl+T ",
-            Style::default()
-                .fg(theme.footer_key_fg)
-                .bg(theme.footer_key_bg),
-        ),
-        Span::raw(" Theme  "),
-        Span::styled(
-            " Ctrl+Enter ",
-            Style::default()
-                .fg(theme.footer_key_fg)
-                .bg(theme.footer_key_bg),
-        ),
-        Span::raw(" Submit  "),
-        Span::styled(
-            " Ctrl+N ",
-            Style::default()
-                .fg(theme.footer_key_fg)
-                .bg(theme.footer_key_bg),
-        ),
-        Span::raw(" New Session  "),
-        Span::styled(
-            " Ctrl+L ",
-            Style::default()
-                .fg(theme.footer_key_fg)
-                .bg(theme.footer_key_bg),
-        ),
-        Span::raw(" Sessions "),
-    ];
+        ));
+        hints.push(Span::raw(format!(" {}  ", desc)));
+    }
 
     let footer = Paragraph::new(Line::from(hints))
         .style(Style::default().fg(theme.footer_fg).bg(theme.footer_bg));
