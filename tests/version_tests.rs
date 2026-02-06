@@ -17,19 +17,13 @@ fn test_version_flag() {
         .output()
         .expect("Failed to execute binary");
 
-    assert!(
-        output.status.success(),
-        "Command should exit successfully"
-    );
+    assert!(output.status.success(), "Command should exit successfully");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let version = env!("CARGO_PKG_VERSION");
 
     // Should output "hive X.Y.Z"
-    assert!(
-        stdout.contains("hive"),
-        "Output should contain 'hive'"
-    );
+    assert!(stdout.contains("hive"), "Output should contain 'hive'");
     assert!(
         stdout.contains(version),
         "Output should contain version {}",
@@ -61,10 +55,7 @@ fn test_version_short_flag() {
     let version = env!("CARGO_PKG_VERSION");
 
     // Should output "hive X.Y.Z"
-    assert!(
-        stdout.contains("hive"),
-        "Output should contain 'hive'"
-    );
+    assert!(stdout.contains("hive"), "Output should contain 'hive'");
     assert!(
         stdout.contains(version),
         "Output should contain version {}",
@@ -85,19 +76,13 @@ fn test_version_subcommand() {
         .output()
         .expect("Failed to execute binary");
 
-    assert!(
-        output.status.success(),
-        "Command should exit successfully"
-    );
+    assert!(output.status.success(), "Command should exit successfully");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let version = env!("CARGO_PKG_VERSION");
 
     // version subcommand has a different output format with emoji
-    assert!(
-        stdout.contains("Hive"),
-        "Output should contain 'Hive'"
-    );
+    assert!(stdout.contains("Hive"), "Output should contain 'Hive'");
     assert!(
         stdout.contains(version),
         "Output should contain version {}",
