@@ -23,6 +23,7 @@ serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 ratatui = "0.28"
 crossterm = "0.28"
+tui-textarea = "0.6"
 dialoguer = "0.11"
 colored = "2"
 anyhow = "1"
