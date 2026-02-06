@@ -83,13 +83,12 @@ pub fn run() -> Result<()> {
     }
 
     // 7. Install skills and MCP server for Claude Code integration
-    println!("\n{}", "Setting up Claude Code integration...".bright_blue());
+    println!(
+        "\n{}",
+        "Setting up Claude Code integration...".bright_blue()
+    );
     if let Err(e) = install::run(true, false) {
-        println!(
-            "  {} Failed to install skills: {}",
-            "⚠".yellow(),
-            e
-        );
+        println!("  {} Failed to install skills: {}", "⚠".yellow(), e);
         println!("    Run 'hive install --skills-only' manually to retry");
     }
 
