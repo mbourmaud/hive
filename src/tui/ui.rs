@@ -11,10 +11,10 @@ use super::app::App;
 /// Render the entire UI
 pub fn render(f: &mut Frame, app: &mut App) {
     let size = f.area();
-    
+
     // Calculate layout
     let (sidebar, content, footer) = app.layout.calculate(size, app.sidebar_visible);
-    
+
     // Render sidebar if visible
     if app.sidebar_visible {
         render_sidebar(f, sidebar, app);
@@ -35,23 +35,33 @@ fn render_sidebar(f: &mut Frame, area: Rect, app: &App) {
     let logo = vec![
         Line::from(Span::styled(
             "    __  __  _____   _______",
-            Style::default().fg(theme.accent_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent_primary)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "   / / / / /  _/ | / / ____/",
-            Style::default().fg(theme.accent_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent_primary)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  / /_/ /  / / | |/ / __/   ",
-            Style::default().fg(theme.accent_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent_primary)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             " / __  / _/ /  |   / /___   ",
-            Style::default().fg(theme.accent_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent_primary)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "/_/ /_/ /___/  |__/_____/   ",
-            Style::default().fg(theme.accent_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent_primary)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
     ];
@@ -203,22 +213,30 @@ fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let hints = vec![
         Span::styled(
             " q ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(" Quit  "),
         Span::styled(
             " Ctrl+B ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(format!(" {}  ", sidebar_hint)),
         Span::styled(
             " Ctrl+T ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(" Theme  "),
         Span::styled(
             " Ctrl+Enter ",
-            Style::default().fg(theme.footer_key_fg).bg(theme.footer_key_bg),
+            Style::default()
+                .fg(theme.footer_key_fg)
+                .bg(theme.footer_key_bg),
         ),
         Span::raw(" Submit "),
     ];

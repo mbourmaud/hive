@@ -207,7 +207,9 @@ impl InputState {
     fn set_textarea_content(&mut self, content: &str) {
         let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
         self.textarea = TextArea::new(lines);
-        self.textarea.set_placeholder_text("Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)");
+        self.textarea.set_placeholder_text(
+            "Type your message here... (Ctrl+Enter to submit, @ for file autocomplete)",
+        );
     }
 
     /// Get the current input text

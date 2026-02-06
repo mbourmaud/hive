@@ -86,7 +86,8 @@ impl ClaudeBackend {
     #[allow(dead_code)]
     pub fn send_prompt(&self, prompt: &str) -> Result<()> {
         if let Some(tx) = &self.input_tx {
-            tx.send(prompt.to_string()).context("Failed to send prompt")?;
+            tx.send(prompt.to_string())
+                .context("Failed to send prompt")?;
         }
         Ok(())
     }

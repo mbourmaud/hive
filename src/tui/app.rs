@@ -75,7 +75,8 @@ impl App {
                 }
 
                 // Handle 'q' for quit
-                if key.code == KeyCode::Char('q') && !key.modifiers.contains(KeyModifiers::CONTROL) {
+                if key.code == KeyCode::Char('q') && !key.modifiers.contains(KeyModifiers::CONTROL)
+                {
                     self.should_quit = true;
                     return Ok(());
                 }
@@ -97,7 +98,14 @@ impl App {
         vec![
             ("q", "quit"),
             ("Ctrl+C", "quit"),
-            ("Ctrl+B", if self.sidebar_visible { "hide sidebar" } else { "show sidebar" }),
+            (
+                "Ctrl+B",
+                if self.sidebar_visible {
+                    "hide sidebar"
+                } else {
+                    "show sidebar"
+                },
+            ),
             ("Ctrl+Enter", "submit"),
             ("Ctrl+A/E", "start/end of line"),
             ("Ctrl+K/U", "delete to end/start"),
@@ -118,7 +126,8 @@ impl App {
                     self.claude = Some(backend);
                 }
                 Err(e) => {
-                    self.messages.push(Message::Error(format!("Failed to start Claude: {}", e)));
+                    self.messages
+                        .push(Message::Error(format!("Failed to start Claude: {}", e)));
                     return Ok(());
                 }
             }
@@ -127,7 +136,8 @@ impl App {
         // Send prompt to Claude
         if let Some(claude) = &self.claude {
             if let Err(e) = claude.send_prompt(&prompt) {
-                self.messages.push(Message::Error(format!("Failed to send prompt: {}", e)));
+                self.messages
+                    .push(Message::Error(format!("Failed to send prompt: {}", e)));
             }
         }
 
@@ -145,7 +155,8 @@ impl App {
 
             // Check if process is still running
             if !claude.is_running() {
-                self.messages.push(Message::Error("Claude process terminated".to_string()));
+                self.messages
+                    .push(Message::Error("Claude process terminated".to_string()));
                 self.claude = None;
             }
         }
