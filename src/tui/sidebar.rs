@@ -1,10 +1,11 @@
 /// Sidebar widget for the Hive TUI
 /// Displays drone list with status, progress bars, and story details
 use crate::tui::monitor;
+use crate::tui::theme::Theme;
 use crate::types::{DroneStatus, Prd};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
@@ -50,6 +51,7 @@ impl Default for SidebarState {
 }
 
 /// Render the sidebar with drone list
+#[allow(clippy::too_many_arguments)]
 pub fn render_sidebar(
     f: &mut Frame,
     area: Rect,
@@ -58,6 +60,7 @@ pub fn render_sidebar(
     prd_cache: &HashMap<String, Prd>,
     display_order: &[usize],
     active_count: usize,
+    theme: &Theme,
 ) {
     let mut lines: Vec<Line> = Vec::new();
     let mut drone_line_indices: Vec<usize> = Vec::new();
@@ -69,13 +72,16 @@ pub fn render_sidebar(
         lines.push(Line::from(vec![Span::styled(
             "  No drones running",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(theme.fg_muted)
                 .add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::raw(""));
         lines.push(Line::from(vec![
             Span::raw("  "),
-            Span::styled("Press 'n' to create", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "Press 'n' to create",
+                Style::default().fg(theme.accent_warning),
+            ),
         ]));
     }
 
@@ -83,14 +89,14 @@ pub fn render_sidebar(
     if active_count > 0 {
         lines.push(Line::from(vec![
             Span::styled(
-                "  🍯 ACTIVE",
+                "  \u{1f36f} ACTIVE",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent_warning)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!(" ({})", active_count),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.fg_muted),
             ),
         ]));
         lines.push(Line::raw(""));
@@ -100,20 +106,20 @@ pub fn render_sidebar(
         // Add ARCHIVED header before first archived drone
         if display_idx == active_count && active_count < display_order.len() {
             lines.push(Line::styled(
-                "  ─────────────────────────────────────────────────────",
-                Style::default().fg(Color::DarkGray),
+                "  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}",
+                Style::default().fg(theme.fg_muted),
             ));
             lines.push(Line::raw(""));
             lines.push(Line::from(vec![
                 Span::styled(
-                    "  🐻 ARCHIVED",
+                    "  \u{1f43b} ARCHIVED",
                     Style::default()
-                        .fg(Color::DarkGray)
+                        .fg(theme.fg_muted)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!(" ({})", display_order.len() - active_count),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(theme.fg_muted),
                 ),
             ]));
             lines.push(Line::raw(""));
@@ -128,7 +134,7 @@ pub fn render_sidebar(
 
         // Render drone header line
         let drone_lines =
-            monitor::render_drone_line(name, status, is_selected, is_expanded, prd, &area);
+            monitor::render_drone_line(name, status, is_selected, is_expanded, prd, &area, theme);
         lines.extend(drone_lines);
 
         // Render stories if expanded
@@ -141,6 +147,7 @@ pub fn render_sidebar(
                     state.selected_story_index,
                     is_selected,
                     &area,
+                    theme,
                 );
                 lines.extend(story_lines);
             }
@@ -179,8 +186,8 @@ pub fn render_sidebar(
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)
-            .track_symbol(Some("│"))
-            .thumb_symbol("█");
+            .track_symbol(Some("\u{2502}"))
+            .thumb_symbol("\u{2588}");
 
         let mut scrollbar_state = ScrollbarState::new(total_lines)
             .position(state.scroll_offset)

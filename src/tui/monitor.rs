@@ -5,11 +5,12 @@ use crate::commands::common::{
     parse_timestamp, read_drone_pid, reconcile_progress_with_prd, truncate_with_ellipsis,
     DEFAULT_INACTIVE_THRESHOLD_SECS, MAX_DRONE_NAME_LEN,
 };
+use crate::tui::theme::Theme;
 use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 use chrono::Utc;
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 use std::collections::{HashMap, HashSet};
@@ -24,6 +25,7 @@ pub fn render_drone_line(
     is_expanded: bool,
     prd: Option<&Prd>,
     _area: &Rect,
+    theme: &Theme,
 ) -> Vec<Line<'static>> {
     let process_running = read_drone_pid(drone_name)
         .map(is_process_running)
@@ -32,18 +34,18 @@ pub fn render_drone_line(
     // Status icon and color
     let is_active_process = process_running || status.current_story.is_some();
     let (icon, status_color) = match status.status {
-        DroneState::Starting | DroneState::Resuming => ("◐", Color::Yellow),
+        DroneState::Starting | DroneState::Resuming => ("\u{25d0}", theme.drone_starting),
         DroneState::InProgress => {
             if is_active_process {
-                ("◐", Color::Green)
+                ("\u{25d0}", theme.drone_active)
             } else {
-                ("○", Color::Yellow)
+                ("\u{25cb}", theme.drone_starting)
             }
         }
-        DroneState::Completed => ("●", Color::Green),
-        DroneState::Error => ("◐", Color::Red),
-        DroneState::Blocked => ("◐", Color::Red),
-        DroneState::Stopped => ("○", Color::DarkGray),
+        DroneState::Completed => ("\u{25cf}", theme.drone_completed),
+        DroneState::Error => ("\u{25d0}", theme.drone_error),
+        DroneState::Blocked => ("\u{25d0}", theme.drone_error),
+        DroneState::Stopped => ("\u{25cb}", theme.drone_stopped),
     };
 
     // Use reconciled progress to filter out old completed stories
@@ -64,27 +66,25 @@ pub fn render_drone_line(
     let empty = bar_width - filled;
 
     let (filled_bar, empty_bar) = if status.status == DroneState::Completed && !has_new_stories {
-        // Completed: full green bar
-        ("━".repeat(bar_width), String::new())
+        ("\u{2501}".repeat(bar_width), String::new())
     } else {
-        ("━".repeat(filled), "─".repeat(empty))
+        ("\u{2501}".repeat(filled), "\u{2500}".repeat(empty))
     };
 
     let filled_color = match status.status {
-        DroneState::Completed => Color::Green, // Full green when completed
-        DroneState::Blocked | DroneState::Error => Color::Rgb(255, 165, 0),
-        _ => Color::Green,
+        DroneState::Completed => theme.drone_completed,
+        DroneState::Blocked | DroneState::Error => theme.drone_progress_blocked,
+        _ => theme.drone_active,
     };
 
     // Expand/collapse indicator
-    let expand_indicator = if is_expanded { "▼" } else { "▶" };
+    let expand_indicator = if is_expanded { "\u{25bc}" } else { "\u{25b6}" };
 
     // Selection indicator
-    let select_char = if is_selected { "▸" } else { " " };
+    let select_char = if is_selected { "\u{25b8}" } else { " " };
 
     // Elapsed time - stop timer if completed
     let elapsed = if status.status == DroneState::Completed {
-        // Find the last completed story time
         let last_completed = status
             .story_times
             .values()
@@ -100,38 +100,36 @@ pub fn render_drone_line(
             elapsed_since(&status.started).unwrap_or_default()
         }
     } else if status.status == DroneState::Stopped {
-        // Stopped - show time at stop (use updated timestamp)
         if let Some(duration) = duration_between(&status.started, &status.updated) {
             format_duration(duration)
         } else {
             elapsed_since(&status.started).unwrap_or_default()
         }
     } else {
-        // In progress - show live elapsed time
         elapsed_since(&status.started).unwrap_or_default()
     };
 
     // Drone header line
     let name_style = if is_selected {
         Style::default()
-            .fg(Color::Yellow)
+            .fg(theme.drone_name)
             .add_modifier(Modifier::BOLD)
     } else if status.status == DroneState::Completed {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(theme.drone_name_completed)
     } else {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(theme.drone_name)
     };
 
     // Use different emoji based on execution mode
     let mode_emoji = match status.execution_mode {
-        ExecutionMode::Subagent => "🤖",
-        ExecutionMode::Worktree => "🐝",
-        ExecutionMode::Swarm => "🐝",
+        ExecutionMode::Subagent => "\u{1f916}",
+        ExecutionMode::Worktree => "\u{1f41d}",
+        ExecutionMode::Swarm => "\u{1f41d}",
     };
 
     let name_display = truncate_with_ellipsis(drone_name, MAX_DRONE_NAME_LEN);
 
-    // Backend tag: [worktree|native], [subagent|swarm], etc.
+    // Backend tag
     let mode_tag = format!("[{}|{}]", status.execution_mode, status.backend);
 
     // Check inbox for pending messages
@@ -149,38 +147,41 @@ pub fn render_drone_line(
         0
     };
     let inbox_indicator = if inbox_count > 0 {
-        format!(" ✉{}", inbox_count)
+        format!(" \u{2709}{}", inbox_count)
     } else {
         String::new()
+    };
+
+    let count_color = if status.status == DroneState::Completed && !has_new_stories {
+        theme.drone_name_completed
+    } else if has_new_stories {
+        theme.drone_progress_new_stories
+    } else {
+        theme.drone_progress_count
     };
 
     let header_line = Line::from(vec![
         Span::raw(format!(" {} ", select_char)),
         Span::styled(icon, Style::default().fg(status_color)),
         Span::raw(" "),
-        Span::styled(expand_indicator, Style::default().fg(Color::DarkGray)),
+        Span::styled(expand_indicator, Style::default().fg(theme.fg_muted)),
         Span::raw(" "),
         Span::styled(format!("{} {} ", mode_emoji, name_display), name_style),
         Span::styled(filled_bar, Style::default().fg(filled_color)),
-        Span::styled(empty_bar, Style::default().fg(Color::DarkGray)),
+        Span::styled(empty_bar, Style::default().fg(theme.fg_muted)),
         Span::raw(" "),
         Span::styled(
             format!("{}/{}", valid_completed, prd_story_count),
-            Style::default().fg(
-                if status.status == DroneState::Completed && !has_new_stories {
-                    Color::DarkGray
-                } else if has_new_stories {
-                    Color::Cyan
-                } else {
-                    Color::White
-                },
-            ),
+            Style::default().fg(count_color),
         ),
         Span::raw("  "),
-        Span::styled(mode_tag.clone(), Style::default().fg(Color::DarkGray)),
-        Span::styled(inbox_indicator.clone(), Style::default().fg(Color::Cyan)),
+        Span::styled(mode_tag.clone(), Style::default().fg(theme.fg_muted)),
+        Span::styled(
+            inbox_indicator.clone(),
+            Style::default().fg(theme.accent_primary),
+        ),
         Span::raw("  "),
-        Span::styled(elapsed, Style::default().fg(Color::DarkGray)),
+        Span::styled(elapsed, Style::default().fg(theme.fg_muted)),
     ]);
 
     vec![header_line]
@@ -194,6 +195,7 @@ pub fn render_drone_stories(
     selected_story_index: Option<usize>,
     is_drone_selected: bool,
     area: &Rect,
+    theme: &Theme,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
@@ -212,17 +214,16 @@ pub fn render_drone_stories(
             false
         };
 
-        // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending), ⏳ = blocked by deps
         let (story_icon, story_color) = if is_story_selected {
-            ("▸", Color::Cyan)
+            ("\u{25b8}", theme.accent_primary)
         } else if is_completed {
-            ("●", Color::Green) // Full green = completed
+            ("\u{25cf}", theme.drone_completed)
         } else if has_blocked_deps {
-            ("⏳", Color::Yellow) // Waiting for dependency
+            ("\u{231b}", theme.accent_warning)
         } else if is_current {
-            ("◐", Color::Yellow) // Half-full yellow = in progress
+            ("\u{25d0}", theme.accent_warning)
         } else {
-            ("○", Color::DarkGray) // Empty = pending
+            ("\u{25cb}", theme.fg_muted)
         };
 
         // Dependency info suffix
@@ -233,7 +234,7 @@ pub fn render_drone_stories(
                 .filter(|dep_id| !status.completed.contains(dep_id))
                 .map(|s| s.as_str())
                 .collect();
-            format!(" ⏳ waiting: {}", missing.join(", "))
+            format!(" \u{231b} waiting: {}", missing.join(", "))
         } else {
             String::new()
         };
@@ -266,7 +267,7 @@ pub fn render_drone_stories(
         };
 
         let title_color = if is_story_selected {
-            Color::Cyan
+            theme.accent_primary
         } else {
             story_color
         };
@@ -278,24 +279,22 @@ pub fn render_drone_stories(
         let max_title_width = available_width.saturating_sub(prefix_len + duration_len + 2);
 
         if story.title.len() <= max_title_width || max_title_width < 20 {
-            // Title fits on one line
             let mut spans = vec![
                 Span::styled("      ", line_style),
                 Span::styled(story_icon, line_style.fg(story_color)),
                 Span::raw(" "),
                 Span::styled(format!("{:<16} ", story.id), line_style.fg(title_color)),
                 Span::styled(story.title.clone(), line_style.fg(title_color)),
-                Span::styled(duration_str.clone(), line_style.fg(Color::DarkGray)),
+                Span::styled(duration_str.clone(), line_style.fg(theme.fg_muted)),
             ];
             if !dep_info.is_empty() {
                 spans.push(Span::styled(
                     dep_info.clone(),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(theme.accent_warning),
                 ));
             }
             lines.push(Line::from(spans));
         } else {
-            // Title needs to wrap - simplified for now, just truncate
             let truncated_title = truncate_with_ellipsis(&story.title, max_title_width);
             let mut spans = vec![
                 Span::styled("      ", line_style),
@@ -303,12 +302,12 @@ pub fn render_drone_stories(
                 Span::raw(" "),
                 Span::styled(format!("{:<16} ", story.id), line_style.fg(title_color)),
                 Span::styled(truncated_title, line_style.fg(title_color)),
-                Span::styled(duration_str.clone(), line_style.fg(Color::DarkGray)),
+                Span::styled(duration_str.clone(), line_style.fg(theme.fg_muted)),
             ];
             if !dep_info.is_empty() {
                 spans.push(Span::styled(
                     dep_info.clone(),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(theme.accent_warning),
                 ));
             }
             lines.push(Line::from(spans));

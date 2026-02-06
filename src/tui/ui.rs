@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use super::app::App;
+use super::app::{App, FocusedPane};
 
 /// Render the entire UI
 pub fn render(f: &mut Frame, app: &mut App) {
@@ -66,6 +66,7 @@ fn render_sidebar(f: &mut Frame, area: Rect, app: &mut App) {
         &app.prd_cache,
         &app.display_order,
         app.active_count,
+        &app.theme,
     );
 }
 
