@@ -4,36 +4,36 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
-use crate::agent_teams;
 use crate::backend::{self, SpawnConfig};
+use crate::commands::profile;
 use crate::config;
 use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
 
-#[derive(Debug)]
-struct WorktreeInfo {
-    path: PathBuf,
-    branch: String,
-    prunable: bool,
-}
-
-#[allow(clippy::too_many_arguments)]
 pub fn run(
     name: String,
     _prompt: Option<String>,
     resume: bool,
     local: bool,
     model: String,
+    max_agents: usize,
     dry_run: bool,
-    team: bool,
-    teammate_mode: String,
 ) -> Result<()> {
-    let mode_label = if team { "team" } else { "drone" };
     println!(
-        "{} Launching {} '{}'...",
+        "{} Launching team '{}'...",
         "→".bright_blue(),
-        mode_label,
         name.bright_cyan()
     );
+
+    // 0. Load active profile to get Claude binary and environment
+    let active_profile = profile::load_active_profile()?;
+
+    if active_profile.name != "default" {
+        println!(
+            "  {} Using profile: {}",
+            "→".bright_blue(),
+            active_profile.name.bright_cyan()
+        );
+    }
 
     // 1. Check if drone already exists
     let drone_dir = PathBuf::from(".hive/drones").join(&name);
@@ -56,102 +56,16 @@ pub fn run(
         println!("  {} Base branch: {}", "→".bright_blue(), base);
     }
 
-    // Determine execution mode
-    // --team forces Opus model for best multi-agent coordination
-    let model = if team && model == "sonnet" {
-        println!(
-            "  {} Team mode: auto-switching to {} for multi-agent coordination",
-            "→".bright_blue(),
-            "opus".bright_cyan()
-        );
-        "opus".to_string()
-    } else {
-        model
-    };
-
-    let execution_mode = if team {
-        ExecutionMode::AgentTeam
-    } else {
-        ExecutionMode::Worktree
-    };
+    // Use the model specified by the user
+    println!(
+        "  {} Using model: {}",
+        "→".bright_blue(),
+        model.bright_cyan()
+    );
 
     // 4. Handle worktree creation
     let worktree_path = if local {
         std::env::current_dir()?
-    } else if team {
-        // Agent Teams mode: single worktree, Opus handles parallelization via Agent Teams
-        let worktree_base = config::get_worktree_base()?;
-        let project_name = get_project_name()?;
-        let new_path = worktree_base.join(&project_name).join(&name);
-
-        if !new_path.exists() {
-            create_worktree(&new_path, branch, base_branch)?;
-            println!("  {} Created worktree", "✓".green());
-        } else {
-            println!("  {} Using existing worktree", "✓".green());
-        }
-
-        new_path
-    } else if resume {
-        // On resume, check if worktree already exists for this branch
-        match find_existing_worktree(branch)? {
-            Some(existing) => {
-                if existing.prunable {
-                    println!(
-                        "  {} Found prunable worktree at {}",
-                        "⚠".yellow(),
-                        existing.path.display()
-                    );
-                    println!("  {} Pruning and recreating...", "→".bright_blue());
-
-                    let output = ProcessCommand::new("git")
-                        .args([
-                            "worktree",
-                            "remove",
-                            "--force",
-                            existing.path.to_str().unwrap(),
-                        ])
-                        .output()?;
-
-                    if !output.status.success() {
-                        bail!(
-                            "Failed to remove prunable worktree: {}",
-                            String::from_utf8_lossy(&output.stderr)
-                        );
-                    }
-
-                    let worktree_base = config::get_worktree_base()?;
-                    let project_name = get_project_name()?;
-                    let new_path = worktree_base.join(&project_name).join(&name);
-                    create_worktree(&new_path, branch, base_branch)?;
-                    println!(
-                        "  {} Created worktree at {}",
-                        "✓".green(),
-                        new_path.display()
-                    );
-                    new_path
-                } else {
-                    println!(
-                        "  {} Found existing worktree at {}",
-                        "✓".green(),
-                        existing.path.display()
-                    );
-                    existing.path
-                }
-            }
-            None => {
-                let worktree_base = config::get_worktree_base()?;
-                let project_name = get_project_name()?;
-                let new_path = worktree_base.join(&project_name).join(&name);
-                create_worktree(&new_path, branch, base_branch)?;
-                println!(
-                    "  {} Created worktree at {}",
-                    "✓".green(),
-                    new_path.display()
-                );
-                new_path
-            }
-        }
     } else {
         let worktree_base = config::get_worktree_base()?;
         let project_name = get_project_name()?;
@@ -175,19 +89,7 @@ pub fn run(
         println!("  {} Symlinked .hive", "✓".green());
     }
 
-    // 6. Agent Teams: seed task list for Opus to parallelize
-    if team {
-        let tasks = agent_teams::translate_stories_to_tasks(&prd);
-        agent_teams::seed_task_list(&name, &tasks)?;
-        println!(
-            "  {} Seeded {} tasks for Agent Teams",
-            "✓".green(),
-            tasks.len()
-        );
-    }
-
-    // 7. Create drone status
-    let backend_name = if team { "agent_team" } else { "native" };
+    // 6. Create drone status
     fs::create_dir_all(&drone_dir)?;
     let status = DroneStatus {
         drone: name.clone(),
@@ -195,8 +97,8 @@ pub fn run(
         branch: branch.to_string(),
         worktree: worktree_path.to_string_lossy().to_string(),
         local_mode: local,
-        execution_mode: execution_mode.clone(),
-        backend: backend_name.to_string(),
+        execution_mode: ExecutionMode::AgentTeam,
+        backend: "agent_team".to_string(),
         status: DroneState::Starting,
         current_story: None,
         completed: Vec::new(),
@@ -223,15 +125,11 @@ pub fn run(
     fs::create_dir_all(&inbox_dir)?;
     fs::create_dir_all(&outbox_dir)?;
 
-    // 8. Launch Claude via ExecutionBackend
+    // 7. Launch Claude via ExecutionBackend
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {
-        let backend: Box<dyn crate::backend::ExecutionBackend> = if team {
-            backend::resolve_agent_team_backend()
-        } else {
-            backend::resolve_backend(None)
-        };
+        let backend = backend::resolve_agent_team_backend();
 
         let spawn_config = SpawnConfig {
             drone_name: name.clone(),
@@ -240,49 +138,30 @@ pub fn run(
             worktree_path: worktree_path.clone(),
             status_file: status_path.clone(),
             working_dir: worktree_path.clone(),
-            execution_mode: execution_mode.clone(),
             wait: false,
-            team_name: if team { Some(name.clone()) } else { None },
-            teammate_mode: if team {
-                Some(teammate_mode.clone())
-            } else {
-                None
-            },
+            team_name: name.clone(),
+            max_agents,
             worktree_assignments: None,
+            claude_binary: active_profile.claude_wrapper.clone(),
+            environment: active_profile.environment.clone(),
         };
 
         backend.spawn(&spawn_config)?;
 
-        if team {
-            println!(
-                "  {} Launched Agent Teams lead (model: {})",
-                "✓".green(),
-                model.bright_cyan()
-            );
-        } else {
-            println!(
-                "  {} Launched Claude (model: {})",
-                "✓".green(),
-                model.bright_cyan()
-            );
-        }
+        println!(
+            "  {} Launched Agent Teams lead (model: {}, max agents: {})",
+            "✓".green(),
+            model.bright_cyan(),
+            max_agents.to_string().bright_cyan()
+        );
     }
 
-    // 9. Send notification
-    let mode_emoji = if team { "🤝" } else { "🐝" };
-    crate::notifications::notify(
-        &format!("{} {}", mode_emoji, name),
-        &format!(
-            "started ({} stories, {} mode)",
-            prd.stories.len(),
-            execution_mode
-        ),
-    );
+    // 8. Notification (only for completions, not start)
+    // Removed start notification to reduce noise
 
     println!(
-        "\n{} {} '{}' is running!",
+        "\n{} Team '{}' is running!",
         "✓".green().bold(),
-        if team { "Team" } else { "Drone" },
         name.bright_cyan()
     );
     println!("\nMonitor progress:");
@@ -540,68 +419,4 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
         .context("Failed to create .hive symlink")?;
 
     Ok(())
-}
-
-fn list_worktrees() -> Result<Vec<WorktreeInfo>> {
-    let output = ProcessCommand::new("git")
-        .args(["worktree", "list", "--porcelain"])
-        .output()
-        .context("Failed to list worktrees")?;
-
-    if !output.status.success() {
-        bail!(
-            "Failed to list worktrees: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut worktrees = Vec::new();
-    let mut current_worktree = None::<WorktreeInfo>;
-
-    for line in stdout.lines() {
-        if line.starts_with("worktree ") {
-            if let Some(wt) = current_worktree.take() {
-                worktrees.push(wt);
-            }
-            let path = line.strip_prefix("worktree ").unwrap().trim();
-            current_worktree = Some(WorktreeInfo {
-                path: PathBuf::from(path),
-                branch: String::new(),
-                prunable: false,
-            });
-        } else if line.starts_with("branch ") {
-            if let Some(ref mut wt) = current_worktree {
-                let branch = line
-                    .strip_prefix("branch ")
-                    .unwrap()
-                    .strip_prefix("refs/heads/")
-                    .unwrap_or(line.strip_prefix("branch ").unwrap())
-                    .trim();
-                wt.branch = branch.to_string();
-            }
-        } else if line == "prunable" {
-            if let Some(ref mut wt) = current_worktree {
-                wt.prunable = true;
-            }
-        }
-    }
-
-    if let Some(wt) = current_worktree {
-        worktrees.push(wt);
-    }
-
-    Ok(worktrees)
-}
-
-fn find_existing_worktree(branch: &str) -> Result<Option<WorktreeInfo>> {
-    let worktrees = list_worktrees()?;
-
-    for wt in worktrees {
-        if wt.branch == branch {
-            return Ok(Some(wt));
-        }
-    }
-
-    Ok(None)
 }

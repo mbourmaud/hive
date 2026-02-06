@@ -1,10 +1,7 @@
 pub mod agent_team;
-pub mod native;
 
 use anyhow::Result;
 use std::path::PathBuf;
-
-use crate::types::ExecutionMode;
 
 /// Configuration for spawning a drone process.
 pub struct SpawnConfig {
@@ -14,14 +11,17 @@ pub struct SpawnConfig {
     pub worktree_path: PathBuf,
     pub status_file: PathBuf,
     pub working_dir: PathBuf,
-    pub execution_mode: ExecutionMode,
     pub wait: bool,
     /// Team name for Agent Teams mode
-    pub team_name: Option<String>,
-    /// Teammate spawning mode: "in-process", "tmux", or "auto"
-    pub teammate_mode: Option<String>,
+    pub team_name: String,
+    /// Maximum number of concurrent teammates the team lead can spawn
+    pub max_agents: usize,
     /// Worktree assignments for each teammate in Agent Teams mode
     pub worktree_assignments: Option<Vec<WorktreeAssignment>>,
+    /// Claude binary to use (e.g., "claude" or "claude-ml")
+    pub claude_binary: String,
+    /// Environment variables to set when spawning Claude
+    pub environment: Option<Vec<(String, String)>>,
 }
 
 /// Worktree assignment for a teammate in Agent Teams mode.
@@ -60,12 +60,7 @@ pub trait ExecutionBackend {
     fn is_available(&self) -> bool;
 }
 
-/// Resolve which backend to use based on configuration and execution mode.
-pub fn resolve_backend(_default_backend: Option<&str>) -> Box<dyn ExecutionBackend> {
-    Box::new(native::NativeBackend)
-}
-
-/// Resolve backend specifically for Agent Teams mode.
+/// Resolve the Agent Teams backend.
 pub fn resolve_agent_team_backend() -> Box<dyn ExecutionBackend> {
     Box::new(agent_team::AgentTeamBackend)
 }

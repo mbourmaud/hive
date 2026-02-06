@@ -32,15 +32,12 @@ enum Commands {
         /// Model to use (sonnet, opus, haiku)
         #[arg(long, default_value = "sonnet")]
         model: String,
+        /// Maximum concurrent agents in the team (default: 3)
+        #[arg(long, default_value = "3")]
+        max_agents: usize,
         /// Dry run - don't launch Claude
         #[arg(long)]
         dry_run: bool,
-        /// Use Agent Teams mode (multi-agent coordination with Claude Code)
-        #[arg(long)]
-        team: bool,
-        /// Teammate spawning mode: in-process, tmux, or auto (default: auto)
-        #[arg(long, default_value = "auto")]
-        teammate_mode: String,
     },
 
     /// Monitor drone status with auto-refreshing TUI dashboard
@@ -65,9 +62,6 @@ enum Commands {
         /// Follow mode - continuously tail logs
         #[arg(short, long)]
         follow: bool,
-        /// Show Agent Teams conversation view (auto-detected for team drones)
-        #[arg(long)]
-        team: bool,
     },
 
     /// Stop a running drone
@@ -180,9 +174,8 @@ fn main() {
             resume,
             local,
             model,
+            max_agents,
             dry_run,
-            team,
-            teammate_mode,
         } => {
             if let Err(e) = commands::start::run(
                 name,
@@ -190,9 +183,8 @@ fn main() {
                 resume,
                 local,
                 model,
+                max_agents,
                 dry_run,
-                team,
-                teammate_mode,
             ) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -209,9 +201,8 @@ fn main() {
             lines,
             story,
             follow,
-            team,
         } => {
-            if let Err(e) = commands::logs::run(name, lines, story, follow, team) {
+            if let Err(e) = commands::logs::run(name, lines, story, follow) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

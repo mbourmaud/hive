@@ -11,8 +11,7 @@ use super::common::{
     MAX_DRONE_NAME_LEN, MAX_STORY_TITLE_LEN,
 };
 use crate::agent_teams::task_sync;
-use crate::communication::MessageBus;
-use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
+use crate::types::{DroneState, DroneStatus, Prd};
 
 /// Refresh interval for follow mode in seconds
 const FOLLOW_REFRESH_SECS: u64 = 30;
@@ -167,11 +166,7 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
         .map(|e| format!("  {}", e))
         .unwrap_or_default();
 
-    // Determine emoji based on execution mode
-    let mode_emoji = match status.execution_mode {
-        ExecutionMode::AgentTeam => "🤝",
-        ExecutionMode::Worktree => "🐝",
-    };
+    let mode_emoji = "🐝";
 
     // Reconcile progress with actual PRD (filters out old completed stories)
     let (valid_completed, total_stories) = reconcile_progress(status);
@@ -227,8 +222,8 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     );
     println!("  {}", bar);
 
-    // Agent Teams: show active agents
-    if status.execution_mode == ExecutionMode::AgentTeam {
+    // Show active agents
+    {
         if let Ok(task_states) = task_sync::read_team_task_states(name) {
             let active: Vec<_> = task_states.values()
                 .filter(|t| t.status == "in_progress" && t.owner.is_some())
@@ -236,7 +231,7 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
             if !active.is_empty() {
                 println!(
                     "\n  {} Active agents ({}):",
-                    "🤝".to_string(),
+                    "🐝".to_string(),
                     active.len().to_string().bright_white()
                 );
                 for task in &active {
@@ -271,8 +266,8 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     if let Some(prd) = load_prd(&prd_path) {
         println!("\n  Stories:");
 
-        // For Agent Teams mode, build a map of story_id -> agent_name from active tasks
-        let agent_map: std::collections::HashMap<String, String> = if status.execution_mode == ExecutionMode::AgentTeam {
+        // Build a map of story_id -> agent_name from active tasks
+        let agent_map: std::collections::HashMap<String, String> =
             task_sync::read_team_task_states(name)
                 .unwrap_or_default()
                 .values()
@@ -280,10 +275,7 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
                     let story_id = t.story_id.clone().unwrap_or_else(|| t.id.clone());
                     t.owner.clone().map(|owner| (story_id, owner))
                 })
-                .collect()
-        } else {
-            std::collections::HashMap::new()
-        };
+                .collect();
 
         for story in &prd.stories {
             let is_completed = status.completed.contains(&story.id);
@@ -862,15 +854,12 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 };
 
                 // Use different emoji based on execution mode
-                let mode_emoji = match status.execution_mode {
-                    ExecutionMode::AgentTeam => "🤝",
-                    ExecutionMode::Worktree => "🐝",
-                            };
+                let mode_emoji = "🐝";
 
                 let name_display = truncate_with_ellipsis(name, MAX_DRONE_NAME_LEN);
 
-                // Backend tag: show teammate count for Agent Teams, mode for others
-                let mode_tag = if status.execution_mode == ExecutionMode::AgentTeam {
+                // Backend tag: show teammate count
+                let mode_tag = {
                     let member_count = task_sync::read_team_members(name)
                         .map(|m| m.len())
                         .unwrap_or(0);
@@ -879,39 +868,17 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     } else {
                         "[team]".to_string()
                     }
-                } else {
-                    format!("[{}]", status.backend)
                 };
 
                 // Check inbox for pending messages
-                let inbox_count = if status.execution_mode == ExecutionMode::AgentTeam {
-                    // Agent Teams: count unread messages across all inboxes
-                    task_sync::read_team_inboxes(name)
-                        .map(|inboxes| {
-                            inboxes.values()
-                                .flat_map(|v| v.iter())
-                                .filter(|m| !m.read)
-                                .count()
-                        })
-                        .unwrap_or(0)
-                } else {
-                    // Worktree: check file bus inbox
-                    let inbox_dir = PathBuf::from(".hive/drones").join(name).join("inbox");
-                    if inbox_dir.exists() {
-                        fs::read_dir(&inbox_dir)
-                            .map(|entries| {
-                                entries
-                                    .filter_map(|e| e.ok())
-                                    .filter(|e| {
-                                        e.path().extension().and_then(|s| s.to_str()) == Some("json")
-                                    })
-                                    .count()
-                            })
-                            .unwrap_or(0)
-                    } else {
-                        0
-                    }
-                };
+                let inbox_count = task_sync::read_team_inboxes(name)
+                    .map(|inboxes| {
+                        inboxes.values()
+                            .flat_map(|v| v.iter())
+                            .filter(|m| !m.read)
+                            .count()
+                    })
+                    .unwrap_or(0);
                 let inbox_indicator = if inbox_count > 0 {
                     format!(" ✉{}", inbox_count)
                 } else {
@@ -950,8 +917,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                 // Expanded: show stories (works for all drones including completed)
                 if is_expanded {
-                    // For Agent Teams drones, build a map of story_id -> agent_name
-                    let agent_map: HashMap<String, String> = if status.execution_mode == ExecutionMode::AgentTeam {
+                    // Build a map of story_id -> agent_name
+                    let agent_map: HashMap<String, String> = {
                         let mut map = HashMap::new();
 
                         // Method 1: from task states (storyId in metadata)
@@ -967,13 +934,10 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
 
                         // Method 2: from teammate names matching story IDs
-                        // Agent Teams creates internal tasks named like "worker-us0"
-                        // We match these to story IDs like "US-0"
                         if map.is_empty() {
                             if let Ok(task_states) = task_sync::read_team_task_states(name) {
                                 for t in task_states.values() {
                                     if t.status != "in_progress" { continue; }
-                                    // Parse subject like "worker-us2" -> "US-2"
                                     let subj = t.subject.to_lowercase();
                                     if let Some(prd) = prd_cache.get(&status.prd) {
                                         for story in &prd.stories {
@@ -993,8 +957,6 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                         }
 
                         map
-                    } else {
-                        HashMap::new()
                     };
 
                     if let Some(prd) = prd_cache.get(&status.prd) {
@@ -1367,39 +1329,12 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             // Show messages for current drone
                             if !drones.is_empty() {
                                 let drone_name = &drones[current_drone_idx].0;
-                                let drone_status = &drones[current_drone_idx].1;
 
-                                if drone_status.execution_mode == ExecutionMode::AgentTeam {
-                                    // Agent Teams mode: open full message viewer
-                                    match show_team_messages_viewer(&mut terminal, drone_name) {
-                                        Ok(_) => {}
-                                        Err(e) => {
-                                            message = Some(format!("Error: {}", e));
-                                            message_color = Color::Red;
-                                        }
-                                    }
-                                } else {
-                                    // Worktree mode: show file bus messages summary
-                                    let bus = crate::communication::file_bus::FileBus::new();
-                                    let inbox = bus.peek(drone_name).unwrap_or_default();
-                                    let outbox = bus.list_outbox(drone_name).unwrap_or_default();
-                                    if inbox.is_empty() && outbox.is_empty() {
-                                        message = Some(format!("No messages for '{}'", drone_name));
-                                        message_color = Color::DarkGray;
-                                    } else {
-                                        let mut msg_parts = Vec::new();
-                                        if !inbox.is_empty() {
-                                            msg_parts.push(format!("📥 {} inbox", inbox.len()));
-                                        }
-                                        if !outbox.is_empty() {
-                                            msg_parts.push(format!("📤 {} outbox", outbox.len()));
-                                        }
-                                        message = Some(format!(
-                                            "✉ '{}': {}",
-                                            drone_name,
-                                            msg_parts.join(", ")
-                                        ));
-                                        message_color = Color::Cyan;
+                                match show_team_messages_viewer(&mut terminal, drone_name) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        message = Some(format!("Error: {}", e));
+                                        message_color = Color::Red;
                                     }
                                 }
                             }
@@ -1499,13 +1434,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             // Open logs viewer
                             if let Some(ref drone_name) = blocked_view {
                                 // In blocked view - open logs for this drone
-                                // Find the execution mode for this drone
-                                let exec_mode = drones
-                                    .iter()
-                                    .find(|(name, _)| name == drone_name)
-                                    .map(|(_, s)| &s.execution_mode)
-                                    .unwrap_or(&ExecutionMode::Worktree);
-                                match show_logs_viewer(&mut terminal, drone_name, exec_mode) {
+                                match show_logs_viewer(&mut terminal, drone_name) {
                                     Ok(_) => {}
                                     Err(e) => {
                                         message = Some(format!("Error: {}", e));
@@ -1531,7 +1460,6 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                     match show_logs_viewer(
                                         &mut terminal,
                                         drone_name,
-                                        &status.execution_mode,
                                     ) {
                                         Ok(_) => {}
                                         Err(e) => {
@@ -1721,16 +1649,15 @@ fn handle_new_drone<B: ratatui::backend::Backend>(
             .interact()?;
         let model = models[model_idx].to_string();
 
-        // Launch drone using start command (default to worktree mode)
+        // Launch drone using start command
         crate::commands::start::run(
             drone_name.clone(),
             None,
             false,
             false,
             model,
+            3,
             false,
-            false,
-            "auto".to_string(),
         )?;
 
         Ok(Some(format!("🐝 Launched drone: {}", drone_name)))
@@ -1841,16 +1768,15 @@ fn handle_resume_drone(drone_name: &str) -> Result<String> {
         }
     }
 
-    // Launch drone with resume flag (preserve original mode, default to worktree)
+    // Launch drone with resume flag
     crate::commands::start::run(
         drone_name.to_string(),
         None,
         true,
         false,
         "sonnet".to_string(),
+        3,
         false,
-        false,
-        "auto".to_string(),
     )?;
     Ok(format!("🔄 Resumed drone: {}", drone_name))
 }
@@ -1917,11 +1843,7 @@ fn render_blocked_detail_view(
         .map(|s| s.title.as_str())
         .unwrap_or("");
 
-    // Use different emoji based on execution mode
-    let mode_emoji = match status.execution_mode {
-        ExecutionMode::AgentTeam => "🤝",
-        ExecutionMode::Worktree => "🐝",
-    };
+    let mode_emoji = "🐝";
 
     let subheader_lines = vec![
         Line::from(vec![
@@ -2120,7 +2042,7 @@ fn show_team_messages_viewer<B: ratatui::backend::Backend>(
                 Line::from(vec![
                     Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
                     Span::styled(
-                        format!("  🤝 {}", drone_name),
+                        format!("  🐝 {}", drone_name),
                         Style::default().fg(Color::Cyan),
                     ),
                 ]),
@@ -2144,44 +2066,39 @@ fn show_team_messages_viewer<B: ratatui::backend::Backend>(
                     Style::default().fg(Color::DarkGray),
                 ));
             } else {
-                // Prefix: " * HH:MM:SS from → to: " ~35 chars
-                let prefix_len: usize = 35;
-                let wrap_width = (area.width as usize).saturating_sub(prefix_len + 2);
-                let wrap_indent = " ".repeat(prefix_len);
+                let content_width = (area.width as usize).saturating_sub(8);
 
                 for (ts, route, text, read) in &all_msgs {
                     let time_str = if ts.len() >= 19 { &ts[11..19] } else { ts };
-                    let unread_marker = if !read { "*" } else { " " };
+                    let unread_marker = if !read { "●" } else { " " };
 
-                    // Word-wrap the text
-                    let wrapped = wrap_text(text, wrap_width.max(20));
+                    // Header line: marker + time + route
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            format!("  {} ", unread_marker),
+                            Style::default().fg(if !read { Color::Cyan } else { Color::DarkGray }),
+                        ),
+                        Span::styled(
+                            format!("{} ", time_str),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            route.clone(),
+                            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
 
-                    for (i, chunk) in wrapped.iter().enumerate() {
-                        if i == 0 {
-                            // First line: show header + text
-                            lines.push(Line::from(vec![
-                                Span::styled(
-                                    format!(" {} ", unread_marker),
-                                    Style::default().fg(if !read { Color::Cyan } else { Color::DarkGray }),
-                                ),
-                                Span::styled(
-                                    format!("{} ", time_str),
-                                    Style::default().fg(Color::DarkGray),
-                                ),
-                                Span::styled(
-                                    format!("{}: ", route),
-                                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                                ),
-                                Span::styled(chunk.clone(), Style::default().fg(Color::White)),
-                            ]));
-                        } else {
-                            // Continuation lines: indent to align with text
-                            lines.push(Line::from(vec![
-                                Span::raw(wrap_indent.clone()),
-                                Span::styled(chunk.clone(), Style::default().fg(Color::White)),
-                            ]));
-                        }
+                    // Content lines: indented and word-wrapped
+                    let wrapped = wrap_text(text, content_width.max(20));
+                    for chunk in &wrapped {
+                        lines.push(Line::from(vec![
+                            Span::raw("      "),
+                            Span::styled(chunk.clone(), Style::default().fg(Color::White)),
+                        ]));
                     }
+
+                    // Blank separator between messages
+                    lines.push(Line::raw(""));
                 }
             }
 
@@ -2257,7 +2174,6 @@ fn show_team_messages_viewer<B: ratatui::backend::Backend>(
 fn show_logs_viewer<B: ratatui::backend::Backend>(
     terminal: &mut ratatui::Terminal<B>,
     drone_name: &str,
-    execution_mode: &ExecutionMode,
 ) -> Result<()> {
     use crossterm::event::{self, Event, KeyCode};
     use ratatui::{
@@ -2309,10 +2225,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                     .split(area);
 
                 // Use different emoji based on execution mode
-                let mode_emoji = match execution_mode {
-                    ExecutionMode::AgentTeam => "🤝",
-                    ExecutionMode::Worktree => "🐝",
-                            };
+                let mode_emoji = "🐝";
 
                 // Header with HIVE ASCII art
                 let header_lines = vec![
@@ -2429,11 +2342,7 @@ fn show_logs_viewer<B: ratatui::backend::Backend>(
                 ])
                 .split(area);
 
-            // Use different emoji based on execution mode
-            let mode_emoji = match execution_mode {
-                ExecutionMode::AgentTeam => "🤝",
-                ExecutionMode::Worktree => "🐝",
-                    };
+            let mode_emoji = "🐝";
 
             // Header with HIVE ASCII art
             let header_lines = vec![
