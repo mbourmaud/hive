@@ -316,23 +316,22 @@ impl InputState {
     }
 
     /// Check if input is a bash command (starts with !)
+    #[allow(dead_code)]
     pub fn is_bash_command(&self) -> bool {
         let text = self.get_text();
         text.trim().starts_with('!')
     }
 
     /// Get the bash command (without the ! prefix)
+    #[allow(dead_code)]
     pub fn get_bash_command(&self) -> Option<String> {
         let text = self.get_text();
         let trimmed = text.trim();
-        if trimmed.starts_with('!') {
-            Some(trimmed[1..].trim().to_string())
-        } else {
-            None
-        }
+        trimmed.strip_prefix('!').map(|s| s.trim().to_string())
     }
 
     /// Execute and consume the pending command
+    #[allow(dead_code)]
     pub fn take_pending_command(&mut self) -> Option<SlashCommand> {
         self.pending_command.take()
     }

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Message types in the chat interface
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Message {
     /// User prompt
     User(String),
@@ -43,6 +44,7 @@ pub enum ClaudeEvent {
 
 impl Message {
     /// Create a message from a Claude stream event
+    #[allow(dead_code)]
     pub fn from_claude_event(event: ClaudeEvent) -> Self {
         match event {
             ClaudeEvent::Assistant { text } => Message::Assistant(text),

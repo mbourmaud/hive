@@ -3,6 +3,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 /// Manages the TUI layout calculations
 pub struct AppLayout {
     /// Cached layout chunks
+    #[allow(dead_code)]
     cached_chunks: Option<(Rect, Vec<Rect>)>,
 }
 

@@ -70,6 +70,7 @@ impl SlashCommand {
     }
 
     /// Execute the command
+    #[allow(dead_code)]
     pub fn execute(&self) -> Result<CommandResult> {
         match self {
             SlashCommand::New => Ok(CommandResult::NewSession),
@@ -82,6 +83,7 @@ impl SlashCommand {
 
 /// Result of executing a slash command
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum CommandResult {
     /// Create a new session
     NewSession,

@@ -29,8 +29,10 @@ pub struct App {
     /// Layout manager
     pub layout: AppLayout,
     /// Claude backend (spawned on first prompt)
+    #[allow(dead_code)]
     claude: Option<ClaudeBackend>,
     /// Chat message history
+    #[allow(dead_code)]
     pub messages: Vec<Message>,
     /// Current theme
     pub theme: Theme,
@@ -90,6 +92,7 @@ impl App {
     }
 
     /// Get keybinding hints for the footer
+    #[allow(dead_code)]
     pub fn get_keybindings(&self) -> Vec<(&'static str, &'static str)> {
         vec![
             ("q", "quit"),
@@ -103,6 +106,7 @@ impl App {
     }
 
     /// Handle a user prompt submission
+    #[allow(dead_code)]
     pub fn handle_submit(&mut self, prompt: String) -> Result<()> {
         // Add user message to history
         self.messages.push(Message::User(prompt.clone()));
@@ -131,6 +135,7 @@ impl App {
     }
 
     /// Poll for new messages from Claude
+    #[allow(dead_code)]
     pub fn poll_claude_messages(&mut self) {
         if let Some(claude) = &mut self.claude {
             // Collect all pending messages

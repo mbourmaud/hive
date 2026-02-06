@@ -63,11 +63,7 @@ impl FilePicker {
             .iter()
             .filter_map(|path| {
                 let path_str = path.to_string_lossy().to_lowercase();
-                if let Some(score) = self.fuzzy_match(&path_str, &query_lower) {
-                    Some((path.clone(), score))
-                } else {
-                    None
-                }
+                self.fuzzy_match(&path_str, &query_lower).map(|score| (path.clone(), score))
             })
             .collect();
 

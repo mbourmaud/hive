@@ -7,6 +7,7 @@ use std::thread;
 use super::messages::{ClaudeEvent, Message};
 
 /// Claude Code subprocess manager
+#[allow(dead_code)]
 pub struct ClaudeBackend {
     /// The Claude subprocess
     process: Option<Child>,
@@ -18,6 +19,7 @@ pub struct ClaudeBackend {
 
 impl ClaudeBackend {
     /// Spawn a new Claude Code subprocess
+    #[allow(dead_code)]
     pub fn spawn() -> Result<Self> {
         let mut child = Command::new("claude")
             .arg("--output-format")
@@ -81,6 +83,7 @@ impl ClaudeBackend {
     }
 
     /// Send a user prompt to Claude
+    #[allow(dead_code)]
     pub fn send_prompt(&self, prompt: &str) -> Result<()> {
         if let Some(tx) = &self.input_tx {
             tx.send(prompt.to_string()).context("Failed to send prompt")?;
@@ -89,11 +92,13 @@ impl ClaudeBackend {
     }
 
     /// Try to receive a message from Claude (non-blocking)
+    #[allow(dead_code)]
     pub fn try_recv(&self) -> Option<Message> {
         self.message_rx.try_recv().ok()
     }
 
     /// Check if the Claude process is still running
+    #[allow(dead_code)]
     pub fn is_running(&mut self) -> bool {
         if let Some(child) = &mut self.process {
             child.try_wait().ok().flatten().is_none()
