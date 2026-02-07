@@ -2,20 +2,22 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 
 use super::read_task_list;
-use crate::types::{DroneState, DroneStatus, StoryTiming};
 
 /// Rich task info for monitoring display
 #[derive(Debug, Clone)]
 pub struct TeamTaskInfo {
     pub id: String,
     pub subject: String,
+    pub description: String,
     pub status: String,
     pub owner: Option<String>,
     pub active_form: Option<String>,
     pub story_id: Option<String>,
+    pub model: Option<String>,
+    /// Whether this is an internal teammate tracking task
+    pub is_internal: bool,
 }
 
 /// Team member info from config
@@ -38,106 +40,43 @@ pub struct TeamConfig {
     pub members: Vec<TeamMember>,
 }
 
-/// Sync Agent Teams task states into the drone's status.json.
-///
-/// Reads `~/.claude/tasks/{team-name}/` and updates the corresponding
-/// `.hive/drones/{drone-name}/status.json` with reconciled progress.
-pub fn sync_team_tasks_to_status(team_name: &str, drone_name: &str) -> Result<()> {
-    let tasks = read_task_list(team_name)?;
-    if tasks.is_empty() {
-        return Ok(());
-    }
-
-    let status_path = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("status.json");
-
-    if !status_path.exists() {
-        return Ok(());
-    }
-
-    let contents = fs::read_to_string(&status_path)?;
-    let mut status: DroneStatus = serde_json::from_str(&contents)?;
-
-    let mut completed: Vec<String> = Vec::new();
-    let mut active_stories: Vec<String> = Vec::new();
-    let mut active_agents: HashMap<String, String> = HashMap::new();
-    let mut has_in_progress = false;
-
-    for task in &tasks {
-        match task.status.as_str() {
-            "completed" => {
-                if !completed.contains(&task.id) {
-                    completed.push(task.id.clone());
-                }
-                // Ensure story_times entry exists
-                status
-                    .story_times
-                    .entry(task.id.clone())
-                    .or_insert_with(|| StoryTiming {
-                        started: Some(chrono::Utc::now().to_rfc3339()),
-                        completed: Some(chrono::Utc::now().to_rfc3339()),
-                    });
-            }
-            "in_progress" => {
-                has_in_progress = true;
-                let story_id = task.metadata.as_ref()
-                    .and_then(|m| m.get("storyId"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(&task.id);
-                active_stories.push(story_id.to_string());
-                if let Some(ref owner) = task.owner {
-                    active_agents.insert(owner.clone(), story_id.to_string());
-                }
-                status
-                    .story_times
-                    .entry(task.id.clone())
-                    .or_insert_with(|| StoryTiming {
-                        started: Some(chrono::Utc::now().to_rfc3339()),
-                        completed: None,
-                    });
-            }
-            _ => {} // pending
-        }
-    }
-
-    // Update status fields
-    status.completed = completed;
-    status.current_story = active_stories.first().cloned();
-    status.active_agents = active_agents;
-
-    if status.completed.len() == tasks.len() {
-        status.status = DroneState::Completed;
-    } else if has_in_progress {
-        status.status = DroneState::InProgress;
-    }
-
-    status.updated = chrono::Utc::now().to_rfc3339();
-
-    let json = serde_json::to_string_pretty(&status)?;
-    fs::write(&status_path, json)?;
-
-    Ok(())
-}
-
 /// Read task states for TUI display without writing to status.json.
 pub fn read_team_task_states(
     team_name: &str,
 ) -> Result<HashMap<String, TeamTaskInfo>> {
     let tasks = read_task_list(team_name)?;
+
+    // Build owner->model map from team members
+    let member_models: HashMap<String, String> = read_team_members(team_name)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| !m.model.is_empty())
+        .map(|m| (m.name, m.model))
+        .collect();
+
     let mut states = HashMap::new();
     for task in tasks {
         let story_id = task.metadata.as_ref()
             .and_then(|m| m.get("storyId"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let is_internal = task.metadata.as_ref()
+            .and_then(|m| m.get("_internal"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let model = task.owner.as_ref()
+            .and_then(|owner| member_models.get(owner))
+            .cloned();
         states.insert(task.id.clone(), TeamTaskInfo {
             id: task.id,
             subject: task.subject,
+            description: task.description,
             status: task.status,
             owner: task.owner,
             active_form: task.active_form,
             story_id,
+            model,
+            is_internal,
         });
     }
     Ok(states)

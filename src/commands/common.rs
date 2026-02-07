@@ -18,9 +18,6 @@ use crate::types::{DroneStatus, Prd};
 /// Default threshold in seconds for considering a drone inactive (1 hour)
 pub const DEFAULT_INACTIVE_THRESHOLD_SECS: i64 = 3600;
 
-/// Progress bar width in characters for TUI display
-pub const PROGRESS_BAR_WIDTH: usize = 10;
-
 /// Full progress bar width for simple mode display
 pub const FULL_PROGRESS_BAR_WIDTH: usize = 40;
 
@@ -88,14 +85,29 @@ pub fn load_prd(path: &Path) -> Option<Prd> {
 }
 
 /// Reconcile status with actual PRD, filtering out completed stories that no longer exist.
+/// For plan-only PRDs (no stories), falls back to Agent Teams task progress.
 ///
-/// Returns (valid_completed_count, total_from_prd).
+/// Returns (valid_completed_count, total).
 pub fn reconcile_progress(status: &DroneStatus) -> (usize, usize) {
     let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
 
-    load_prd(&prd_path)
+    let result = load_prd(&prd_path)
         .map(|prd| reconcile_progress_with_prd(status, &prd))
-        .unwrap_or((status.completed.len(), status.total))
+        .unwrap_or((status.completed.len(), status.total));
+
+    // For plan-only PRDs (0 stories), try Agent Teams tasks, then status.json itself
+    if result.1 == 0 {
+        let at_progress = agent_teams_progress(&status.drone);
+        if at_progress.1 > 0 {
+            return at_progress;
+        }
+        // Final fallback: use status.json's own total/completed
+        if status.total > 0 {
+            return (status.completed.len(), status.total);
+        }
+    }
+
+    result
 }
 
 /// Reconcile status with a provided PRD.
@@ -110,7 +122,49 @@ pub fn reconcile_progress_with_prd(status: &DroneStatus, prd: &Prd) -> (usize, u
         .filter(|id| prd_story_ids.contains(id.as_str()))
         .count();
 
-    (valid_completed, prd.stories.len())
+    let prd_count = prd.stories.len();
+
+    // For plan-only PRDs, try Agent Teams tasks, then status.json itself
+    if prd_count == 0 {
+        let at_progress = agent_teams_progress(&status.drone);
+        if at_progress.1 > 0 {
+            return at_progress;
+        }
+        if status.total > 0 {
+            return (status.completed.len(), status.total);
+        }
+    }
+
+    (valid_completed, prd_count)
+}
+
+/// Get progress from Agent Teams task list (for plan-only PRDs).
+///
+/// Returns (completed_tasks, total_tasks). Filters out internal tracking tasks.
+fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
+    use crate::agent_teams;
+
+    let tasks = agent_teams::read_task_list(drone_name).unwrap_or_default();
+
+    // Filter out internal tasks (auto-created teammate tracking)
+    let user_tasks: Vec<_> = tasks
+        .iter()
+        .filter(|t| {
+            !t.metadata
+                .as_ref()
+                .and_then(|m| m.get("_internal"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        })
+        .collect();
+
+    let total = user_tasks.len();
+    let completed = user_tasks
+        .iter()
+        .filter(|t| t.status == "completed")
+        .count();
+
+    (completed, total)
 }
 
 // ============================================================================

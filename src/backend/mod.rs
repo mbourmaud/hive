@@ -16,20 +16,10 @@ pub struct SpawnConfig {
     pub team_name: String,
     /// Maximum number of concurrent teammates the team lead can spawn
     pub max_agents: usize,
-    /// Worktree assignments for each teammate in Agent Teams mode
-    pub worktree_assignments: Option<Vec<WorktreeAssignment>>,
     /// Claude binary to use (e.g., "claude" or "claude-ml")
     pub claude_binary: String,
     /// Environment variables to set when spawning Claude
     pub environment: Option<Vec<(String, String)>>,
-}
-
-/// Worktree assignment for a teammate in Agent Teams mode.
-pub struct WorktreeAssignment {
-    pub teammate_name: String,
-    pub worktree_path: PathBuf,
-    pub branch: String,
-    pub story_ids: Vec<String>,
 }
 
 /// Handle returned by a backend after spawning a drone.

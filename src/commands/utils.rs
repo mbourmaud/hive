@@ -38,6 +38,7 @@ pub fn list() -> Result<()> {
             DroneState::Error => "error".red().bold(),
             DroneState::Blocked => "blocked".red().bold(),
             DroneState::Stopped => "stopped".bright_black(),
+            DroneState::Cleaning => "cleaning".bright_black(),
         };
 
         // Reconcile progress with actual PRD (filters out old completed stories)
@@ -46,7 +47,7 @@ pub fn list() -> Result<()> {
         let progress = if total_stories > 0 {
             format!("{}/{}", valid_completed, total_stories)
         } else {
-            "0/0".to_string()
+            "Planning...".to_string()
         };
 
         let percentage = if total_stories > 0 {

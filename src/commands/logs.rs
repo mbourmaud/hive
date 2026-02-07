@@ -46,8 +46,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
         }
 
         println!(
-            "  {} {} Team Conversation",
-            "🐝".to_string(),
+            "  🐝 {} Team Conversation",
             team_name.bright_cyan().bold()
         );
         println!();
@@ -56,8 +55,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
         match task_sync::read_team_members(team_name) {
             Ok(members) if !members.is_empty() => {
                 println!(
-                    "  {} {} ({} agents)",
-                    "👥".to_string(),
+                    "  👥 {} ({} agents)",
                     "Team Roster".bright_white().bold(),
                     members.len()
                 );
@@ -202,8 +200,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
 
                 if !messages_to_show.is_empty() {
                     println!(
-                        "  {} {} ({} messages)",
-                        "💬".to_string(),
+                        "  💬 {} ({} messages)",
                         "Inbox Messages".bright_white().bold(),
                         all_messages.len()
                     );
@@ -283,9 +280,8 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
 
                         let read_marker = if msg.read { "" } else { " *" };
                         println!(
-                            "    {} {} {} → {}: {}{}",
+                            "    {} 💬 {} → {}: {}{}",
                             time_display.bright_black(),
-                            "💬".to_string(),
                             msg.from.bright_cyan(),
                             recipient.bright_green(),
                             content,

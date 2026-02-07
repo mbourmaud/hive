@@ -6,6 +6,6 @@ pub mod logs;
 pub mod profile;
 pub mod sessions;
 pub mod start;
-pub mod status;
+pub mod monitor;
 pub mod unblock;
 pub mod utils;

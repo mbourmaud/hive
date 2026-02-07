@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 use crate::backend::{self, SpawnConfig};
@@ -89,6 +89,10 @@ pub fn run(
         println!("  {} Symlinked .hive", "✓".green());
     }
 
+    // 5b. Write Claude Code hooks config for event streaming
+    write_hooks_config(&worktree_path, &name)?;
+    println!("  {} Configured hooks", "✓".green());
+
     // 6. Create drone status
     fs::create_dir_all(&drone_dir)?;
     let status = DroneStatus {
@@ -141,7 +145,6 @@ pub fn run(
             wait: false,
             team_name: name.clone(),
             max_agents,
-            worktree_assignments: None,
             claude_binary: active_profile.claude_wrapper.clone(),
             environment: active_profile.environment.clone(),
         };
@@ -149,7 +152,7 @@ pub fn run(
         backend.spawn(&spawn_config)?;
 
         println!(
-            "  {} Launched Agent Teams lead (model: {}, max agents: {})",
+            "  {} Launched Agent Teams lead (model: {}, teammates: haiku/sonnet, max: {})",
             "✓".green(),
             model.bright_cyan(),
             max_agents.to_string().bright_cyan()
@@ -401,6 +404,80 @@ fn get_worktree_base_ref(branch: &str) -> Result<String> {
     Ok("HEAD".to_string())
 }
 
+/// Write `.claude/settings.json` in the worktree with hooks that stream events
+/// to `.hive/drones/{name}/events.ndjson`.
+fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
+    let claude_dir = worktree.join(".claude");
+    fs::create_dir_all(&claude_dir)?;
+    let settings_path = claude_dir.join("settings.json");
+
+    // Load existing settings if present
+    let mut settings: serde_json::Value = if settings_path.exists() {
+        let contents = fs::read_to_string(&settings_path).unwrap_or_else(|_| "{}".to_string());
+        serde_json::from_str(&contents).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let events_file = format!(
+        "$CLAUDE_PROJECT_DIR/.hive/drones/{}/events.ndjson",
+        drone_name
+    );
+
+    // Build hook commands — each appends a JSON line to events.ndjson
+    let hooks = serde_json::json!({
+        "PostToolUse": [
+            {
+                "matcher": "TaskCreate",
+                "command": format!(
+                    "jq -c '{{event:\"TaskCreate\",ts:(now|todate),subject:.tool_input.subject,description:(.tool_input.description // \"\")}}' >> {}",
+                    events_file
+                ),
+                "async": true,
+                "timeout": 5
+            },
+            {
+                "matcher": "TaskUpdate",
+                "command": format!(
+                    "jq -c '{{event:\"TaskUpdate\",ts:(now|todate),task_id:.tool_input.taskId,status:(.tool_input.status // \"\"),owner:.tool_input.owner}}' >> {}",
+                    events_file
+                ),
+                "async": true,
+                "timeout": 5
+            },
+            {
+                "matcher": "SendMessage",
+                "command": format!(
+                    "jq -c '{{event:\"Message\",ts:(now|todate),recipient:(.tool_input.recipient // \"\"),summary:(.tool_input.summary // (.tool_input.content // \"\" | .[0:200]))}}' >> {}",
+                    events_file
+                ),
+                "async": true,
+                "timeout": 5
+            }
+        ],
+        "Stop": [
+            {
+                "command": format!(
+                    "echo '{{\"event\":\"Stop\",\"ts\":\"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'\"}}' >> {}",
+                    events_file
+                ),
+                "async": true,
+                "timeout": 5
+            }
+        ]
+    });
+
+    // Merge hooks into settings (overwrite hooks key)
+    if let Some(obj) = settings.as_object_mut() {
+        obj.insert("hooks".to_string(), hooks);
+    }
+
+    let json = serde_json::to_string_pretty(&settings)?;
+    fs::write(&settings_path, json)?;
+
+    Ok(())
+}
+
 fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
     let hive_dir = std::env::current_dir()?.join(".hive");
     let symlink_path = worktree.join(".hive");
@@ -419,4 +496,81 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
         .context("Failed to create .hive symlink")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_write_hooks_config_creates_settings() {
+        let dir = TempDir::new().unwrap();
+        write_hooks_config(dir.path(), "test-drone").unwrap();
+
+        let settings_path = dir.path().join(".claude").join("settings.json");
+        assert!(settings_path.exists());
+
+        let contents = fs::read_to_string(&settings_path).unwrap();
+        let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
+
+        assert!(settings.get("hooks").is_some());
+        let hooks = settings.get("hooks").unwrap();
+        assert!(hooks.get("PostToolUse").is_some());
+        assert!(hooks.get("Stop").is_some());
+
+        // Verify PostToolUse has 3 matchers
+        let post_tool = hooks.get("PostToolUse").unwrap().as_array().unwrap();
+        assert_eq!(post_tool.len(), 3);
+
+        // Verify drone name is baked in
+        let command = post_tool[0].get("command").unwrap().as_str().unwrap();
+        assert!(command.contains("test-drone"));
+        assert!(command.contains("events.ndjson"));
+    }
+
+    #[test]
+    fn test_write_hooks_config_merges_existing() {
+        let dir = TempDir::new().unwrap();
+        let claude_dir = dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).unwrap();
+
+        // Write existing settings
+        let existing = serde_json::json!({
+            "model": "opus",
+            "permissions": {"allow": ["Bash"]}
+        });
+        fs::write(
+            claude_dir.join("settings.json"),
+            serde_json::to_string_pretty(&existing).unwrap(),
+        )
+        .unwrap();
+
+        write_hooks_config(dir.path(), "merge-test").unwrap();
+
+        let contents = fs::read_to_string(claude_dir.join("settings.json")).unwrap();
+        let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
+
+        // Original keys preserved
+        assert_eq!(settings.get("model").unwrap().as_str().unwrap(), "opus");
+        assert!(settings.get("permissions").is_some());
+
+        // Hooks added
+        assert!(settings.get("hooks").is_some());
+    }
+
+    #[test]
+    fn test_write_hooks_config_async_and_timeout() {
+        let dir = TempDir::new().unwrap();
+        write_hooks_config(dir.path(), "timeout-test").unwrap();
+
+        let contents = fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
+        let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
+
+        let post_tool = settings["hooks"]["PostToolUse"].as_array().unwrap();
+        for hook in post_tool {
+            assert_eq!(hook.get("async").unwrap().as_bool().unwrap(), true);
+            assert_eq!(hook.get("timeout").unwrap().as_u64().unwrap(), 5);
+        }
+    }
 }

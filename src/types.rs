@@ -20,6 +20,11 @@ pub struct Prd {
     /// Base branch to create worktree from (defaults to origin/master or origin/main)
     /// For master/main, always uses origin/ version (up-to-date remote)
     pub base_branch: Option<String>,
+    /// Freeform markdown plan — if present, sent directly to the team lead
+    /// instead of formatting individual stories
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    #[serde(default)]
     pub stories: Vec<Story>,
 }
 
@@ -219,19 +224,15 @@ pub enum DroneState {
     Error,
     Blocked,
     Stopped,
+    Cleaning,
 }
 
 /// Drone execution mode (always AgentTeam; Worktree kept as alias for backwards compat)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ExecutionMode {
     /// Agent Teams mode: Claude Code native multi-agent coordination
+    #[default]
     AgentTeam,
-}
-
-impl Default for ExecutionMode {
-    fn default() -> Self {
-        ExecutionMode::AgentTeam
-    }
 }
 
 impl<'de> serde::Deserialize<'de> for ExecutionMode {
@@ -273,6 +274,7 @@ impl std::fmt::Display for DroneState {
             DroneState::Error => write!(f, "error"),
             DroneState::Blocked => write!(f, "blocked"),
             DroneState::Stopped => write!(f, "stopped"),
+            DroneState::Cleaning => write!(f, "cleaning"),
         }
     }
 }
@@ -329,6 +331,40 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_plan_only_prd() {
+        let json = r###"{
+            "id": "my-feature",
+            "title": "My Feature",
+            "version": "1.0.0",
+            "target_branch": "feature/my-feature",
+            "base_branch": "main",
+            "plan": "## Goal\nBuild X\n\n## Requirements\n- Thing A"
+        }"###;
+
+        let prd: Prd = serde_json::from_str(json).unwrap();
+        assert_eq!(prd.id, "my-feature");
+        assert_eq!(
+            prd.plan,
+            Some("## Goal\nBuild X\n\n## Requirements\n- Thing A".to_string())
+        );
+        assert!(prd.stories.is_empty());
+    }
+
+    #[test]
+    fn test_parse_prd_without_plan_field() {
+        // Old PRDs without `plan` should still parse (backwards compat)
+        let json = r#"{
+            "id": "old-prd",
+            "title": "Old PRD",
+            "stories": [{"id": "S1", "title": "Story 1", "description": "desc"}]
+        }"#;
+
+        let prd: Prd = serde_json::from_str(json).unwrap();
+        assert!(prd.plan.is_none());
+        assert_eq!(prd.stories.len(), 1);
+    }
+
+    #[test]
     fn test_parse_drone_status() {
         let json = r#"{
             "drone": "test-drone",
@@ -380,6 +416,7 @@ mod tests {
         assert_eq!(DroneState::Error.to_string(), "error");
         assert_eq!(DroneState::Blocked.to_string(), "blocked");
         assert_eq!(DroneState::Stopped.to_string(), "stopped");
+        assert_eq!(DroneState::Cleaning.to_string(), "cleaning");
     }
 
     #[test]

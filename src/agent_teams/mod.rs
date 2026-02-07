@@ -34,7 +34,16 @@ pub struct AgentTeamTask {
 }
 
 /// Format PRD content as readable text for the team lead prompt.
+///
+/// If the PRD has a freeform `plan` field, uses that directly.
+/// Otherwise falls back to formatting individual stories (backwards compat).
 pub fn format_prd_for_prompt(prd: &Prd) -> String {
+    // New thin format: freeform plan
+    if let Some(ref plan) = prd.plan {
+        return format!("# {}\n\n{}", prd.title, plan);
+    }
+
+    // Legacy format: structured stories
     let mut sections = Vec::new();
 
     sections.push(format!("# {}\n{}", prd.title, prd.description));
@@ -181,6 +190,7 @@ mod tests {
             target_platforms: None,
             target_branch: None,
             base_branch: None,
+            plan: None,
             stories: vec![
                 Story {
                     id: "S1".to_string(),
@@ -241,6 +251,40 @@ mod tests {
         assert!(output.contains("Depends on: S1"));
         // S2 has no files, so "Files:" should not appear for S2
         // S1 has files, so "Files:" appears once
+    }
+
+    #[test]
+    fn test_format_prd_with_plan() {
+        let prd = Prd {
+            id: "lean".to_string(),
+            title: "Lean PRD".to_string(),
+            description: String::new(),
+            version: "1.0".to_string(),
+            created_at: String::new(),
+            target_platforms: None,
+            target_branch: None,
+            base_branch: None,
+            plan: Some("## Goal\nBuild feature X\n\n## Requirements\n- Thing A\n- Thing B".to_string()),
+            stories: vec![],
+        };
+        let output = format_prd_for_prompt(&prd);
+
+        assert!(output.starts_with("# Lean PRD"));
+        assert!(output.contains("## Goal"));
+        assert!(output.contains("- Thing A"));
+        // Should NOT contain story formatting
+        assert!(!output.contains("## Story"));
+    }
+
+    #[test]
+    fn test_format_prd_plan_takes_precedence_over_stories() {
+        let mut prd = make_test_prd();
+        prd.plan = Some("Custom plan text".to_string());
+        let output = format_prd_for_prompt(&prd);
+
+        // Plan should win even when stories exist
+        assert!(output.contains("Custom plan text"));
+        assert!(!output.contains("## Story"));
     }
 
     #[test]

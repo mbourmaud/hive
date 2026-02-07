@@ -191,7 +191,7 @@ fn main() {
             }
         }
         Commands::Monitor { name, simple } => {
-            if let Err(e) = commands::status::run_monitor(name, simple) {
+            if let Err(e) = commands::monitor::run_monitor(name, simple) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

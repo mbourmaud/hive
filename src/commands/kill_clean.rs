@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use chrono::Utc;
 use colored::Colorize;
 use dialoguer::Confirm;
 use std::fs;
@@ -87,8 +88,21 @@ pub fn clean_quiet(name: String) -> Result<()> {
     clean_impl(name, true, true)
 }
 
-/// Clean in background thread (returns immediately, cleans async)
+/// Clean in background thread (returns immediately, cleans async).
+/// Sets drone status to "cleaning" so the TUI can show it.
 pub fn clean_background(name: String) {
+    // Mark as "cleaning" in status.json before background thread starts
+    let status_path = PathBuf::from(".hive/drones").join(&name).join("status.json");
+    if let Ok(contents) = fs::read_to_string(&status_path) {
+        if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&contents) {
+            status.status = crate::types::DroneState::Cleaning;
+            status.updated = Utc::now().to_rfc3339();
+            if let Ok(json) = serde_json::to_string_pretty(&status) {
+                let _ = fs::write(&status_path, json);
+            }
+        }
+    }
+
     std::thread::spawn(move || {
         let _ = clean_impl(name, true, true);
     });
@@ -122,11 +136,22 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
         .any(|line| line.contains("claude") && line.contains(&status.worktree));
 
     if is_running {
-        bail!(
-            "Drone '{}' is still running. Stop it first with 'hive kill {}'",
-            name,
-            name
-        );
+        if quiet {
+            // In quiet/background mode (TUI), auto-stop before cleaning
+            let backend = backend::resolve_agent_team_backend();
+            let handle = SpawnHandle {
+                pid: None,
+                backend_id: status.worktree.clone(),
+                backend_type: status.backend.clone(),
+            };
+            let _ = backend.stop(&handle);
+        } else {
+            bail!(
+                "Drone '{}' is still running. Stop it first with 'hive kill {}'",
+                name,
+                name
+            );
+        }
     }
 
     // Confirm cleanup (only in interactive mode)

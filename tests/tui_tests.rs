@@ -118,7 +118,7 @@ fn tui_status_dashboard_single_drone() {
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
                     DroneState::Blocked => Color::Red,
-                    DroneState::Stopped => Color::DarkGray,
+                    DroneState::Stopped | DroneState::Cleaning => Color::DarkGray,
                 };
 
                 let progress = if status.total > 0 {
@@ -227,7 +227,7 @@ fn tui_status_dashboard_multiple_drones() {
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
                     DroneState::Blocked => Color::Red,
-                    DroneState::Stopped => Color::DarkGray,
+                    DroneState::Stopped | DroneState::Cleaning => Color::DarkGray,
                 };
 
                 let progress = if status.total > 0 {

@@ -25,6 +25,7 @@ fn create_test_prd(prds_dir: &Path, prd_name: &str) {
         target_platforms: Some(vec!["macos".to_string(), "linux".to_string()]),
         target_branch: Some("main".to_string()),
         base_branch: None,
+        plan: None,
         stories: vec![],
     };
 

@@ -31,7 +31,7 @@ impl ExecutionBackend for AgentTeamBackend {
 
     fn cleanup(&self, handle: &SpawnHandle) -> Result<()> {
         // Clean up Agent Teams directories
-        if let Some(team_name) = handle.backend_id.split('/').last() {
+        if let Some(team_name) = handle.backend_id.split('/').next_back() {
             let _ = agent_teams::cleanup_team(team_name);
         }
         Ok(())
@@ -54,10 +54,15 @@ impl ExecutionBackend for AgentTeamBackend {
 }
 
 fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
-    let log_path = PathBuf::from(".hive/drones")
-        .join(&config.drone_name)
-        .join("activity.log");
+    let drone_dir = PathBuf::from(".hive/drones").join(&config.drone_name);
+    let log_path = drone_dir.join("activity.log");
     let log_file = fs::File::create(&log_path)?;
+
+    // Touch events.ndjson so the TUI can start tailing immediately
+    let events_path = drone_dir.join("events.ndjson");
+    if !events_path.exists() {
+        let _ = fs::File::create(&events_path);
+    }
 
     let prd: crate::types::Prd = {
         let contents = fs::read_to_string(&config.prd_path)?;
@@ -66,100 +71,27 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
     };
     let prd_text = agent_teams::format_prd_for_prompt(&prd);
 
-    // Build story ID list for reference in prompt
-    let story_ids: Vec<String> = prd
-        .stories
-        .iter()
-        .map(|s| s.id.clone())
-        .collect();
-
-    let status_file = format!(".hive/drones/{}/status.json", config.drone_name);
-
     let prompt = format!(
-        r#"You are the team lead for Hive drone "{drone_name}".
+        r#"You are coordinating work on this project.
 
-## FORBIDDEN TOOLS — READ THIS FIRST
-- NEVER call TeamCreate — the team "{drone_name}" is ALREADY created
-- NEVER call TodoWrite — it does NOT create Agent Teams tasks
-- NEVER write code yourself — you are a COORDINATOR, not a developer
-
-## YOUR MISSION
-Read the PRD below. Your job is to:
-1. Understand the project vision and requirements
-2. Think about the best way to break down the work into tasks
-3. Plan which tasks can run in parallel vs which have dependencies
-4. Create tasks, spawn teammates, and coordinate until everything is done
-
-You have full autonomy on HOW to organize the work. The PRD gives you the vision and details — you decide the task breakdown, grouping, and execution order.
-
-## MANDATORY BOOKENDS
-Regardless of how you organize the work:
-- **FIRST task**: Environment setup — ensure the project compiles, dependencies are installed, the workspace is ready for development
-- **LAST task**: Create a Pull Request via `gh pr create`, then verify CI passes. If CI fails, fix and retry.
-
-## PRD — PROJECT VISION & REQUIREMENTS
+## Project Requirements
 {prd_text}
 
-## HOW TO WORK
+## Working directory
+{worktree_path}
 
-### 1. Plan your tasks
-Read the PRD, explore the codebase if needed, then decide how to split the work.
-Create tasks using the TaskCreate tool. For each task:
-- subject: clear, concise title
-- description: detailed requirements for the teammate who will implement it
-- activeForm: "Implementing <title>" (shown in TUI spinner)
-- metadata: {{"storyId": "<ID>"}} — maps the task to a PRD story for TUI monitoring
-
-PRD story IDs for reference: {story_id_list}
-
-If a task covers multiple stories, pick the primary story ID. Every story ID should appear in at least one task's metadata.
-
-Use TaskUpdate to set blockedBy relationships between tasks.
-
-### 2. Spawn teammates for unblocked tasks
-
-**HARD LIMIT: Maximum {max_agents} concurrent teammates at any time.**
-Never exceed this limit. If {max_agents} teammates are running, WAIT for one to finish before spawning another.
-Track active teammates carefully. When one finishes, you can spawn a replacement.
-
-For each task ready to start, spawn a teammate:
-- Use the Task tool with subagent_type="general-purpose"
-- Set mode="bypassPermissions" and team_name="{drone_name}"
-- Give a clear name (e.g. "worker-setup", "worker-ui-shell")
-- Include the FULL task requirements in the prompt
-- Tell them to use TaskUpdate to mark their task completed when done
-- Tell them to work in: {worktree_path}
-
-**Model selection — be cost-conscious:**
-Use the `model` parameter on each Task tool call to pick the cheapest model that can do the job:
-- **"haiku"** — use for: env setup, config changes, file creation, boilerplate, simple refactors, adding dependencies, creating directory structures, running commands, writing tests for existing code
-- **"sonnet"** — use for: standard feature implementation, moderate refactoring, writing tests that require understanding complex logic, bug fixes, integrating existing patterns
-- **"opus"** — use ONLY for: complex architecture decisions, tasks requiring deep reasoning across many files, tricky debugging with unclear root cause, tasks where a sonnet attempt already failed
-
-**Default to "sonnet"**. Use "haiku" aggressively for anything that doesn't require reasoning. Reserve "opus" for genuinely hard problems — most tasks do NOT need it.
-
-Spawn up to {max_agents} unblocked tasks simultaneously in one message. Queue the rest.
-
-### 3. Monitor and unblock
-As teammates finish, check if blocked tasks are now unblocked. Spawn new teammates (respecting the {max_agents} limit).
-Repeat until all tasks are done.
-
-### 4. Update status
-Maintain {status_file} throughout:
-- Set "status": "in_progress" when work begins
-- Update "current_story" with any active story ID
-- Add completed story IDs to "completed" array
-- When ALL done: set "status": "completed""#,
-        drone_name = config.drone_name,
+## Instructions
+- Create an agent team named "{drone_name}" to implement this PRD
+- Use delegate mode — coordinate only, do not write code yourself
+- Be cost-conscious with teammate models: use haiku for simple tasks, sonnet for implementation, opus only if truly needed
+- Maximum {max_agents} concurrent teammates
+- When all stories are done, create a PR via `gh pr create` and verify CI
+- Do NOT modify any files under .hive/ — those are managed by the orchestrator"#,
         prd_text = prd_text,
-        status_file = status_file,
         worktree_path = config.worktree_path.display(),
-        story_id_list = story_ids.join(", "),
+        drone_name = config.drone_name,
         max_agents = config.max_agents,
     );
-
-    // Generate a unique agent ID for the team lead
-    let agent_id = format!("hive-lead-{}", uuid::Uuid::new_v4());
 
     let mut cmd = ProcessCommand::new(&config.claude_binary);
     cmd.arg("-p")
@@ -169,13 +101,7 @@ Maintain {status_file} throughout:
         .arg("--output-format")
         .arg("stream-json")
         .arg("--verbose")
-        .arg("--dangerously-skip-permissions")
-        .arg("--team-name")
-        .arg(&config.drone_name)
-        .arg("--agent-id")
-        .arg(&agent_id)
-        .arg("--agent-name")
-        .arg("team-lead");
+        .arg("--dangerously-skip-permissions");
 
     // Enable Agent Teams experimental flag
     cmd.env("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1");
