@@ -1,3 +1,7 @@
+//! Event handling for Hive TUI monitoring.
+//! Defines `HiveEvent` types and `EventReader` for incrementally reading
+//! events from `.hive/drones/{name}/events.ndjson` files.
+
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{BufRead, Seek, SeekFrom};
