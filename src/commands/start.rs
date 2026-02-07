@@ -569,7 +569,7 @@ mod tests {
 
         let post_tool = settings["hooks"]["PostToolUse"].as_array().unwrap();
         for hook in post_tool {
-            assert_eq!(hook.get("async").unwrap().as_bool().unwrap(), true);
+            assert!(hook.get("async").unwrap().as_bool().unwrap());
             assert_eq!(hook.get("timeout").unwrap().as_u64().unwrap(), 5);
         }
     }
