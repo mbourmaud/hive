@@ -59,9 +59,6 @@ fn create_test_drone(
         updated: "2024-01-01T01:00:00Z".to_string(),
         error_count: 0,
         last_error_story: None,
-        blocked_reason: None,
-        blocked_questions: vec![],
-        awaiting_human: false,
         active_agents: HashMap::new(),
     };
 
@@ -139,13 +136,12 @@ fn test_drone_states() {
     create_test_drone(&temp_dir, "inprogress-drone", DroneState::InProgress, 2, 5);
     create_test_drone(&temp_dir, "completed-drone", DroneState::Completed, 5, 5);
     create_test_drone(&temp_dir, "error-drone", DroneState::Error, 1, 5);
-    create_test_drone(&temp_dir, "blocked-drone", DroneState::Blocked, 2, 5);
     create_test_drone(&temp_dir, "stopped-drone", DroneState::Stopped, 3, 5);
 
     // Use absolute path instead of changing current directory (avoids race conditions)
     let drones_dir = temp_dir.path().join(".hive").join("drones");
     let drone_count = fs::read_dir(&drones_dir).unwrap().count();
-    assert_eq!(drone_count, 6);
+    assert_eq!(drone_count, 5);
 }
 
 #[test]

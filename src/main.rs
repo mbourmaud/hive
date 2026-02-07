@@ -44,9 +44,6 @@ enum Commands {
     Monitor {
         /// Drone name (optional)
         name: Option<String>,
-        /// Simple output mode (no TUI, for scripts/CI)
-        #[arg(short, long)]
-        simple: bool,
     },
 
     /// View drone activity logs
@@ -84,15 +81,6 @@ enum Commands {
         /// Force clean without confirmation
         #[arg(long)]
         force: bool,
-    },
-
-    /// Interactive workflow to unblock stuck drones
-    Unblock {
-        /// Drone name
-        name: String,
-        /// Non-interactive mode for CI
-        #[arg(long)]
-        no_interactive: bool,
     },
 
     /// List all drones
@@ -190,8 +178,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Monitor { name, simple } => {
-            if let Err(e) = commands::monitor::run_monitor(name, simple) {
+        Commands::Monitor { name } => {
+            if let Err(e) = commands::monitor::run_monitor(name) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -222,15 +210,6 @@ fn main() {
         }
         Commands::Clean { name, force } => {
             if let Err(e) = commands::kill_clean::clean(name, force) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Unblock {
-            name,
-            no_interactive,
-        } => {
-            if let Err(e) = commands::unblock::run(name, no_interactive) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

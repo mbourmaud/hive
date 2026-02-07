@@ -12,7 +12,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
@@ -377,7 +376,7 @@ fn tool_query_dependencies(args: &Value) -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("Missing required parameter: story_id"))?;
 
     let drones = list_drones()?;
-    let (_, status) = drones
+    let (_, _status) = drones
         .iter()
         .find(|(name, _)| name == drone_name)
         .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;

@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
 use crate::backend::{self, SpawnHandle};
-use crate::types::DroneStatus;
+use crate::notification;
+use crate::types::{DroneState, DroneStatus};
 
 /// Stop a drone by name. If `quiet` is true, no output is printed (for TUI use).
 pub fn kill(name: String) -> Result<()> {
@@ -43,6 +44,16 @@ fn kill_impl(name: String, quiet: bool) -> Result<()> {
         bail!("No status file found for drone '{}'", name);
     };
 
+    // Update status.json BEFORE stopping the process.
+    // Claude's graceful shutdown can delete the drone directory (via .hive symlink),
+    // so we must persist the "stopped" state first.
+    {
+        let mut updated_status = status.clone();
+        updated_status.status = DroneState::Stopped;
+        updated_status.updated = Utc::now().to_rfc3339();
+        let _ = fs::write(&status_path, serde_json::to_string_pretty(&updated_status)?);
+    }
+
     // Use the backend to stop the drone process
     let backend = backend::resolve_agent_team_backend();
     let handle = SpawnHandle {
@@ -66,7 +77,7 @@ fn kill_impl(name: String, quiet: bool) -> Result<()> {
     }
 
     // Send notification
-    send_notification(&name, "stopped")?;
+    notification::notify("Hive", &format!("Drone '{}' stopped", name));
 
     if !quiet {
         println!(
@@ -242,22 +253,3 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
     Ok(())
 }
 
-fn send_notification(drone_name: &str, action: &str) -> Result<()> {
-    let message = format!("Drone {} {}", drone_name, action);
-
-    // Try terminal-notifier first (macOS)
-    let _ = ProcessCommand::new("terminal-notifier")
-        .args(["-title", "🐝 Hive", "-message", &message, "-sound", "Glass"])
-        .output();
-
-    // Fallback to osascript
-    let _ = ProcessCommand::new("osascript")
-        .arg("-e")
-        .arg(format!(
-            "display notification \"{}\" with title \"🐝 Hive\" sound name \"Glass\"",
-            message
-        ))
-        .output();
-
-    Ok(())
-}

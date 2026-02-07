@@ -54,9 +54,6 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         updated: "2024-01-01T01:00:00Z".to_string(),
         error_count: 0,
         last_error_story: None,
-        blocked_reason: None,
-        blocked_questions: vec![],
-        awaiting_human: false,
         active_agents: HashMap::new(),
     };
 
@@ -128,10 +125,7 @@ fn test_backward_compatible_status_json() {
         "started": "2024-01-01T00:00:00Z",
         "updated": "2024-01-01T01:00:00Z",
         "error_count": 0,
-        "last_error_story": null,
-        "blocked_reason": null,
-        "blocked_questions": [],
-        "awaiting_human": false
+        "last_error_story": null
     }"#;
 
     let drone_dir = hive_dir.join("drones").join("legacy-drone");
@@ -265,7 +259,6 @@ fn test_drone_state_transitions() {
         DroneState::InProgress,
         DroneState::Completed,
         DroneState::Error,
-        DroneState::Blocked,
         DroneState::Stopped,
     ] {
         let status = DroneStatus {
@@ -285,9 +278,6 @@ fn test_drone_state_transitions() {
             updated: "2024-01-01T01:00:00Z".to_string(),
             error_count: 0,
             last_error_story: None,
-            blocked_reason: None,
-            blocked_questions: vec![],
-            awaiting_human: false,
             active_agents: HashMap::new(),
         };
 

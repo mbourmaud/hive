@@ -83,9 +83,10 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 ## Instructions
 - Create an agent team named "{drone_name}" to implement this PRD
 - Use delegate mode — coordinate only, do not write code yourself
+- IMPORTANT: Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items. Each task should be a meaningful unit of work (e.g. "Simplify PRD types", "Update TUI render", "Fix tests"). This allows progress monitoring.
 - Be cost-conscious with teammate models: use haiku for simple tasks, sonnet for implementation, opus only if truly needed
 - Maximum {max_agents} concurrent teammates
-- When all tasks are done, create a PR via `gh pr create` and verify CI
+- When all tasks are done, create a PR via `gh pr create` and verify CI passes
 - Do NOT modify any files under .hive/ — those are managed by the orchestrator"#,
         prd_text = prd_text,
         worktree_path = config.worktree_path.display(),

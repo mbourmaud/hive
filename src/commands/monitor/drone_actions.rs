@@ -2,7 +2,6 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::commands::common::load_prd;
 use crate::types::{DroneState, DroneStatus, Prd};
 
 // Handler for 'New Drone' action - browse PRDs and launch
@@ -78,33 +77,6 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
     crossterm::terminal::enable_raw_mode()?;
 
     result
-}
-
-/// Send a macOS/Linux desktop notification
-pub(crate) fn send_desktop_notification(title: &str, body: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        let script = format!(
-            "display notification \"{}\" with title \"{}\" sound name \"Glass\"",
-            body.replace('\"', "\\\"").replace('\n', " "),
-            title.replace('\"', "\\\""),
-        );
-        let _ = std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let _ = std::process::Command::new("notify-send")
-            .arg(title)
-            .arg(body)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
-    }
 }
 
 // Find all PRD files in .hive/prds/ and project root
@@ -215,40 +187,6 @@ pub(crate) fn extract_last_activity(log_contents: &str) -> String {
 }
 
 /// Extract a meaningful title from an Agent Teams task description.
-/// For internal tasks, the description often starts with "You are implementing Feature N: Title"
-/// or "You are exploring..." — extract the key part.
-pub(crate) fn extract_task_title(description: &str) -> String {
-    let first_line = description.lines().next().unwrap_or(description);
-
-    // Try to extract "Feature N: Title" pattern (must have digit + colon after "Feature")
-    if let Some(pos) = first_line.find("Feature ") {
-        let after = &first_line[pos..];
-        // Verify it matches "Feature <digit>" pattern
-        let rest = &after["Feature ".len()..];
-        if rest.starts_with(|c: char| c.is_ascii_digit()) {
-            let end = after.find('.').unwrap_or(after.len());
-            return after[..end].trim().to_string();
-        }
-    }
-
-    // Try "You are implementing/exploring X" pattern
-    let stripped = first_line
-        .trim_start_matches("You are implementing ")
-        .trim_start_matches("You are exploring ")
-        .trim_start_matches("You are building ")
-        .trim_start_matches("You are adding ")
-        .trim_start_matches("You are creating ");
-
-    if stripped != first_line {
-        let end = stripped.find('.').unwrap_or(stripped.len().min(80));
-        return stripped[..end].trim().to_string();
-    }
-
-    // Fallback: first 80 chars of first line
-    let end = first_line.len().min(80);
-    first_line[..end].trim().to_string()
-}
-
 // Handler for 'Stop' action (uses quiet mode to avoid corrupting TUI)
 pub(crate) fn handle_stop_drone(drone_name: &str) -> Result<String> {
     crate::commands::kill_clean::kill_quiet(drone_name.to_string())?;
@@ -268,7 +206,7 @@ pub(crate) fn handle_resume_drone(drone_name: &str) -> Result<String> {
         .join("drones")
         .join(drone_name)
         .join("status.json");
-    let prd_path_dir = PathBuf::from(".hive").join("prds");
+    let _prd_path_dir = PathBuf::from(".hive").join("prds");
 
     if let Ok(status_content) = fs::read_to_string(&status_path) {
         if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&status_content) {
@@ -305,27 +243,4 @@ mod tests {
         assert_eq!(extract_last_activity(""), "");
     }
 
-    #[test]
-    fn test_extract_task_title_feature() {
-        assert_eq!(
-            extract_task_title("You are implementing Feature 1: Auth flow"),
-            "Feature 1: Auth flow"
-        );
-    }
-
-    #[test]
-    fn test_extract_task_title_building() {
-        assert_eq!(
-            extract_task_title("You are building the login page"),
-            "the login page"
-        );
-    }
-
-    #[test]
-    fn test_extract_task_title_fallback() {
-        assert_eq!(
-            extract_task_title("Something else entirely"),
-            "Something else entirely"
-        );
-    }
 }

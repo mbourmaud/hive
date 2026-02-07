@@ -67,9 +67,6 @@ fn create_mock_drone(
             updated: "2024-01-01T00:00:00Z".to_string(),
             error_count: 0,
             last_error_story: None,
-            blocked_reason: None,
-            blocked_questions: Vec::new(),
-            awaiting_human: false,
             active_agents: HashMap::new(),
         },
     )
@@ -117,8 +114,7 @@ fn tui_status_dashboard_single_drone() {
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
-                    DroneState::Blocked => Color::Red,
-                    DroneState::Stopped | DroneState::Cleaning => Color::DarkGray,
+                    DroneState::Stopped | DroneState::Cleaning | DroneState::Zombie => Color::DarkGray,
                 };
 
                 let progress = if status.total > 0 {
@@ -226,8 +222,7 @@ fn tui_status_dashboard_multiple_drones() {
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
-                    DroneState::Blocked => Color::Red,
-                    DroneState::Stopped | DroneState::Cleaning => Color::DarkGray,
+                    DroneState::Stopped | DroneState::Cleaning | DroneState::Zombie => Color::DarkGray,
                 };
 
                 let progress = if status.total > 0 {
@@ -385,44 +380,6 @@ fn tui_progress_bar() {
 
         insta::assert_snapshot!(format!("tui_progress_bar_{}", pct), output);
     }
-}
-
-#[test]
-fn tui_blocked_drone() {
-    let mut drone = create_mock_drone(
-        "blocked-drone",
-        DroneState::Blocked,
-        vec!["STORY-1"],
-        3,
-        Some("STORY-2"),
-    );
-    drone.1.blocked_reason = Some("Missing API key".to_string());
-
-    let output = render_to_string(80, 10, |f| {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(1)
-            .constraints([Constraint::Length(3), Constraint::Min(0)])
-            .split(f.area());
-
-        let title = Paragraph::new(format!("Drone: {} [BLOCKED]", drone.0))
-            .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-            .block(Block::default().borders(Borders::ALL));
-        f.render_widget(title, chunks[0]);
-
-        let blocked_text = format!(
-            "Blocked Reason: {}\n\nProgress: {}/{}",
-            drone.1.blocked_reason.as_ref().unwrap(),
-            drone.1.completed.len(),
-            drone.1.total
-        );
-        let blocked_widget = Paragraph::new(blocked_text)
-            .style(Style::default().fg(Color::Red))
-            .block(Block::default().borders(Borders::ALL).title("Details"));
-        f.render_widget(blocked_widget, chunks[1]);
-    });
-
-    insta::assert_snapshot!("tui_blocked_drone", output);
 }
 
 #[test]

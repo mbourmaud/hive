@@ -9,7 +9,6 @@ use super::drone_actions::{
     handle_clean_drone, handle_new_drone, handle_resume_drone, handle_stop_drone,
 };
 use super::state::TuiState;
-use super::ViewMode;
 
 pub(crate) enum KeyAction {
     Continue,
@@ -32,43 +31,28 @@ impl TuiState {
 
         match key.code {
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                if self.view_mode == ViewMode::Timeline {
-                    self.view_mode = ViewMode::Dashboard;
-                } else if self.blocked_view.is_some() {
-                    self.blocked_view = None;
-                } else if self.selected_story_index.is_some() {
-                    self.selected_story_index = None;
+                if self.messages_view.is_some() {
+                    self.messages_view = None;
+                    self.messages_scroll = 0;
                 } else {
                     return Ok(KeyAction::Break);
                 }
             }
-            KeyCode::Char('b') | KeyCode::Char('B') => {
-                if !self.drones.is_empty() {
-                    let drone_name = &self.drones[current_drone_idx].0;
-                    let status = &self.drones[current_drone_idx].1;
-                    if status.status == DroneState::Blocked {
-                        self.blocked_view = Some(drone_name.clone());
-                    } else {
-                        self.message = Some("Drone is not blocked".to_string());
-                        self.message_color = Color::Yellow;
-                    }
-                }
-            }
             KeyCode::Char('j') | KeyCode::Down => {
-                if self.view_mode == ViewMode::Timeline {
-                    self.timeline_scroll += 1;
+                if self.messages_view.is_some() {
+                    self.messages_scroll += 1;
                 } else if !self.drones.is_empty() && self.selected_index < self.drones.len() - 1 {
                     self.selected_index += 1;
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                if self.view_mode == ViewMode::Timeline {
-                    self.timeline_scroll = self.timeline_scroll.saturating_sub(1);
+                if self.messages_view.is_some() {
+                    self.messages_scroll = self.messages_scroll.saturating_sub(1);
                 } else {
                     self.selected_index = self.selected_index.saturating_sub(1);
                 }
             }
-            KeyCode::Enter => {
+            KeyCode::Enter | KeyCode::Right => {
                 if !self.drones.is_empty() {
                     let drone_name = &self.drones[current_drone_idx].0;
                     if self.expanded_drones.contains(drone_name) {
@@ -84,12 +68,6 @@ impl TuiState {
                     self.expanded_drones.remove(drone_name);
                 }
             }
-            KeyCode::Right => {
-                if !self.drones.is_empty() {
-                    let drone_name = &self.drones[current_drone_idx].0;
-                    self.expanded_drones.insert(drone_name.clone());
-                }
-            }
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 match handle_new_drone(terminal) {
                     Ok(Some(msg)) => {
@@ -103,19 +81,11 @@ impl TuiState {
                     }
                 }
             }
-            KeyCode::Char('t') => {
-                if self.view_mode == ViewMode::Timeline {
-                    self.view_mode = ViewMode::Dashboard;
-                } else {
-                    self.view_mode = ViewMode::Timeline;
-                    self.timeline_scroll = 0;
-                }
-            }
-            KeyCode::Char('i') | KeyCode::Char('I') => {
-                // Info key disabled in plan mode (no stories)
+            KeyCode::Char('m') | KeyCode::Char('M') => {
                 if !self.drones.is_empty() {
-                    self.message = Some("Info view not available in plan mode".to_string());
-                    self.message_color = Color::Yellow;
+                    let drone_name = self.drones[current_drone_idx].0.clone();
+                    self.messages_view = Some(drone_name);
+                    self.messages_scroll = 0;
                 }
             }
             KeyCode::Char('x') | KeyCode::Char('X') => {
@@ -146,27 +116,6 @@ impl TuiState {
                             self.message_color = Color::Red;
                         }
                     }
-                }
-            }
-            KeyCode::Char('u') | KeyCode::Char('U') => {
-                if !self.drones.is_empty() {
-                    let drone_name = &self.drones[current_drone_idx].0;
-                    let status = &self.drones[current_drone_idx].1;
-                    if status.status == DroneState::Blocked {
-                        self.message = Some(format!("Use: hive unblock {}", drone_name));
-                        self.message_color = Color::Yellow;
-                    } else {
-                        self.message =
-                            Some(format!("Drone {} is not blocked", drone_name));
-                        self.message_color = Color::Yellow;
-                    }
-                }
-            }
-            KeyCode::Char('s') | KeyCode::Char('S') => {
-                if !self.drones.is_empty() {
-                    let drone_name = &self.drones[current_drone_idx].0;
-                    self.message = Some(format!("Use: hive sessions {}", drone_name));
-                    self.message_color = Color::Yellow;
                 }
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {

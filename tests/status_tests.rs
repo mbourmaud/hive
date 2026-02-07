@@ -63,10 +63,7 @@ fn setup_test_env(test_name: &str) -> PathBuf {
         "started": "2024-01-01T00:00:00Z",
         "updated": "2024-01-01T00:00:00Z",
         "error_count": 0,
-        "last_error_story": null,
-        "blocked_reason": null,
-        "blocked_questions": [],
-        "awaiting_human": false
+        "last_error_story": null
     }"#;
 
     fs::write(drones_dir.join("status.json"), status).unwrap();
@@ -86,7 +83,7 @@ fn test_status_shows_drones() {
     let temp_dir = setup_test_env("shows");
 
     let output = Command::new(&binary)
-        .args(["monitor", "--simple"])
+        .args(["list"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();
@@ -96,50 +93,7 @@ fn test_status_shows_drones() {
 
     assert!(output.status.success());
     assert!(stdout.contains("test-drone"));
-    assert!(stdout.contains("0%")); // Task-based progress, not story-based
     assert!(stdout.contains("in_progress"));
-
-    cleanup(&temp_dir);
-}
-
-#[test]
-fn test_status_specific_drone() {
-    let binary = get_binary_path();
-    let temp_dir = setup_test_env("specific");
-
-    let output = Command::new(&binary)
-        .args(["monitor", "--simple", "test-drone"])
-        .current_dir(&temp_dir)
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("stdout: {}", stdout);
-
-    assert!(output.status.success());
-    assert!(stdout.contains("test-drone"));
-
-    cleanup(&temp_dir);
-}
-
-#[test]
-fn test_status_nonexistent_drone() {
-    let binary = get_binary_path();
-    let temp_dir = setup_test_env("noexist");
-
-    let output = Command::new(&binary)
-        .args(["monitor", "--simple", "nonexistent"])
-        .current_dir(&temp_dir)
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    println!("stdout: {}", stdout);
-    println!("stderr: {}", stderr);
-
-    assert!(output.status.success());
-    assert!(stderr.contains("not found"));
 
     cleanup(&temp_dir);
 }
@@ -179,7 +133,7 @@ fn test_status_no_drones() {
         .unwrap();
 
     let output = Command::new(&binary)
-        .args(["monitor", "--simple"])
+        .args(["list"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();

@@ -112,9 +112,6 @@ pub fn run(
         updated: chrono::Utc::now().to_rfc3339(),
         error_count: 0,
         last_error_story: None,
-        blocked_reason: None,
-        blocked_questions: Vec::new(),
-        awaiting_human: false,
         active_agents: std::collections::HashMap::new(),
     };
 
@@ -149,7 +146,13 @@ pub fn run(
             environment: active_profile.environment.clone(),
         };
 
-        backend.spawn(&spawn_config)?;
+        let handle = backend.spawn(&spawn_config)?;
+
+        // Persist PID so zombie detection can check if the process is still alive
+        if let Some(pid) = handle.pid {
+            let pid_path = drone_dir.join(".pid");
+            let _ = fs::write(&pid_path, pid.to_string());
+        }
 
         println!(
             "  {} Launched Agent Teams lead (model: {}, teammates: haiku/sonnet, max: {})",

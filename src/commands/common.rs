@@ -5,7 +5,6 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -17,9 +16,6 @@ use crate::types::{DroneStatus, Prd};
 
 /// Default threshold in seconds for considering a drone inactive (1 hour)
 pub const DEFAULT_INACTIVE_THRESHOLD_SECS: i64 = 3600;
-
-/// Full progress bar width for simple mode display
-pub const FULL_PROGRESS_BAR_WIDTH: usize = 40;
 
 /// Maximum drone name length before truncation
 pub const MAX_DRONE_NAME_LEN: usize = 35;
@@ -163,6 +159,21 @@ pub fn read_drone_pid(drone_name: &str) -> Option<i32> {
     fs::read_to_string(pid_path)
         .ok()
         .and_then(|s| s.trim().parse().ok())
+}
+
+// ============================================================================
+// PR / GitHub Utilities
+// ============================================================================
+
+/// Check if a PR for the given branch has been merged.
+pub fn is_pr_merged(branch: &str) -> bool {
+    std::process::Command::new("gh")
+        .args(["pr", "view", branch, "--json", "state", "-q", ".state"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim() == "MERGED")
+        .unwrap_or(false)
 }
 
 // ============================================================================

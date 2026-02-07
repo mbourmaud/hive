@@ -88,10 +88,7 @@ fn setup_test_env(test_name: &str) -> PathBuf {
         "started": "2024-01-01T00:00:00Z",
         "updated": "2024-01-01T00:00:00Z",
         "error_count": 0,
-        "last_error_story": null,
-        "blocked_reason": null,
-        "blocked_questions": [],
-        "awaiting_human": false
+        "last_error_story": null
     }"#;
 
     fs::write(drone_dir.join("status.json"), status).unwrap();

@@ -5,24 +5,22 @@ use ratatui::{
     widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crate::agent_teams::task_sync;
 use crate::commands::common::{
-    duration_between, elapsed_since, format_duration, is_process_running, parse_timestamp,
-    read_drone_pid, reconcile_progress_with_prd, truncate_with_ellipsis,
-    DEFAULT_INACTIVE_THRESHOLD_SECS, MAX_DRONE_NAME_LEN,
+    is_process_running, parse_timestamp, read_drone_pid,
+    truncate_with_ellipsis, DEFAULT_INACTIVE_THRESHOLD_SECS, MAX_DRONE_NAME_LEN,
 };
 use crate::events::HiveEvent;
 use crate::types::DroneState;
 
 use super::cost::format_token_count;
-use super::drone_actions::{extract_last_activity, extract_task_title};
-use super::sparkline::{get_sparkline_data, render_sparkline};
+use super::drone_actions::extract_last_activity;
 use super::state::TuiState;
-use super::views::{render_blocked_detail_view, render_timeline_view};
-use super::ViewMode;
+use super::views::render_messages_view;
 
 /// Get a unique color for an agent based on their index
 fn get_agent_color(agent_index: usize) -> Color {
@@ -43,22 +41,10 @@ impl TuiState {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
 
-        // Timeline view (toggle with 't')
-        if self.view_mode == ViewMode::Timeline {
-            render_timeline_view(f, area, &self.drones, &self.prd_cache, self.timeline_scroll);
+        // Messages view (toggle with 'm')
+        if let Some(ref drone_name) = self.messages_view {
+            render_messages_view(f, area, drone_name, self.messages_scroll);
             return;
-        }
-
-        // Check if we're showing the blocked detail view
-        if let Some(ref blocked_drone_name) = self.blocked_view {
-            if let Some((_, status)) = self
-                .drones
-                .iter()
-                .find(|(name, _)| name == blocked_drone_name)
-            {
-                render_blocked_detail_view(f, area, blocked_drone_name, status, &self.prd_cache);
-                return;
-            }
         }
 
         // Main layout: header, content, footer
@@ -182,14 +168,6 @@ impl TuiState {
                 if status.status != DroneState::Completed {
                     return true;
                 }
-                let (valid_completed, prd_story_count) = self
-                    .prd_cache
-                    .get(&status.prd)
-                    .map(|prd| reconcile_progress_with_prd(status, prd))
-                    .unwrap_or((status.completed.len(), status.total));
-                if valid_completed < prd_story_count {
-                    return true;
-                }
                 let inactive_secs = parse_timestamp(&status.updated)
                     .map(|updated| now.signed_duration_since(updated).num_seconds())
                     .unwrap_or(0);
@@ -214,7 +192,8 @@ impl TuiState {
             lines.push(Line::raw(""));
         }
 
-        for (display_idx, &drone_idx) in self.display_order.iter().enumerate() {
+        let display_order = self.display_order.clone();
+        for (display_idx, &drone_idx) in display_order.iter().enumerate() {
             // Add ARCHIVED header before first archived drone
             if display_idx == active_count && active_count < self.display_order.len() {
                 lines.push(Line::styled(
@@ -237,7 +216,6 @@ impl TuiState {
                 lines.push(Line::raw(""));
             }
 
-            let _is_archived = display_idx >= active_count;
             let (name, status) = &self.drones[drone_idx];
             drone_line_indices.push(lines.len());
 
@@ -269,20 +247,18 @@ impl TuiState {
                 }
                 DroneState::Completed => ("●", Color::Green),
                 DroneState::Error => ("◐", Color::Red),
-                DroneState::Blocked => ("◐", Color::Red),
                 DroneState::Stopped => ("○", Color::DarkGray),
                 DroneState::Cleaning => ("◌", Color::DarkGray),
+                DroneState::Zombie => ("\u{1f480}", Color::Magenta),
             };
 
-            // Plan mode: count from Agent Teams tasks (excluding internal)
+            // Plan mode: count from Agent Teams tasks
             let (valid_completed, prd_story_count) = task_sync::read_team_task_states(name)
                 .map(|tasks| {
-                    let real_tasks: Vec<_> = tasks.values().filter(|t| !t.is_internal).collect();
-                    let completed = real_tasks.iter().filter(|t| t.status == "completed").count();
-                    (completed, real_tasks.len())
+                    let completed = tasks.values().filter(|t| t.status == "completed").count();
+                    (completed, tasks.len())
                 })
                 .unwrap_or((0, 0));
-            let has_new_stories = false;
 
             let percentage = if prd_story_count > 0 {
                 (valid_completed as f32 / prd_story_count as f32 * 100.0) as u16
@@ -295,16 +271,15 @@ impl TuiState {
             let filled = (bar_width as f32 * percentage as f32 / 100.0) as usize;
             let empty = bar_width - filled;
 
-            let (filled_bar, empty_bar) =
-                if status.status == DroneState::Completed && !has_new_stories {
-                    ("━".repeat(bar_width), String::new())
-                } else {
-                    ("━".repeat(filled), "─".repeat(empty))
-                };
+            let (filled_bar, empty_bar) = if status.status == DroneState::Completed {
+                ("━".repeat(bar_width), String::new())
+            } else {
+                ("━".repeat(filled), "─".repeat(empty))
+            };
 
             let filled_color = match status.status {
                 DroneState::Completed => Color::Green,
-                DroneState::Blocked | DroneState::Error => Color::Rgb(255, 165, 0),
+                DroneState::Error => Color::Rgb(255, 165, 0),
                 _ => Color::Green,
             };
 
@@ -332,22 +307,6 @@ impl TuiState {
                 .map(|m| m.len())
                 .unwrap_or(0);
 
-            // Check inbox for pending messages
-            let inbox_count = task_sync::read_team_inboxes(name)
-                .map(|inboxes| {
-                    inboxes
-                        .values()
-                        .flat_map(|v| v.iter())
-                        .filter(|m| !m.read)
-                        .count()
-                })
-                .unwrap_or(0);
-            let inbox_indicator = if inbox_count > 0 {
-                format!(" ✉{}", inbox_count)
-            } else {
-                String::new()
-            };
-
             // Cost display
             let cost = self.cost_cache.get(name).cloned().unwrap_or_default();
             let cost_str = if cost.total_cost_usd > 0.0 {
@@ -361,16 +320,6 @@ impl TuiState {
                 Color::Yellow
             } else {
                 Color::Green
-            };
-
-            // Activity sparkline
-            let sparkline_data = get_sparkline_data(&self.activity_history, name);
-            let sparkline_str = render_sparkline(&sparkline_data);
-            let has_recent_activity = sparkline_data.iter().rev().take(2).any(|&v| v > 0);
-            let sparkline_color = if has_recent_activity {
-                Color::Cyan
-            } else {
-                Color::DarkGray
             };
 
             let header_line = Line::from(vec![
@@ -389,20 +338,13 @@ impl TuiState {
                     } else {
                         "Planning...".to_string()
                     },
-                    Style::default().fg(
-                        if prd_story_count == 0
-                            || (status.status == DroneState::Completed && !has_new_stories)
-                        {
-                            Color::DarkGray
-                        } else if has_new_stories {
-                            Color::Cyan
-                        } else {
-                            Color::White
-                        },
-                    ),
+                    Style::default().fg(if prd_story_count == 0 {
+                        Color::DarkGray
+                    } else {
+                        Color::White
+                    }),
                 ),
                 Span::styled(cost_str, Style::default().fg(cost_color)),
-                Span::styled(inbox_indicator.clone(), Style::default().fg(Color::Cyan)),
                 if member_count > 0 {
                     Span::styled(
                         format!("  🤖{}", member_count),
@@ -412,21 +354,13 @@ impl TuiState {
                     Span::raw("")
                 },
                 Span::raw("  "),
-                Span::styled(sparkline_str, Style::default().fg(sparkline_color)),
-                Span::raw("  "),
                 Span::styled(elapsed, Style::default().fg(Color::DarkGray)),
             ]);
             lines.push(header_line);
 
-            // Expanded: show stories
+            // Expanded: show tasks
             if is_expanded {
-                self.render_expanded_drone(
-                    &mut lines,
-                    drone_idx,
-                    area,
-                    has_new_stories,
-                    prd_story_count,
-                );
+                self.render_expanded_drone(&mut lines, drone_idx, area);
             }
 
             // Add separator between drones with spacing
@@ -482,10 +416,8 @@ impl TuiState {
         // Footer - shortcuts (context-dependent)
         let footer_text = if let Some(msg) = &self.message {
             msg.clone()
-        } else if self.selected_story_index.is_some() {
-            " i info  ↑↓ navigate  ← back  q back".to_string()
         } else {
-            " ↵ expand  t timeline  b blocked  x stop  D clean  q quit".to_string()
+            " ↵ expand  m msgs  x stop  D clean  r resume  q quit".to_string()
         };
 
         let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -500,19 +432,15 @@ impl TuiState {
     }
 
     fn render_expanded_drone(
-        &self,
+        &mut self,
         lines: &mut Vec<Line>,
         drone_idx: usize,
         area: Rect,
-        _has_new_stories: bool,
-        _prd_story_count: usize,
     ) {
-        let (name, status) = &self.drones[drone_idx];
+        let (name, _status) = &self.drones[drone_idx];
 
         // Read task states for Agent Teams rendering
         let task_states_result = task_sync::read_team_task_states(name);
-        
-        // Show Agent Teams tasks (plan mode only)
         let has_tasks = task_states_result
             .as_ref()
             .map(|t| !t.is_empty())
@@ -520,10 +448,11 @@ impl TuiState {
 
         if has_tasks {
             let task_states = task_states_result.as_ref().unwrap();
-            let mut tasks: Vec<_> = task_states.values().collect();
+            let mut tasks: Vec<_> = task_states.values().cloned().collect();
             tasks.sort_by(|a, b| a.id.cmp(&b.id));
 
-            // Build agent index map for tasks
+            // Build agent index map for tasks.
+            // For internal tasks, the agent name is in `subject`; for work tasks, it's in `owner`.
             let mut task_unique_agents: Vec<String> = tasks
                 .iter()
                 .filter_map(|t| {
@@ -542,6 +471,26 @@ impl TuiState {
                 .map(|(idx, agent)| (agent.clone(), idx))
                 .collect();
 
+            // Show team members summary
+            let members = task_sync::read_team_members(name).unwrap_or_default();
+            if !members.is_empty() {
+                let mut member_spans: Vec<Span> = vec![
+                    Span::raw("      "),
+                    Span::styled("Team: ", Style::default().fg(Color::DarkGray)),
+                ];
+                for (idx, m) in members.iter().enumerate() {
+                    if idx > 0 {
+                        member_spans
+                            .push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+                    }
+                    member_spans.push(Span::styled(
+                        m.name.clone(),
+                        Style::default().fg(get_agent_color(idx)),
+                    ));
+                }
+                lines.push(Line::from(member_spans));
+            }
+
             for task in &tasks {
                 let (task_icon, task_color) = if task.status == "completed" {
                     ("●", Color::Green)
@@ -551,9 +500,36 @@ impl TuiState {
                     ("○", Color::DarkGray)
                 };
 
+                // For internal teammate tasks: subject is the agent name, description is the work.
+                // For work tasks: subject is the title, owner is the agent name.
                 let (title, agent_name) = if task.is_internal {
-                    let title = extract_task_title(&task.description);
-                    (title, Some(task.subject.clone()))
+                    // Extract meaningful task description, skipping boilerplate.
+                    // Descriptions are often truncated (~100 chars), so fall back
+                    // to the agent name (subject) when nothing useful is found.
+                    let task_line = task
+                        .description
+                        .lines()
+                        .find(|l| l.starts_with("Your task:") || l.starts_with("Your tasks:"))
+                        .map(|l| {
+                            l.trim_start_matches("Your task:")
+                                .trim_start_matches("Your tasks:")
+                                .trim()
+                                .to_string()
+                        })
+                        .filter(|s| !s.is_empty())
+                        .or_else(|| {
+                            task.description
+                                .lines()
+                                .find(|l| {
+                                    !l.is_empty()
+                                        && !l.starts_with("You are")
+                                        && !l.starts_with("Check the task")
+                                })
+                                .map(|l| l.to_string())
+                        })
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| task.subject.clone());
+                    (task_line, Some(task.subject.clone()))
                 } else {
                     (task.subject.clone(), task.owner.clone())
                 };
@@ -573,30 +549,61 @@ impl TuiState {
                     .map(|f| format!(" ({})", f))
                     .unwrap_or_default();
 
+                // Track and display elapsed time for in_progress tasks
+                let task_key = (name.to_string(), task.id.clone());
+                if task.status == "in_progress" {
+                    self.task_start_times
+                        .entry(task_key.clone())
+                        .or_insert_with(Instant::now);
+                }
+                let elapsed_str = if task.status == "in_progress" {
+                    self.task_start_times
+                        .get(&task_key)
+                        .map(|start| {
+                            let secs = start.elapsed().as_secs();
+                            if secs < 60 {
+                                format!(" {}s", secs)
+                            } else {
+                                format!(" {}m{}s", secs / 60, secs % 60)
+                            }
+                        })
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+
                 let task_prefix_len = 8;
                 let badge_len = agent_badge_with_color
                     .as_ref()
                     .map(|(text, _)| text.len())
                     .unwrap_or(0)
-                    + active_form.len();
+                    + active_form.len()
+                    + elapsed_str.len();
                 let task_available_width = area.width as usize;
                 let max_task_title_width =
                     task_available_width.saturating_sub(task_prefix_len + badge_len + 1);
 
-                if title.chars().count() <= max_task_title_width
-                    || max_task_title_width < 20
-                {
+                if title.chars().count() <= max_task_title_width || max_task_title_width < 20 {
                     let mut spans = vec![
                         Span::raw("      "),
                         Span::styled(task_icon, Style::default().fg(task_color)),
                         Span::raw(" "),
                         Span::styled(title, Style::default().fg(task_color)),
-                        Span::styled(active_form.clone(), Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            active_form.clone(),
+                            Style::default().fg(Color::DarkGray),
+                        ),
                     ];
                     if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
                         spans.push(Span::styled(
                             badge_text.clone(),
                             Style::default().fg(*badge_color),
+                        ));
+                    }
+                    if !elapsed_str.is_empty() {
+                        spans.push(Span::styled(
+                            elapsed_str.clone(),
+                            Style::default().fg(Color::DarkGray),
                         ));
                     }
                     lines.push(Line::from(spans));
@@ -630,10 +637,7 @@ impl TuiState {
                         if first_line {
                             let mut spans = vec![
                                 Span::raw("      "),
-                                Span::styled(
-                                    task_icon,
-                                    Style::default().fg(task_color),
-                                ),
+                                Span::styled(task_icon, Style::default().fg(task_color)),
                                 Span::raw(" "),
                                 Span::styled(
                                     chunk.to_string(),
@@ -651,6 +655,12 @@ impl TuiState {
                                     spans.push(Span::styled(
                                         badge_text.clone(),
                                         Style::default().fg(*badge_color),
+                                    ));
+                                }
+                                if !elapsed_str.is_empty() {
+                                    spans.push(Span::styled(
+                                        elapsed_str.clone(),
+                                        Style::default().fg(Color::DarkGray),
                                     ));
                                 }
                             }
@@ -677,11 +687,36 @@ impl TuiState {
                                         Style::default().fg(*badge_color),
                                     ));
                                 }
+                                if !elapsed_str.is_empty() {
+                                    spans.push(Span::styled(
+                                        elapsed_str.clone(),
+                                        Style::default().fg(Color::DarkGray),
+                                    ));
+                                }
                             }
                             lines.push(Line::from(spans));
                         }
                         remaining = rest;
                     }
+                }
+            }
+        } else {
+            // No tasks yet — show last activity from log
+            let log_path = PathBuf::from(".hive/drones")
+                .join(name)
+                .join("activity.log");
+            if let Ok(contents) = std::fs::read_to_string(&log_path) {
+                let last_activity = extract_last_activity(&contents);
+                if !last_activity.is_empty() {
+                    let prefix_len = 8; // "      ◦ "
+                    let max_width = area.width as usize;
+                    let activity_display =
+                        truncate_with_ellipsis(&last_activity, max_width.saturating_sub(prefix_len));
+                    lines.push(Line::from(vec![
+                        Span::raw("      "),
+                        Span::styled("◦ ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(activity_display, Style::default().fg(Color::DarkGray)),
+                    ]));
                 }
             }
         }
@@ -742,170 +777,16 @@ impl TuiState {
                     format!("Started ({})", model)
                 }
             };
+            let prefix_len = 8; // "      ⚡ "
+            let max_width = area.width as usize;
+            let event_display =
+                truncate_with_ellipsis(&event_desc, max_width.saturating_sub(prefix_len));
             lines.push(Line::from(vec![
                 Span::raw("      "),
                 Span::styled("⚡ ", Style::default().fg(Color::Cyan)),
-                Span::styled(event_desc, Style::default().fg(Color::DarkGray)),
+                Span::styled(event_display, Style::default().fg(Color::DarkGray)),
             ]));
         }
 
-        // Show team messages inline (last 2-3 messages)
-        let inboxes = task_sync::read_team_inboxes(name).unwrap_or_default();
-        if !inboxes.is_empty() {
-            // Build agent color map from all message participants
-            let teammates: HashSet<String> = task_sync::read_team_members(name)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|m| m.name)
-                .collect();
-
-            let mut msg_agents: Vec<String> = Vec::new();
-            for (recipient, msgs) in &inboxes {
-                if !msg_agents.contains(recipient) {
-                    msg_agents.push(recipient.clone());
-                }
-                for m in msgs {
-                    if !msg_agents.contains(&m.from) {
-                        msg_agents.push(m.from.clone());
-                    }
-                }
-            }
-            msg_agents.sort();
-            let msg_agent_index: HashMap<String, usize> = msg_agents
-                .iter()
-                .enumerate()
-                .map(|(idx, a)| (a.clone(), idx))
-                .collect();
-
-            // Collect all messages with recipient info, sorted by timestamp
-            let mut all_msgs: Vec<(String, String, String, String, bool)> = Vec::new();
-            for (recipient, msgs) in &inboxes {
-                for m in msgs {
-                    // Parse JSON messages to get a clean display
-                    let display_text = if m.text.starts_with('{') {
-                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&m.text) {
-                            let msg_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            match msg_type {
-                                "idle_notification" => format!("[idle] {}", m.from),
-                                "shutdown_request" => format!(
-                                    "[shutdown request] {}",
-                                    parsed
-                                        .get("content")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
-                                ),
-                                "shutdown_response" => {
-                                    let approved = parsed
-                                        .get("approve")
-                                        .and_then(|v| v.as_bool())
-                                        .unwrap_or(false);
-                                    format!("[shutdown {}]", if approved { "approved" } else { "rejected" })
-                                }
-                                "task_completed" | "task_assignment" => {
-                                    let content = parsed
-                                        .get("content")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or(&m.text);
-                                    content.to_string()
-                                }
-                                _ => parsed
-                                    .get("content")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(&m.text)
-                                    .to_string(),
-                            }
-                        } else {
-                            m.text.clone()
-                        }
-                    } else {
-                        m.text.clone()
-                    };
-
-                    all_msgs.push((
-                        m.timestamp.clone(),
-                        m.from.clone(),
-                        recipient.clone(),
-                        display_text,
-                        m.read,
-                    ));
-                }
-            }
-            all_msgs.sort_by(|a, b| b.0.cmp(&a.0)); // Sort descending (most recent first)
-
-            // Show last 2-3 messages
-            let recent_msgs: Vec<_> = all_msgs.iter().take(3).collect();
-            if !recent_msgs.is_empty() {
-                for (ts, from, to, text, read) in recent_msgs {
-                    let time_str = if ts.len() >= 19 { &ts[11..19] } else { ts };
-                    let unread_marker = if !read { "●" } else { " " };
-
-                    let from_is_lead = !teammates.contains(from.as_str());
-                    let to_is_lead = !teammates.contains(to.as_str());
-                    let from_color = msg_agent_index
-                        .get(from.as_str())
-                        .map(|&idx| get_agent_color(idx))
-                        .unwrap_or(Color::Cyan);
-                    let to_color = msg_agent_index
-                        .get(to.as_str())
-                        .map(|&idx| get_agent_color(idx))
-                        .unwrap_or(Color::Cyan);
-
-                    let from_label = if from_is_lead {
-                        format!("👑{}", from)
-                    } else {
-                        from.clone()
-                    };
-                    let to_label = if to_is_lead {
-                        format!("👑{}", to)
-                    } else {
-                        to.clone()
-                    };
-
-                    lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("      {} ", unread_marker),
-                            Style::default().fg(if !read { Color::Cyan } else { Color::DarkGray }),
-                        ),
-                        Span::styled(
-                            format!("{} ", time_str),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::styled(from_label, Style::default().fg(from_color)),
-                        Span::styled(" → ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(to_label, Style::default().fg(to_color)),
-                    ]));
-
-                    // Truncate long messages to fit on one line
-                    let max_msg_len = 80;
-                    let display_msg = if text.chars().count() > max_msg_len {
-                        let truncated: String = text.chars().take(max_msg_len).collect();
-                        format!("{}...", truncated)
-                    } else {
-                        text.clone()
-                    };
-
-                    lines.push(Line::from(vec![
-                        Span::raw("          "),
-                        Span::styled(display_msg, Style::default().fg(Color::White)),
-                    ]));
-                }
-            }
-        }
-
-        // Show blocked indicator (press 'b' for details)
-        if status.status == DroneState::Blocked {
-            let orange = Color::Rgb(255, 165, 0);
-            lines.push(Line::from(vec![
-                Span::raw("      "),
-                Span::styled(
-                    "⚠ BLOCKED",
-                    Style::default().fg(orange).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    " - press 'b' for details",
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
     }
 }

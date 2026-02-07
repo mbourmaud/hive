@@ -2,35 +2,33 @@ use anyhow::Result;
 use chrono::Utc;
 use ratatui::style::Color;
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crate::commands::common::{
-    elapsed_since, is_process_running, list_drones, load_prd, parse_timestamp, read_drone_pid,
-    reconcile_progress_with_prd, DEFAULT_INACTIVE_THRESHOLD_SECS,
+    elapsed_since, is_pr_merged, is_process_running, list_drones, load_prd, parse_timestamp,
+    read_drone_pid, reconcile_progress_with_prd, DEFAULT_INACTIVE_THRESHOLD_SECS,
 };
 use crate::events::{EventReader, HiveEvent};
+use crate::notification;
 use crate::types::{DroneState, DroneStatus, Prd};
 
 use super::cost::{parse_cost_from_log, CostSummary};
-use super::drone_actions::{handle_resume_drone, send_desktop_notification};
-use super::sparkline::update_activity_history;
-use super::ViewMode;
 
 pub(crate) struct TuiState {
     // Selection
     pub selected_index: usize,
-    pub selected_story_index: Option<usize>,
     pub scroll_offset: usize,
     // Messages
     pub message: Option<String>,
     pub message_color: Color,
     // Views
-    pub blocked_view: Option<String>,
+    pub messages_view: Option<String>,
+    pub messages_scroll: usize,
     pub expanded_drones: HashSet<String>,
-    pub view_mode: ViewMode,
-    pub timeline_scroll: usize,
     // Tracking
-    pub auto_resumed_drones: HashSet<String>,
+    pub _auto_resumed_drones: HashSet<String>,
     pub auto_stopped_drones: HashSet<String>,
     pub last_completed_counts: HashMap<String, usize>,
     pub last_drone_states: HashMap<String, DroneState>,
@@ -39,7 +37,9 @@ pub(crate) struct TuiState {
     pub last_events: HashMap<String, HiveEvent>,
     pub cost_cache: HashMap<String, CostSummary>,
     pub cost_refresh_counter: u32,
-    pub activity_history: HashMap<String, Vec<(std::time::Instant, u64)>>,
+    pub merge_check_counter: u32,
+    /// Tracks when we first saw a task as in_progress: (drone_name, task_id) -> Instant
+    pub task_start_times: HashMap<(String, String), Instant>,
     // Computed per-tick
     pub drones: Vec<(String, DroneStatus)>,
     pub display_order: Vec<usize>,
@@ -57,7 +57,6 @@ impl TuiState {
                     DroneState::InProgress
                         | DroneState::Starting
                         | DroneState::Resuming
-                        | DroneState::Blocked
                         | DroneState::Error
                 )
             })
@@ -66,15 +65,13 @@ impl TuiState {
 
         Ok(Self {
             selected_index: 0,
-            selected_story_index: None,
             scroll_offset: 0,
             message: None,
             message_color: Color::Green,
-            blocked_view: None,
+            messages_view: None,
+            messages_scroll: 0,
             expanded_drones,
-            view_mode: ViewMode::Dashboard,
-            timeline_scroll: 0,
-            auto_resumed_drones: HashSet::new(),
+            _auto_resumed_drones: HashSet::new(),
             auto_stopped_drones: HashSet::new(),
             last_completed_counts: HashMap::new(),
             last_drone_states: HashMap::new(),
@@ -82,7 +79,8 @@ impl TuiState {
             last_events: HashMap::new(),
             cost_cache: HashMap::new(),
             cost_refresh_counter: 0,
-            activity_history: HashMap::new(),
+            merge_check_counter: 0,
+            task_start_times: HashMap::new(),
             drones: Vec::new(),
             display_order: Vec::new(),
             prd_cache: HashMap::new(),
@@ -101,29 +99,22 @@ impl TuiState {
             // Story completed
             if completed_count > prev_count && prev_count > 0 {
                 if completed_count >= status.total && status.total > 0 {
-                    send_desktop_notification(
+                    notification::notify(
                         &format!("Hive - {}", name),
                         &format!("Done! {}/{} stories", completed_count, status.total),
                     );
                 } else {
-                    send_desktop_notification(
+                    notification::notify(
                         &format!("Hive - {}", name),
                         &format!("Story completed ({}/{})", completed_count, status.total),
                     );
                 }
             }
 
-            // Blocked or error
+            // Error notification
             if let Some(prev) = prev_state {
-                if prev != DroneState::Blocked && status.status == DroneState::Blocked {
-                    let reason = status.blocked_reason.as_deref().unwrap_or("Unknown");
-                    send_desktop_notification(
-                        &format!("Hive - {} BLOCKED", name),
-                        reason,
-                    );
-                }
                 if prev != DroneState::Error && status.status == DroneState::Error {
-                    send_desktop_notification(
+                    notification::notify(
                         &format!("Hive - {} ERROR", name),
                         &format!(
                             "Error in {}",
@@ -155,6 +146,7 @@ impl TuiState {
                     self.auto_stopped_drones.insert(name.clone());
                     let _ = crate::commands::kill_clean::kill_quiet(name.clone());
                 }
+
                 self.last_events.insert(name.clone(), event);
             }
         }
@@ -169,16 +161,69 @@ impl TuiState {
             }
         }
 
-        // Update activity sparkline history
-        for (name, _) in &self.drones {
-            update_activity_history(&mut self.activity_history, name);
+        // Zombie detection: mark drones whose process died but status is still active
+        for (name, status) in &mut self.drones {
+            if matches!(
+                status.status,
+                DroneState::InProgress | DroneState::Starting | DroneState::Resuming
+            ) {
+                let pid_alive = read_drone_pid(name)
+                    .map(is_process_running)
+                    .unwrap_or(false);
+                if !pid_alive {
+                    status.status = DroneState::Zombie;
+                    let status_path =
+                        PathBuf::from(".hive/drones").join(name).join("status.json");
+                    let _ = fs::write(
+                        &status_path,
+                        serde_json::to_string_pretty(&*status).unwrap_or_default(),
+                    );
+                }
+            }
+        }
+
+        // Auto-clean zombie drones
+        let zombies: Vec<String> = self
+            .drones
+            .iter()
+            .filter(|(_, s)| s.status == DroneState::Zombie)
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        for name in &zombies {
+            crate::commands::kill_clean::clean_background(name.clone());
+            notification::notify("Hive", &format!("Zombie drone '{}' auto-cleaned", name));
+        }
+
+        // PR merge detection: every ~600 ticks (60 seconds), check completed/stopped drones
+        self.merge_check_counter += 1;
+        if self.merge_check_counter >= 600 {
+            self.merge_check_counter = 0;
+
+            let merged: Vec<String> = self
+                .drones
+                .iter()
+                .filter(|(_, s)| {
+                    matches!(s.status, DroneState::Completed | DroneState::Stopped)
+                })
+                .filter(|(_, s)| is_pr_merged(&s.branch))
+                .map(|(name, _)| name.clone())
+                .collect();
+
+            for name in &merged {
+                crate::commands::kill_clean::clean_background(name.clone());
+                notification::notify(
+                    "Hive",
+                    &format!("PR merged — drone '{}' auto-cleaned", name),
+                );
+            }
         }
 
         // Sort: in_progress first, then blocked, then completed
         self.drones.sort_by_key(|(_, status)| match status.status {
             DroneState::InProgress | DroneState::Starting | DroneState::Resuming => 0,
-            DroneState::Blocked | DroneState::Error => 1,
-            DroneState::Stopped | DroneState::Cleaning => 2,
+            DroneState::Error => 1,
+            DroneState::Zombie | DroneState::Stopped | DroneState::Cleaning => 2,
             DroneState::Completed => 3,
         });
 
@@ -257,7 +302,7 @@ impl TuiState {
             } else {
                 elapsed_since(&status.started).unwrap_or_default()
             }
-        } else if status.status == DroneState::Stopped {
+        } else if matches!(status.status, DroneState::Stopped | DroneState::Zombie) {
             if let Some(duration) = duration_between(&status.started, &status.updated) {
                 format_duration(duration)
             } else {

@@ -131,8 +131,8 @@ pub fn read_team_members(team_name: &str) -> Result<Vec<TeamMember>> {
     }
     let contents = fs::read_to_string(&config_path)?;
     let config: TeamConfig = serde_json::from_str(&contents)?;
-    // Filter out the team-lead itself, only return actual workers
+    // Filter out the team-lead/coordinator, only return actual workers
     Ok(config.members.into_iter()
-        .filter(|m| m.agent_type != "team-lead")
+        .filter(|m| m.agent_type != "team-lead" && m.agent_type != "coordinator")
         .collect())
 }

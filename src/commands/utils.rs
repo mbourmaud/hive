@@ -4,6 +4,7 @@ use std::fs;
 use std::time::{Duration, SystemTime};
 
 use super::common::reconcile_progress;
+use super::monitor::cost::parse_cost_from_log;
 use crate::types::{DroneState, DroneStatus};
 
 /// List all drones with compact output
@@ -22,12 +23,13 @@ pub fn list() -> Result<()> {
 
     // Header
     println!(
-        "{:<20} {:<15} {:<10}",
+        "{:<20} {:<15} {:<15} {:<10}",
         "NAME".bright_black(),
         "STATUS".bright_black(),
-        "PROGRESS".bright_black()
+        "PROGRESS".bright_black(),
+        "COST".bright_black(),
     );
-    println!("{}", "─".repeat(50).bright_black());
+    println!("{}", "─".repeat(65).bright_black());
 
     for (name, status) in drones {
         let status_str = match status.status {
@@ -36,9 +38,9 @@ pub fn list() -> Result<()> {
             DroneState::InProgress => "in_progress".green(),
             DroneState::Completed => "completed".bright_green().bold(),
             DroneState::Error => "error".red().bold(),
-            DroneState::Blocked => "blocked".red().bold(),
             DroneState::Stopped => "stopped".bright_black(),
             DroneState::Cleaning => "cleaning".bright_black(),
+            DroneState::Zombie => "zombie".magenta(),
         };
 
         // Reconcile progress with actual PRD (filters out old completed stories)
@@ -56,13 +58,21 @@ pub fn list() -> Result<()> {
             0
         };
 
-        let mode_emoji = "🐝";
+        let cost = parse_cost_from_log(&name);
+        let cost_str = if cost.total_cost_usd > 0.0 {
+            format!("${:.2}", cost.total_cost_usd)
+        } else {
+            "-".to_string()
+        };
+
+        let mode_emoji = "\u{1f41d}";
 
         println!(
-            "{:<20} {:<15} {:<10}",
+            "{:<20} {:<15} {:<15} {:<10}",
             format!("{} {}", mode_emoji, name).yellow().bold(),
             status_str,
-            format!("{} ({}%)", progress, percentage).bright_white()
+            format!("{} ({}%)", progress, percentage).bright_white(),
+            cost_str.bright_black(),
         );
     }
 

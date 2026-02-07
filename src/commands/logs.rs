@@ -1,7 +1,5 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use colored::Colorize;
-use std::fs;
-use std::io::{BufRead, BufReader, Seek};
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;

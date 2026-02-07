@@ -53,11 +53,6 @@ pub struct DroneStatus {
     pub error_count: usize,
     #[serde(default)]
     pub last_error_story: Option<String>,
-    #[serde(default)]
-    pub blocked_reason: Option<String>,
-    #[serde(default)]
-    pub blocked_questions: Vec<String>,
-    pub awaiting_human: bool,
     /// Active agents and their current story (for Agent Teams mode)
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub active_agents: HashMap<String, String>,
@@ -83,9 +78,9 @@ pub enum DroneState {
     InProgress,
     Completed,
     Error,
-    Blocked,
     Stopped,
     Cleaning,
+    Zombie,
 }
 
 /// Drone execution mode (always AgentTeam; Worktree kept as alias for backwards compat)
@@ -133,9 +128,9 @@ impl std::fmt::Display for DroneState {
             DroneState::InProgress => write!(f, "in_progress"),
             DroneState::Completed => write!(f, "completed"),
             DroneState::Error => write!(f, "error"),
-            DroneState::Blocked => write!(f, "blocked"),
             DroneState::Stopped => write!(f, "stopped"),
             DroneState::Cleaning => write!(f, "cleaning"),
+            DroneState::Zombie => write!(f, "zombie"),
         }
     }
 }
@@ -214,10 +209,7 @@ mod tests {
             "started": "2024-01-01T00:00:00Z",
             "updated": "2024-01-01T00:00:00Z",
             "error_count": 0,
-            "last_error_story": null,
-            "blocked_reason": null,
-            "blocked_questions": [],
-            "awaiting_human": false
+            "last_error_story": null
         }"#;
 
         let status: DroneStatus = serde_json::from_str(json).unwrap();
@@ -248,9 +240,9 @@ mod tests {
         assert_eq!(DroneState::InProgress.to_string(), "in_progress");
         assert_eq!(DroneState::Completed.to_string(), "completed");
         assert_eq!(DroneState::Error.to_string(), "error");
-        assert_eq!(DroneState::Blocked.to_string(), "blocked");
         assert_eq!(DroneState::Stopped.to_string(), "stopped");
         assert_eq!(DroneState::Cleaning.to_string(), "cleaning");
+        assert_eq!(DroneState::Zombie.to_string(), "zombie");
     }
 
     #[test]
