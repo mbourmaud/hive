@@ -3,6 +3,8 @@ use chrono::Utc;
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
+use std::collections::HashMap;
+use std::time::SystemTime;
 
 use super::common::{
     duration_between, elapsed_since, format_duration, is_process_running, list_drones, load_prd,
@@ -24,6 +26,42 @@ const LOG_POLL_TIMEOUT_MS: u64 = 500;
 
 /// ANSI escape sequence to clear screen and move cursor to top-left
 const CLEAR_SCREEN: &str = "\x1B[2J\x1B[1;1H";
+
+/// Number of sparkline data points (8 chars wide)
+const SPARKLINE_WIDTH: usize = 8;
+
+/// Duration of each activity bucket in seconds (1 minute)
+const ACTIVITY_BUCKET_SECS: u64 = 60;
+
+/// Cost summary parsed from activity logs
+#[derive(Debug, Clone, Default)]
+struct CostSummary {
+    total_cost_usd: f64,
+    input_tokens: u64,
+    output_tokens: u64,
+    cache_read_tokens: u64,
+    cache_creation_tokens: u64,
+}
+
+/// Cache entry for cost data to avoid re-parsing unchanged logs
+#[derive(Debug, Clone)]
+struct CostCacheEntry {
+    summary: CostSummary,
+    log_mtime: SystemTime,
+}
+
+// Global cache for cost data per drone (using thread_local for simplicity)
+thread_local! {
+    static COST_CACHE: std::cell::RefCell<HashMap<String, CostCacheEntry>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// View mode for the TUI
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ViewMode {
+    Dashboard,
+    Timeline,
+}
 
 /// Run the monitor command with auto-refresh TUI by default, simple mode for scripts/CI.
 pub fn run_monitor(name: Option<String>, simple: bool) -> Result<()> {
@@ -301,7 +339,196 @@ fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bool) {
     println!("  PRD: {}", status.prd.bright_black());
 }
 
+/// Format token count with k suffix (e.g., 12345 -> 12.3k)
+fn format_token_count(tokens: u64) -> String {
+    if tokens >= 1000 {
+        format!("{:.1}k", tokens as f64 / 1000.0)
+    } else {
+        tokens.to_string()
+    }
+}
+
+/// Parse cost information from a drone's activity log
+/// Returns CostSummary with accumulated token usage and costs
+/// Uses caching to avoid re-parsing unchanged logs
+fn parse_cost_from_log(drone_name: &str) -> Option<CostSummary> {
+    let log_path = PathBuf::from(".hive")
+        .join("drones")
+        .join(drone_name)
+        .join("activity.log");
+
+    // Check if log file exists
+    if !log_path.exists() {
+        return None;
+    }
+
+    // Get log file modification time
+    let log_mtime = fs::metadata(&log_path).ok()?.modified().ok()?;
+
+    // Check cache
+    let cached = COST_CACHE.with(|cache| {
+        let cache_ref = cache.borrow();
+        cache_ref.get(drone_name).and_then(|entry| {
+            if entry.log_mtime == log_mtime {
+                Some(entry.summary.clone())
+            } else {
+                None
+            }
+        })
+    });
+
+    if let Some(summary) = cached {
+        return Some(summary);
+    }
+
+    // Parse the log file
+    let log_content = fs::read_to_string(&log_path).ok()?;
+    let mut summary = CostSummary::default();
+
+    for line in log_content.lines() {
+        // Parse each line as JSON
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+            // Look for result type with cost information
+            if value.get("type")?.as_str() == Some("result") {
+                if let Some(total_cost) = value.get("total_cost_usd") {
+                    summary.total_cost_usd += total_cost.as_f64().unwrap_or(0.0);
+                }
+
+                if let Some(model_usage) = value.get("modelUsage") {
+                    // Sum up costs from all models
+                    if let Some(obj) = model_usage.as_object() {
+                        for (_model, usage) in obj {
+                            if let Some(cost) = usage.get("costUSD") {
+                                summary.total_cost_usd += cost.as_f64().unwrap_or(0.0);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Look for assistant messages with usage info
+            if value.get("type")?.as_str() == Some("assistant") {
+                if let Some(message) = value.get("message") {
+                    if let Some(usage) = message.get("usage") {
+                        summary.input_tokens += usage
+                            .get("input_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        summary.output_tokens += usage
+                            .get("output_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        summary.cache_read_tokens += usage
+                            .get("cache_read_input_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        summary.cache_creation_tokens += usage
+                            .get("cache_creation_input_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                    }
+                }
+            }
+        }
+    }
+
+    // Update cache
+    COST_CACHE.with(|cache| {
+        let mut cache_mut = cache.borrow_mut();
+        cache_mut.insert(
+            drone_name.to_string(),
+            CostCacheEntry {
+                summary: summary.clone(),
+                log_mtime,
+            },
+        );
+    });
+
+    Some(summary)
+}
+
 fn run_tui(_name: Option<String>) -> Result<()> {
+
+/// Render activity data as a sparkline string using Unicode block characters.
+/// Takes a slice of activity values and returns an 8-character string.
+fn render_sparkline(data: &[u64]) -> String {
+    // Unicode block characters for sparkline (from empty to full)
+    const BLOCKS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+    if data.is_empty() {
+        return " ".repeat(SPARKLINE_WIDTH);
+    }
+
+    // Find max value for normalization
+    let max_value = *data.iter().max().unwrap_or(&1);
+
+    if max_value == 0 {
+        return " ".repeat(SPARKLINE_WIDTH);
+    }
+
+    // Normalize and convert to block characters
+    data.iter()
+        .map(|&value| {
+            let normalized = (value * 8) / max_value.max(1);
+            let block_idx = normalized.min(8) as usize;
+            BLOCKS[block_idx]
+        })
+        .collect()
+}
+
+/// Parse activity buckets for sparkline rendering.
+/// Returns a Vec<u64> where each element is the count of log events in that time bucket.
+/// Uses file size deltas to approximate activity without parsing each log line.
+fn parse_activity_buckets(
+    log_path: &std::path::Path,
+    activity_history: &mut Vec<(std::time::Instant, u64)>,
+    bucket_count: usize,
+    bucket_duration_secs: u64,
+) -> Vec<u64> {
+    use std::time::{Duration, Instant};
+
+    // Get current file size
+    let current_size = fs::metadata(log_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    let now = Instant::now();
+
+    // Add current reading to history
+    activity_history.push((now, current_size));
+
+    // Clean up old readings (keep last bucket_count * bucket_duration_secs worth of data)
+    let max_age = Duration::from_secs(bucket_count as u64 * bucket_duration_secs);
+    activity_history.retain(|(instant, _)| now.duration_since(*instant) <= max_age);
+
+    // Create buckets
+    let mut buckets = vec![0u64; bucket_count];
+    let bucket_duration = Duration::from_secs(bucket_duration_secs);
+
+    // For each bucket, calculate activity by summing file size deltas
+    for i in 0..bucket_count {
+        let bucket_start = now - bucket_duration * (bucket_count - i) as u32;
+        let bucket_end = bucket_start + bucket_duration;
+
+        // Find all readings in this bucket and sum the deltas
+        let mut bucket_activity = 0u64;
+        for j in 1..activity_history.len() {
+            let (_prev_instant, prev_size) = activity_history[j - 1];
+            let (curr_instant, curr_size) = activity_history[j];
+
+            // Check if this delta falls within the bucket
+            if curr_instant >= bucket_start && curr_instant < bucket_end {
+                bucket_activity += curr_size.saturating_sub(prev_size);
+            }
+        }
+
+        // Normalize to a reasonable range (0-100) for sparkline rendering
+        // Each character of log roughly = 1 byte, so divide by ~100 to get event count
+        buckets[i] = bucket_activity / 100;
+    }
+
+    buckets
+}
     use crossterm::{
         event::{self, Event, KeyCode},
         execute,
@@ -315,7 +542,8 @@ fn run_tui(_name: Option<String>) -> Result<()> {
         widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
         Terminal,
     };
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
+    use std::time::Instant;
     use std::io;
 
     // Install panic hook to restore terminal before printing panic info
@@ -358,6 +586,20 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
     // Track drones that have been auto-resumed to avoid duplicate resumes
     let mut auto_resumed_drones: HashSet<String> = HashSet::new();
+
+    // Track activity history for sparkline rendering
+    // Map: drone_name -> Vec<(check_time, file_size)>
+    let mut activity_history: HashMap<String, Vec<(Instant, u64)>> = HashMap::new();
+
+    // Feature 3: Split-pane log viewer state
+    let mut log_pane: Option<String> = None; // Some(drone_name) when split view is active
+    let mut log_pane_scroll: usize = 0;
+    let mut log_pane_auto_scroll: bool = true;
+    let mut log_pane_focus: bool = false; // false = dashboard focused, true = log pane focused
+
+    // Feature 4: Timeline/Gantt view state
+    let mut view_mode = ViewMode::Dashboard;
+    let mut timeline_scroll: (usize, usize) = (0, 0); // (vertical, horizontal)
 
     loop {
         let mut drones = list_drones()?;
@@ -458,6 +700,12 @@ fn run_tui(_name: Option<String>) -> Result<()> {
         terminal.draw(|f| {
             let area = f.area();
 
+            // Check if we're showing the timeline view
+            if view_mode == ViewMode::Timeline {
+                render_timeline_view(f, area, &drones, &prd_cache, timeline_scroll);
+                return;
+            }
+
             // Check if we're showing the blocked detail view
             if let Some(ref blocked_drone_name) = blocked_view {
                 // Find the blocked drone
@@ -469,15 +717,30 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 }
             }
 
-            // Main layout: header, content, footer
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(5), // Header with ASCII art + padding
-                    Constraint::Min(0),    // Content
-                    Constraint::Length(1), // Footer
-                ])
-                .split(area);
+            // Main layout: header, content (with optional split pane), footer
+            let chunks = if log_pane.is_some() {
+                // Split-pane layout: header, dashboard, divider, log pane, footer
+                Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(4),      // Header (reduced by 1 for compactness)
+                        Constraint::Percentage(50), // Dashboard
+                        Constraint::Length(1),      // Divider
+                        Constraint::Percentage(50), // Log pane
+                        Constraint::Length(1),      // Footer
+                    ])
+                    .split(area)
+            } else {
+                // Normal layout: header, content, footer
+                Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(5), // Header with ASCII art + padding
+                        Constraint::Min(0),    // Content
+                        Constraint::Length(1), // Footer
+                    ])
+                    .split(area)
+            };
 
             // Header with ASCII art (with top padding)
             let header_lines = vec![
@@ -784,6 +1047,45 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     String::new()
                 };
 
+                // Parse cost from activity log
+                let cost_info = parse_cost_from_log(name);
+                let (cost_str, cost_color) = if let Some(ref cost) = cost_info {
+                    let cost_usd = cost.total_cost_usd;
+                    let color = if cost_usd < 1.0 {
+                        Color::Green
+                    } else if cost_usd < 5.0 {
+                        Color::Yellow
+                    } else {
+                        Color::Red
+                    };
+                    (format!(" ${:.2}", cost_usd), color)
+                } else {
+                    (String::new(), Color::DarkGray)
+                };
+
+                // Calculate activity sparkline
+                let log_path = PathBuf::from(".hive")
+                    .join("drones")
+                    .join(name)
+                    .join("activity.log");
+
+                let drone_history = activity_history.entry(name.clone()).or_default();
+                let activity_data = parse_activity_buckets(
+                    &log_path,
+                    drone_history,
+                    SPARKLINE_WIDTH,
+                    ACTIVITY_BUCKET_SECS,
+                );
+
+                // Check if sparkline is all zeros (stalled drone)
+                let is_stalled = activity_data.iter().all(|&v| v == 0);
+                let sparkline_chars = render_sparkline(&activity_data);
+                let sparkline_style = if is_stalled {
+                    Style::default().fg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::Cyan)
+                };
+
                 let header_line = Line::from(vec![
                     Span::raw(format!(" {} ", select_char)),
                     Span::styled(icon, Style::default().fg(status_color)),
@@ -809,13 +1111,47 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     Span::raw("  "),
                     Span::styled(mode_tag.clone(), Style::default().fg(Color::DarkGray)),
                     Span::styled(inbox_indicator.clone(), Style::default().fg(Color::Cyan)),
+                    Span::styled(cost_str, Style::default().fg(cost_color)),
                     Span::raw("  "),
                     Span::styled(elapsed, Style::default().fg(Color::DarkGray)),
+                    Span::raw(" "),
+                    Span::styled(sparkline_chars, sparkline_style),
                 ]);
                 lines.push(header_line);
 
-                // Expanded: show stories (works for all drones including completed)
+                // Expanded: show cost breakdown and stories
                 if is_expanded {
+                    // Add cost breakdown line if cost data is available
+                    if let Some(cost) = cost_info {
+                        let cost_breakdown = Line::from(vec![
+                            Span::raw("    "),
+                            Span::styled(
+                                format!("Cost: ${:.2}", cost.total_cost_usd),
+                                Style::default().fg(cost_color),
+                            ),
+                            Span::raw(" | "),
+                            Span::styled(
+                                format!("In: {}", format_token_count(cost.input_tokens)),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                            Span::raw(" | "),
+                            Span::styled(
+                                format!("Out: {}", format_token_count(cost.output_tokens)),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                            Span::raw(" | "),
+                            Span::styled(
+                                format!(
+                                    "Cache: {} read, {} created",
+                                    format_token_count(cost.cache_read_tokens),
+                                    format_token_count(cost.cache_creation_tokens)
+                                ),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                        ]);
+                        lines.push(cost_breakdown);
+                    }
+
                     if let Some(prd) = prd_cache.get(&status.prd) {
                         for (story_idx, story) in prd.stories.iter().enumerate() {
                             let is_completed = status.completed.contains(&story.id);
@@ -1085,13 +1421,46 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                 f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
             }
 
+            // Render divider and log pane if split view is active
+            if let Some(ref log_drone_name) = log_pane {
+                // Divider line
+                let divider_line = Line::styled(
+                    "─".repeat(area.width as usize),
+                    Style::default().fg(Color::DarkGray),
+                );
+                f.render_widget(Paragraph::new(divider_line), chunks[2]);
+
+                // Get execution mode for the log pane drone
+                let log_exec_mode = drones
+                    .iter()
+                    .find(|(name, _)| name == log_drone_name)
+                    .map(|(_, status)| &status.execution_mode)
+                    .unwrap_or(&ExecutionMode::Worktree);
+
+                // Render log pane
+                render_log_pane(
+                    f,
+                    chunks[3],
+                    log_drone_name,
+                    log_pane_scroll,
+                    log_pane_auto_scroll,
+                    log_pane_focus,
+                    log_exec_mode,
+                );
+            }
+
             // Footer - shortcuts (context-dependent)
+            let footer_chunk_idx = if log_pane.is_some() { 4 } else { 2 };
             let footer_text = if let Some(msg) = &message {
                 msg.clone()
+            } else if log_pane.is_some() && log_pane_focus {
+                " ↑↓jk scroll  g/G top/bottom  Tab switch  q close".to_string()
+            } else if log_pane.is_some() {
+                " ↑↓jk navigate  Tab switch to logs  q close logs  t timeline".to_string()
             } else if selected_story_index.is_some() {
-                " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
+                " i info  l logs  L logs-split  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " ↵ expand  l logs  b blocked  m msgs  x stop  c clean  q quit".to_string()
+                " ↵ expand  l logs  L split  b blocked  m msgs  x stop  c clean  t timeline  q quit".to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -1102,7 +1471,7 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                     Color::DarkGray
                 }),
             )]));
-            f.render_widget(footer, chunks[2]);
+            f.render_widget(footer, chunks[footer_chunk_idx]);
         })?;
 
         // Clear message after displaying
@@ -1146,8 +1515,14 @@ fn run_tui(_name: Option<String>) -> Result<()> {
 
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                            // If in blocked view, go back to main view
-                            if blocked_view.is_some() {
+                            // Close log pane if open
+                            if log_pane.is_some() {
+                                log_pane = None;
+                                log_pane_focus = false;
+                                log_pane_scroll = 0;
+                                log_pane_auto_scroll = true;
+                            } else if blocked_view.is_some() {
+                                // If in blocked view, go back to main view
                                 blocked_view = None;
                             } else if selected_story_index.is_some() {
                                 // If story selected, go back to drone
@@ -1198,7 +1573,14 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             }
                         }
                         KeyCode::Char('j') | KeyCode::Down => {
-                            if !drones.is_empty() {
+                            if view_mode == ViewMode::Timeline {
+                                // Scroll timeline down
+                                timeline_scroll.0 = timeline_scroll.0.saturating_add(1);
+                            } else if log_pane_focus {
+                                // Scroll log pane down
+                                log_pane_scroll = log_pane_scroll.saturating_add(1);
+                                log_pane_auto_scroll = false;
+                            } else if !drones.is_empty() {
                                 if let Some(story_idx) = selected_story_index {
                                     // Navigate within stories
                                     if story_idx < current_story_count.saturating_sub(1) {
@@ -1212,7 +1594,14 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             }
                         }
                         KeyCode::Char('k') | KeyCode::Up => {
-                            if let Some(story_idx) = selected_story_index {
+                            if view_mode == ViewMode::Timeline {
+                                // Scroll timeline up
+                                timeline_scroll.0 = timeline_scroll.0.saturating_sub(1);
+                            } else if log_pane_focus {
+                                // Scroll log pane up
+                                log_pane_scroll = log_pane_scroll.saturating_sub(1);
+                                log_pane_auto_scroll = false;
+                            } else if let Some(story_idx) = selected_story_index {
                                 // Navigate within stories
                                 if story_idx > 0 {
                                     selected_story_index = Some(story_idx - 1);
@@ -1223,6 +1612,26 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                             } else {
                                 // Navigate between drones
                                 selected_index = selected_index.saturating_sub(1);
+                            }
+                        }
+                        KeyCode::Char('g') => {
+                            if log_pane_focus {
+                                // Jump to top of log pane
+                                log_pane_scroll = 0;
+                                log_pane_auto_scroll = false;
+                            }
+                        }
+                        KeyCode::Char('G') => {
+                            if log_pane_focus {
+                                // Jump to bottom of log pane
+                                log_pane_scroll = usize::MAX;
+                                log_pane_auto_scroll = true;
+                            }
+                        }
+                        KeyCode::Tab => {
+                            if log_pane.is_some() {
+                                // Toggle focus between dashboard and log pane
+                                log_pane_focus = !log_pane_focus;
                             }
                         }
                         KeyCode::Enter => {
@@ -1255,16 +1664,16 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 }
                             }
                         }
-                        KeyCode::Left => {
-                            // Collapse current drone
+                        KeyCode::Left if view_mode == ViewMode::Dashboard => {
+                            // Collapse current drone (dashboard mode only)
                             if !drones.is_empty() {
                                 let drone_name = &drones[current_drone_idx].0;
                                 expanded_drones.remove(drone_name);
                                 selected_story_index = None;
                             }
                         }
-                        KeyCode::Right => {
-                            // Expand current drone or enter stories
+                        KeyCode::Right if view_mode == ViewMode::Dashboard => {
+                            // Expand current drone or enter stories (dashboard mode only)
                             if !drones.is_empty() {
                                 let drone_name = &drones[current_drone_idx].0;
                                 if !expanded_drones.contains(drone_name) {
@@ -1288,8 +1697,27 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                 }
                             }
                         }
-                        KeyCode::Char('l') | KeyCode::Char('L') => {
-                            // Open logs viewer
+                        KeyCode::Char('l') if view_mode == ViewMode::Dashboard => {
+                            // Toggle split-pane log viewer (lowercase 'l') - only in dashboard mode
+                            if !drones.is_empty() {
+                                let drone_name = &drones[current_drone_idx].0;
+                                if log_pane.as_ref() == Some(drone_name) {
+                                    // Close log pane if already open for this drone
+                                    log_pane = None;
+                                    log_pane_focus = false;
+                                    log_pane_scroll = 0;
+                                    log_pane_auto_scroll = true;
+                                } else {
+                                    // Open log pane for selected drone
+                                    log_pane = Some(drone_name.clone());
+                                    log_pane_focus = false;
+                                    log_pane_scroll = 0;
+                                    log_pane_auto_scroll = true;
+                                }
+                            }
+                        }
+                        KeyCode::Char('L') => {
+                            // Open full-screen logs viewer (uppercase 'L')
                             if let Some(ref drone_name) = blocked_view {
                                 // In blocked view - open logs for this drone
                                 // Find the execution mode for this drone
@@ -1443,6 +1871,25 @@ fn run_tui(_name: Option<String>) -> Result<()> {
                                     message_color = Color::Yellow;
                                 }
                             }
+                        }
+                        KeyCode::Char('t') | KeyCode::Char('T') => {
+                            // Toggle timeline view
+                            view_mode = match view_mode {
+                                ViewMode::Dashboard => ViewMode::Timeline,
+                                ViewMode::Timeline => ViewMode::Dashboard,
+                            };
+                            // Reset timeline scroll when entering
+                            if view_mode == ViewMode::Timeline {
+                                timeline_scroll = (0, 0);
+                            }
+                        }
+                        KeyCode::Char('h') | KeyCode::Left if view_mode == ViewMode::Timeline => {
+                            // Scroll timeline left
+                            timeline_scroll.1 = timeline_scroll.1.saturating_sub(5);
+                        }
+                        KeyCode::Char('l') | KeyCode::Right if view_mode == ViewMode::Timeline => {
+                            // Scroll timeline right
+                            timeline_scroll.1 = timeline_scroll.1.saturating_add(5);
                         }
                         _ => {}
                     }
@@ -1618,6 +2065,442 @@ fn handle_resume_drone(drone_name: &str) -> Result<String> {
         false, // wait
     )?;
     Ok(format!("🔄 Resumed drone: {}", drone_name))
+}
+
+/// Render the timeline/Gantt chart view
+fn render_timeline_view(
+    f: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
+    drones: &[(String, DroneStatus)],
+    prd_cache: &HashMap<String, Prd>,
+    scroll: (usize, usize),
+) {
+    use ratatui::{
+        layout::{Constraint, Direction, Layout},
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    };
+
+    // Layout: header, timeline content, footer
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4), // Header
+            Constraint::Min(0),    // Timeline content
+            Constraint::Length(1), // Footer
+        ])
+        .split(area);
+
+    // Header
+    let header_lines = vec![
+        Line::from(vec![
+            Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "  Timeline View",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("  {} drone{}", drones.len(), if drones.len() != 1 { "s" } else { "" }),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
+        ]),
+    ];
+    f.render_widget(Paragraph::new(header_lines), chunks[0]);
+
+    // Collect all story timings across all drones
+    let mut timeline_entries: Vec<(String, String, String, Option<chrono::DateTime<Utc>>, Option<chrono::DateTime<Utc>>, DroneState)> = Vec::new();
+
+    for (drone_name, status) in drones {
+        if let Some(prd) = prd_cache.get(&status.prd) {
+            for story in &prd.stories {
+                if let Some(story_time) = status.story_times.get(&story.id) {
+                    let start_time = story_time.started.as_ref().and_then(|s| parse_timestamp(s));
+                    let end_time = story_time.completed.as_ref().and_then(|s| parse_timestamp(s));
+
+                    // Determine story state
+                    let story_state = if status.completed.contains(&story.id) {
+                        DroneState::Completed
+                    } else if status.current_story.as_deref() == Some(&story.id) {
+                        DroneState::InProgress
+                    } else {
+                        DroneState::Stopped
+                    };
+
+                    timeline_entries.push((
+                        drone_name.clone(),
+                        story.id.clone(),
+                        story.title.clone(),
+                        start_time,
+                        end_time,
+                        story_state,
+                    ));
+                }
+            }
+        }
+    }
+
+    // If no timeline data, show placeholder
+    if timeline_entries.is_empty() {
+        let placeholder_lines = vec![
+            Line::raw(""),
+            Line::raw(""),
+            Line::from(vec![Span::styled(
+                "  No timeline data available",
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::raw(""),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled("Timeline shows story progress across drones", Style::default().fg(Color::DarkGray)),
+            ]),
+        ];
+        f.render_widget(Paragraph::new(placeholder_lines), chunks[1]);
+
+        let footer = Paragraph::new(Line::from(vec![Span::styled(
+            " t/q: back to dashboard  hjkl/arrows: scroll",
+            Style::default().fg(Color::DarkGray),
+        )]));
+        f.render_widget(footer, chunks[2]);
+        return;
+    }
+
+    // Calculate time range
+    let now = Utc::now();
+    let min_time = timeline_entries
+        .iter()
+        .filter_map(|(_, _, _, start, _, _)| *start)
+        .min()
+        .unwrap_or(now);
+    let max_time = timeline_entries
+        .iter()
+        .filter_map(|(_, _, _, _, end, _)| *end)
+        .max()
+        .unwrap_or(now)
+        .max(now);
+
+    let total_duration = max_time.signed_duration_since(min_time).num_seconds().max(1);
+
+    // Available width for timeline bars (accounting for labels)
+    let label_width = 35; // "drone-name | story-id"
+    let duration_width = 10; // " 1h 23m"
+    let available_width = (area.width as usize).saturating_sub(label_width + duration_width + 4);
+
+    // Build timeline lines
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Time axis header
+    let time_axis = {
+        let mut axis_line = String::new();
+        axis_line.push_str(&format!("{:label_width$}  ", "DRONE | STORY"));
+
+        // Show start and end times
+        let start_str = min_time.format("%H:%M").to_string();
+        let end_str = max_time.format("%H:%M").to_string();
+
+        if available_width > 20 {
+            let padding = available_width.saturating_sub(start_str.len() + end_str.len());
+            axis_line.push_str(&start_str);
+            axis_line.push_str(&"─".repeat(padding));
+            axis_line.push_str(&end_str);
+        } else {
+            axis_line.push_str(&"─".repeat(available_width));
+        }
+
+        Line::from(vec![
+            Span::styled(axis_line, Style::default().fg(Color::DarkGray))
+        ])
+    };
+    lines.push(time_axis);
+    lines.push(Line::raw(""));
+
+    // Render each story as a timeline bar
+    for (drone_name, story_id, story_title, start_time, end_time, story_state) in &timeline_entries {
+        let label = format!("{} | {}",
+            truncate_with_ellipsis(drone_name, 15),
+            truncate_with_ellipsis(story_id, 12)
+        );
+
+        // Calculate bar position and width
+        let (bar_start, bar_width) = if let Some(start) = start_time {
+            let start_offset = start.signed_duration_since(min_time).num_seconds();
+            let end_offset = if let Some(end) = end_time {
+                end.signed_duration_since(min_time).num_seconds()
+            } else {
+                now.signed_duration_since(min_time).num_seconds()
+            };
+
+            let start_pos = (start_offset as f64 / total_duration as f64 * available_width as f64) as usize;
+            let end_pos = (end_offset as f64 / total_duration as f64 * available_width as f64) as usize;
+            let width = end_pos.saturating_sub(start_pos).max(1);
+
+            (start_pos, width)
+        } else {
+            (0, 1)
+        };
+
+        // Choose bar character and color based on state
+        let (bar_char, bar_color) = match story_state {
+            DroneState::Completed => ('█', Color::Green),
+            DroneState::InProgress => ('▓', Color::Yellow),
+            _ => ('░', Color::DarkGray),
+        };
+
+        // Build the timeline bar
+        let mut bar_line = format!("{:label_width$}  ", label);
+        bar_line.push_str(&" ".repeat(bar_start));
+        bar_line.push_str(&bar_char.to_string().repeat(bar_width));
+
+        // Add duration
+        let duration_str = if let (Some(start), Some(end)) = (start_time, end_time) {
+            let dur = end.signed_duration_since(*start);
+            let hours = dur.num_hours();
+            let mins = dur.num_minutes() % 60;
+            if hours > 0 {
+                format!(" {}h {}m", hours, mins)
+            } else {
+                format!(" {}m", mins)
+            }
+        } else if let Some(start) = start_time {
+            let dur = now.signed_duration_since(*start);
+            let hours = dur.num_hours();
+            let mins = dur.num_minutes() % 60;
+            if hours > 0 {
+                format!(" {}h {}m", hours, mins)
+            } else {
+                format!(" {}m", mins)
+            }
+        } else {
+            String::from(" -")
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{:label_width$}  ", label),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::styled(
+                " ".repeat(bar_start),
+                Style::default(),
+            ),
+            Span::styled(
+                bar_char.to_string().repeat(bar_width),
+                Style::default().fg(bar_color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                duration_str,
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+
+        // Add story title on next line (indented)
+        let title_line = format!("    {}", truncate_with_ellipsis(story_title, 70));
+        lines.push(Line::from(vec![
+            Span::styled(title_line, Style::default().fg(Color::DarkGray)),
+        ]));
+        lines.push(Line::raw(""));
+    }
+
+    // Handle scrolling
+    let (v_scroll, _h_scroll) = scroll;
+    let content_height = chunks[1].height as usize;
+    let total_lines = lines.len();
+    let actual_v_scroll = v_scroll.min(total_lines.saturating_sub(content_height).max(0));
+
+    let visible_lines: Vec<Line> = lines
+        .into_iter()
+        .skip(actual_v_scroll)
+        .take(content_height)
+        .collect();
+
+    let content = Paragraph::new(visible_lines);
+    f.render_widget(content, chunks[1]);
+
+    // Scrollbar if needed
+    if total_lines > content_height {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(Some("│"))
+            .thumb_symbol("█");
+
+        let mut scrollbar_state = ScrollbarState::new(total_lines)
+            .position(actual_v_scroll)
+            .viewport_content_length(content_height);
+
+        let scrollbar_area = ratatui::layout::Rect {
+            x: chunks[1].x + chunks[1].width - 1,
+            y: chunks[1].y,
+            width: 1,
+            height: chunks[1].height,
+        };
+        f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+    }
+
+    // Footer
+    let footer = Paragraph::new(Line::from(vec![Span::styled(
+        " t/q/Esc: back to dashboard  hjkl/arrows: scroll",
+        Style::default().fg(Color::DarkGray),
+    )]));
+    f.render_widget(footer, chunks[2]);
+}
+
+/// Render the split-pane log viewer at the bottom of the screen
+fn render_log_pane(
+    f: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
+    drone_name: &str,
+    scroll_offset: usize,
+    auto_scroll: bool,
+    is_focused: bool,
+    execution_mode: &ExecutionMode,
+) {
+    use ratatui::{
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+        widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    };
+
+    // Build the log path based on execution mode
+    let log_path = match execution_mode {
+        ExecutionMode::Subagent => {
+            // Subagent logs are in ~/.hive/drones/{name}/subagent.log
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home)
+                .join(".hive")
+                .join("drones")
+                .join(drone_name)
+                .join("subagent.log")
+        }
+        _ => {
+            // Worktree logs are in .hive/drones/{name}/activity.log
+            PathBuf::from(".hive")
+                .join("drones")
+                .join(drone_name)
+                .join("activity.log")
+        }
+    };
+
+    // Read log file
+    let log_lines: Vec<String> = if log_path.exists() {
+        match fs::read_to_string(&log_path) {
+            Ok(content) => content.lines().map(|s| s.to_string()).collect(),
+            Err(_) => vec!["Error reading log file".to_string()],
+        }
+    } else {
+        vec!["Log file not found".to_string()]
+    };
+
+    // Calculate scroll position
+    let total_lines = log_lines.len();
+    let content_height = area.height.saturating_sub(2) as usize; // Subtract border
+    let actual_scroll = if auto_scroll && total_lines > content_height {
+        total_lines.saturating_sub(content_height)
+    } else {
+        scroll_offset.min(total_lines.saturating_sub(content_height).max(0))
+    };
+
+    // Get visible lines
+    let visible_lines: Vec<Line> = log_lines
+        .iter()
+        .skip(actual_scroll)
+        .take(content_height)
+        .map(|line| {
+            // Parse JSON log lines for better formatting
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+                let timestamp = value.get("timestamp")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let level = value.get("level")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or("INFO")
+                    .to_string();
+                let message = value.get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or(line)
+                    .to_string();
+
+                let level_color = match level.as_str() {
+                    "ERROR" => Color::Red,
+                    "WARN" => Color::Yellow,
+                    "INFO" => Color::Cyan,
+                    "DEBUG" => Color::DarkGray,
+                    _ => Color::White,
+                };
+
+                let time_str = if timestamp.len() >= 19 {
+                    timestamp[11..19].to_string()
+                } else {
+                    timestamp.clone()
+                };
+
+                Line::from(vec![
+                    Span::styled(
+                        format!("{:<8} ", level),
+                        Style::default().fg(level_color).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{} ", time_str),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::raw(message),
+                ])
+            } else {
+                Line::raw(line.clone())
+            }
+        })
+        .collect();
+
+    // Build border with title
+    let border_style = if is_focused {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let title = format!(
+        " Logs: {} {} (Tab: switch focus | q: close) ",
+        drone_name,
+        if auto_scroll { "[auto-scroll]" } else { "" }
+    );
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(Span::styled(title, border_style));
+
+    let paragraph = Paragraph::new(visible_lines).block(block);
+    f.render_widget(paragraph, area);
+
+    // Render scrollbar if needed
+    if total_lines > content_height {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(Some("│"))
+            .thumb_symbol("█");
+
+        let mut scrollbar_state = ScrollbarState::new(total_lines)
+            .position(actual_scroll)
+            .viewport_content_length(content_height);
+
+        let scrollbar_area = ratatui::layout::Rect {
+            x: area.x + area.width - 1,
+            y: area.y + 1,
+            width: 1,
+            height: area.height.saturating_sub(2),
+        };
+        f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+    }
 }
 
 // Render the blocked detail view
