@@ -1,3 +1,5 @@
+// Hive - CLI tool for orchestrating multiple Claude Code instances via git worktrees
+
 use clap::{Parser, Subcommand};
 use hive_lib::commands;
 
