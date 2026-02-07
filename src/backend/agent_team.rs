@@ -85,7 +85,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 - Use delegate mode — coordinate only, do not write code yourself
 - Be cost-conscious with teammate models: use haiku for simple tasks, sonnet for implementation, opus only if truly needed
 - Maximum {max_agents} concurrent teammates
-- When all stories are done, create a PR via `gh pr create` and verify CI
+- When all tasks are done, create a PR via `gh pr create` and verify CI
 - Do NOT modify any files under .hive/ — those are managed by the orchestrator"#,
         prd_text = prd_text,
         worktree_path = config.worktree_path.display(),

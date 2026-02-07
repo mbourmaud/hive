@@ -72,71 +72,7 @@ pub(crate) fn render_timeline_view(
             ),
         ]));
 
-        if let Some(prd) = prd_cache.get(&status.prd) {
-            for story in &prd.stories {
-                let timing = status.story_times.get(&story.id);
-                let is_completed = status.completed.contains(&story.id);
-
-                // Calculate bar position and width
-                let (bar_start, bar_end) = if let Some(timing) = timing {
-                    let s = timing
-                        .started
-                        .as_ref()
-                        .and_then(|t| parse_timestamp(t))
-                        .and_then(|t| {
-                            start_ts.map(|s| t.signed_duration_since(s).num_seconds().max(0) as f64)
-                        })
-                        .unwrap_or(0.0);
-
-                    let e = timing
-                        .completed
-                        .as_ref()
-                        .and_then(|t| parse_timestamp(t))
-                        .and_then(|t| {
-                            start_ts.map(|s| t.signed_duration_since(s).num_seconds().max(0) as f64)
-                        })
-                        .unwrap_or(total_secs);
-
-                    (s / total_secs, e / total_secs)
-                } else {
-                    (0.0, 0.0) // not started
-                };
-
-                let bar_start_col = (bar_start * bar_width as f64) as usize;
-                let bar_end_col = (bar_end * bar_width as f64) as usize;
-                let bar_len = bar_end_col.saturating_sub(bar_start_col).max(if timing.is_some() { 1 } else { 0 });
-
-                let mut bar = String::new();
-                for i in 0..bar_width {
-                    if i >= bar_start_col && i < bar_start_col + bar_len {
-                        if is_completed {
-                            bar.push('█');
-                        } else {
-                            bar.push('▓');
-                        }
-                    } else {
-                        bar.push('░');
-                    }
-                }
-
-                let bar_color = if is_completed {
-                    Color::Green
-                } else if timing.is_some() {
-                    Color::Yellow
-                } else {
-                    Color::DarkGray
-                };
-
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("{:<8}", truncate_with_ellipsis(&story.id, 8)),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                    Span::styled(bar, Style::default().fg(bar_color)),
-                ]));
-            }
-        }
+        // Stories removed in plan mode - timeline not supported for tasks
 
         lines.push(Line::raw(""));
     }

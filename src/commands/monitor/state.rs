@@ -225,46 +225,7 @@ impl TuiState {
             self.selected_index = self.display_order.len() - 1;
         }
 
-        // Auto-resume drones with new stories (only once per drone)
-        for (name, status) in &self.drones {
-            if self.auto_resumed_drones.contains(name) {
-                continue;
-            }
-
-            let prd_story_count = self
-                .prd_cache
-                .get(&status.prd)
-                .map(|p| p.stories.len())
-                .unwrap_or(status.total);
-
-            if prd_story_count > status.total {
-                let process_running = read_drone_pid(name)
-                    .map(is_process_running)
-                    .unwrap_or(false);
-
-                if !process_running
-                    && matches!(
-                        status.status,
-                        DroneState::Completed | DroneState::Stopped | DroneState::InProgress
-                    )
-                {
-                    let new_count = prd_story_count - status.total;
-                    self.message = Some(format!(
-                        "🔄 Auto-resuming '{}' ({} new stor{})",
-                        name,
-                        new_count,
-                        if new_count == 1 { "y" } else { "ies" }
-                    ));
-                    self.message_color = Color::Cyan;
-                    self.auto_resumed_drones.insert(name.clone());
-
-                    if let Err(e) = handle_resume_drone(name) {
-                        self.message = Some(format!("❌ Failed to resume: {}", e));
-                        self.message_color = Color::Red;
-                    }
-                }
-            }
-        }
+        // Auto-resume removed (no stories in plan mode)
 
         Ok(())
     }

@@ -272,19 +272,13 @@ pub(crate) fn handle_resume_drone(drone_name: &str) -> Result<String> {
 
     if let Ok(status_content) = fs::read_to_string(&status_path) {
         if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&status_content) {
-            // Find and load PRD to get new story count
-            let prd_path = prd_path_dir.join(&status.prd);
-            if let Some(prd) = load_prd(&prd_path) {
-                // Update total to match PRD
-                status.total = prd.stories.len();
-                // Reset status to in_progress
-                status.status = DroneState::InProgress;
-                status.updated = chrono::Utc::now().to_rfc3339();
+            // Reset status to in_progress (total is tracked by Agent Teams tasks)
+            status.status = DroneState::InProgress;
+            status.updated = chrono::Utc::now().to_rfc3339();
 
-                // Write updated status
-                if let Ok(updated_json) = serde_json::to_string_pretty(&status) {
-                    let _ = fs::write(&status_path, updated_json);
-                }
+            // Write updated status
+            if let Ok(updated_json) = serde_json::to_string_pretty(&status) {
+                let _ = fs::write(&status_path, updated_json);
             }
         }
     }

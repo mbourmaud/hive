@@ -260,70 +260,36 @@ pub(crate) fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bo
             })
             .collect();
 
-        for story in &prd.stories {
-            let is_completed = status.completed.contains(&story.id);
-            let is_current = status.current_story.as_ref() == Some(&story.id);
-            let is_active = status.active_agents.values().any(|s| s == &story.id)
-                || agent_map.contains_key(&story.id);
+        // Plan mode: show Agent Teams tasks instead
+        if let Ok(task_states) = task_sync::read_team_task_states(name) {
+            let mut tasks: Vec<_> = task_states.values().filter(|t| !t.is_internal).collect();
+            tasks.sort_by_key(|t| &t.id);
 
-            // ◐ = half-full (in progress), ● = full (completed), ○ = empty (pending)
-            let (icon, color_fn): (_, fn(String) -> colored::ColoredString) = if is_completed {
-                ("●", |s| s.green()) // Full green = completed
-            } else if is_current || is_active {
-                ("◐", |s| s.yellow()) // Half-full yellow = in progress
-            } else {
-                ("○", |s| s.bright_black()) // Empty = pending
-            };
-
-            // Calculate duration
-            let duration_str = if let Some(timing) = status.story_times.get(&story.id) {
-                if let (Some(started), Some(completed)) = (&timing.started, &timing.completed) {
-                    // Completed story - show duration
-                    if let Some(dur) = duration_between(started, completed) {
-                        format!(" ({})", format_duration(dur))
-                    } else {
-                        String::new()
-                    }
-                } else if let Some(started) = &timing.started {
-                    // In-progress story - show elapsed time
-                    if let Some(elapsed) = elapsed_since(started) {
-                        format!(" ({})", elapsed)
-                    } else {
-                        String::new()
-                    }
+            for task in &tasks {
+                let (icon, color_fn): (_, fn(String) -> colored::ColoredString) = if task.status == "completed" {
+                    ("●", |s| s.green())
+                } else if task.status == "in_progress" {
+                    ("◐", |s| s.yellow())
                 } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
+                    ("○", |s| s.bright_black())
+                };
 
-            // Show agent name and model for active stories in Agent Teams mode
-            let agent_suffix = if is_active || is_current {
-                agent_map.get(&story.id)
-                    .map(|a| {
-                        let model_str = model_map.get(&story.id)
-                            .map(|m| format!(" {}", m))
-                            .unwrap_or_default();
-                        format!(" [@{}{}]", a, model_str)
-                    })
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
+                let agent_suffix = task.owner.as_ref()
+                    .map(|a| format!(" [@{}]", a))
+                    .unwrap_or_default();
 
-            let title_display = truncate_with_ellipsis(&story.title, MAX_STORY_TITLE_LEN);
-            let story_line = format!(
-                "    {} {} {}{}{}",
-                icon, story.id, title_display, duration_str, agent_suffix
-            );
-            println!("{}", color_fn(story_line));
+                let task_line = format!(
+                    "    {} {}{}",
+                    icon, task.subject, agent_suffix
+                );
+                println!("{}", color_fn(task_line));
+            }
         }
-    } else {
-        // Fallback: just show current story if PRD not loaded
-        if let Some(ref story) = status.current_story {
-            println!("  Current: {}", story.bright_yellow());
-        }
+    }
+
+    // Show current task if available
+    if let Some(ref task_id) = status.current_story {
+        println!("  Current: {}", task_id.bright_yellow());
     }
 
     // Print blocked reason

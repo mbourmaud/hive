@@ -382,52 +382,12 @@ fn tool_query_dependencies(args: &Value) -> Result<String> {
         .find(|(name, _)| name == drone_name)
         .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
 
-    let prd_path = PathBuf::from(".hive/prds").join(&status.prd);
-    let prd =
-        load_prd(&prd_path).ok_or_else(|| anyhow::anyhow!("Failed to load PRD: {}", status.prd))?;
-
-    let story = prd
-        .stories
-        .iter()
-        .find(|s| s.id == story_id)
-        .ok_or_else(|| anyhow::anyhow!("Story '{}' not found in PRD", story_id))?;
-
-    if story.depends_on.is_empty() {
-        return Ok(serde_json::to_string_pretty(&serde_json::json!({
-            "story_id": story_id,
-            "has_dependencies": false,
-            "all_satisfied": true,
-            "message": "No dependencies declared"
-        }))?);
-    }
-
-    // Check all drones for completed stories
-    let mut all_completed: HashSet<String> = HashSet::new();
-    for (_, drone_status) in &drones {
-        for completed_id in &drone_status.completed {
-            all_completed.insert(completed_id.clone());
-        }
-    }
-
-    let mut missing = Vec::new();
-    let mut satisfied = Vec::new();
-    for dep in &story.depends_on {
-        if all_completed.contains(dep) {
-            satisfied.push(dep.clone());
-        } else {
-            missing.push(dep.clone());
-        }
-    }
-
-    let all_satisfied = missing.is_empty();
-
+    // Stories removed in plan mode - dependencies not supported
     Ok(serde_json::to_string_pretty(&serde_json::json!({
         "story_id": story_id,
-        "has_dependencies": true,
-        "depends_on": story.depends_on,
-        "satisfied": satisfied,
-        "missing": missing,
-        "all_satisfied": all_satisfied,
+        "has_dependencies": false,
+        "all_satisfied": true,
+        "message": "Story dependencies not supported in plan mode"
     }))?)
 }
 

@@ -96,7 +96,7 @@ fn test_status_shows_drones() {
 
     assert!(output.status.success());
     assert!(stdout.contains("test-drone"));
-    assert!(stdout.contains("1/5"));
+    assert!(stdout.contains("0%")); // Task-based progress, not story-based
     assert!(stdout.contains("in_progress"));
 
     cleanup(&temp_dir);

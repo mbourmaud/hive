@@ -107,7 +107,7 @@ pub fn run(
         current_story: None,
         completed: Vec::new(),
         story_times: std::collections::HashMap::new(),
-        total: prd.stories.len(),
+        total: 0, // Total is 0 initially, tracked by Agent Teams tasks
         started: chrono::Utc::now().to_rfc3339(),
         updated: chrono::Utc::now().to_rfc3339(),
         error_count: 0,
@@ -262,6 +262,12 @@ fn find_prd(name: &str) -> Result<PathBuf> {
 fn load_prd(path: &PathBuf) -> Result<Prd> {
     let contents = fs::read_to_string(path).context("Failed to read PRD")?;
     let prd: Prd = serde_json::from_str(&contents).context("Failed to parse PRD")?;
+
+    // Validate that plan is not empty
+    if prd.plan.trim().is_empty() {
+        bail!("PRD plan field cannot be empty");
+    }
+
     Ok(prd)
 }
 

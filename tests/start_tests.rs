@@ -73,22 +73,14 @@ fn setup_test_env(test_name: &str) -> PathBuf {
         .unwrap();
 
     // Create a test PRD
-    let prd = r#"{
-        "id": "test-prd",
-        "title": "Test PRD",
-        "description": "A test PRD",
-        "version": "1.0.0",
-        "created_at": "2024-01-01T00:00:00Z",
-        "stories": [
-            {
-                "id": "TEST-001",
-                "title": "Test Story",
-                "description": "A test story",
-                "definition_of_done": ["Done"],
-                "verification_commands": ["echo test"]
-            }
-        ]
-    }"#;
+    let prd = "{
+        \"id\": \"test-prd\",
+        \"title\": \"Test PRD\",
+        \"description\": \"A test PRD\",
+        \"version\": \"1.0.0\",
+        \"created_at\": \"2024-01-01T00:00:00Z\",
+        \"plan\": \"# Test Plan\\n\\nThis is a test plan for the test drone.\"
+    }";
 
     fs::write(temp_dir.join(".hive/prds/prd-test-drone.json"), prd).unwrap();
 

@@ -20,156 +20,11 @@ pub struct Prd {
     /// Base branch to create worktree from (defaults to origin/master or origin/main)
     /// For master/main, always uses origin/ version (up-to-date remote)
     pub base_branch: Option<String>,
-    /// Freeform markdown plan — if present, sent directly to the team lead
-    /// instead of formatting individual stories
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub plan: Option<String>,
+    /// Freeform markdown plan — sent directly to the team lead
     #[serde(default)]
-    pub stories: Vec<Story>,
+    pub plan: String,
 }
 
-/// Individual story within a PRD
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Story {
-    pub id: String,
-    pub title: String,
-    #[serde(default)]
-    pub description: String,
-    pub acceptance_criteria: Option<Vec<String>>,
-    #[serde(default)]
-    pub definition_of_done: Vec<String>,
-    #[serde(default)]
-    pub verification_commands: Vec<String>,
-    pub notes: Option<String>,
-    /// Specific actions to take (optional, enhances guidance)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub actions: Vec<String>,
-    /// Files to modify/create (optional, helps target work)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub files: Vec<String>,
-    /// Tools/commands to use (optional, specifies tooling)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<String>,
-    /// Context and dependencies for the story
-    #[serde(default, skip_serializing_if = "StoryContext::is_empty")]
-    pub context: StoryContext,
-    /// Testing requirements and strategy
-    #[serde(default, skip_serializing_if = "TestingStrategy::is_empty")]
-    pub testing: TestingStrategy,
-    /// Error handling and recovery procedures
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error_handling: Option<ErrorHandling>,
-    /// Agent behavior controls
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_controls: Option<AgentControls>,
-    /// Communication templates for commits and PRs
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub communication: Option<Communication>,
-
-    /// Story IDs that must complete before this one can start
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub depends_on: Vec<String>,
-
-    /// Whether this story can run in parallel with others (no shared file conflicts)
-    #[serde(default)]
-    pub parallel: bool,
-}
-
-/// Context and dependencies for a story
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct StoryContext {
-    /// External dependencies (APIs, services, libraries)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub dependencies: Vec<String>,
-    /// Prerequisites that must be completed first
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub prerequisites: Vec<String>,
-    /// Architectural patterns and constraints to follow
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub architectural_notes: Vec<String>,
-    /// Related documentation references
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_docs: Vec<String>,
-}
-
-impl StoryContext {
-    fn is_empty(&self) -> bool {
-        self.dependencies.is_empty()
-            && self.prerequisites.is_empty()
-            && self.architectural_notes.is_empty()
-            && self.related_docs.is_empty()
-    }
-}
-
-/// Testing strategy and requirements
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct TestingStrategy {
-    /// Required unit tests
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub unit_tests: Vec<String>,
-    /// Required integration tests
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub integration_tests: Vec<String>,
-    /// Required end-to-end tests
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub e2e_tests: Vec<String>,
-    /// Minimum test coverage threshold (0-100)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coverage_threshold: Option<f32>,
-}
-
-impl TestingStrategy {
-    fn is_empty(&self) -> bool {
-        self.unit_tests.is_empty()
-            && self.integration_tests.is_empty()
-            && self.e2e_tests.is_empty()
-            && self.coverage_threshold.is_none()
-    }
-}
-
-/// Error handling and recovery procedures
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorHandling {
-    /// Expected error scenarios
-    pub expected_errors: Vec<String>,
-    /// Rollback procedure if implementation fails
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rollback_procedure: Option<String>,
-    /// Recovery strategy for handling errors
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery_strategy: Option<String>,
-}
-
-/// Agent behavior controls
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentControls {
-    /// Maximum iterations before requiring human intervention
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_iterations: Option<u32>,
-    /// Actions that require human approval
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub require_approval_for: Vec<String>,
-    /// Conditions that should block the agent
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub block_on: Vec<String>,
-}
-
-/// Communication templates for version control
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Communication {
-    /// Template for commit message
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub commit_template: Option<String>,
-    /// Template for pull request description
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pr_template: Option<String>,
-    /// Documentation files that need updates
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub docs_to_update: Vec<String>,
-    /// Changelog entry for this story
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub changelog_entry: Option<String>,
-}
 
 /// Drone execution status
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,15 +41,21 @@ pub struct DroneStatus {
     #[serde(default = "default_backend")]
     pub backend: String,
     pub status: DroneState,
+    #[serde(default)]
     pub current_story: Option<String>,
+    #[serde(default)]
     pub completed: Vec<String>,
+    #[serde(default)]
     pub story_times: HashMap<String, StoryTiming>,
     pub total: usize,
     pub started: String,
     pub updated: String,
     pub error_count: usize,
+    #[serde(default)]
     pub last_error_story: Option<String>,
+    #[serde(default)]
     pub blocked_reason: Option<String>,
+    #[serde(default)]
     pub blocked_questions: Vec<String>,
     pub awaiting_human: bool,
     /// Active agents and their current story (for Agent Teams mode)
@@ -306,32 +167,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_prd() {
-        let json = r#"{
-            "id": "test-prd",
-            "title": "Test PRD",
-            "description": "A test PRD",
-            "version": "1.0.0",
-            "created_at": "2024-01-01T00:00:00Z",
-            "stories": [
-                {
-                    "id": "TEST-001",
-                    "title": "Test Story",
-                    "description": "A test story",
-                    "definition_of_done": ["Done"],
-                    "verification_commands": ["echo test"]
-                }
-            ]
-        }"#;
-
-        let prd: Prd = serde_json::from_str(json).unwrap();
-        assert_eq!(prd.id, "test-prd");
-        assert_eq!(prd.stories.len(), 1);
-        assert_eq!(prd.stories[0].id, "TEST-001");
-    }
-
-    #[test]
-    fn test_parse_plan_only_prd() {
+    fn test_parse_plan_prd() {
         let json = r###"{
             "id": "my-feature",
             "title": "My Feature",
@@ -345,23 +181,21 @@ mod tests {
         assert_eq!(prd.id, "my-feature");
         assert_eq!(
             prd.plan,
-            Some("## Goal\nBuild X\n\n## Requirements\n- Thing A".to_string())
+            "## Goal\nBuild X\n\n## Requirements\n- Thing A"
         );
-        assert!(prd.stories.is_empty());
     }
 
     #[test]
-    fn test_parse_prd_without_plan_field() {
-        // Old PRDs without `plan` should still parse (backwards compat)
+    fn test_parse_minimal_prd() {
         let json = r#"{
-            "id": "old-prd",
-            "title": "Old PRD",
-            "stories": [{"id": "S1", "title": "Story 1", "description": "desc"}]
+            "id": "minimal",
+            "title": "Minimal PRD",
+            "plan": "Do the thing"
         }"#;
 
         let prd: Prd = serde_json::from_str(json).unwrap();
-        assert!(prd.plan.is_none());
-        assert_eq!(prd.stories.len(), 1);
+        assert_eq!(prd.id, "minimal");
+        assert_eq!(prd.plan, "Do the thing");
     }
 
     #[test]
