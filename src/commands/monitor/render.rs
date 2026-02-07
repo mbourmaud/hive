@@ -1110,8 +1110,9 @@ impl TuiState {
 
                     // Truncate long messages to fit on one line
                     let max_msg_len = 80;
-                    let display_msg = if text.len() > max_msg_len {
-                        format!("{}...", &text[..max_msg_len])
+                    let display_msg = if text.chars().count() > max_msg_len {
+                        let truncated: String = text.chars().take(max_msg_len).collect();
+                        format!("{}...", truncated)
                     } else {
                         text.clone()
                     };
