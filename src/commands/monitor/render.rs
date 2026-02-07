@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::agent_teams::task_sync;
@@ -275,12 +275,28 @@ impl TuiState {
             };
 
             // Use reconciled progress to filter out old completed stories
-            let (valid_completed, prd_story_count) = self
+            let prd_has_stories = self
                 .prd_cache
                 .get(&status.prd)
-                .map(|prd| reconcile_progress_with_prd(status, prd))
-                .unwrap_or((status.completed.len(), status.total));
-            let has_new_stories = prd_story_count > status.total;
+                .map(|p| !p.stories.is_empty())
+                .unwrap_or(false);
+
+            let (valid_completed, prd_story_count) = if prd_has_stories {
+                self.prd_cache
+                    .get(&status.prd)
+                    .map(|prd| reconcile_progress_with_prd(status, prd))
+                    .unwrap_or((status.completed.len(), status.total))
+            } else {
+                // Plan mode: count from Agent Teams tasks (excluding internal)
+                task_sync::read_team_task_states(name)
+                    .map(|tasks| {
+                        let real_tasks: Vec<_> = tasks.values().filter(|t| !t.is_internal).collect();
+                        let completed = real_tasks.iter().filter(|t| t.status == "completed").count();
+                        (completed, real_tasks.len())
+                    })
+                    .unwrap_or((0, 0))
+            };
+            let has_new_stories = prd_has_stories && prd_story_count > status.total;
 
             let percentage = if prd_story_count > 0 {
                 (valid_completed as f32 / prd_story_count as f32 * 100.0) as u16
@@ -1019,7 +1035,7 @@ impl TuiState {
                             .unwrap_or_default()
                     )
                 }
-                HiveEvent::Idle { agent, .. } => format!("Idle: @{}", agent),
+                HiveEvent::Idle { agent, .. } => format!("@{} idle", agent),
                 HiveEvent::Stop { .. } => "Stopped".to_string(),
                 HiveEvent::Start { model, .. } => {
                     format!("Started ({})", model)
@@ -1035,8 +1051,33 @@ impl TuiState {
         // Show team messages inline (last 2-3 messages)
         let inboxes = task_sync::read_team_inboxes(name).unwrap_or_default();
         if !inboxes.is_empty() {
+            // Build agent color map from all message participants
+            let teammates: HashSet<String> = task_sync::read_team_members(name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| m.name)
+                .collect();
+
+            let mut msg_agents: Vec<String> = Vec::new();
+            for (recipient, msgs) in &inboxes {
+                if !msg_agents.contains(recipient) {
+                    msg_agents.push(recipient.clone());
+                }
+                for m in msgs {
+                    if !msg_agents.contains(&m.from) {
+                        msg_agents.push(m.from.clone());
+                    }
+                }
+            }
+            msg_agents.sort();
+            let msg_agent_index: HashMap<String, usize> = msg_agents
+                .iter()
+                .enumerate()
+                .map(|(idx, a)| (a.clone(), idx))
+                .collect();
+
             // Collect all messages with recipient info, sorted by timestamp
-            let mut all_msgs: Vec<(String, String, String, bool)> = Vec::new();
+            let mut all_msgs: Vec<(String, String, String, String, bool)> = Vec::new();
             for (recipient, msgs) in &inboxes {
                 for m in msgs {
                     // Parse JSON messages to get a clean display
@@ -1081,7 +1122,8 @@ impl TuiState {
 
                     all_msgs.push((
                         m.timestamp.clone(),
-                        format!("{} → {}", m.from, recipient),
+                        m.from.clone(),
+                        recipient.clone(),
                         display_text,
                         m.read,
                     ));
@@ -1092,9 +1134,31 @@ impl TuiState {
             // Show last 2-3 messages
             let recent_msgs: Vec<_> = all_msgs.iter().take(3).collect();
             if !recent_msgs.is_empty() {
-                for (ts, route, text, read) in recent_msgs {
+                for (ts, from, to, text, read) in recent_msgs {
                     let time_str = if ts.len() >= 19 { &ts[11..19] } else { ts };
                     let unread_marker = if !read { "●" } else { " " };
+
+                    let from_is_lead = !teammates.contains(from.as_str());
+                    let to_is_lead = !teammates.contains(to.as_str());
+                    let from_color = msg_agent_index
+                        .get(from.as_str())
+                        .map(|&idx| get_agent_color(idx))
+                        .unwrap_or(Color::Cyan);
+                    let to_color = msg_agent_index
+                        .get(to.as_str())
+                        .map(|&idx| get_agent_color(idx))
+                        .unwrap_or(Color::Cyan);
+
+                    let from_label = if from_is_lead {
+                        format!("👑{}", from)
+                    } else {
+                        from.clone()
+                    };
+                    let to_label = if to_is_lead {
+                        format!("👑{}", to)
+                    } else {
+                        to.clone()
+                    };
 
                     lines.push(Line::from(vec![
                         Span::styled(
@@ -1105,7 +1169,9 @@ impl TuiState {
                             format!("{} ", time_str),
                             Style::default().fg(Color::DarkGray),
                         ),
-                        Span::styled(route.clone(), Style::default().fg(Color::Cyan)),
+                        Span::styled(from_label, Style::default().fg(from_color)),
+                        Span::styled(" → ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(to_label, Style::default().fg(to_color)),
                     ]));
 
                     // Truncate long messages to fit on one line
