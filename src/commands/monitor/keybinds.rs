@@ -9,7 +9,6 @@ use super::drone_actions::{
     handle_clean_drone, handle_new_drone, handle_resume_drone, handle_stop_drone,
 };
 use super::state::TuiState;
-use super::views::{show_logs_viewer, show_team_messages_viewer};
 use super::ViewMode;
 
 pub(crate) enum KeyAction {
@@ -54,8 +53,6 @@ impl TuiState {
                     self.view_mode = ViewMode::Dashboard;
                 } else if self.blocked_view.is_some() {
                     self.blocked_view = None;
-                } else if self.log_pane.is_some() && self.log_pane_focus {
-                    self.log_pane_focus = false;
                 } else if self.selected_story_index.is_some() {
                     self.selected_story_index = None;
                 } else {
@@ -74,24 +71,9 @@ impl TuiState {
                     }
                 }
             }
-            KeyCode::Char('m') | KeyCode::Char('M') => {
-                if !self.drones.is_empty() {
-                    let drone_name = &self.drones[current_drone_idx].0;
-                    match show_team_messages_viewer(terminal, drone_name) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            self.message = Some(format!("Error: {}", e));
-                            self.message_color = Color::Red;
-                        }
-                    }
-                }
-            }
             KeyCode::Char('j') | KeyCode::Down => {
                 if self.view_mode == ViewMode::Timeline {
                     self.timeline_scroll += 1;
-                } else if self.log_pane_focus && self.log_pane.is_some() {
-                    self.log_pane_auto_scroll = false;
-                    self.log_pane_scroll += 1;
                 } else if !self.drones.is_empty() {
                     if let Some(story_idx) = self.selected_story_index {
                         if story_idx < current_story_count.saturating_sub(1) {
@@ -106,9 +88,6 @@ impl TuiState {
             KeyCode::Char('k') | KeyCode::Up => {
                 if self.view_mode == ViewMode::Timeline {
                     self.timeline_scroll = self.timeline_scroll.saturating_sub(1);
-                } else if self.log_pane_focus && self.log_pane.is_some() {
-                    self.log_pane_auto_scroll = false;
-                    self.log_pane_scroll = self.log_pane_scroll.saturating_sub(1);
                 } else if let Some(story_idx) = self.selected_story_index {
                     if story_idx > 0 {
                         self.selected_story_index = Some(story_idx - 1);
@@ -172,56 +151,6 @@ impl TuiState {
                         self.message = Some(format!("Error: {}", e));
                         self.message_color = Color::Red;
                     }
-                }
-            }
-            KeyCode::Char('l') => {
-                if let Some(ref drone_name) = self.blocked_view {
-                    match show_logs_viewer(terminal, drone_name) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            self.message = Some(format!("Error: {}", e));
-                            self.message_color = Color::Red;
-                        }
-                    }
-                } else if !self.drones.is_empty() {
-                    let drone_name = &self.drones[current_drone_idx].0;
-                    let status = &self.drones[current_drone_idx].1;
-                    if let Some(story_idx) = self.selected_story_index {
-                        if let Some(prd) = self.prd_cache.get(&status.prd) {
-                            if let Some(story) = prd.stories.get(story_idx) {
-                                self.message = Some(format!(
-                                    "Use: hive logs {} --story {}",
-                                    drone_name, story.id
-                                ));
-                                self.message_color = Color::Yellow;
-                            }
-                        }
-                    } else {
-                        match show_logs_viewer(terminal, drone_name) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                self.message = Some(format!("Error: {}", e));
-                                self.message_color = Color::Red;
-                            }
-                        }
-                    }
-                }
-            }
-            KeyCode::Char('L') => {
-                if self.log_pane.is_some() {
-                    self.log_pane = None;
-                    self.log_pane_focus = false;
-                } else if !self.drones.is_empty() {
-                    let drone_name = self.drones[current_drone_idx].0.clone();
-                    self.log_pane = Some(drone_name);
-                    self.log_pane_scroll = 0;
-                    self.log_pane_auto_scroll = true;
-                    self.log_pane_focus = false;
-                }
-            }
-            KeyCode::Tab => {
-                if self.log_pane.is_some() {
-                    self.log_pane_focus = !self.log_pane_focus;
                 }
             }
             KeyCode::Char('t') => {

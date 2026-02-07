@@ -1,7 +1,6 @@
 mod cost;
 mod drone_actions;
 mod keybinds;
-mod log_parsing;
 mod render;
 mod simple;
 mod sparkline;
