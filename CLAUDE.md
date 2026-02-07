@@ -10,7 +10,6 @@ Rust CLI for orchestrating multiple Claude Code instances (drones) via git workt
 hive init                              # Initialize Hive in current repo
 hive start --prd <file>                # Launch a drone with a PRD
 hive monitor                           # TUI dashboard for all drones
-hive monitor --simple                  # Simple text output (for scripts)
 hive logs <name>                       # View drone activity log
 hive stop <name>                       # Stop a running drone
 hive clean <name>                      # Remove drone & worktree

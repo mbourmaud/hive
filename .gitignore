@@ -43,6 +43,13 @@ __pycache__/
 ralph-output.log
 
 
+# Compiled binary
+/hive
+
+# Runtime data
+tasks/
+workspaces/
+
 # Added by cargo
 
 /target
