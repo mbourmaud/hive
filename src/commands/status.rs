@@ -1,9 +1,9 @@
 use anyhow::Result;
 use chrono::Utc;
 use colored::Colorize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::collections::HashMap;
 use std::time::SystemTime;
 
 use super::common::{
@@ -448,87 +448,84 @@ fn parse_cost_from_log(drone_name: &str) -> Option<CostSummary> {
 }
 
 fn run_tui(_name: Option<String>) -> Result<()> {
+    /// Render activity data as a sparkline string using Unicode block characters.
+    /// Takes a slice of activity values and returns an 8-character string.
+    fn render_sparkline(data: &[u64]) -> String {
+        // Unicode block characters for sparkline (from empty to full)
+        const BLOCKS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
-/// Render activity data as a sparkline string using Unicode block characters.
-/// Takes a slice of activity values and returns an 8-character string.
-fn render_sparkline(data: &[u64]) -> String {
-    // Unicode block characters for sparkline (from empty to full)
-    const BLOCKS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-
-    if data.is_empty() {
-        return " ".repeat(SPARKLINE_WIDTH);
-    }
-
-    // Find max value for normalization
-    let max_value = *data.iter().max().unwrap_or(&1);
-
-    if max_value == 0 {
-        return " ".repeat(SPARKLINE_WIDTH);
-    }
-
-    // Normalize and convert to block characters
-    data.iter()
-        .map(|&value| {
-            let normalized = (value * 8) / max_value.max(1);
-            let block_idx = normalized.min(8) as usize;
-            BLOCKS[block_idx]
-        })
-        .collect()
-}
-
-/// Parse activity buckets for sparkline rendering.
-/// Returns a Vec<u64> where each element is the count of log events in that time bucket.
-/// Uses file size deltas to approximate activity without parsing each log line.
-fn parse_activity_buckets(
-    log_path: &std::path::Path,
-    activity_history: &mut Vec<(std::time::Instant, u64)>,
-    bucket_count: usize,
-    bucket_duration_secs: u64,
-) -> Vec<u64> {
-    use std::time::{Duration, Instant};
-
-    // Get current file size
-    let current_size = fs::metadata(log_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
-
-    let now = Instant::now();
-
-    // Add current reading to history
-    activity_history.push((now, current_size));
-
-    // Clean up old readings (keep last bucket_count * bucket_duration_secs worth of data)
-    let max_age = Duration::from_secs(bucket_count as u64 * bucket_duration_secs);
-    activity_history.retain(|(instant, _)| now.duration_since(*instant) <= max_age);
-
-    // Create buckets
-    let mut buckets = vec![0u64; bucket_count];
-    let bucket_duration = Duration::from_secs(bucket_duration_secs);
-
-    // For each bucket, calculate activity by summing file size deltas
-    for i in 0..bucket_count {
-        let bucket_start = now - bucket_duration * (bucket_count - i) as u32;
-        let bucket_end = bucket_start + bucket_duration;
-
-        // Find all readings in this bucket and sum the deltas
-        let mut bucket_activity = 0u64;
-        for j in 1..activity_history.len() {
-            let (_prev_instant, prev_size) = activity_history[j - 1];
-            let (curr_instant, curr_size) = activity_history[j];
-
-            // Check if this delta falls within the bucket
-            if curr_instant >= bucket_start && curr_instant < bucket_end {
-                bucket_activity += curr_size.saturating_sub(prev_size);
-            }
+        if data.is_empty() {
+            return " ".repeat(SPARKLINE_WIDTH);
         }
 
-        // Normalize to a reasonable range (0-100) for sparkline rendering
-        // Each character of log roughly = 1 byte, so divide by ~100 to get event count
-        buckets[i] = bucket_activity / 100;
+        // Find max value for normalization
+        let max_value = *data.iter().max().unwrap_or(&1);
+
+        if max_value == 0 {
+            return " ".repeat(SPARKLINE_WIDTH);
+        }
+
+        // Normalize and convert to block characters
+        data.iter()
+            .map(|&value| {
+                let normalized = (value * 8) / max_value.max(1);
+                let block_idx = normalized.min(8) as usize;
+                BLOCKS[block_idx]
+            })
+            .collect()
     }
 
-    buckets
-}
+    /// Parse activity buckets for sparkline rendering.
+    /// Returns a Vec<u64> where each element is the count of log events in that time bucket.
+    /// Uses file size deltas to approximate activity without parsing each log line.
+    fn parse_activity_buckets(
+        log_path: &std::path::Path,
+        activity_history: &mut Vec<(std::time::Instant, u64)>,
+        bucket_count: usize,
+        bucket_duration_secs: u64,
+    ) -> Vec<u64> {
+        use std::time::{Duration, Instant};
+
+        // Get current file size
+        let current_size = fs::metadata(log_path).map(|m| m.len()).unwrap_or(0);
+
+        let now = Instant::now();
+
+        // Add current reading to history
+        activity_history.push((now, current_size));
+
+        // Clean up old readings (keep last bucket_count * bucket_duration_secs worth of data)
+        let max_age = Duration::from_secs(bucket_count as u64 * bucket_duration_secs);
+        activity_history.retain(|(instant, _)| now.duration_since(*instant) <= max_age);
+
+        // Create buckets
+        let mut buckets = vec![0u64; bucket_count];
+        let bucket_duration = Duration::from_secs(bucket_duration_secs);
+
+        // For each bucket, calculate activity by summing file size deltas
+        for i in 0..bucket_count {
+            let bucket_start = now - bucket_duration * (bucket_count - i) as u32;
+            let bucket_end = bucket_start + bucket_duration;
+
+            // Find all readings in this bucket and sum the deltas
+            let mut bucket_activity = 0u64;
+            for j in 1..activity_history.len() {
+                let (_prev_instant, prev_size) = activity_history[j - 1];
+                let (curr_instant, curr_size) = activity_history[j];
+
+                // Check if this delta falls within the bucket
+                if curr_instant >= bucket_start && curr_instant < bucket_end {
+                    bucket_activity += curr_size.saturating_sub(prev_size);
+                }
+            }
+
+            // Normalize to a reasonable range (0-100) for sparkline rendering
+            // Each character of log roughly = 1 byte, so divide by ~100 to get event count
+            buckets[i] = bucket_activity / 100;
+        }
+
+        buckets
+    }
     use crossterm::{
         event::{self, Event, KeyCode},
         execute,
@@ -543,8 +540,8 @@ fn parse_activity_buckets(
         Terminal,
     };
     use std::collections::{HashMap, HashSet};
-    use std::time::Instant;
     use std::io;
+    use std::time::Instant;
 
     // Install panic hook to restore terminal before printing panic info
     let original_hook = std::panic::take_hook();
@@ -1460,7 +1457,8 @@ fn parse_activity_buckets(
             } else if selected_story_index.is_some() {
                 " i info  l logs  L logs-split  ↑↓ navigate  ← back  q back".to_string()
             } else {
-                " ↵ expand  l logs  L split  b blocked  m msgs  x stop  c clean  t timeline  q quit".to_string()
+                " ↵ expand  l logs  L split  b blocked  m msgs  x stop  c clean  t timeline  q quit"
+                    .to_string()
             };
 
             let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -2098,31 +2096,48 @@ fn render_timeline_view(
             Span::styled("  ╦ ╦╦╦  ╦╔═╗", Style::default().fg(Color::Yellow)),
             Span::styled(
                 "  Timeline View",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
             Span::styled("  ╠═╣║╚╗╔╝║╣ ", Style::default().fg(Color::Yellow)),
             Span::styled(
-                format!("  {} drone{}", drones.len(), if drones.len() != 1 { "s" } else { "" }),
+                format!(
+                    "  {} drone{}",
+                    drones.len(),
+                    if drones.len() != 1 { "s" } else { "" }
+                ),
                 Style::default().fg(Color::DarkGray),
             ),
         ]),
-        Line::from(vec![
-            Span::styled("  ╩ ╩╩ ╚╝ ╚═╝", Style::default().fg(Color::Yellow)),
-        ]),
+        Line::from(vec![Span::styled(
+            "  ╩ ╩╩ ╚╝ ╚═╝",
+            Style::default().fg(Color::Yellow),
+        )]),
     ];
     f.render_widget(Paragraph::new(header_lines), chunks[0]);
 
     // Collect all story timings across all drones
-    let mut timeline_entries: Vec<(String, String, String, Option<chrono::DateTime<Utc>>, Option<chrono::DateTime<Utc>>, DroneState)> = Vec::new();
+    let mut timeline_entries: Vec<(
+        String,
+        String,
+        String,
+        Option<chrono::DateTime<Utc>>,
+        Option<chrono::DateTime<Utc>>,
+        DroneState,
+    )> = Vec::new();
 
     for (drone_name, status) in drones {
         if let Some(prd) = prd_cache.get(&status.prd) {
             for story in &prd.stories {
                 if let Some(story_time) = status.story_times.get(&story.id) {
                     let start_time = story_time.started.as_ref().and_then(|s| parse_timestamp(s));
-                    let end_time = story_time.completed.as_ref().and_then(|s| parse_timestamp(s));
+                    let end_time = story_time
+                        .completed
+                        .as_ref()
+                        .and_then(|s| parse_timestamp(s));
 
                     // Determine story state
                     let story_state = if status.completed.contains(&story.id) {
@@ -2160,7 +2175,10 @@ fn render_timeline_view(
             Line::raw(""),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("Timeline shows story progress across drones", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "Timeline shows story progress across drones",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]),
         ];
         f.render_widget(Paragraph::new(placeholder_lines), chunks[1]);
@@ -2187,7 +2205,10 @@ fn render_timeline_view(
         .unwrap_or(now)
         .max(now);
 
-    let total_duration = max_time.signed_duration_since(min_time).num_seconds().max(1);
+    let total_duration = max_time
+        .signed_duration_since(min_time)
+        .num_seconds()
+        .max(1);
 
     // Available width for timeline bars (accounting for labels)
     let label_width = 35; // "drone-name | story-id"
@@ -2215,16 +2236,19 @@ fn render_timeline_view(
             axis_line.push_str(&"─".repeat(available_width));
         }
 
-        Line::from(vec![
-            Span::styled(axis_line, Style::default().fg(Color::DarkGray))
-        ])
+        Line::from(vec![Span::styled(
+            axis_line,
+            Style::default().fg(Color::DarkGray),
+        )])
     };
     lines.push(time_axis);
     lines.push(Line::raw(""));
 
     // Render each story as a timeline bar
-    for (drone_name, story_id, story_title, start_time, end_time, story_state) in &timeline_entries {
-        let label = format!("{} | {}",
+    for (drone_name, story_id, story_title, start_time, end_time, story_state) in &timeline_entries
+    {
+        let label = format!(
+            "{} | {}",
             truncate_with_ellipsis(drone_name, 15),
             truncate_with_ellipsis(story_id, 12)
         );
@@ -2238,8 +2262,10 @@ fn render_timeline_view(
                 now.signed_duration_since(min_time).num_seconds()
             };
 
-            let start_pos = (start_offset as f64 / total_duration as f64 * available_width as f64) as usize;
-            let end_pos = (end_offset as f64 / total_duration as f64 * available_width as f64) as usize;
+            let start_pos =
+                (start_offset as f64 / total_duration as f64 * available_width as f64) as usize;
+            let end_pos =
+                (end_offset as f64 / total_duration as f64 * available_width as f64) as usize;
             let width = end_pos.saturating_sub(start_pos).max(1);
 
             (start_pos, width)
@@ -2287,25 +2313,20 @@ fn render_timeline_view(
                 format!("{:label_width$}  ", label),
                 Style::default().fg(Color::Cyan),
             ),
-            Span::styled(
-                " ".repeat(bar_start),
-                Style::default(),
-            ),
+            Span::styled(" ".repeat(bar_start), Style::default()),
             Span::styled(
                 bar_char.to_string().repeat(bar_width),
                 Style::default().fg(bar_color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                duration_str,
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(duration_str, Style::default().fg(Color::DarkGray)),
         ]));
 
         // Add story title on next line (indented)
         let title_line = format!("    {}", truncate_with_ellipsis(story_title, 70));
-        lines.push(Line::from(vec![
-            Span::styled(title_line, Style::default().fg(Color::DarkGray)),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            title_line,
+            Style::default().fg(Color::DarkGray),
+        )]));
         lines.push(Line::raw(""));
     }
 
@@ -2416,15 +2437,18 @@ fn render_log_pane(
         .map(|line| {
             // Parse JSON log lines for better formatting
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
-                let timestamp = value.get("timestamp")
+                let timestamp = value
+                    .get("timestamp")
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
-                let level = value.get("level")
+                let level = value
+                    .get("level")
                     .and_then(|l| l.as_str())
                     .unwrap_or("INFO")
                     .to_string();
-                let message = value.get("message")
+                let message = value
+                    .get("message")
                     .and_then(|m| m.as_str())
                     .unwrap_or(line)
                     .to_string();
@@ -2446,7 +2470,9 @@ fn render_log_pane(
                 Line::from(vec![
                     Span::styled(
                         format!("{:<8} ", level),
-                        Style::default().fg(level_color).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(level_color)
+                            .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(
                         format!("{} ", time_str),
@@ -2462,7 +2488,9 @@ fn render_log_pane(
 
     // Build border with title
     let border_style = if is_focused {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
