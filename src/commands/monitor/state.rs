@@ -29,11 +29,6 @@ pub(crate) struct TuiState {
     pub expanded_drones: HashSet<String>,
     pub view_mode: ViewMode,
     pub timeline_scroll: usize,
-    // Log pane
-    pub log_pane: Option<String>,
-    pub log_pane_scroll: usize,
-    pub log_pane_auto_scroll: bool,
-    pub log_pane_focus: bool,
     // Tracking
     pub auto_resumed_drones: HashSet<String>,
     pub auto_stopped_drones: HashSet<String>,
@@ -79,10 +74,6 @@ impl TuiState {
             expanded_drones,
             view_mode: ViewMode::Dashboard,
             timeline_scroll: 0,
-            log_pane: None,
-            log_pane_scroll: 0,
-            log_pane_auto_scroll: true,
-            log_pane_focus: false,
             auto_resumed_drones: HashSet::new(),
             auto_stopped_drones: HashSet::new(),
             last_completed_counts: HashMap::new(),

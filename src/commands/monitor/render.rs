@@ -21,8 +21,23 @@ use super::cost::format_token_count;
 use super::drone_actions::{extract_last_activity, extract_task_title};
 use super::sparkline::{get_sparkline_data, render_sparkline};
 use super::state::TuiState;
-use super::views::{render_blocked_detail_view, render_log_pane, render_timeline_view};
+use super::views::{render_blocked_detail_view, render_timeline_view};
 use super::ViewMode;
+
+/// Get a unique color for an agent based on their index
+fn get_agent_color(agent_index: usize) -> Color {
+    let palette = [
+        Color::Cyan,
+        Color::Magenta,
+        Color::Yellow,
+        Color::Blue,
+        Color::Green,
+        Color::Red,
+        Color::LightCyan,
+        Color::LightMagenta,
+    ];
+    palette[agent_index % palette.len()]
+}
 
 impl TuiState {
     pub fn render(&mut self, f: &mut Frame) {
@@ -46,40 +61,6 @@ impl TuiState {
             }
         }
 
-        // Determine layout based on split-pane mode
-        let (dashboard_area, log_area) = if self.log_pane.is_some() {
-            let h_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(50),
-                    Constraint::Length(1), // divider
-                    Constraint::Percentage(50),
-                ])
-                .split(area);
-            // Render divider
-            let divider_lines: Vec<Line> = (0..h_chunks[1].height)
-                .map(|_| Line::from(Span::styled("│", Style::default().fg(Color::DarkGray))))
-                .collect();
-            f.render_widget(Paragraph::new(divider_lines), h_chunks[1]);
-
-            // Render log pane
-            if let Some(ref log_drone) = self.log_pane {
-                render_log_pane(
-                    f,
-                    h_chunks[2],
-                    log_drone,
-                    self.log_pane_scroll,
-                    self.log_pane_auto_scroll,
-                    self.log_pane_focus,
-                );
-            }
-
-            (h_chunks[0], Some(h_chunks[2]))
-        } else {
-            (area, None)
-        };
-        let _ = log_area; // suppress unused warning
-
         // Main layout: header, content, footer
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -88,7 +69,7 @@ impl TuiState {
                 Constraint::Min(0),    // Content
                 Constraint::Length(1), // Footer
             ])
-            .split(dashboard_area);
+            .split(area);
 
         // Header with ASCII art (with top padding)
         let header_lines = vec![
@@ -422,7 +403,7 @@ impl TuiState {
                 Span::styled(inbox_indicator.clone(), Style::default().fg(Color::Cyan)),
                 if member_count > 0 {
                     Span::styled(
-                        format!("  👤{}", member_count),
+                        format!("  🤖{}", member_count),
                         Style::default().fg(Color::DarkGray),
                     )
                 } else {
@@ -500,10 +481,9 @@ impl TuiState {
         let footer_text = if let Some(msg) = &self.message {
             msg.clone()
         } else if self.selected_story_index.is_some() {
-            " i info  l logs  ↑↓ navigate  ← back  q back".to_string()
+            " i info  ↑↓ navigate  ← back  q back".to_string()
         } else {
-            " ↵ expand  l logs  L split  t timeline  b blocked  m msgs  x stop  D clean  q quit"
-                .to_string()
+            " ↵ expand  t timeline  b blocked  x stop  D clean  q quit".to_string()
         };
 
         let footer = Paragraph::new(Line::from(vec![Span::styled(
@@ -582,6 +562,16 @@ impl TuiState {
             (map, mmap)
         };
 
+        // Build agent index map for unique colors
+        let mut unique_agents: Vec<String> = agent_map.values().cloned().collect();
+        unique_agents.sort();
+        unique_agents.dedup();
+        let agent_index_map: HashMap<String, usize> = unique_agents
+            .iter()
+            .enumerate()
+            .map(|(idx, agent)| (agent.clone(), idx))
+            .collect();
+
         if let Some(prd) = self.prd_cache.get(&status.prd) {
             for (story_idx, story) in prd.stories.iter().enumerate() {
                 let is_completed = status.completed.contains(&story.id);
@@ -607,9 +597,9 @@ impl TuiState {
                 } else if is_completed {
                     ("●", Color::Green)
                 } else if has_blocked_deps {
-                    ("⏳", Color::Yellow)
+                    ("⏳", Color::DarkGray)
                 } else if is_current || is_agent_active {
-                    ("◐", Color::Yellow)
+                    ("◐", Color::DarkGray)
                 } else {
                     ("○", Color::DarkGray)
                 };
@@ -660,12 +650,17 @@ impl TuiState {
                 let max_title_width =
                     available_width.saturating_sub(prefix_len + duration_len + 2);
 
-                let agent_badge = agent_map.get(&story.id).map(|a| {
+                let agent_badge_with_color = agent_map.get(&story.id).map(|a| {
                     let model_str = model_map
                         .get(&story.id)
                         .map(|m| format!(" {}", m))
                         .unwrap_or_default();
-                    format!(" @{}{}", a, model_str)
+                    let badge_text = format!(" @{}{}", a, model_str);
+                    let agent_color = agent_index_map
+                        .get(a)
+                        .map(|&idx| get_agent_color(idx))
+                        .unwrap_or(Color::Cyan);
+                    (badge_text, agent_color)
                 });
 
                 if story.title.len() <= max_title_width || max_title_width < 20 {
@@ -683,10 +678,10 @@ impl TuiState {
                             line_style.fg(Color::DarkGray),
                         ),
                     ];
-                    if let Some(ref badge) = agent_badge {
+                    if let Some((ref badge, color)) = agent_badge_with_color {
                         spans.push(Span::styled(
                             badge.clone(),
-                            Style::default().fg(Color::Cyan),
+                            Style::default().fg(color),
                         ));
                     }
                     if !dep_info.is_empty() {
@@ -777,11 +772,30 @@ impl TuiState {
                 let mut tasks: Vec<_> = task_states.values().collect();
                 tasks.sort_by(|a, b| a.id.cmp(&b.id));
 
+                // Build agent index map for tasks
+                let mut task_unique_agents: Vec<String> = tasks
+                    .iter()
+                    .filter_map(|t| {
+                        if t.is_internal {
+                            Some(t.subject.clone())
+                        } else {
+                            t.owner.clone()
+                        }
+                    })
+                    .collect();
+                task_unique_agents.sort();
+                task_unique_agents.dedup();
+                let task_agent_index_map: HashMap<String, usize> = task_unique_agents
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, agent)| (agent.clone(), idx))
+                    .collect();
+
                 for task in &tasks {
                     let (task_icon, task_color) = if task.status == "completed" {
                         ("●", Color::Green)
                     } else if task.status == "in_progress" {
-                        ("◐", Color::Yellow)
+                        ("◐", Color::DarkGray)
                     } else {
                         ("○", Color::DarkGray)
                     };
@@ -793,9 +807,14 @@ impl TuiState {
                         (task.subject.clone(), task.owner.clone())
                     };
 
-                    let agent_badge = agent_name
-                        .map(|a| format!(" @{}", a))
-                        .unwrap_or_default();
+                    let agent_badge_with_color = agent_name.map(|a| {
+                        let badge_text = format!(" @{}", a);
+                        let agent_color = task_agent_index_map
+                            .get(&a)
+                            .map(|&idx| get_agent_color(idx))
+                            .unwrap_or(Color::Cyan);
+                        (badge_text, agent_color)
+                    });
 
                     let active_form = task
                         .active_form
@@ -804,7 +823,11 @@ impl TuiState {
                         .unwrap_or_default();
 
                     let task_prefix_len = 8;
-                    let badge_len = agent_badge.len() + active_form.len();
+                    let badge_len = agent_badge_with_color
+                        .as_ref()
+                        .map(|(text, _)| text.len())
+                        .unwrap_or(0)
+                        + active_form.len();
                     let task_available_width = area.width as usize;
                     let max_task_title_width =
                         task_available_width.saturating_sub(task_prefix_len + badge_len + 1);
@@ -812,14 +835,20 @@ impl TuiState {
                     if title.chars().count() <= max_task_title_width
                         || max_task_title_width < 20
                     {
-                        lines.push(Line::from(vec![
+                        let mut spans = vec![
                             Span::raw("      "),
                             Span::styled(task_icon, Style::default().fg(task_color)),
                             Span::raw(" "),
                             Span::styled(title, Style::default().fg(task_color)),
-                            Span::styled(active_form, Style::default().fg(Color::DarkGray)),
-                            Span::styled(agent_badge, Style::default().fg(Color::Cyan)),
-                        ]));
+                            Span::styled(active_form.clone(), Style::default().fg(Color::DarkGray)),
+                        ];
+                        if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
+                            spans.push(Span::styled(
+                                badge_text.clone(),
+                                Style::default().fg(*badge_color),
+                            ));
+                        }
+                        lines.push(Line::from(spans));
                     } else {
                         let task_title_indent = "        "; // 8 spaces
                         let wrap_width =
@@ -865,10 +894,14 @@ impl TuiState {
                                         active_form.clone(),
                                         Style::default().fg(Color::DarkGray),
                                     ));
-                                    spans.push(Span::styled(
-                                        agent_badge.clone(),
-                                        Style::default().fg(Color::Cyan),
-                                    ));
+                                    if let Some((badge_text, badge_color)) =
+                                        agent_badge_with_color.as_ref()
+                                    {
+                                        spans.push(Span::styled(
+                                            badge_text.clone(),
+                                            Style::default().fg(*badge_color),
+                                        ));
+                                    }
                                 }
                                 lines.push(Line::from(spans));
                                 first_line = false;
@@ -885,10 +918,14 @@ impl TuiState {
                                         active_form.clone(),
                                         Style::default().fg(Color::DarkGray),
                                     ));
-                                    spans.push(Span::styled(
-                                        agent_badge.clone(),
-                                        Style::default().fg(Color::Cyan),
-                                    ));
+                                    if let Some((badge_text, badge_color)) =
+                                        agent_badge_with_color.as_ref()
+                                    {
+                                        spans.push(Span::styled(
+                                            badge_text.clone(),
+                                            Style::default().fg(*badge_color),
+                                        ));
+                                    }
                                 }
                                 lines.push(Line::from(spans));
                             }
@@ -993,6 +1030,98 @@ impl TuiState {
                 Span::styled("⚡ ", Style::default().fg(Color::Cyan)),
                 Span::styled(event_desc, Style::default().fg(Color::DarkGray)),
             ]));
+        }
+
+        // Show team messages inline (last 2-3 messages)
+        let inboxes = task_sync::read_team_inboxes(name).unwrap_or_default();
+        if !inboxes.is_empty() {
+            // Collect all messages with recipient info, sorted by timestamp
+            let mut all_msgs: Vec<(String, String, String, bool)> = Vec::new();
+            for (recipient, msgs) in &inboxes {
+                for m in msgs {
+                    // Parse JSON messages to get a clean display
+                    let display_text = if m.text.starts_with('{') {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&m.text) {
+                            let msg_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            match msg_type {
+                                "idle_notification" => format!("[idle] {}", m.from),
+                                "shutdown_request" => format!(
+                                    "[shutdown request] {}",
+                                    parsed
+                                        .get("content")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                ),
+                                "shutdown_response" => {
+                                    let approved = parsed
+                                        .get("approve")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false);
+                                    format!("[shutdown {}]", if approved { "approved" } else { "rejected" })
+                                }
+                                "task_completed" | "task_assignment" => {
+                                    let content = parsed
+                                        .get("content")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or(&m.text);
+                                    content.to_string()
+                                }
+                                _ => parsed
+                                    .get("content")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(&m.text)
+                                    .to_string(),
+                            }
+                        } else {
+                            m.text.clone()
+                        }
+                    } else {
+                        m.text.clone()
+                    };
+
+                    all_msgs.push((
+                        m.timestamp.clone(),
+                        format!("{} → {}", m.from, recipient),
+                        display_text,
+                        m.read,
+                    ));
+                }
+            }
+            all_msgs.sort_by(|a, b| b.0.cmp(&a.0)); // Sort descending (most recent first)
+
+            // Show last 2-3 messages
+            let recent_msgs: Vec<_> = all_msgs.iter().take(3).collect();
+            if !recent_msgs.is_empty() {
+                for (ts, route, text, read) in recent_msgs {
+                    let time_str = if ts.len() >= 19 { &ts[11..19] } else { ts };
+                    let unread_marker = if !read { "●" } else { " " };
+
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            format!("      {} ", unread_marker),
+                            Style::default().fg(if !read { Color::Cyan } else { Color::DarkGray }),
+                        ),
+                        Span::styled(
+                            format!("{} ", time_str),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(route.clone(), Style::default().fg(Color::Cyan)),
+                    ]));
+
+                    // Truncate long messages to fit on one line
+                    let max_msg_len = 80;
+                    let display_msg = if text.len() > max_msg_len {
+                        format!("{}...", &text[..max_msg_len])
+                    } else {
+                        text.clone()
+                    };
+
+                    lines.push(Line::from(vec![
+                        Span::raw("          "),
+                        Span::styled(display_msg, Style::default().fg(Color::White)),
+                    ]));
+                }
+            }
         }
 
         // Show blocked indicator (press 'b' for details)
