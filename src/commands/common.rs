@@ -84,58 +84,20 @@ pub fn load_prd(path: &Path) -> Option<Prd> {
     serde_json::from_str(&contents).ok()
 }
 
-/// Reconcile status with actual PRD, filtering out completed stories that no longer exist.
-/// For plan-only PRDs (no stories), falls back to Agent Teams task progress.
+/// Reconcile status with actual PRD.
+/// Returns (completed_tasks, total_tasks) from Agent Teams progress.
 ///
 /// Returns (valid_completed_count, total).
 pub fn reconcile_progress(status: &DroneStatus) -> (usize, usize) {
-    let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
-
-    let result = load_prd(&prd_path)
-        .map(|prd| reconcile_progress_with_prd(status, &prd))
-        .unwrap_or((status.completed.len(), status.total));
-
-    // For plan-only PRDs (0 stories), try Agent Teams tasks, then status.json itself
-    if result.1 == 0 {
-        let at_progress = agent_teams_progress(&status.drone);
-        if at_progress.1 > 0 {
-            return at_progress;
-        }
-        // Final fallback: use status.json's own total/completed
-        if status.total > 0 {
-            return (status.completed.len(), status.total);
-        }
-    }
-
-    result
+    agent_teams_progress(&status.drone)
 }
 
 /// Reconcile status with a provided PRD.
+/// Returns Agent Teams task progress.
 ///
-/// Returns (valid_completed_count, total_from_prd).
-pub fn reconcile_progress_with_prd(status: &DroneStatus, prd: &Prd) -> (usize, usize) {
-    let prd_story_ids: HashSet<&str> = prd.stories.iter().map(|s| s.id.as_str()).collect();
-
-    let valid_completed = status
-        .completed
-        .iter()
-        .filter(|id| prd_story_ids.contains(id.as_str()))
-        .count();
-
-    let prd_count = prd.stories.len();
-
-    // For plan-only PRDs, try Agent Teams tasks, then status.json itself
-    if prd_count == 0 {
-        let at_progress = agent_teams_progress(&status.drone);
-        if at_progress.1 > 0 {
-            return at_progress;
-        }
-        if status.total > 0 {
-            return (status.completed.len(), status.total);
-        }
-    }
-
-    (valid_completed, prd_count)
+/// Returns (valid_completed_count, total).
+pub fn reconcile_progress_with_prd(status: &DroneStatus, _prd: &Prd) -> (usize, usize) {
+    agent_teams_progress(&status.drone)
 }
 
 /// Get progress from Agent Teams task list (for plan-only PRDs).

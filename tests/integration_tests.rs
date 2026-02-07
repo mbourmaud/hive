@@ -25,8 +25,7 @@ fn create_test_prd(prds_dir: &Path, prd_name: &str) {
         target_platforms: Some(vec!["macos".to_string(), "linux".to_string()]),
         target_branch: Some("main".to_string()),
         base_branch: None,
-        plan: None,
-        stories: vec![],
+        plan: "# Test Plan\n\nThis is a test plan.".to_string(),
     };
 
     let prd_path = prds_dir.join(format!("{}.json", prd_name));
@@ -187,8 +186,8 @@ fn test_existing_prd_compatibility() {
     assert!(prd.is_ok());
     let prd = prd.unwrap();
     assert_eq!(prd.id, "existing-prd");
-    assert_eq!(prd.stories.len(), 1);
-    assert_eq!(prd.stories[0].id, "STORY-001");
+    // Stories field is ignored in plan mode - only plan field is used
+    assert!(prd.plan.is_empty()); // No plan field in old JSON, defaults to empty string
 }
 
 #[test]

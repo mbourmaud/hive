@@ -58,11 +58,7 @@ pub(crate) fn render_blocked_detail_view(
 
     // Subheader: drone name + blocked story
     let blocked_story = status.current_story.as_deref().unwrap_or("Unknown");
-    let story_title = prd_cache
-        .get(&status.prd)
-        .and_then(|prd| prd.stories.iter().find(|s| s.id == blocked_story))
-        .map(|s| s.title.as_str())
-        .unwrap_or("");
+    let story_title = ""; // Stories removed in plan mode
 
     let mode_emoji = "🐝";
 

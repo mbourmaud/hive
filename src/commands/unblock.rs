@@ -93,21 +93,15 @@ pub fn run(name: String, no_interactive: bool) -> Result<()> {
         None
     };
 
-    // Show current story context
+    // Show current story context (removed in plan mode)
     if let Some(ref story_id) = status.current_story {
-        if let Some(ref prd) = prd {
-            if let Some(story) = prd.stories.iter().find(|s| s.id == *story_id) {
-                println!(
-                    "{}",
-                    format!("Current Story: {}", story_id)
-                        .bright_yellow()
-                        .bold()
-                );
-                println!("  Title: {}", story.title);
-                println!("  Description: {}", story.description);
-                println!();
-            }
-        }
+        println!(
+            "{}",
+            format!("Current Task: {}", story_id)
+                .bright_yellow()
+                .bold()
+        );
+        println!();
     }
 
     // Show stats

@@ -30,23 +30,6 @@ impl TuiState {
                 0
             };
 
-        // Get story count for current drone if expanded
-        let current_story_count =
-            if !self.drones.is_empty() && current_drone_idx < self.drones.len() {
-                let drone_name = &self.drones[current_drone_idx].0;
-                let status = &self.drones[current_drone_idx].1;
-                if self.expanded_drones.contains(drone_name) {
-                    self.prd_cache
-                        .get(&status.prd)
-                        .map(|p| p.stories.len())
-                        .unwrap_or(0)
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
-
         match key.code {
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
                 if self.view_mode == ViewMode::Timeline {
@@ -74,26 +57,13 @@ impl TuiState {
             KeyCode::Char('j') | KeyCode::Down => {
                 if self.view_mode == ViewMode::Timeline {
                     self.timeline_scroll += 1;
-                } else if !self.drones.is_empty() {
-                    if let Some(story_idx) = self.selected_story_index {
-                        if story_idx < current_story_count.saturating_sub(1) {
-                            self.selected_story_index = Some(story_idx + 1);
-                        }
-                    } else if self.selected_index < self.drones.len() - 1 {
-                        self.selected_index += 1;
-                        self.selected_story_index = None;
-                    }
+                } else if !self.drones.is_empty() && self.selected_index < self.drones.len() - 1 {
+                    self.selected_index += 1;
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 if self.view_mode == ViewMode::Timeline {
                     self.timeline_scroll = self.timeline_scroll.saturating_sub(1);
-                } else if let Some(story_idx) = self.selected_story_index {
-                    if story_idx > 0 {
-                        self.selected_story_index = Some(story_idx - 1);
-                    } else {
-                        self.selected_story_index = None;
-                    }
                 } else {
                     self.selected_index = self.selected_index.saturating_sub(1);
                 }
@@ -101,23 +71,8 @@ impl TuiState {
             KeyCode::Enter => {
                 if !self.drones.is_empty() {
                     let drone_name = &self.drones[current_drone_idx].0;
-                    if self.selected_story_index.is_some() {
-                        if let Some(story_idx) = self.selected_story_index {
-                            let status = &self.drones[current_drone_idx].1;
-                            if let Some(prd) = self.prd_cache.get(&status.prd) {
-                                if let Some(story) = prd.stories.get(story_idx) {
-                                    self.message =
-                                        Some(format!("{}: {}", story.id, story.title));
-                                    self.message_color = Color::Cyan;
-                                }
-                            }
-                        }
-                    } else if self.expanded_drones.contains(drone_name) {
-                        if current_story_count > 0 {
-                            self.selected_story_index = Some(0);
-                        } else {
-                            self.expanded_drones.remove(drone_name);
-                        }
+                    if self.expanded_drones.contains(drone_name) {
+                        self.expanded_drones.remove(drone_name);
                     } else {
                         self.expanded_drones.insert(drone_name.clone());
                     }
@@ -127,17 +82,12 @@ impl TuiState {
                 if !self.drones.is_empty() {
                     let drone_name = &self.drones[current_drone_idx].0;
                     self.expanded_drones.remove(drone_name);
-                    self.selected_story_index = None;
                 }
             }
             KeyCode::Right => {
                 if !self.drones.is_empty() {
                     let drone_name = &self.drones[current_drone_idx].0;
-                    if !self.expanded_drones.contains(drone_name) {
-                        self.expanded_drones.insert(drone_name.clone());
-                    } else if current_story_count > 0 && self.selected_story_index.is_none() {
-                        self.selected_story_index = Some(0);
-                    }
+                    self.expanded_drones.insert(drone_name.clone());
                 }
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
@@ -162,28 +112,10 @@ impl TuiState {
                 }
             }
             KeyCode::Char('i') | KeyCode::Char('I') => {
+                // Info key disabled in plan mode (no stories)
                 if !self.drones.is_empty() {
-                    if let Some(story_idx) = self.selected_story_index {
-                        let status = &self.drones[current_drone_idx].1;
-                        if let Some(prd) = self.prd_cache.get(&status.prd) {
-                            if let Some(story) = prd.stories.get(story_idx) {
-                                let desc = if story.description.is_empty() {
-                                    "No description".to_string()
-                                } else if story.description.len() > 80 {
-                                    format!("{}...", &story.description[..77])
-                                } else {
-                                    story.description.clone()
-                                };
-                                self.message = Some(format!("[{}] {}", story.id, desc));
-                                self.message_color = Color::Cyan;
-                            }
-                        }
-                    } else {
-                        self.message = Some(
-                            "Select a story first (↵ to enter stories)".to_string(),
-                        );
-                        self.message_color = Color::Yellow;
-                    }
+                    self.message = Some("Info view not available in plan mode".to_string());
+                    self.message_color = Color::Yellow;
                 }
             }
             KeyCode::Char('x') | KeyCode::Char('X') => {
@@ -241,15 +173,8 @@ impl TuiState {
                 if !self.drones.is_empty() {
                     let drone_name = self.drones[current_drone_idx].0.clone();
                     let status = &self.drones[current_drone_idx].1;
-                    let prd_story_count = self
-                        .prd_cache
-                        .get(&status.prd)
-                        .map(|p| p.stories.len())
-                        .unwrap_or(status.total);
-                    let has_new_stories = prd_story_count > status.total;
 
-                    if has_new_stories
-                        || status.status == DroneState::Completed
+                    if status.status == DroneState::Completed
                         || status.status == DroneState::Stopped
                     {
                         match handle_resume_drone(&drone_name) {

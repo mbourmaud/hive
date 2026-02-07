@@ -34,87 +34,8 @@ pub struct AgentTeamTask {
 }
 
 /// Format PRD content as readable text for the team lead prompt.
-///
-/// If the PRD has a freeform `plan` field, uses that directly.
-/// Otherwise falls back to formatting individual stories (backwards compat).
 pub fn format_prd_for_prompt(prd: &Prd) -> String {
-    // New thin format: freeform plan
-    if let Some(ref plan) = prd.plan {
-        return format!("# {}\n\n{}", prd.title, plan);
-    }
-
-    // Legacy format: structured stories
-    let mut sections = Vec::new();
-
-    sections.push(format!("# {}\n{}", prd.title, prd.description));
-
-    for story in &prd.stories {
-        let mut parts = vec![format!("## Story {}: {}", story.id, story.title)];
-        parts.push(format!("Description: {}", story.description));
-
-        if let Some(ref criteria) = story.acceptance_criteria {
-            if !criteria.is_empty() {
-                parts.push(format!(
-                    "Acceptance Criteria:\n{}",
-                    criteria
-                        .iter()
-                        .map(|c| format!("- {}", c))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                ));
-            }
-        }
-
-        if !story.definition_of_done.is_empty() {
-            parts.push(format!(
-                "Definition of Done:\n{}",
-                story
-                    .definition_of_done
-                    .iter()
-                    .map(|d| format!("- {}", d))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
-        }
-
-        if !story.verification_commands.is_empty() {
-            parts.push(format!(
-                "Verification:\n{}",
-                story
-                    .verification_commands
-                    .iter()
-                    .map(|v| format!("```\n{}\n```", v))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
-        }
-
-        if !story.depends_on.is_empty() {
-            parts.push(format!("Depends on: {}", story.depends_on.join(", ")));
-        }
-
-        if !story.files.is_empty() {
-            parts.push(format!("Files: {}", story.files.join(", ")));
-        }
-
-        sections.push(parts.join("\n"));
-    }
-
-    sections.join("\n\n")
-}
-
-/// Map task numeric IDs back to story IDs using metadata.
-pub fn task_id_to_story_id(tasks: &[AgentTeamTask]) -> HashMap<String, String> {
-    tasks
-        .iter()
-        .filter_map(|t| {
-            t.metadata
-                .as_ref()
-                .and_then(|m| m.get("storyId"))
-                .and_then(|v| v.as_str())
-                .map(|sid| (t.id.clone(), sid.to_string()))
-        })
-        .collect()
+    format!("# {}\n\n{}", prd.title, prd.plan)
 }
 
 /// Get the task list directory for a team.
@@ -178,7 +99,7 @@ pub fn cleanup_team(team_name: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Prd, Story};
+    use crate::types::Prd;
 
     fn make_test_prd() -> Prd {
         Prd {
@@ -190,47 +111,7 @@ mod tests {
             target_platforms: None,
             target_branch: None,
             base_branch: None,
-            plan: None,
-            stories: vec![
-                Story {
-                    id: "S1".to_string(),
-                    title: "Story 1".to_string(),
-                    description: "First story".to_string(),
-                    acceptance_criteria: Some(vec!["Criterion A".to_string()]),
-                    definition_of_done: vec!["Done".to_string()],
-                    verification_commands: vec!["cargo test".to_string()],
-                    notes: None,
-                    actions: vec![],
-                    files: vec!["src/a.rs".to_string()],
-                    tools: vec![],
-                    context: Default::default(),
-                    testing: Default::default(),
-                    error_handling: None,
-                    agent_controls: None,
-                    communication: None,
-                    depends_on: vec![],
-                    parallel: true,
-                },
-                Story {
-                    id: "S2".to_string(),
-                    title: "Story 2".to_string(),
-                    description: "Second story".to_string(),
-                    acceptance_criteria: None,
-                    definition_of_done: vec![],
-                    verification_commands: vec![],
-                    notes: None,
-                    actions: vec![],
-                    files: vec![],
-                    tools: vec![],
-                    context: Default::default(),
-                    testing: Default::default(),
-                    error_handling: None,
-                    agent_controls: None,
-                    communication: None,
-                    depends_on: vec!["S1".to_string()],
-                    parallel: false,
-                },
-            ],
+            plan: "## Goal\nImplement feature X\n\n## Tasks\n- Task 1\n- Task 2".to_string(),
         }
     }
 
@@ -239,86 +120,27 @@ mod tests {
         let prd = make_test_prd();
         let output = format_prd_for_prompt(&prd);
 
-        assert!(output.contains("# Test PRD"));
-        assert!(output.contains("## Story S1: Story 1"));
-        assert!(output.contains("Description: First story"));
-        assert!(output.contains("- Criterion A"));
-        assert!(output.contains("- Done"));
-        assert!(output.contains("cargo test"));
-        assert!(output.contains("Files: src/a.rs"));
-
-        assert!(output.contains("## Story S2: Story 2"));
-        assert!(output.contains("Depends on: S1"));
-        // S2 has no files, so "Files:" should not appear for S2
-        // S1 has files, so "Files:" appears once
+        assert!(output.starts_with("# Test PRD"));
+        assert!(output.contains("## Goal"));
+        assert!(output.contains("Implement feature X"));
+        assert!(output.contains("- Task 1"));
     }
 
     #[test]
-    fn test_format_prd_with_plan() {
+    fn test_format_prd_minimal() {
         let prd = Prd {
-            id: "lean".to_string(),
-            title: "Lean PRD".to_string(),
+            id: "minimal".to_string(),
+            title: "Minimal".to_string(),
             description: String::new(),
             version: "1.0".to_string(),
             created_at: String::new(),
             target_platforms: None,
             target_branch: None,
             base_branch: None,
-            plan: Some("## Goal\nBuild feature X\n\n## Requirements\n- Thing A\n- Thing B".to_string()),
-            stories: vec![],
+            plan: "Just do it".to_string(),
         };
         let output = format_prd_for_prompt(&prd);
 
-        assert!(output.starts_with("# Lean PRD"));
-        assert!(output.contains("## Goal"));
-        assert!(output.contains("- Thing A"));
-        // Should NOT contain story formatting
-        assert!(!output.contains("## Story"));
-    }
-
-    #[test]
-    fn test_format_prd_plan_takes_precedence_over_stories() {
-        let mut prd = make_test_prd();
-        prd.plan = Some("Custom plan text".to_string());
-        let output = format_prd_for_prompt(&prd);
-
-        // Plan should win even when stories exist
-        assert!(output.contains("Custom plan text"));
-        assert!(!output.contains("## Story"));
-    }
-
-    #[test]
-    fn test_task_id_to_story_id() {
-        let tasks = vec![
-            AgentTeamTask {
-                id: "1".to_string(),
-                subject: "Story 1".to_string(),
-                description: "desc".to_string(),
-                status: "pending".to_string(),
-                owner: None,
-                active_form: None,
-                blocked_by: vec![],
-                blocks: vec![],
-                metadata: Some(serde_json::json!({"storyId": "S1"})),
-                created_at: None,
-                updated_at: None,
-            },
-            AgentTeamTask {
-                id: "2".to_string(),
-                subject: "Story 2".to_string(),
-                description: "desc".to_string(),
-                status: "pending".to_string(),
-                owner: None,
-                active_form: None,
-                blocked_by: vec![],
-                blocks: vec![],
-                metadata: Some(serde_json::json!({"storyId": "S2"})),
-                created_at: None,
-                updated_at: None,
-            },
-        ];
-        let mapping = task_id_to_story_id(&tasks);
-        assert_eq!(mapping.get("1").unwrap(), "S1");
-        assert_eq!(mapping.get("2").unwrap(), "S2");
+        assert_eq!(output, "# Minimal\n\nJust do it");
     }
 }
