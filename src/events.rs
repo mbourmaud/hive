@@ -144,7 +144,11 @@ mod tests {
         let json = r#"{"event":"TaskCreate","ts":"2025-01-15T10:00:00Z","subject":"Implement auth","description":"Add JWT auth"}"#;
         let event: HiveEvent = serde_json::from_str(json).unwrap();
         match event {
-            HiveEvent::TaskCreate { ts, subject, description } => {
+            HiveEvent::TaskCreate {
+                ts,
+                subject,
+                description,
+            } => {
                 assert_eq!(ts, "2025-01-15T10:00:00Z");
                 assert_eq!(subject, "Implement auth");
                 assert_eq!(description, "Add JWT auth");
@@ -158,7 +162,12 @@ mod tests {
         let json = r#"{"event":"TaskUpdate","ts":"2025-01-15T10:01:00Z","task_id":"1","status":"in_progress","owner":"researcher"}"#;
         let event: HiveEvent = serde_json::from_str(json).unwrap();
         match event {
-            HiveEvent::TaskUpdate { ts, task_id, status, owner } => {
+            HiveEvent::TaskUpdate {
+                ts,
+                task_id,
+                status,
+                owner,
+            } => {
                 assert_eq!(ts, "2025-01-15T10:01:00Z");
                 assert_eq!(task_id, "1");
                 assert_eq!(status, "in_progress");
@@ -185,7 +194,11 @@ mod tests {
 
         // Write some events
         let mut file = fs::File::create(&events_path).unwrap();
-        writeln!(file, r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#).unwrap();
+        writeln!(
+            file,
+            r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#
+        )
+        .unwrap();
         writeln!(file, r#"{{"event":"TaskCreate","ts":"2025-01-15T10:01:00Z","subject":"Story 1","description":"desc"}}"#).unwrap();
 
         let mut reader = EventReader {
@@ -201,7 +214,10 @@ mod tests {
         assert!(events.is_empty());
 
         // Append more
-        let mut file = fs::OpenOptions::new().append(true).open(&events_path).unwrap();
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .open(&events_path)
+            .unwrap();
         writeln!(file, r#"{{"event":"Stop","ts":"2025-01-15T10:05:00Z"}}"#).unwrap();
 
         let events = reader.read_new();
@@ -225,7 +241,11 @@ mod tests {
         let events_path = dir.path().join("events.ndjson");
 
         let mut file = fs::File::create(&events_path).unwrap();
-        writeln!(file, r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#).unwrap();
+        writeln!(
+            file,
+            r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#
+        )
+        .unwrap();
         writeln!(file, "not valid json").unwrap();
         writeln!(file, r#"{{"event":"Stop","ts":"2025-01-15T10:05:00Z"}}"#).unwrap();
 

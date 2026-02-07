@@ -8,12 +8,7 @@ use std::time::Duration;
 
 use crate::agent_teams::task_sync;
 
-pub fn run(
-    name: String,
-    lines: Option<usize>,
-    story: Option<String>,
-    follow: bool,
-) -> Result<()> {
+pub fn run(name: String, lines: Option<usize>, story: Option<String>, follow: bool) -> Result<()> {
     let drone_dir = PathBuf::from(".hive/drones").join(&name);
 
     if !drone_dir.exists() {
@@ -45,10 +40,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
             print!("\x1B[2J\x1B[1;1H"); // Clear screen
         }
 
-        println!(
-            "  🐝 {} Team Conversation",
-            team_name.bright_cyan().bold()
-        );
+        println!("  🐝 {} Team Conversation", team_name.bright_cyan().bold());
         println!();
 
         // 1. Show team roster
@@ -87,14 +79,10 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                     .values()
                     .filter(|t| t.status == "in_progress")
                     .collect();
-                let mut completed: Vec<_> = tasks
-                    .values()
-                    .filter(|t| t.status == "completed")
-                    .collect();
-                let mut pending: Vec<_> = tasks
-                    .values()
-                    .filter(|t| t.status == "pending")
-                    .collect();
+                let mut completed: Vec<_> =
+                    tasks.values().filter(|t| t.status == "completed").collect();
+                let mut pending: Vec<_> =
+                    tasks.values().filter(|t| t.status == "pending").collect();
 
                 in_progress.sort_by_key(|t| &t.id);
                 completed.sort_by_key(|t| &t.id);
@@ -114,10 +102,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                             .as_deref()
                             .map(|a| format!(" [{}]", a.bright_cyan()))
                             .unwrap_or_default();
-                        let form = task
-                            .active_form
-                            .as_deref()
-                            .unwrap_or(&task.subject);
+                        let form = task.active_form.as_deref().unwrap_or(&task.subject);
                         println!(
                             "    {} {} {}{}",
                             "◐".yellow(),
@@ -219,8 +204,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                         // Agent Teams messages are often JSON-encoded
                         let content = if msg.text.starts_with('{') {
                             // Try to parse as JSON and extract meaningful fields
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&msg.text)
-                            {
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&msg.text) {
                                 if let Some(msg_type) = json.get("type").and_then(|v| v.as_str()) {
                                     match msg_type {
                                         "task_assignment" => {
@@ -241,7 +225,9 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                                                 .unwrap_or("?");
                                             format!("Completed task #{}", task_id)
                                         }
-                                        "idle_notification" => "Idle - available for work".to_string(),
+                                        "idle_notification" => {
+                                            "Idle - available for work".to_string()
+                                        }
                                         "shutdown_request" => "Shutdown requested".to_string(),
                                         "shutdown_approved" => "Shutdown approved".to_string(),
                                         _ => {
@@ -296,10 +282,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
 
         if !follow {
             // Show hint for follow mode
-            println!(
-                "  {}",
-                "Use -f/--follow for live updates".bright_black()
-            );
+            println!("  {}", "Use -f/--follow for live updates".bright_black());
             break;
         }
 

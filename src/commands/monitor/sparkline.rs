@@ -41,9 +41,7 @@ pub(crate) fn update_activity_history(
     let file_size = fs::metadata(&log_path).map(|m| m.len()).unwrap_or(0);
     let now = Instant::now();
 
-    let entry = history
-        .entry(drone_name.to_string())
-        .or_default();
+    let entry = history.entry(drone_name.to_string()).or_default();
     entry.push((now, file_size));
 
     // Keep only last 10 minutes of data

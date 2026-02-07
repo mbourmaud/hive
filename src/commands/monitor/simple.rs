@@ -3,12 +3,12 @@ use chrono::Utc;
 use colored::Colorize;
 use std::path::PathBuf;
 
+use crate::agent_teams::task_sync;
 use crate::commands::common::{
     duration_between, elapsed_since, format_duration, is_process_running, list_drones, load_prd,
     parse_timestamp, read_drone_pid, reconcile_progress, truncate_with_ellipsis,
     DEFAULT_INACTIVE_THRESHOLD_SECS, FULL_PROGRESS_BAR_WIDTH, MAX_STORY_TITLE_LEN,
 };
-use crate::agent_teams::task_sync;
 use crate::types::{DroneState, DroneStatus};
 
 /// Refresh interval for follow mode in seconds
@@ -200,7 +200,8 @@ pub(crate) fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bo
     // Show active agents
     {
         if let Ok(task_states) = task_sync::read_team_task_states(name) {
-            let active: Vec<_> = task_states.values()
+            let active: Vec<_> = task_states
+                .values()
                 .filter(|t| t.status == "in_progress" && t.owner.is_some())
                 .collect();
             if !active.is_empty() {
@@ -212,7 +213,9 @@ pub(crate) fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bo
                     let agent = task.owner.as_deref().unwrap_or("?");
                     let story = task.story_id.as_deref().unwrap_or(&task.id);
                     let form = task.active_form.as_deref().unwrap_or(&task.subject);
-                    let model_str = task.model.as_deref()
+                    let model_str = task
+                        .model
+                        .as_deref()
                         .map(|m| format!(" [{}]", m))
                         .unwrap_or_default();
                     println!(
@@ -300,9 +303,11 @@ pub(crate) fn print_drone_status(name: &str, status: &DroneStatus, collapsed: bo
 
             // Show agent name and model for active stories in Agent Teams mode
             let agent_suffix = if is_active || is_current {
-                agent_map.get(&story.id)
+                agent_map
+                    .get(&story.id)
                     .map(|a| {
-                        let model_str = model_map.get(&story.id)
+                        let model_str = model_map
+                            .get(&story.id)
                             .map(|m| format!(" {}", m))
                             .unwrap_or_default();
                         format!(" [@{}{}]", a, model_str)

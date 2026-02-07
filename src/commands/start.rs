@@ -564,7 +564,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write_hooks_config(dir.path(), "timeout-test").unwrap();
 
-        let contents = fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
+        let contents =
+            fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
         let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
         let post_tool = settings["hooks"]["PostToolUse"].as_array().unwrap();

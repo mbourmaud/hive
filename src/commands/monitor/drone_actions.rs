@@ -60,15 +60,7 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
         let model = models[model_idx].to_string();
 
         // Launch drone using start command
-        crate::commands::start::run(
-            drone_name.clone(),
-            None,
-            false,
-            false,
-            model,
-            3,
-            false,
-        )?;
+        crate::commands::start::run(drone_name.clone(), None, false, false, model, 3, false)?;
 
         Ok(Some(format!("\u{1f41d} Launched drone: {}", drone_name)))
     })();
@@ -179,9 +171,12 @@ pub(crate) fn extract_last_activity(log_contents: &str) -> String {
                         // TodoWrite: look at the first in_progress todo
                         if let Some(todos) = input.get("todos").and_then(|t| t.as_array()) {
                             for todo in todos {
-                                let status = todo.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                                let status =
+                                    todo.get("status").and_then(|s| s.as_str()).unwrap_or("");
                                 if status == "in_progress" {
-                                    if let Some(form) = todo.get("activeForm").and_then(|f| f.as_str()) {
+                                    if let Some(form) =
+                                        todo.get("activeForm").and_then(|f| f.as_str())
+                                    {
                                         return form.to_string();
                                     }
                                 }
@@ -191,7 +186,8 @@ pub(crate) fn extract_last_activity(log_contents: &str) -> String {
                 }
 
                 // For other tools, show a description
-                let desc = item.pointer("/input/description")
+                let desc = item
+                    .pointer("/input/description")
                     .and_then(|d| d.as_str())
                     .unwrap_or("");
                 if !desc.is_empty() {

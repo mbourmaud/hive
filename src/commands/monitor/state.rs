@@ -117,10 +117,7 @@ impl TuiState {
             if let Some(prev) = prev_state {
                 if prev != DroneState::Blocked && status.status == DroneState::Blocked {
                     let reason = status.blocked_reason.as_deref().unwrap_or("Unknown");
-                    send_desktop_notification(
-                        &format!("Hive - {} BLOCKED", name),
-                        reason,
-                    );
+                    send_desktop_notification(&format!("Hive - {} BLOCKED", name), reason);
                 }
                 if prev != DroneState::Error && status.status == DroneState::Error {
                     send_desktop_notification(
@@ -285,9 +282,7 @@ impl TuiState {
                 .values()
                 .filter_map(|t| t.completed.as_ref())
                 .max();
-            if let (Some(last), Some(start)) =
-                (last_completed, parse_timestamp(&status.started))
-            {
+            if let (Some(last), Some(start)) = (last_completed, parse_timestamp(&status.started)) {
                 if let Some(end) = parse_timestamp(last) {
                     format_duration(end.signed_duration_since(start))
                 } else {

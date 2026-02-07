@@ -441,8 +441,7 @@ impl TuiState {
             if selected_line < self.scroll_offset {
                 self.scroll_offset = selected_line;
             } else if selected_line >= self.scroll_offset + content_height.saturating_sub(2) {
-                self.scroll_offset =
-                    selected_line.saturating_sub(content_height.saturating_sub(3));
+                self.scroll_offset = selected_line.saturating_sub(content_height.saturating_sub(3));
             }
         }
 
@@ -555,8 +554,7 @@ impl TuiState {
 
             // Method 3: from active_agents in status.json
             for (agent, story_id) in &status.active_agents {
-                map.entry(story_id.clone())
-                    .or_insert_with(|| agent.clone());
+                map.entry(story_id.clone()).or_insert_with(|| agent.clone());
             }
 
             (map, mmap)
@@ -577,20 +575,22 @@ impl TuiState {
                 let is_completed = status.completed.contains(&story.id);
                 let is_current = status.current_story.as_ref() == Some(&story.id);
                 let is_agent_active = agent_map.contains_key(&story.id);
-                let is_story_selected = self.display_order.iter().position(|&i| i == drone_idx)
+                let is_story_selected = self
+                    .display_order
+                    .iter()
+                    .position(|&i| i == drone_idx)
                     .map(|di| di == self.selected_index)
                     .unwrap_or(false)
                     && self.selected_story_index == Some(story_idx);
 
-                let has_blocked_deps =
-                    if !story.depends_on.is_empty() && !is_completed {
-                        story
-                            .depends_on
-                            .iter()
-                            .any(|dep_id| !status.completed.contains(dep_id))
-                    } else {
-                        false
-                    };
+                let has_blocked_deps = if !story.depends_on.is_empty() && !is_completed {
+                    story
+                        .depends_on
+                        .iter()
+                        .any(|dep_id| !status.completed.contains(dep_id))
+                } else {
+                    false
+                };
 
                 let (story_icon, story_color) = if is_story_selected {
                     ("▸", Color::Cyan)
@@ -611,9 +611,7 @@ impl TuiState {
                 };
 
                 let duration_str = if let Some(timing) = status.story_times.get(&story.id) {
-                    if let (Some(started), Some(completed)) =
-                        (&timing.started, &timing.completed)
-                    {
+                    if let (Some(started), Some(completed)) = (&timing.started, &timing.completed) {
                         if let Some(dur) = duration_between(started, completed) {
                             format!(" {}", format_duration(dur))
                         } else {
@@ -647,8 +645,7 @@ impl TuiState {
                 let prefix_len = 26;
                 let duration_len = duration_str.len();
                 let available_width = area.width as usize;
-                let max_title_width =
-                    available_width.saturating_sub(prefix_len + duration_len + 2);
+                let max_title_width = available_width.saturating_sub(prefix_len + duration_len + 2);
 
                 let agent_badge_with_color = agent_map.get(&story.id).map(|a| {
                     let model_str = model_map
@@ -668,21 +665,12 @@ impl TuiState {
                         Span::styled("      ", line_style),
                         Span::styled(story_icon, line_style.fg(story_color)),
                         Span::raw(" "),
-                        Span::styled(
-                            format!("{:<16} ", story.id),
-                            line_style.fg(title_color),
-                        ),
+                        Span::styled(format!("{:<16} ", story.id), line_style.fg(title_color)),
                         Span::styled(story.title.clone(), line_style.fg(title_color)),
-                        Span::styled(
-                            duration_str.clone(),
-                            line_style.fg(Color::DarkGray),
-                        ),
+                        Span::styled(duration_str.clone(), line_style.fg(Color::DarkGray)),
                     ];
                     if let Some((ref badge, color)) = agent_badge_with_color {
-                        spans.push(Span::styled(
-                            badge.clone(),
-                            Style::default().fg(color),
-                        ));
+                        spans.push(Span::styled(badge.clone(), Style::default().fg(color)));
                     }
                     if !dep_info.is_empty() {
                         spans.push(Span::styled(
@@ -706,13 +694,8 @@ impl TuiState {
                                 .nth(max_title_width)
                                 .map(|(i, _)| i)
                                 .unwrap_or(remaining.len());
-                            let break_at = remaining[..byte_limit]
-                                .rfind(' ')
-                                .unwrap_or(byte_limit);
-                            (
-                                &remaining[..break_at],
-                                remaining[break_at..].trim_start(),
-                            )
+                            let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
+                            (&remaining[..break_at], remaining[break_at..].trim_start())
                         };
 
                         if first_line {
@@ -832,9 +815,7 @@ impl TuiState {
                     let max_task_title_width =
                         task_available_width.saturating_sub(task_prefix_len + badge_len + 1);
 
-                    if title.chars().count() <= max_task_title_width
-                        || max_task_title_width < 20
-                    {
+                    if title.chars().count() <= max_task_title_width || max_task_title_width < 20 {
                         let mut spans = vec![
                             Span::raw("      "),
                             Span::styled(task_icon, Style::default().fg(task_color)),
@@ -851,8 +832,7 @@ impl TuiState {
                         lines.push(Line::from(spans));
                     } else {
                         let task_title_indent = "        "; // 8 spaces
-                        let wrap_width =
-                            task_available_width.saturating_sub(task_prefix_len + 1);
+                        let wrap_width = task_available_width.saturating_sub(task_prefix_len + 1);
                         let mut remaining = title.as_str();
                         let mut first_line = true;
 
@@ -867,22 +847,15 @@ impl TuiState {
                                     .nth(wrap_width)
                                     .map(|(i, _)| i)
                                     .unwrap_or(remaining.len());
-                                let break_at = remaining[..byte_limit]
-                                    .rfind(' ')
-                                    .unwrap_or(byte_limit);
-                                (
-                                    &remaining[..break_at],
-                                    remaining[break_at..].trim_start(),
-                                )
+                                let break_at =
+                                    remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
+                                (&remaining[..break_at], remaining[break_at..].trim_start())
                             };
 
                             if first_line {
                                 let mut spans = vec![
                                     Span::raw("      "),
-                                    Span::styled(
-                                        task_icon,
-                                        Style::default().fg(task_color),
-                                    ),
+                                    Span::styled(task_icon, Style::default().fg(task_color)),
                                     Span::raw(" "),
                                     Span::styled(
                                         chunk.to_string(),
@@ -1042,22 +1015,23 @@ impl TuiState {
                     // Parse JSON messages to get a clean display
                     let display_text = if m.text.starts_with('{') {
                         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&m.text) {
-                            let msg_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            let msg_type =
+                                parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
                             match msg_type {
                                 "idle_notification" => format!("[idle] {}", m.from),
                                 "shutdown_request" => format!(
                                     "[shutdown request] {}",
-                                    parsed
-                                        .get("content")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
+                                    parsed.get("content").and_then(|v| v.as_str()).unwrap_or("")
                                 ),
                                 "shutdown_response" => {
                                     let approved = parsed
                                         .get("approve")
                                         .and_then(|v| v.as_bool())
                                         .unwrap_or(false);
-                                    format!("[shutdown {}]", if approved { "approved" } else { "rejected" })
+                                    format!(
+                                        "[shutdown {}]",
+                                        if approved { "approved" } else { "rejected" }
+                                    )
                                 }
                                 "task_completed" | "task_assignment" => {
                                     let content = parsed
@@ -1156,10 +1130,7 @@ impl TuiState {
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    " - auto-resuming...",
-                    Style::default().fg(Color::DarkGray),
-                ),
+                Span::styled(" - auto-resuming...", Style::default().fg(Color::DarkGray)),
             ]));
         }
     }

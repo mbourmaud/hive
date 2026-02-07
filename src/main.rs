@@ -177,15 +177,9 @@ fn main() {
             max_agents,
             dry_run,
         } => {
-            if let Err(e) = commands::start::run(
-                name,
-                prompt,
-                resume,
-                local,
-                model,
-                max_agents,
-                dry_run,
-            ) {
+            if let Err(e) =
+                commands::start::run(name, prompt, resume, local, model, max_agents, dry_run)
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

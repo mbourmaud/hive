@@ -92,7 +92,9 @@ pub fn clean_quiet(name: String) -> Result<()> {
 /// Sets drone status to "cleaning" so the TUI can show it.
 pub fn clean_background(name: String) {
     // Mark as "cleaning" in status.json before background thread starts
-    let status_path = PathBuf::from(".hive/drones").join(&name).join("status.json");
+    let status_path = PathBuf::from(".hive/drones")
+        .join(&name)
+        .join("status.json");
     if let Ok(contents) = fs::read_to_string(&status_path) {
         if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&contents) {
             status.status = crate::types::DroneState::Cleaning;
@@ -221,11 +223,7 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
     // Clean up Agent Teams directories
     if let Err(e) = crate::agent_teams::cleanup_team(&name) {
         if !quiet {
-            println!(
-                "  {} Failed to clean Agent Teams dirs: {}",
-                "⚠".yellow(),
-                e
-            );
+            println!("  {} Failed to clean Agent Teams dirs: {}", "⚠".yellow(), e);
         }
     } else if !quiet {
         println!("  {} Cleaned Agent Teams directories", "✓".green());

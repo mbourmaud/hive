@@ -162,14 +162,12 @@ pub fn read_task_list(team_name: &str) -> Result<Vec<AgentTeamTask>> {
 pub fn cleanup_team(team_name: &str) -> Result<()> {
     let tasks_dir = team_tasks_dir(team_name);
     if tasks_dir.exists() {
-        fs::remove_dir_all(&tasks_dir)
-            .context("Failed to remove Agent Teams tasks directory")?;
+        fs::remove_dir_all(&tasks_dir).context("Failed to remove Agent Teams tasks directory")?;
     }
 
     let teams_dir = team_dir(team_name);
     if teams_dir.exists() {
-        fs::remove_dir_all(&teams_dir)
-            .context("Failed to remove Agent Teams team directory")?;
+        fs::remove_dir_all(&teams_dir).context("Failed to remove Agent Teams team directory")?;
     }
 
     Ok(())
@@ -264,7 +262,9 @@ mod tests {
             target_platforms: None,
             target_branch: None,
             base_branch: None,
-            plan: Some("## Goal\nBuild feature X\n\n## Requirements\n- Thing A\n- Thing B".to_string()),
+            plan: Some(
+                "## Goal\nBuild feature X\n\n## Requirements\n- Thing A\n- Thing B".to_string(),
+            ),
             stories: vec![],
         };
         let output = format_prd_for_prompt(&prd);

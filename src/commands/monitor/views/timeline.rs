@@ -63,14 +63,12 @@ pub(crate) fn render_timeline_view(
             .map(|s| now.signed_duration_since(s).num_seconds().max(1))
             .unwrap_or(1) as f64;
 
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  🐝 {:<20}", truncate_with_ellipsis(name, 20)),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            format!("  🐝 {:<20}", truncate_with_ellipsis(name, 20)),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]));
 
         if let Some(prd) = prd_cache.get(&status.prd) {
             for story in &prd.stories {
@@ -104,7 +102,9 @@ pub(crate) fn render_timeline_view(
 
                 let bar_start_col = (bar_start * bar_width as f64) as usize;
                 let bar_end_col = (bar_end * bar_width as f64) as usize;
-                let bar_len = bar_end_col.saturating_sub(bar_start_col).max(if timing.is_some() { 1 } else { 0 });
+                let bar_len = bar_end_col
+                    .saturating_sub(bar_start_col)
+                    .max(if timing.is_some() { 1 } else { 0 });
 
                 let mut bar = String::new();
                 for i in 0..bar_width {
@@ -142,7 +142,11 @@ pub(crate) fn render_timeline_view(
     }
 
     let content_height = chunks[1].height as usize;
-    let visible: Vec<Line> = lines.into_iter().skip(scroll).take(content_height).collect();
+    let visible: Vec<Line> = lines
+        .into_iter()
+        .skip(scroll)
+        .take(content_height)
+        .collect();
     f.render_widget(Paragraph::new(visible), chunks[1]);
 
     let footer = Paragraph::new(Line::from(vec![Span::styled(

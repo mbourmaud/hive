@@ -66,8 +66,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 
     let prd: crate::types::Prd = {
         let contents = fs::read_to_string(&config.prd_path)?;
-        serde_json::from_str(&contents)
-            .context("Failed to parse PRD for team lead prompt")?
+        serde_json::from_str(&contents).context("Failed to parse PRD for team lead prompt")?
     };
     let prd_text = agent_teams::format_prd_for_prompt(&prd);
 

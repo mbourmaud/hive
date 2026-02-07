@@ -106,8 +106,7 @@ impl TuiState {
                             let status = &self.drones[current_drone_idx].1;
                             if let Some(prd) = self.prd_cache.get(&status.prd) {
                                 if let Some(story) = prd.stories.get(story_idx) {
-                                    self.message =
-                                        Some(format!("{}: {}", story.id, story.title));
+                                    self.message = Some(format!("{}: {}", story.id, story.title));
                                     self.message_color = Color::Cyan;
                                 }
                             }
@@ -140,19 +139,17 @@ impl TuiState {
                     }
                 }
             }
-            KeyCode::Char('n') | KeyCode::Char('N') => {
-                match handle_new_drone(terminal) {
-                    Ok(Some(msg)) => {
-                        self.message = Some(msg);
-                        self.message_color = Color::Green;
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        self.message = Some(format!("Error: {}", e));
-                        self.message_color = Color::Red;
-                    }
+            KeyCode::Char('n') | KeyCode::Char('N') => match handle_new_drone(terminal) {
+                Ok(Some(msg)) => {
+                    self.message = Some(msg);
+                    self.message_color = Color::Green;
                 }
-            }
+                Ok(None) => {}
+                Err(e) => {
+                    self.message = Some(format!("Error: {}", e));
+                    self.message_color = Color::Red;
+                }
+            },
             KeyCode::Char('t') => {
                 if self.view_mode == ViewMode::Timeline {
                     self.view_mode = ViewMode::Dashboard;
@@ -179,9 +176,8 @@ impl TuiState {
                             }
                         }
                     } else {
-                        self.message = Some(
-                            "Select a story first (↵ to enter stories)".to_string(),
-                        );
+                        self.message =
+                            Some("Select a story first (↵ to enter stories)".to_string());
                         self.message_color = Color::Yellow;
                     }
                 }
@@ -224,8 +220,7 @@ impl TuiState {
                         self.message = Some(format!("Use: hive unblock {}", drone_name));
                         self.message_color = Color::Yellow;
                     } else {
-                        self.message =
-                            Some(format!("Drone {} is not blocked", drone_name));
+                        self.message = Some(format!("Drone {} is not blocked", drone_name));
                         self.message_color = Color::Yellow;
                     }
                 }
@@ -263,8 +258,7 @@ impl TuiState {
                             }
                         }
                     } else {
-                        self.message =
-                            Some(format!("Drone {} is already running", drone_name));
+                        self.message = Some(format!("Drone {} is already running", drone_name));
                         self.message_color = Color::Yellow;
                     }
                 }
