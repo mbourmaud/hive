@@ -1,3 +1,6 @@
+//! Shared types for Hive: PRD, Story, DroneStatus, and configuration structures
+//! used throughout the drone orchestration system.
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
