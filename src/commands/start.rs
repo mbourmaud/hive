@@ -487,8 +487,8 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
             {
                 "matcher": "TaskCreate",
                 "command": format!(
-                    r#"jq -c '{{event:"TaskCreate",ts:(now|todate),subject:.tool_input.subject,description:(.tool_input.description // "")}}' >> {} && \
-    jq -c '{{id:.tool_input.taskId,title:.tool_input.subject,description:(.tool_input.description // ""),status:"pending"}}' | \
+                    r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"TaskCreate",ts:(now|todate),subject:.tool_input.subject,description:(.tool_input.description // "")}}' >> {} && \
+    echo "$INPUT" | jq -c '{{id:.tool_input.taskId,title:.tool_input.subject,description:(.tool_input.description // ""),status:"pending"}}' | \
     python3 -c 'import sys,json,os; tasks_file="{}"; tasks=json.load(open(tasks_file)) if os.path.exists(tasks_file) else []; task=json.load(sys.stdin); tasks=[t for t in tasks if t.get("id") != task.get("id")]+[task]; json.dump(tasks,open(tasks_file,"w"),indent=2)'"#,
                     events_file, tasks_file
                 ),
@@ -498,7 +498,8 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
             {
                 "matcher": "TaskUpdate",
                 "command": format!(
-                    r#"jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' >> {} && \
+                    r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' >> {} && \
+    echo "$INPUT" | jq -c '{{task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' | \
 python3 -c '
 import sys,json,os
 tasks_file="{}"
@@ -520,7 +521,7 @@ if os.path.exists(tasks_file):
         status_data["total"]=len(tasks)
         status_data["completed"]=completed
         json.dump(status_data,open(status_file,"w"),indent=2)
-' < <(jq -c '{{task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}')"#,
+'"#,
                     events_file, tasks_file, status_file
                 ),
                 "async": true,
@@ -529,9 +530,9 @@ if os.path.exists(tasks_file):
             {
                 "matcher": "SendMessage",
                 "command": format!(
-                    r#"jq -c '{{event:"Message",ts:(now|todate),recipient:(.tool_input.recipient // ""),summary:(.tool_input.summary // (.tool_input.content // "" | .[0:200]))}}' >> {} && \
-    jq -c '{{timestamp:(now|todate),from:(.tool_input.type // "message"),to:(.tool_input.recipient // ""),content:(.tool_input.content // ""),summary:(.tool_input.summary // "")}}' >> {}"#,
-                    events_file, messages_file
+                    r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"Message",ts:(now|todate),recipient:(.tool_input.recipient // ""),summary:(.tool_input.summary // (.tool_input.content // "" | .[0:200]))}}' >> {} && \
+    echo "$INPUT" | jq -c '{{timestamp:(now|todate),from:"{}",to:(.tool_input.recipient // ""),content:(.tool_input.content // ""),summary:(.tool_input.summary // "")}}' >> {}"#,
+                    events_file, drone_name, messages_file
                 ),
                 "async": true,
                 "timeout": 5
