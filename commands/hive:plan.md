@@ -4,7 +4,7 @@ Create a plan JSON file collaboratively with the user, then offer to launch a dr
 
 ## What this does
 
-Creates a plan JSON file in `.hive/plans/` that a Hive drone can execute autonomously. Plans are **freeform markdown** — no rigid stories or DoD cards. The plan is crafted collaboratively through conversation, then you offer to launch the drone directly.
+Creates a plan JSON file in `.hive/plans/` that a Hive drone can execute autonomously. Plans are **freeform markdown** — no rigid stories or DoD cards. The plan is crafted collaboratively through conversation, then **you MUST offer to launch a drone via `/hive:start`** — never tell the user to implement it themselves.
 
 ## Workflow
 
@@ -62,17 +62,25 @@ Write the JSON file to `.hive/plans/plan-<id>.json`:
 }
 ```
 
-### Step 6: Exit Plan Mode and Launch Approval
+### Step 6: Offer to Launch (BEFORE exiting plan mode)
 
-After writing the plan JSON, **exit plan mode** and present the user with an interactive approval flow using `AskUserQuestion`:
+**BEFORE calling `ExitPlanMode`**, present the user with an interactive launch flow using `AskUserQuestion`:
 
-- **Question:** "Plan saved! What would you like to do?"
+- **Question:** "Plan saved to `.hive/plans/plan-<id>.json`! Ready to launch a drone?"
 - **Options:**
-  - "Launch drone" (Recommended) — immediately runs `hive start <id>` via Bash, then tells the user to run `hive monitor`
-  - "Save only" — confirm the plan is saved but don't launch
-- **Custom feedback (Other):** If the user types feedback, re-enter plan mode to iterate on the plan based on their feedback, update the plan JSON, then re-present the same AskUserQuestion options
+  - "Launch drone now" (Recommended) — after the user approves, exit plan mode and immediately invoke the `/hive:start` skill with the plan ID to launch the drone
+  - "Save only" — exit plan mode and confirm the plan is saved, do NOT implement anything
+- **Custom feedback (Other):** If the user types feedback, iterate on the plan based on their feedback, update the plan JSON, then re-present the same `AskUserQuestion` options
 
-This creates a tight loop: plan → review → feedback → plan → review → launch.
+Only call `ExitPlanMode` AFTER the user has answered this question.
+
+**CRITICAL — DO NOT IMPLEMENT THE PLAN YOURSELF:**
+- When the user selects "Launch drone now", invoke `/hive:start` to launch a **drone** (a separate Claude Code instance in a worktree). You are NOT the drone. Do NOT write code, create files, or make changes yourself.
+- When the user selects "Save only", just confirm the file is saved. Do NOT start implementing.
+- When `ExitPlanMode` is approved by the user, that is approval to proceed with the launch/save action they already chose — it is NOT an instruction to implement the plan yourself.
+- **You are the planner, not the implementer.** Your job ends after saving the plan JSON and optionally launching a drone via `/hive:start`.
+
+This creates a tight loop: plan → review → feedback → plan → review → launch drone.
 
 ## Plan JSON Schema
 

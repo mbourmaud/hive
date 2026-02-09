@@ -1,10 +1,10 @@
 # Hive Plan - Collaborative Planning for Drones
 
-Create a plan JSON file collaboratively with the user, using Claude's plan mode for iterative exploration and refinement.
+Create a plan JSON file collaboratively with the user, then offer to launch a drone immediately. Uses Claude's plan mode for iterative exploration and an interactive approval flow before launch.
 
 ## What this does
 
-Creates a plan JSON file in `.hive/plans/` that a Hive drone can execute autonomously. Unlike the old PRD workflow, plans are **freeform markdown** — no rigid stories or DoD cards. The plan is crafted collaboratively through conversation.
+Creates a plan JSON file in `.hive/plans/` that a Hive drone can execute autonomously. Plans are **freeform markdown** — no rigid stories or DoD cards. The plan is crafted collaboratively through conversation, then **you MUST offer to launch a drone via `/hive:start`** — never tell the user to implement it themselves.
 
 ## Workflow
 
@@ -14,12 +14,15 @@ First, check if `.hive/` exists in the project. If not, tell the user to run `hi
 
 ### Step 2: Enter Plan Mode
 
-Enter Claude plan mode to explore the codebase and design the plan collaboratively:
+Enter Claude plan mode to explore the codebase and design the plan collaboratively.
 
-1. Ask the user: **"What do you want to build or change?"**
-2. Explore the codebase to understand the project structure, patterns, and affected areas
-3. Discuss the approach with the user — ask clarifying questions, propose alternatives
-4. Iterate on the plan until the user is satisfied
+- If the user invoked `/hive:plan <prompt>` with a prompt, use that as the starting point and begin exploring the codebase immediately.
+- If the user invoked bare `/hive:plan`, ask: **"What do you want to build or change?"**
+
+Then:
+1. Explore the codebase to understand the project structure, patterns, and affected areas
+2. Discuss the approach with the user — ask clarifying questions, propose alternatives
+3. Iterate on the plan until the user is satisfied
 
 ### Step 3: Draft the Plan
 
@@ -59,19 +62,25 @@ Write the JSON file to `.hive/plans/plan-<id>.json`:
 }
 ```
 
-### Step 6: Exit Plan Mode and Next Steps
+### Step 6: Offer to Launch (BEFORE exiting plan mode)
 
-Tell the user:
+**BEFORE calling `ExitPlanMode`**, present the user with an interactive launch flow using `AskUserQuestion`:
 
-```
-Plan ready! Saved to .hive/plans/plan-<id>.json
+- **Question:** "Plan saved to `.hive/plans/plan-<id>.json`! Ready to launch a drone?"
+- **Options:**
+  - "Launch drone now" (Recommended) — after the user approves, exit plan mode and immediately invoke the `/hive:start` skill with the plan ID to launch the drone
+  - "Save only" — exit plan mode and confirm the plan is saved, do NOT implement anything
+- **Custom feedback (Other):** If the user types feedback, iterate on the plan based on their feedback, update the plan JSON, then re-present the same `AskUserQuestion` options
 
-To launch a drone:
-  hive start <id>
+Only call `ExitPlanMode` AFTER the user has answered this question.
 
-To monitor progress:
-  hive monitor
-```
+**CRITICAL — DO NOT IMPLEMENT THE PLAN YOURSELF:**
+- When the user selects "Launch drone now", invoke `/hive:start` to launch a **drone** (a separate Claude Code instance in a worktree). You are NOT the drone. Do NOT write code, create files, or make changes yourself.
+- When the user selects "Save only", just confirm the file is saved. Do NOT start implementing.
+- When `ExitPlanMode` is approved by the user, that is approval to proceed with the launch/save action they already chose — it is NOT an instruction to implement the plan yourself.
+- **You are the planner, not the implementer.** Your job ends after saving the plan JSON and optionally launching a drone via `/hive:start`.
+
+This creates a tight loop: plan → review → feedback → plan → review → launch drone.
 
 ## Plan JSON Schema
 

@@ -17,6 +17,10 @@ pub struct TeamTaskInfo {
     pub model: Option<String>,
     /// Whether this is an internal teammate tracking task
     pub is_internal: bool,
+    /// Epoch millis when task was created
+    pub created_at: Option<u64>,
+    /// Epoch millis when task was last updated
+    pub updated_at: Option<u64>,
 }
 
 /// Team member info from config
@@ -75,6 +79,8 @@ pub fn read_team_task_states(team_name: &str) -> Result<HashMap<String, TeamTask
                 active_form: task.active_form,
                 model,
                 is_internal,
+                created_at: task.created_at,
+                updated_at: task.updated_at,
             },
         );
     }

@@ -201,11 +201,11 @@ pub(crate) fn render_messages_view(
             lines.push(Line::from(vec![
                 left_marker.clone(),
                 Span::styled(
-                    format!("{}{}", msg.from, lead_badge),
+                    format!("@{}{}", msg.from, lead_badge),
                     Style::default().fg(from_color).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!("  → {}", msg.to),
+                    format!("  → @{}", msg.to),
                     Style::default().fg(Color::DarkGray),
                 ),
                 Span::styled(
@@ -229,33 +229,22 @@ pub(crate) fn render_messages_view(
             lines.push(Line::from(vec![
                 left_marker,
                 Span::styled(
-                    format!("→ {}  {}", msg.to, time_str),
+                    format!("→ @{}  {}", msg.to, time_str),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
         }
 
         // Message body — with left border in sender's color
-        let mut remaining = msg.text.as_str();
-        if remaining.is_empty() {
-            remaining = "(empty)";
-        }
+        // Split on newlines first for paragraph/list structure
+        let body = if msg.text.is_empty() {
+            "(empty)"
+        } else {
+            &msg.text
+        };
 
-        while !remaining.is_empty() {
-            let char_count = remaining.chars().count();
-            let (chunk, rest) = if char_count <= max_width {
-                (remaining, "")
-            } else {
-                let byte_limit: usize = remaining
-                    .char_indices()
-                    .nth(max_width)
-                    .map(|(i, _)| i)
-                    .unwrap_or(remaining.len());
-                let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
-                (&remaining[..break_at], remaining[break_at..].trim_start())
-            };
-
-            let left_marker = if is_selected {
+        let left_marker_fn = |sel: bool| -> Span {
+            if sel {
                 Span::styled(
                     "▶ ",
                     Style::default()
@@ -264,14 +253,59 @@ pub(crate) fn render_messages_view(
                 )
             } else {
                 Span::raw("  ")
-            };
+            }
+        };
 
-            lines.push(Line::from(vec![
-                left_marker,
-                Span::styled("│ ", Style::default().fg(from_color)),
-                Span::styled(chunk, Style::default().fg(Color::White)),
-            ]));
-            remaining = rest;
+        for logical_line in body.split('\n') {
+            if logical_line.trim().is_empty() {
+                // Empty line → spacer with just the border
+                lines.push(Line::from(vec![
+                    left_marker_fn(is_selected),
+                    Span::styled("│", Style::default().fg(from_color)),
+                ]));
+                continue;
+            }
+
+            // Detect list items
+            let trimmed = logical_line.trim_start();
+            let is_list = trimmed.starts_with("- ")
+                || trimmed.starts_with("* ")
+                || (trimmed.len() > 2
+                    && trimmed
+                        .chars()
+                        .next()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(false)
+                    && trimmed.contains(". "));
+            let indent = if is_list { "  " } else { "" };
+            let effective_width = max_width.saturating_sub(indent.len());
+
+            // Word-wrap this logical line
+            let mut remaining = logical_line.trim();
+            while !remaining.is_empty() {
+                let char_count = remaining.chars().count();
+                let (chunk, rest) = if char_count <= effective_width {
+                    (remaining, "")
+                } else {
+                    let byte_limit: usize = remaining
+                        .char_indices()
+                        .nth(effective_width)
+                        .map(|(i, _)| i)
+                        .unwrap_or(remaining.len());
+                    let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
+                    (&remaining[..break_at], remaining[break_at..].trim_start())
+                };
+
+                lines.push(Line::from(vec![
+                    left_marker_fn(is_selected),
+                    Span::styled("│ ", Style::default().fg(from_color)),
+                    Span::styled(
+                        format!("{}{}", indent, chunk),
+                        Style::default().fg(Color::White),
+                    ),
+                ]));
+                remaining = rest;
+            }
         }
 
         last_from = Some(msg.from.clone());

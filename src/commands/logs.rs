@@ -58,84 +58,81 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
         // 2. Show task states with agents
         match task_sync::read_team_task_states(team_name) {
             Ok(tasks) if !tasks.is_empty() => {
-                // Separate into categories
-                let mut in_progress: Vec<_> = tasks
-                    .values()
-                    .filter(|t| t.status == "in_progress")
-                    .collect();
-                let mut completed: Vec<_> =
-                    tasks.values().filter(|t| t.status == "completed").collect();
-                let mut pending: Vec<_> =
-                    tasks.values().filter(|t| t.status == "pending").collect();
+                // Filter out internal tasks (auto-created for agent spawning)
+                let tasks: std::collections::HashMap<_, _> =
+                    tasks.into_iter().filter(|(_, t)| !t.is_internal).collect();
+                if tasks.is_empty() {
+                    println!("  {} No tasks found", "○".dimmed());
+                    println!();
+                } else {
+                    // Separate into categories
+                    let mut in_progress: Vec<_> = tasks
+                        .values()
+                        .filter(|t| t.status == "in_progress")
+                        .collect();
+                    let mut completed: Vec<_> =
+                        tasks.values().filter(|t| t.status == "completed").collect();
+                    let mut pending: Vec<_> =
+                        tasks.values().filter(|t| t.status == "pending").collect();
 
-                in_progress.sort_by_key(|t| &t.id);
-                completed.sort_by_key(|t| &t.id);
-                pending.sort_by_key(|t| &t.id);
+                    in_progress.sort_by_key(|t| &t.id);
+                    completed.sort_by_key(|t| &t.id);
+                    pending.sort_by_key(|t| &t.id);
 
-                // Active tasks
-                if !in_progress.is_empty() {
-                    println!(
-                        "  {} {}",
-                        "◐".yellow(),
-                        "Active Tasks".bright_yellow().bold()
-                    );
-                    for task in &in_progress {
-                        let story = &task.id;
-                        let agent = task
-                            .owner
-                            .as_deref()
-                            .map(|a| format!(" [{}]", a.bright_cyan()))
-                            .unwrap_or_default();
-                        let form = task.active_form.as_deref().unwrap_or(&task.subject);
+                    // Active tasks
+                    if !in_progress.is_empty() {
                         println!(
-                            "    {} {} {}{}",
+                            "  {} {}",
                             "◐".yellow(),
-                            story.bright_yellow(),
-                            form,
-                            agent
+                            "Active Tasks".bright_yellow().bold()
                         );
+                        for task in &in_progress {
+                            let (title, agent) = extract_task_display(task);
+                            let agent_str = agent
+                                .map(|a| format!(" @{}", a.bright_cyan().bold()))
+                                .unwrap_or_default();
+                            println!(
+                                "    {} {}{}",
+                                "◐".yellow(),
+                                title.bright_yellow(),
+                                agent_str
+                            );
+                        }
+                        println!();
                     }
-                    println!();
-                }
 
-                // Completed tasks
-                if !completed.is_empty() {
-                    println!(
-                        "  {} {} ({})",
-                        "●".green(),
-                        "Completed".green().bold(),
-                        completed.len()
-                    );
-                    for task in &completed {
-                        let story = &task.id;
+                    // Completed tasks
+                    if !completed.is_empty() {
                         println!(
-                            "    {} {} {}",
+                            "  {} {} ({})",
                             "●".green(),
-                            story.green(),
-                            task.subject.bright_black()
+                            "Completed".green().bold(),
+                            completed.len()
                         );
+                        for task in &completed {
+                            let (title, agent) = extract_task_display(task);
+                            let agent_str = agent
+                                .map(|a| format!(" @{}", a.bright_cyan().bold()))
+                                .unwrap_or_default();
+                            println!("    {} {}{}", "●".green(), title.green(), agent_str);
+                        }
+                        println!();
                     }
-                    println!();
-                }
 
-                // Pending tasks
-                if !pending.is_empty() {
-                    println!(
-                        "  {} {} ({})",
-                        "○".bright_black(),
-                        "Pending".bright_black().bold(),
-                        pending.len()
-                    );
-                    for task in &pending {
-                        let story = &task.id;
+                    // Pending tasks
+                    if !pending.is_empty() {
                         println!(
-                            "    {} {} {}",
+                            "  {} {} ({})",
                             "○".bright_black(),
-                            story,
-                            task.subject.bright_black()
+                            "Pending".bright_black().bold(),
+                            pending.len()
                         );
+                        for task in &pending {
+                            let (title, _) = extract_task_display(task);
+                            println!("    {} {}", "○".bright_black(), title.bright_black());
+                        }
+                        println!();
                     }
-                    println!();
                 }
             }
             _ => {
@@ -274,6 +271,55 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
     }
 
     Ok(())
+}
+
+/// Extract a meaningful display title and optional agent name from a task.
+/// For internal teammate tasks (subject = agent name), parse the description
+/// to find the actual work being done.
+fn extract_task_display(task: &task_sync::TeamTaskInfo) -> (String, Option<String>) {
+    if task.is_internal {
+        // Internal tasks have the agent name as subject and work description in description.
+        // Try to extract "Task N: <description>" from the prompt text.
+        let title = task
+            .description
+            .lines()
+            .find(|l| l.contains("Your task:") || l.contains("Your tasks:"))
+            .map(|l| {
+                l.trim_start_matches("Your task:")
+                    .trim_start_matches("Your tasks:")
+                    .trim()
+                    .to_string()
+            })
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                // Try "Task N: <description>" pattern from first line
+                task.description
+                    .lines()
+                    .find(|l| l.contains("Task ") && l.contains(':'))
+                    .and_then(|l| l.split_once("Task "))
+                    .and_then(|(_, rest)| rest.split_once(':'))
+                    .map(|(_, desc)| desc.trim().to_string())
+            })
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                // Fallback: first non-boilerplate line
+                task.description
+                    .lines()
+                    .find(|l| {
+                        !l.is_empty()
+                            && !l.starts_with("You are")
+                            && !l.starts_with("Check the task")
+                    })
+                    .map(|l| l.to_string())
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| task.subject.clone());
+        let title = title.trim_start_matches('#').trim().to_string();
+        (title, Some(task.subject.clone()))
+    } else {
+        let subj = task.subject.trim_start_matches('#').trim().to_string();
+        (subj, task.owner.clone())
+    }
 }
 
 #[cfg(test)]
