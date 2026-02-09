@@ -96,6 +96,9 @@ enum Commands {
     /// Start MCP server (stdio) for Claude Code integration
     #[command(name = "mcp-server")]
     McpServer,
+
+    /// Output formatted statusline for Claude Code (reads JSON from stdin)
+    Statusline,
 }
 
 #[derive(Subcommand)]
@@ -213,6 +216,12 @@ fn main() {
         Commands::McpServer => {
             if let Err(e) = hive_lib::mcp::run_server() {
                 eprintln!("MCP Server error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Statusline => {
+            if let Err(e) = commands::statusline::run() {
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }

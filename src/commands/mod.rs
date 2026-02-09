@@ -6,4 +6,5 @@ pub mod logs;
 pub mod monitor;
 pub mod profile;
 pub mod start;
+pub mod statusline;
 pub mod utils;
