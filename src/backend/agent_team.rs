@@ -86,7 +86,20 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 - Be cost-conscious with teammate models: use haiku for simple tasks, sonnet for implementation, opus only if truly needed
 - Maximum {max_agents} concurrent teammates
 - When all tasks are done, create a PR via `gh pr create` and verify CI passes
-- Do NOT modify any files under .hive/ — those are managed by the orchestrator"#,
+- Do NOT modify any files under .hive/ — those are managed by the orchestrator
+
+## Completion Signal
+CRITICAL: Once ALL tasks are completed AND the PR is successfully created, you MUST signal completion to the orchestrator:
+1. Use the Write tool to create a file named '.hive_complete' in the working directory
+2. The file content should be the single word: HIVE_COMPLETE
+3. This signals the orchestrator that the drone can be safely stopped
+
+Example:
+```
+Write tool:
+file_path: {worktree_path}/.hive_complete
+content: HIVE_COMPLETE
+```"#,
         prd_text = prd_text,
         worktree_path = config.worktree_path.display(),
         drone_name = config.drone_name,
