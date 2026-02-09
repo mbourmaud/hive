@@ -154,18 +154,25 @@ fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
         .filter(|t| t.status == "completed")
         .count();
 
-    // Source 1: live tasks are available
+    // Source 1: user tasks (non-internal)
     if total > 0 {
         return (completed, total);
     }
 
-    // Source 2: fall back to event-sourced progress from events.ndjson
+    // Source 2: internal tasks (team lead used TeamCreate, not TaskCreate)
+    let all_total = tasks.len();
+    let all_completed = tasks.iter().filter(|t| t.status == "completed").count();
+    if all_total > 0 {
+        return (all_completed, all_total);
+    }
+
+    // Source 3: fall back to event-sourced progress from events.ndjson
     let (event_completed, event_total) = events::reconstruct_progress(drone_name);
     if event_total > 0 {
         return (event_completed, event_total);
     }
 
-    // Source 3: nothing available
+    // Source 4: nothing available
     (0, 0)
 }
 

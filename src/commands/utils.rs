@@ -138,6 +138,23 @@ fn check_and_notify_update() -> Result<()> {
         .unwrap_or("")
         .trim_start_matches('v');
 
+    // Don't notify if assets aren't uploaded yet (CI still building)
+    let has_platform_assets = release["assets"]
+        .as_array()
+        .map(|assets| {
+            assets.iter().any(|a| {
+                a["name"]
+                    .as_str()
+                    .map(|n| n.starts_with("hive-"))
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false);
+
+    if !has_platform_assets {
+        return Ok(());
+    }
+
     // Simple version comparison
     if current_version < latest_version {
         eprintln!(
@@ -282,10 +299,26 @@ pub fn update() -> Result<()> {
         .as_array()
         .context("Missing assets in release")?;
 
-    let asset = assets
+    let asset = match assets
         .iter()
         .find(|a| a["name"].as_str() == Some(asset_name))
-        .context(format!("No binary found for platform '{}'", asset_name))?;
+    {
+        Some(a) => a,
+        None => {
+            println!("\n{}", "⚠  Binary not available yet".yellow().bold());
+            println!(
+                "Release {} exists but the {} asset hasn't been uploaded yet.",
+                latest_version.bright_white(),
+                asset_name.bright_white()
+            );
+            println!("CI is probably still building. Try again in a few minutes.\n");
+            println!(
+                "Build status: {}",
+                format!("https://github.com/{}/actions", REPO).bright_cyan()
+            );
+            return Ok(());
+        }
+    };
 
     let download_url = asset["browser_download_url"]
         .as_str()

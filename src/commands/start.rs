@@ -471,26 +471,19 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
         "$CLAUDE_PROJECT_DIR/.hive/drones/{}/events.ndjson",
         drone_name
     );
-    let tasks_file = format!("$CLAUDE_PROJECT_DIR/.hive/drones/{}/tasks.json", drone_name);
     let messages_file = format!(
         "$CLAUDE_PROJECT_DIR/.hive/drones/{}/messages.ndjson",
         drone_name
     );
-    let status_file = format!(
-        "$CLAUDE_PROJECT_DIR/.hive/drones/{}/status.json",
-        drone_name
-    );
 
-    // Build hook commands — each appends to events.ndjson AND persists to tasks.json/messages.ndjson
+    // Build hook commands — each appends one line to events.ndjson via jq (lean, no persistence scripts)
     let hooks = serde_json::json!({
         "PostToolUse": [
             {
                 "matcher": "TaskCreate",
                 "command": format!(
-                    r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"TaskCreate",ts:(now|todate),subject:.tool_input.subject,description:(.tool_input.description // "")}}' >> {} && \
-    echo "$INPUT" | jq -c '{{id:.tool_input.taskId,title:.tool_input.subject,description:(.tool_input.description // ""),status:"pending"}}' | \
-    python3 -c 'import sys,json,os; tasks_file="{}"; tasks=json.load(open(tasks_file)) if os.path.exists(tasks_file) else []; task=json.load(sys.stdin); tasks=[t for t in tasks if t.get("id") != task.get("id")]+[task]; json.dump(tasks,open(tasks_file,"w"),indent=2)'"#,
-                    events_file, tasks_file
+                    r#"cat | jq -c '{{event:"TaskCreate",ts:(now|todate),subject:.tool_input.subject,description:(.tool_input.description // "")}}' >> {}"#,
+                    events_file
                 ),
                 "async": true,
                 "timeout": 5
@@ -498,31 +491,8 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
             {
                 "matcher": "TaskUpdate",
                 "command": format!(
-                    r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' >> {} && \
-    echo "$INPUT" | jq -c '{{task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' | \
-python3 -c '
-import sys,json,os
-tasks_file="{}"
-status_file="{}"
-task_data=json.load(sys.stdin)
-task_id=task_data.get("task_id")
-status=task_data.get("status")
-owner=task_data.get("owner")
-if os.path.exists(tasks_file):
-    tasks=json.load(open(tasks_file))
-    for t in tasks:
-        if t.get("id")==task_id:
-            if status: t["status"]=status
-            if owner: t["owner"]=owner
-    json.dump(tasks,open(tasks_file,"w"),indent=2)
-    if os.path.exists(status_file):
-        completed=[t["id"] for t in tasks if t.get("status")=="completed"]
-        status_data=json.load(open(status_file))
-        status_data["total"]=len(tasks)
-        status_data["completed"]=completed
-        json.dump(status_data,open(status_file,"w"),indent=2)
-'"#,
-                    events_file, tasks_file, status_file
+                    r#"cat | jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' >> {}"#,
+                    events_file
                 ),
                 "async": true,
                 "timeout": 5
@@ -610,6 +580,16 @@ mod tests {
         let command = post_tool[0].get("command").unwrap().as_str().unwrap();
         assert!(command.contains("test-drone"));
         assert!(command.contains("events.ndjson"));
+
+        // Verify no Python scripts in any hook command
+        for hook in post_tool {
+            let cmd = hook.get("command").unwrap().as_str().unwrap();
+            assert!(
+                !cmd.contains("python3"),
+                "Hook command should not contain python3: {}",
+                cmd
+            );
+        }
     }
 
     #[test]

@@ -80,7 +80,7 @@ impl TuiState {
             event_readers: HashMap::new(),
             last_events: HashMap::new(),
             cost_cache: HashMap::new(),
-            cost_refresh_counter: 0,
+            cost_refresh_counter: 29,
             merge_check_counter: 0,
             pr_completion_check_counter: 0,
             zombie_first_seen: HashMap::new(),

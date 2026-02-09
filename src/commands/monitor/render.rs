@@ -445,28 +445,13 @@ impl TuiState {
             let mut tasks: Vec<_> = task_states.values().cloned().collect();
             tasks.sort_by(|a, b| a.id.cmp(&b.id));
 
-            // Build agent index map for tasks.
-            // For internal tasks, the agent name is in `subject`; for work tasks, it's in `owner`.
-            let mut task_unique_agents: Vec<String> = tasks
-                .iter()
-                .filter_map(|t| {
-                    if t.is_internal {
-                        Some(t.subject.clone())
-                    } else {
-                        t.owner.clone()
-                    }
-                })
-                .collect();
-            task_unique_agents.sort();
-            task_unique_agents.dedup();
-            let task_agent_index_map: HashMap<String, usize> = task_unique_agents
+            // Build agent color map from team members (same order as Team: line)
+            let members = task_sync::read_team_members(name).unwrap_or_default();
+            let member_color_map: HashMap<String, usize> = members
                 .iter()
                 .enumerate()
-                .map(|(idx, agent)| (agent.clone(), idx))
+                .map(|(idx, m)| (m.name.clone(), idx))
                 .collect();
-
-            // Show team members summary
-            let members = task_sync::read_team_members(name).unwrap_or_default();
             if !members.is_empty() {
                 let mut member_spans: Vec<Span> = vec![
                     Span::raw("      "),
@@ -533,7 +518,7 @@ impl TuiState {
 
                 let agent_badge_with_color = agent_name.map(|a| {
                     let badge_text = format!(" @{}", a);
-                    let agent_color = task_agent_index_map
+                    let agent_color = member_color_map
                         .get(&a)
                         .map(|&idx| get_agent_color(idx))
                         .unwrap_or(Color::Cyan);
@@ -574,18 +559,28 @@ impl TuiState {
                 } else {
                     let task_title_indent = "        "; // 8 spaces
                     let wrap_width = task_available_width.saturating_sub(task_prefix_len + 1);
+                    let last_line_wrap_width = wrap_width.saturating_sub(badge_len);
                     let mut remaining = title.as_str();
                     let mut first_line = true;
 
                     while !remaining.is_empty() {
                         let char_count = remaining.chars().count();
-                        let is_last = char_count <= wrap_width;
+                        // Use narrower width for the last line to leave room for badge
+                        let is_last = char_count <= last_line_wrap_width;
                         let (chunk, rest) = if is_last {
                             (remaining, "")
                         } else {
+                            // Split at wrap_width (full width) for non-last lines
+                            let split_width = if char_count <= wrap_width {
+                                // Would be last line but badge won't fit;
+                                // split at last_line_wrap_width so badge fits on next line
+                                last_line_wrap_width
+                            } else {
+                                wrap_width
+                            };
                             let byte_limit: usize = remaining
                                 .char_indices()
-                                .nth(wrap_width)
+                                .nth(split_width)
                                 .map(|(i, _)| i)
                                 .unwrap_or(remaining.len());
                             let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
