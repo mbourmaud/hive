@@ -71,10 +71,11 @@ pub fn run(
         println!("  {} Base branch: {}", "→".bright_blue(), base);
     }
 
-    // Use the model specified by the user
+    // Team lead always uses Opus; show the effective model
     println!(
-        "  {} Using model: {}",
+        "  {} Team lead: {} (teammates: {})",
         "→".bright_blue(),
+        "opus".bright_cyan(),
         model.bright_cyan()
     );
 

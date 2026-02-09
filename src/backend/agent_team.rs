@@ -83,7 +83,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 - Create an agent team named "{drone_name}" to implement this plan
 - Use delegate mode — coordinate only, do not write code yourself
 - IMPORTANT: Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items. Each task should be a meaningful unit of work (e.g. "Simplify PRD types", "Update TUI render", "Fix tests"). This allows progress monitoring.
-- Be cost-conscious with teammate models: use haiku for simple tasks, sonnet for implementation, opus only if truly needed
+- Use sonnet for teammates by default, haiku for simple tasks
 - Maximum {max_agents} concurrent teammates
 - When all tasks are done, create a PR via `gh pr create` and verify CI passes
 - Do NOT modify any files under .hive/ — those are managed by the orchestrator
@@ -106,11 +106,16 @@ content: HIVE_COMPLETE
         max_agents = config.max_agents,
     );
 
+    // Force Opus for team lead — Sonnet struggles with Agent Teams coordination
+    // (skips TaskCreate/TaskUpdate, poor task delegation). Falls back to user's
+    // chosen model only if opus is explicitly unavailable.
+    let team_lead_model = "opus";
+
     let mut cmd = ProcessCommand::new(&config.claude_binary);
     cmd.arg("-p")
         .arg(&prompt)
         .arg("--model")
-        .arg(&config.model)
+        .arg(team_lead_model)
         .arg("--output-format")
         .arg("stream-json")
         .arg("--verbose")
