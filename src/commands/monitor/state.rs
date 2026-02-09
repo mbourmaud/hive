@@ -206,11 +206,23 @@ impl TuiState {
 
         // Zombie detection: mark drones whose process died but status is still active
         // Grace period: don't mark as zombie if a Stop event exists (graceful exit)
+        let now_utc = Utc::now();
         for (name, status) in &mut self.drones {
             if matches!(
                 status.status,
                 DroneState::InProgress | DroneState::Starting | DroneState::Resuming
             ) {
+                // Startup grace period: skip zombie detection for recently started/resumed drones
+                // The PID file may not be written yet during the first few seconds
+                if matches!(status.status, DroneState::Starting | DroneState::Resuming) {
+                    let age_secs = parse_timestamp(&status.updated)
+                        .map(|t| now_utc.signed_duration_since(t).num_seconds())
+                        .unwrap_or(0);
+                    if age_secs < 30 {
+                        continue;
+                    }
+                }
+
                 let pid_alive = read_drone_pid(name)
                     .map(is_process_running)
                     .unwrap_or(false);
