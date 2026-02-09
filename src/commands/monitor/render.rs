@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::agent_teams::task_sync::TeamTaskInfo;
@@ -458,189 +458,38 @@ impl TuiState {
                 lines.push(Line::from(member_spans));
             }
 
-            for task in &tasks {
-                let (task_icon, task_color) = if task.status == "completed" {
-                    ("●", Color::Green)
-                } else if task.status == "in_progress" {
-                    ("◐", Color::Yellow)
-                } else {
-                    ("○", Color::DarkGray)
-                };
+            // Split tasks into user vs internal
+            let user_tasks: Vec<_> = tasks.iter().filter(|t| !t.is_internal).collect();
+            let internal_tasks: Vec<_> = tasks.iter().filter(|t| t.is_internal).collect();
 
-                // For internal teammate tasks: subject is the agent name, description is the work.
-                // For work tasks: subject is the title, owner is the agent name.
-                let (title, agent_name) = if task.is_internal {
-                    // Extract meaningful task description, skipping boilerplate.
-                    // Descriptions are often truncated (~100 chars), so fall back
-                    // to the agent name (subject) when nothing useful is found.
-                    let task_line = task
-                        .description
-                        .lines()
-                        .find(|l| l.starts_with("Your task:") || l.starts_with("Your tasks:"))
-                        .map(|l| {
-                            l.trim_start_matches("Your task:")
-                                .trim_start_matches("Your tasks:")
-                                .trim()
-                                .to_string()
-                        })
-                        .filter(|s| !s.is_empty())
-                        .or_else(|| {
-                            task.description
-                                .lines()
-                                .find(|l| {
-                                    !l.is_empty()
-                                        && !l.starts_with("You are")
-                                        && !l.starts_with("Check the task")
-                                })
-                                .map(|l| l.to_string())
-                        })
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or_else(|| task.subject.clone());
-                    // Strip markdown header prefixes (e.g. "## Title" → "Title")
-                    let task_line = task_line.trim_start_matches('#').trim().to_string();
-                    (task_line, Some(task.subject.clone()))
-                } else {
-                    // Strip markdown header prefixes
-                    let subj = task.subject.trim_start_matches('#').trim().to_string();
-                    (subj, task.owner.clone())
-                };
+            if !user_tasks.is_empty() {
+                // Render user tasks with nested internal tasks
+                let matched_agents: HashSet<_> =
+                    user_tasks.iter().filter_map(|t| t.owner.as_ref()).collect();
 
-                let agent_badge_with_color = agent_name.map(|a| {
-                    let badge_text = format!(" @{}", a);
-                    let agent_color = member_color_map
-                        .get(&a)
-                        .map(|&idx| get_agent_color(idx))
-                        .unwrap_or(Color::Cyan);
-                    (badge_text, agent_color)
-                });
+                for task in &user_tasks {
+                    render_user_task(lines, task, &member_color_map, area);
 
-                // For completed tasks, show duration instead of active_form
-                let timing_suffix = if task.status == "completed" {
-                    task.created_at
-                        .zip(task.updated_at)
-                        .map(|(created, updated)| {
-                            let duration_ms = updated.saturating_sub(created);
-                            let duration = chrono::Duration::milliseconds(duration_ms as i64);
-                            format!(" ({})", format_duration(duration))
-                        })
-                        .unwrap_or_default()
-                } else {
-                    String::new()
-                };
-
-                let active_form = if !timing_suffix.is_empty() {
-                    timing_suffix
-                } else {
-                    task.active_form
-                        .as_ref()
-                        .map(|f| format!(" ({})", f))
-                        .unwrap_or_default()
-                };
-
-                let task_prefix_len = 8;
-                let badge_len = agent_badge_with_color
-                    .as_ref()
-                    .map(|(text, _)| text.len())
-                    .unwrap_or(0)
-                    + active_form.len();
-                let task_available_width = area.width as usize;
-                let max_task_title_width =
-                    task_available_width.saturating_sub(task_prefix_len + badge_len + 1);
-
-                if title.chars().count() <= max_task_title_width || max_task_title_width < 20 {
-                    let mut spans = vec![
-                        Span::raw("      "),
-                        Span::styled(task_icon, Style::default().fg(task_color)),
-                        Span::raw(" "),
-                        Span::styled(title, Style::default().fg(task_color)),
-                        Span::styled(active_form.clone(), Style::default().fg(Color::DarkGray)),
-                    ];
-                    if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
-                        spans.push(Span::styled(
-                            badge_text.clone(),
-                            Style::default()
-                                .fg(*badge_color)
-                                .add_modifier(Modifier::BOLD),
-                        ));
-                    }
-                    lines.push(Line::from(spans));
-                } else {
-                    let task_title_indent = "        "; // 8 spaces
-                    let wrap_width = task_available_width.saturating_sub(task_prefix_len + 1);
-                    let last_line_wrap_width = wrap_width.saturating_sub(badge_len);
-                    let mut remaining = title.as_str();
-                    let mut first_line = true;
-
-                    while !remaining.is_empty() {
-                        let char_count = remaining.chars().count();
-                        // Use narrower width for the last line to leave room for badge
-                        let is_last = char_count <= last_line_wrap_width;
-                        let (chunk, rest) = if is_last {
-                            (remaining, "")
-                        } else {
-                            // Split at wrap_width (full width) for non-last lines
-                            let split_width = if char_count <= wrap_width {
-                                // Would be last line but badge won't fit;
-                                // split at last_line_wrap_width so badge fits on next line
-                                last_line_wrap_width
-                            } else {
-                                wrap_width
-                            };
-                            let byte_limit: usize = remaining
-                                .char_indices()
-                                .nth(split_width)
-                                .map(|(i, _)| i)
-                                .unwrap_or(remaining.len());
-                            let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
-                            (&remaining[..break_at], remaining[break_at..].trim_start())
-                        };
-
-                        if first_line {
-                            let mut spans = vec![
-                                Span::raw("      "),
-                                Span::styled(task_icon, Style::default().fg(task_color)),
-                                Span::raw(" "),
-                                Span::styled(chunk.to_string(), Style::default().fg(task_color)),
-                            ];
-                            if is_last {
-                                spans.push(Span::styled(
-                                    active_form.clone(),
-                                    Style::default().fg(Color::DarkGray),
-                                ));
-                                if let Some((badge_text, badge_color)) =
-                                    agent_badge_with_color.as_ref()
-                                {
-                                    spans.push(Span::styled(
-                                        badge_text.clone(),
-                                        Style::default().fg(*badge_color),
-                                    ));
-                                }
+                    // Nested internal tasks for this task's agent
+                    if let Some(ref agent) = task.owner {
+                        for itask in &internal_tasks {
+                            if itask.subject == *agent {
+                                render_nested_internal(lines, itask, &member_color_map, area);
                             }
-                            lines.push(Line::from(spans));
-                            first_line = false;
-                        } else {
-                            let mut spans = vec![
-                                Span::raw(task_title_indent),
-                                Span::styled(chunk.to_string(), Style::default().fg(task_color)),
-                            ];
-                            if is_last {
-                                spans.push(Span::styled(
-                                    active_form.clone(),
-                                    Style::default().fg(Color::DarkGray),
-                                ));
-                                if let Some((badge_text, badge_color)) =
-                                    agent_badge_with_color.as_ref()
-                                {
-                                    spans.push(Span::styled(
-                                        badge_text.clone(),
-                                        Style::default().fg(*badge_color),
-                                    ));
-                                }
-                            }
-                            lines.push(Line::from(spans));
                         }
-                        remaining = rest;
                     }
+                }
+
+                // Orphan internals (agent not assigned to any user task)
+                for itask in &internal_tasks {
+                    if !matched_agents.contains(&itask.subject) {
+                        render_nested_internal(lines, itask, &member_color_map, area);
+                    }
+                }
+            } else {
+                // Planning phase: only internal tasks exist, render as top-level
+                for task in &tasks {
+                    render_user_task(lines, task, &member_color_map, area);
                 }
             }
         } else {
@@ -733,4 +582,232 @@ impl TuiState {
             ]));
         }
     }
+}
+
+/// Extract a meaningful title from an internal task's description.
+/// Internal tasks have the agent name as `subject` and the actual work in `description`.
+fn extract_internal_task_title(task: &TeamTaskInfo) -> String {
+    let title = task
+        .description
+        .lines()
+        .find(|l| l.starts_with("Your task:") || l.starts_with("Your tasks:"))
+        .map(|l| {
+            l.trim_start_matches("Your task:")
+                .trim_start_matches("Your tasks:")
+                .trim()
+                .to_string()
+        })
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            task.description
+                .lines()
+                .find(|l| {
+                    !l.is_empty() && !l.starts_with("You are") && !l.starts_with("Check the task")
+                })
+                .map(|l| l.to_string())
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| task.subject.clone());
+    // Strip markdown header prefixes (e.g. "## Title" → "Title")
+    title.trim_start_matches('#').trim().to_string()
+}
+
+/// Render a top-level task line (user task or internal task shown as top-level during planning).
+fn render_user_task(
+    lines: &mut Vec<Line>,
+    task: &TeamTaskInfo,
+    member_color_map: &HashMap<String, usize>,
+    area: Rect,
+) {
+    let (task_icon, task_color) = if task.status == "completed" {
+        ("●", Color::Green)
+    } else if task.status == "in_progress" {
+        ("◐", Color::Yellow)
+    } else {
+        ("○", Color::DarkGray)
+    };
+
+    let (title, agent_name) = if task.is_internal {
+        (
+            extract_internal_task_title(task),
+            Some(task.subject.clone()),
+        )
+    } else {
+        let subj = task.subject.trim_start_matches('#').trim().to_string();
+        (subj, task.owner.clone())
+    };
+
+    let agent_badge_with_color = agent_name.map(|a| {
+        let badge_text = format!(" @{}", a);
+        let agent_color = member_color_map
+            .get(&a)
+            .map(|&idx| get_agent_color(idx))
+            .unwrap_or(Color::Cyan);
+        (badge_text, agent_color)
+    });
+
+    // For completed tasks, show duration instead of active_form
+    let timing_suffix = if task.status == "completed" {
+        task.created_at
+            .zip(task.updated_at)
+            .map(|(created, updated)| {
+                let duration_ms = updated.saturating_sub(created);
+                let duration = chrono::Duration::milliseconds(duration_ms as i64);
+                format!(" ({})", format_duration(duration))
+            })
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let active_form = if !timing_suffix.is_empty() {
+        timing_suffix
+    } else {
+        task.active_form
+            .as_ref()
+            .map(|f| format!(" ({})", f))
+            .unwrap_or_default()
+    };
+
+    let task_prefix_len = 8;
+    let badge_len = agent_badge_with_color
+        .as_ref()
+        .map(|(text, _)| text.len())
+        .unwrap_or(0)
+        + active_form.len();
+    let task_available_width = area.width as usize;
+    let max_task_title_width = task_available_width.saturating_sub(task_prefix_len + badge_len + 1);
+
+    if title.chars().count() <= max_task_title_width || max_task_title_width < 20 {
+        let mut spans = vec![
+            Span::raw("      "),
+            Span::styled(task_icon, Style::default().fg(task_color)),
+            Span::raw(" "),
+            Span::styled(title, Style::default().fg(task_color)),
+            Span::styled(active_form.clone(), Style::default().fg(Color::DarkGray)),
+        ];
+        if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
+            spans.push(Span::styled(
+                badge_text.clone(),
+                Style::default()
+                    .fg(*badge_color)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+        lines.push(Line::from(spans));
+    } else {
+        let task_title_indent = "        "; // 8 spaces
+        let wrap_width = task_available_width.saturating_sub(task_prefix_len + 1);
+        let last_line_wrap_width = wrap_width.saturating_sub(badge_len);
+        let mut remaining = title.as_str();
+        let mut first_line = true;
+
+        while !remaining.is_empty() {
+            let char_count = remaining.chars().count();
+            let is_last = char_count <= last_line_wrap_width;
+            let (chunk, rest) = if is_last {
+                (remaining, "")
+            } else {
+                let split_width = if char_count <= wrap_width {
+                    last_line_wrap_width
+                } else {
+                    wrap_width
+                };
+                let byte_limit: usize = remaining
+                    .char_indices()
+                    .nth(split_width)
+                    .map(|(i, _)| i)
+                    .unwrap_or(remaining.len());
+                let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
+                (&remaining[..break_at], remaining[break_at..].trim_start())
+            };
+
+            if first_line {
+                let mut spans = vec![
+                    Span::raw("      "),
+                    Span::styled(task_icon, Style::default().fg(task_color)),
+                    Span::raw(" "),
+                    Span::styled(chunk.to_string(), Style::default().fg(task_color)),
+                ];
+                if is_last {
+                    spans.push(Span::styled(
+                        active_form.clone(),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                    if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
+                        spans.push(Span::styled(
+                            badge_text.clone(),
+                            Style::default().fg(*badge_color),
+                        ));
+                    }
+                }
+                lines.push(Line::from(spans));
+                first_line = false;
+            } else {
+                let mut spans = vec![
+                    Span::raw(task_title_indent),
+                    Span::styled(chunk.to_string(), Style::default().fg(task_color)),
+                ];
+                if is_last {
+                    spans.push(Span::styled(
+                        active_form.clone(),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                    if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
+                        spans.push(Span::styled(
+                            badge_text.clone(),
+                            Style::default().fg(*badge_color),
+                        ));
+                    }
+                }
+                lines.push(Line::from(spans));
+            }
+            remaining = rest;
+        }
+    }
+}
+
+/// Render an internal task nested beneath its parent user task.
+/// Format: `        └─ ◐ @agent: Task description`
+fn render_nested_internal(
+    lines: &mut Vec<Line>,
+    task: &TeamTaskInfo,
+    member_color_map: &HashMap<String, usize>,
+    area: Rect,
+) {
+    let (task_icon, task_color) = if task.status == "completed" {
+        ("●", Color::Green)
+    } else if task.status == "in_progress" {
+        ("◐", Color::Yellow)
+    } else {
+        ("○", Color::DarkGray)
+    };
+
+    let agent_name = &task.subject;
+    let agent_color = member_color_map
+        .get(agent_name)
+        .map(|&idx| get_agent_color(idx))
+        .unwrap_or(Color::Cyan);
+
+    let title = extract_internal_task_title(task);
+
+    // Prefix: "        └─ " (8 spaces + tree connector)
+    let prefix = "        └─ ";
+    let agent_badge = format!("@{}: ", agent_name);
+    let prefix_len = prefix.len() + 2 + agent_badge.len(); // icon + space + badge
+    let max_width = area.width as usize;
+    let title_display = truncate_with_ellipsis(&title, max_width.saturating_sub(prefix_len));
+
+    lines.push(Line::from(vec![
+        Span::styled("        └─ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(task_icon, Style::default().fg(task_color)),
+        Span::raw(" "),
+        Span::styled(
+            agent_badge,
+            Style::default()
+                .fg(agent_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(title_display, Style::default().fg(task_color)),
+    ]));
 }

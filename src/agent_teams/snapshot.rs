@@ -87,14 +87,9 @@ impl TaskSnapshotStore {
         let members = task_sync::read_team_members(drone_name).unwrap_or_default();
 
         // Merge: prefer live if non-empty → events if non-empty → cache
+        // Include ALL tasks (user + internal) so the TUI can render internals nested
         let (mut task_list, source) = if let Some(ref live) = live_tasks {
-            let user_tasks: Vec<_> = live.values().filter(|t| !t.is_internal).cloned().collect();
-            let effective = if user_tasks.is_empty() {
-                live.values().cloned().collect()
-            } else {
-                user_tasks
-            };
-            (effective, SnapshotSource::LiveTasks)
+            (live.values().cloned().collect(), SnapshotSource::LiveTasks)
         } else if !event_tasks.is_empty() {
             // Convert event tasks to TeamTaskInfo
             let infos: Vec<TeamTaskInfo> = event_tasks
@@ -139,9 +134,20 @@ impl TaskSnapshotStore {
             }
         }
 
-        // Calculate progress from tasks
-        let current_completed = task_list.iter().filter(|t| t.status == "completed").count();
-        let current_total = task_list.len();
+        // Calculate progress from user tasks only (internal tasks are for nested display)
+        let has_user_tasks = task_list.iter().any(|t| !t.is_internal);
+        let (current_completed, current_total) = if has_user_tasks {
+            let c = task_list
+                .iter()
+                .filter(|t| !t.is_internal && t.status == "completed")
+                .count();
+            let t = task_list.iter().filter(|t| !t.is_internal).count();
+            (c, t)
+        } else {
+            // Planning phase — only internals exist, count them
+            let c = task_list.iter().filter(|t| t.status == "completed").count();
+            (c, task_list.len())
+        };
 
         // Enforce progress monotonicity via high-water mark
         let (prev_max_completed, prev_max_total) = self
