@@ -157,7 +157,17 @@ pub fn run(
     fs::create_dir_all(&inbox_dir)?;
     fs::create_dir_all(&outbox_dir)?;
 
-    // 7. Launch Claude via ExecutionBackend
+    // 7. Verify jq is available (required for event streaming hooks)
+    if !ProcessCommand::new("jq")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        bail!("'jq' is required for event streaming but not found. Install: brew install jq");
+    }
+
+    // 8. Launch Claude via ExecutionBackend
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {

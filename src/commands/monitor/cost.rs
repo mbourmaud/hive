@@ -1,9 +1,14 @@
 use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 // ============================================================================
 // Cost Tracking
 // ============================================================================
+
+/// How many bytes to read from the tail of the activity log.
+/// Cost/usage data is cumulative, so we only need the most recent entries.
+const TAIL_READ_BYTES: u64 = 8192;
 
 /// Parsed cost summary from activity log
 #[derive(Debug, Clone, Default)]
@@ -16,20 +21,45 @@ pub(crate) struct CostSummary {
 }
 
 /// Parse cost/token info from a drone's activity.log (stream-json format).
-/// Scans the last 200 lines for cost_usd and token usage in "result" messages.
+/// Reads only the last 8KB of the file for efficiency (cost data is cumulative).
 pub(crate) fn parse_cost_from_log(drone_name: &str) -> CostSummary {
     let log_path = PathBuf::from(".hive/drones")
         .join(drone_name)
         .join("activity.log");
 
-    let contents = match fs::read_to_string(&log_path) {
-        Ok(c) => c,
+    let mut file = match fs::File::open(&log_path) {
+        Ok(f) => f,
         Err(_) => return CostSummary::default(),
+    };
+
+    let file_size = file.metadata().map(|m| m.len()).unwrap_or(0);
+
+    // Read only the tail of the file
+    let contents = if file_size > TAIL_READ_BYTES {
+        if file.seek(SeekFrom::End(-(TAIL_READ_BYTES as i64))).is_err() {
+            return CostSummary::default();
+        }
+        let mut buf = String::new();
+        if file.read_to_string(&mut buf).is_err() {
+            return CostSummary::default();
+        }
+        // Skip the first (partial) line since we seeked into the middle
+        if let Some(idx) = buf.find('\n') {
+            buf[idx + 1..].to_string()
+        } else {
+            buf
+        }
+    } else {
+        let mut buf = String::new();
+        if file.read_to_string(&mut buf).is_err() {
+            return CostSummary::default();
+        }
+        buf
     };
 
     let mut summary = CostSummary::default();
 
-    // Scan all lines for cumulative cost data
+    // Scan lines for cumulative cost data (take latest values)
     for line in contents.lines() {
         let parsed: serde_json::Value = match serde_json::from_str(line) {
             Ok(v) => v,

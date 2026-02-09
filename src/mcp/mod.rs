@@ -9,13 +9,11 @@
 //! { "mcpServers": { "hive": { "command": "hive", "args": ["mcp-server"] } } }
 //! ```
 
+use crate::commands::common::{agent_teams_progress, list_drones};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
-
-use crate::commands::common::{list_drones, load_prd, reconcile_progress_with_prd};
 
 // ============================================================================
 // JSON-RPC types
@@ -283,7 +281,7 @@ fn tool_list_drones() -> Result<String> {
 
     let mut entries = Vec::new();
     for (name, status) in &drones {
-        let (completed, total) = crate::commands::common::reconcile_progress(status);
+        let (completed, total) = agent_teams_progress(&status.drone);
         entries.push(serde_json::json!({
             "name": name,
             "status": status.status.to_string(),
@@ -326,12 +324,7 @@ fn tool_drone_progress(args: &Value) -> Result<String> {
         .find(|(name, _)| name == drone_name)
         .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
 
-    let prd_path = PathBuf::from(".hive/plans").join(&status.prd);
-    let (completed, total) = if let Some(prd) = load_prd(&prd_path) {
-        reconcile_progress_with_prd(status, &prd)
-    } else {
-        (status.completed.len(), status.total)
-    };
+    let (completed, total) = agent_teams_progress(drone_name);
 
     let result = serde_json::json!({
         "drone": drone_name,

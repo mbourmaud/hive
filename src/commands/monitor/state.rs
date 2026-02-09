@@ -6,16 +6,42 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use crate::agent_teams::snapshot::TaskSnapshotStore;
 use crate::commands::common::{
-    elapsed_since, is_pr_merged, is_pr_open, is_process_running, list_drones, load_prd,
-    parse_timestamp, read_drone_pid, reconcile_progress, reconcile_progress_with_prd,
-    DEFAULT_INACTIVE_THRESHOLD_SECS,
+    command_with_timeout, elapsed_since, is_process_running, list_drones, load_prd,
+    parse_timestamp, read_drone_pid, DEFAULT_INACTIVE_THRESHOLD_SECS,
 };
 use crate::events::{EventReader, HiveEvent};
 use crate::notification;
 use crate::types::{DroneState, DroneStatus, Plan};
 
 use super::cost::{parse_cost_from_log, CostSummary};
+
+/// Check PR state with timeout. Returns true if PR is in expected state.
+/// Uses a cache reference to avoid redundant gh calls (cache entries valid for 60s).
+fn check_pr_state(
+    cache: &HashMap<String, (String, Instant)>,
+    branch: &str,
+    expected_state: &str,
+) -> bool {
+    // Check cache first (valid for 60 seconds)
+    if let Some((cached_state, when)) = cache.get(branch) {
+        if when.elapsed() < std::time::Duration::from_secs(60) {
+            return cached_state == expected_state;
+        }
+    }
+
+    // Query gh with timeout (5 seconds)
+    let mut cmd = std::process::Command::new("gh");
+    cmd.args(["pr", "view", branch, "--json", "state", "-q", ".state"]);
+
+    let result = command_with_timeout(&mut cmd, 5)
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+
+    result == expected_state
+}
 
 pub(crate) struct TuiState {
     // Selection
@@ -31,7 +57,6 @@ pub(crate) struct TuiState {
     pub expanded_drones: HashSet<String>,
     // Tracking
     pub auto_stopped_drones: HashSet<String>,
-    pub last_completed_counts: HashMap<String, usize>,
     pub last_drone_states: HashMap<String, DroneState>,
     // Events & data
     pub event_readers: HashMap<String, EventReader>,
@@ -46,6 +71,12 @@ pub(crate) struct TuiState {
     pub drones: Vec<(String, DroneStatus)>,
     pub display_order: Vec<usize>,
     pub plan_cache: HashMap<String, Plan>,
+    /// Single source of truth for task/progress data (monotonic, cached on disappearance)
+    pub snapshot_store: TaskSnapshotStore,
+    /// Cached PR state to avoid calling gh on every tick cycle
+    pub pr_state_cache: HashMap<String, (String, Instant)>, // branch -> (state, when_checked)
+    /// Two-step clean confirmation: (drone_name, when_prompted)
+    pub pending_clean: Option<(String, Instant)>,
 }
 
 impl TuiState {
@@ -75,7 +106,6 @@ impl TuiState {
             messages_selected_index: usize::MAX,
             expanded_drones,
             auto_stopped_drones: HashSet::new(),
-            last_completed_counts: HashMap::new(),
             last_drone_states: HashMap::new(),
             event_readers: HashMap::new(),
             last_events: HashMap::new(),
@@ -87,6 +117,9 @@ impl TuiState {
             drones: Vec::new(),
             display_order: Vec::new(),
             plan_cache: HashMap::new(),
+            snapshot_store: TaskSnapshotStore::new(),
+            pr_state_cache: HashMap::new(),
+            pending_clean: None,
         })
     }
 
@@ -95,9 +128,11 @@ impl TuiState {
 
         // Desktop notifications for state changes
         for (name, status) in &self.drones {
-            // Get live progress from ~/.claude/tasks/<drone>/ instead of stale status.json
-            let (completed_count, total_count) = reconcile_progress(status);
-            let prev_count = self.last_completed_counts.get(name).copied().unwrap_or(0);
+            // Get progress from snapshot store (single source of truth, monotonic)
+            let prev_progress = self.snapshot_store.progress(name);
+            let snapshot = self.snapshot_store.update(name);
+            let (completed_count, total_count) = snapshot.progress;
+            let prev_count = prev_progress.0;
             let prev_state = self.last_drone_states.get(name).cloned();
 
             // Task completed
@@ -125,8 +160,6 @@ impl TuiState {
                 }
             }
 
-            self.last_completed_counts
-                .insert(name.clone(), completed_count);
             self.last_drone_states
                 .insert(name.clone(), status.status.clone());
         }
@@ -239,58 +272,41 @@ impl TuiState {
         if self.pr_completion_check_counter >= 300 {
             self.pr_completion_check_counter = 0;
 
-            for (name, status) in &mut self.drones {
-                if matches!(status.status, DroneState::InProgress) {
-                    // Check if PR exists and is open
-                    if is_pr_open(&status.branch) {
-                        // Check if all tasks are completed by reading tasks.json
-                        let tasks_path = PathBuf::from(format!(
-                            "{}/.claude/tasks/{}/tasks.json",
-                            std::env::var("HOME").unwrap_or_default(),
-                            name
-                        ));
+            // Collect candidates first to avoid borrow issues
+            let candidates: Vec<(String, String)> = self
+                .drones
+                .iter()
+                .filter(|(_, s)| matches!(s.status, DroneState::InProgress))
+                .map(|(name, s)| (name.clone(), s.branch.clone()))
+                .collect();
 
-                        let all_tasks_done = if tasks_path.exists() {
-                            fs::read_to_string(&tasks_path)
-                                .ok()
-                                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-                                .and_then(|v| v.get("tasks").and_then(|t| t.as_array()).cloned())
-                                .map(|tasks| {
-                                    tasks.iter().all(|t| {
-                                        t.get("status")
-                                            .and_then(|s| s.as_str())
-                                            .map(|s| s == "completed")
-                                            .unwrap_or(false)
-                                    })
-                                })
-                                .unwrap_or(false)
-                        } else {
-                            false
-                        };
+            for (name, branch) in candidates {
+                let pr_open = check_pr_state(&self.pr_state_cache, &branch, "OPEN");
+                if pr_open {
+                    let (completed, total) = self.snapshot_store.progress(&name);
+                    let all_tasks_done = total > 0 && completed >= total;
 
-                        if all_tasks_done {
-                            // Mark as completed
+                    if all_tasks_done {
+                        // Find and update the drone status
+                        if let Some((_, status)) = self.drones.iter_mut().find(|(n, _)| n == &name)
+                        {
                             status.status = DroneState::Completed;
                             status.updated = Utc::now().to_rfc3339();
 
-                            // Update status.json
                             let status_path = PathBuf::from(".hive/drones")
-                                .join(&**name)
+                                .join(&name)
                                 .join("status.json");
                             let _ = fs::write(
                                 &status_path,
                                 serde_json::to_string_pretty(&*status).unwrap_or_default(),
                             );
-
-                            // Kill the process
-                            let _ = crate::commands::kill_clean::kill_quiet(name.to_string());
-
-                            // Notification
-                            notification::notify(
-                                &format!("Hive - {}", name),
-                                "Drone completed (PR created)!",
-                            );
                         }
+
+                        let _ = crate::commands::kill_clean::kill_quiet(name.to_string());
+                        notification::notify(
+                            &format!("Hive - {}", name),
+                            "Drone completed (PR created)!",
+                        );
                     }
                 }
             }
@@ -305,7 +321,7 @@ impl TuiState {
                 .drones
                 .iter()
                 .filter(|(_, s)| matches!(s.status, DroneState::Completed | DroneState::Stopped))
-                .filter(|(_, s)| is_pr_merged(&s.branch))
+                .filter(|(_, s)| check_pr_state(&self.pr_state_cache, &s.branch, "MERGED"))
                 .map(|(name, _)| name.clone())
                 .collect();
 
@@ -341,13 +357,9 @@ impl TuiState {
         self.display_order.clear();
         let mut archived_order: Vec<usize> = Vec::new();
 
-        for (idx, (_, status)) in self.drones.iter().enumerate() {
+        for (idx, (name, status)) in self.drones.iter().enumerate() {
             if status.status == DroneState::Completed {
-                let (valid_completed, task_count) = self
-                    .plan_cache
-                    .get(&status.prd)
-                    .map(|prd| reconcile_progress_with_prd(status, prd))
-                    .unwrap_or((status.completed.len(), status.total));
+                let (valid_completed, task_count) = self.snapshot_store.progress(name);
 
                 if valid_completed >= task_count {
                     let inactive_secs = parse_timestamp(&status.updated)

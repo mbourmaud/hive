@@ -3,7 +3,7 @@ use colored::Colorize;
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use super::common::reconcile_progress;
+use super::common::agent_teams_progress;
 use super::monitor::cost::parse_cost_from_log;
 use crate::types::{DroneState, DroneStatus};
 
@@ -43,8 +43,8 @@ pub fn list() -> Result<()> {
             DroneState::Zombie => "zombie".magenta(),
         };
 
-        // Reconcile progress with actual PRD (filters out old completed stories)
-        let (valid_completed, total_stories) = reconcile_progress(&status);
+        // Get progress from Agent Teams task list (read-only, no write-back)
+        let (valid_completed, total_stories) = agent_teams_progress(&status.drone);
 
         let progress = if total_stories > 0 {
             format!("{}/{}", valid_completed, total_stories)

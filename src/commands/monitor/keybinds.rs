@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::style::Color;
 use ratatui::Terminal;
+use std::time::{Duration, Instant};
 
 use crate::types::DroneState;
 
@@ -129,15 +130,37 @@ impl TuiState {
             KeyCode::Char('D') => {
                 if !self.drones.is_empty() {
                     let drone_name = self.drones[current_drone_idx].0.clone();
-                    match handle_clean_drone(&drone_name) {
-                        Ok(msg) => {
-                            self.message = Some(msg);
-                            self.message_color = Color::Green;
+                    if let Some((ref pending, when)) = self.pending_clean {
+                        if pending == &drone_name && when.elapsed() < Duration::from_secs(5) {
+                            // Second D within 5 seconds = confirmed
+                            self.pending_clean = None;
+                            match handle_clean_drone(&drone_name) {
+                                Ok(msg) => {
+                                    self.message = Some(msg);
+                                    self.message_color = Color::Green;
+                                }
+                                Err(e) => {
+                                    self.message = Some(format!("Error: {}", e));
+                                    self.message_color = Color::Red;
+                                }
+                            }
+                        } else {
+                            // Different drone or timeout — reset
+                            self.pending_clean = Some((drone_name.clone(), Instant::now()));
+                            self.message = Some(format!(
+                                "Press D again to confirm cleaning '{}'",
+                                drone_name
+                            ));
+                            self.message_color = Color::Yellow;
                         }
-                        Err(e) => {
-                            self.message = Some(format!("Error: {}", e));
-                            self.message_color = Color::Red;
-                        }
+                    } else {
+                        // First D — prompt
+                        self.pending_clean = Some((drone_name.clone(), Instant::now()));
+                        self.message = Some(format!(
+                            "Press D again to confirm cleaning '{}'",
+                            drone_name
+                        ));
+                        self.message_color = Color::Yellow;
                     }
                 }
             }

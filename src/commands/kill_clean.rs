@@ -199,18 +199,11 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
         );
     }
 
-    // Remove drone directory first (so it disappears from list immediately)
-    fs::remove_dir_all(&drone_dir).context("Failed to remove drone directory")?;
-    if !quiet {
-        println!("  {} Removed drone state", "✓".green());
-    }
-
-    // Remove worktree if not in local mode
+    // 1. Remove worktree FIRST (may fail — but drone state survives for retry)
     if !status.local_mode {
         let worktree_path = PathBuf::from(&status.worktree);
 
         if worktree_path.exists() {
-            // Remove git worktree
             let output = ProcessCommand::new("git")
                 .args([
                     "worktree",
@@ -239,13 +232,19 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
         }
     }
 
-    // Clean up Agent Teams directories
+    // 2. Clean Agent Teams directories
     if let Err(e) = crate::agent_teams::cleanup_team(&name) {
         if !quiet {
             println!("  {} Failed to clean Agent Teams dirs: {}", "⚠".yellow(), e);
         }
     } else if !quiet {
         println!("  {} Cleaned Agent Teams directories", "✓".green());
+    }
+
+    // 3. Remove drone directory LAST (point of no return)
+    fs::remove_dir_all(&drone_dir).context("Failed to remove drone directory")?;
+    if !quiet {
+        println!("  {} Removed drone state", "✓".green());
     }
 
     if !quiet {

@@ -8,9 +8,9 @@ use ratatui::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::agent_teams::task_sync;
+use crate::agent_teams::task_sync::TeamTaskInfo;
 use crate::commands::common::{
-    is_process_running, parse_timestamp, read_drone_pid, truncate_with_ellipsis,
+    format_duration, is_process_running, parse_timestamp, read_drone_pid, truncate_with_ellipsis,
     DEFAULT_INACTIVE_THRESHOLD_SECS, MAX_DRONE_NAME_LEN,
 };
 use crate::events::HiveEvent;
@@ -252,13 +252,8 @@ impl TuiState {
                 DroneState::Zombie => ("\u{1f480}", Color::Magenta),
             };
 
-            // Plan mode: count from Agent Teams tasks
-            let (valid_completed, task_count) = task_sync::read_team_task_states(name)
-                .map(|tasks| {
-                    let completed = tasks.values().filter(|t| t.status == "completed").count();
-                    (completed, tasks.len())
-                })
-                .unwrap_or((0, 0));
+            // Read progress from snapshot store (single source of truth)
+            let (valid_completed, task_count) = self.snapshot_store.progress(name);
 
             let percentage = if task_count > 0 {
                 (valid_completed as f32 / task_count as f32 * 100.0) as u16
@@ -302,11 +297,6 @@ impl TuiState {
             let mode_emoji = "🐝";
             let name_display = truncate_with_ellipsis(name, MAX_DRONE_NAME_LEN);
 
-            // Teammate count for header
-            let member_count = task_sync::read_team_members(name)
-                .map(|m| m.len())
-                .unwrap_or(0);
-
             // Cost display
             let cost = self.cost_cache.get(name).cloned().unwrap_or_default();
             let cost_str = if cost.total_cost_usd > 0.0 {
@@ -345,14 +335,6 @@ impl TuiState {
                     }),
                 ),
                 Span::styled(cost_str, Style::default().fg(cost_color)),
-                if member_count > 0 {
-                    Span::styled(
-                        format!("  🤖{}", member_count),
-                        Style::default().fg(Color::DarkGray),
-                    )
-                } else {
-                    Span::raw("")
-                },
                 Span::raw("  "),
                 Span::styled(elapsed, Style::default().fg(Color::DarkGray)),
             ]);
@@ -433,20 +415,25 @@ impl TuiState {
     fn render_expanded_drone(&mut self, lines: &mut Vec<Line>, drone_idx: usize, area: Rect) {
         let (name, _status) = &self.drones[drone_idx];
 
-        // Read task states for Agent Teams rendering
-        let task_states_result = task_sync::read_team_task_states(name);
-        let has_tasks = task_states_result
-            .as_ref()
-            .map(|t| !t.is_empty())
-            .unwrap_or(false);
+        // Read task states from snapshot store (single source of truth)
+        let task_list: Vec<TeamTaskInfo> = self
+            .snapshot_store
+            .get(name)
+            .map(|s| s.tasks.clone())
+            .unwrap_or_default();
+
+        let has_tasks = !task_list.is_empty();
 
         if has_tasks {
-            let task_states = task_states_result.as_ref().unwrap();
-            let mut tasks: Vec<_> = task_states.values().cloned().collect();
+            let mut tasks = task_list;
             tasks.sort_by(|a, b| a.id.cmp(&b.id));
 
             // Build agent color map from team members (same order as Team: line)
-            let members = task_sync::read_team_members(name).unwrap_or_default();
+            let members = self
+                .snapshot_store
+                .get(name)
+                .map(|s| s.members.clone())
+                .unwrap_or_default();
             let member_color_map: HashMap<String, usize> = members
                 .iter()
                 .enumerate()
@@ -462,8 +449,10 @@ impl TuiState {
                         member_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
                     }
                     member_spans.push(Span::styled(
-                        m.name.clone(),
-                        Style::default().fg(get_agent_color(idx)),
+                        format!("@{}", m.name),
+                        Style::default()
+                            .fg(get_agent_color(idx))
+                            .add_modifier(Modifier::BOLD),
                     ));
                 }
                 lines.push(Line::from(member_spans));
@@ -525,11 +514,28 @@ impl TuiState {
                     (badge_text, agent_color)
                 });
 
-                let active_form = task
-                    .active_form
-                    .as_ref()
-                    .map(|f| format!(" ({})", f))
-                    .unwrap_or_default();
+                // For completed tasks, show duration instead of active_form
+                let timing_suffix = if task.status == "completed" {
+                    task.created_at
+                        .zip(task.updated_at)
+                        .map(|(created, updated)| {
+                            let duration_ms = updated.saturating_sub(created);
+                            let duration = chrono::Duration::milliseconds(duration_ms as i64);
+                            format!(" ({})", format_duration(duration))
+                        })
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+
+                let active_form = if !timing_suffix.is_empty() {
+                    timing_suffix
+                } else {
+                    task.active_form
+                        .as_ref()
+                        .map(|f| format!(" ({})", f))
+                        .unwrap_or_default()
+                };
 
                 let task_prefix_len = 8;
                 let badge_len = agent_badge_with_color
@@ -552,7 +558,9 @@ impl TuiState {
                     if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
                         spans.push(Span::styled(
                             badge_text.clone(),
-                            Style::default().fg(*badge_color),
+                            Style::default()
+                                .fg(*badge_color)
+                                .add_modifier(Modifier::BOLD),
                         ));
                     }
                     lines.push(Line::from(spans));
@@ -696,7 +704,7 @@ impl TuiState {
                 HiveEvent::Message {
                     recipient, summary, ..
                 } => {
-                    format!("Msg → {}: {}", recipient, summary)
+                    format!("Msg → @{}: {}", recipient, summary)
                 }
                 HiveEvent::TaskDone { subject, agent, .. } => {
                     format!(

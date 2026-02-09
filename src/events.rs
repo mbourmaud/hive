@@ -64,64 +64,110 @@ impl HiveEvent {
     }
 }
 
-/// Reconstruct progress from events.ndjson by replaying TaskCreate/TaskUpdate events.
-/// Returns (completed_count, total_count).
-pub fn reconstruct_progress(drone_name: &str) -> (usize, usize) {
+/// A task reconstructed from events.ndjson
+pub struct EventTask {
+    pub task_id: String,
+    pub subject: String,
+    pub status: String,
+    pub owner: Option<String>,
+}
+
+/// Reconstruct structured task data from events.ndjson by replaying events.
+/// Returns a list of tasks with their latest status.
+pub fn reconstruct_tasks(drone_name: &str) -> Vec<EventTask> {
     let path = PathBuf::from(".hive/drones")
         .join(drone_name)
         .join("events.ndjson");
 
     let contents = match fs::read_to_string(&path) {
         Ok(c) => c,
-        Err(_) => return (0, 0),
+        Err(_) => return Vec::new(),
     };
 
-    // Track tasks: task_id -> status
-    // TaskCreate events don't have a task_id, but they signal a new task was created.
-    // TaskUpdate events have task_id and status.
-    let mut task_statuses: std::collections::HashMap<String, String> =
+    let mut task_map: std::collections::HashMap<String, EventTask> =
         std::collections::HashMap::new();
-    let mut task_count: usize = 0;
+    let mut create_counter: usize = 0;
 
     for line in contents.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if let Ok(event) = serde_json::from_str::<HiveEvent>(trimmed) {
-            match event {
-                HiveEvent::TaskCreate { .. } => {
-                    task_count += 1;
-                    // We don't have a task_id in TaskCreate, so we track by count
+        match serde_json::from_str::<HiveEvent>(trimmed) {
+            Ok(event) => match event {
+                HiveEvent::TaskCreate { subject, .. } => {
+                    create_counter += 1;
+                    let id = create_counter.to_string();
+                    task_map.insert(
+                        id.clone(),
+                        EventTask {
+                            task_id: id,
+                            subject,
+                            status: "pending".to_string(),
+                            owner: None,
+                        },
+                    );
                 }
                 HiveEvent::TaskUpdate {
-                    task_id, status, ..
+                    task_id,
+                    status,
+                    owner,
+                    ..
                 } => {
+                    let entry = task_map
+                        .entry(task_id.clone())
+                        .or_insert_with(|| EventTask {
+                            task_id: task_id.clone(),
+                            subject: format!("Task {}", task_id),
+                            status: "pending".to_string(),
+                            owner: None,
+                        });
                     if !status.is_empty() {
-                        task_statuses.insert(task_id, status);
+                        entry.status = status;
+                    }
+                    if owner.is_some() {
+                        entry.owner = owner;
                     }
                 }
-                HiveEvent::TaskDone { task_id, .. } => {
-                    task_statuses.insert(task_id, "completed".to_string());
+                HiveEvent::TaskDone {
+                    task_id, subject, ..
+                } => {
+                    let entry = task_map
+                        .entry(task_id.clone())
+                        .or_insert_with(|| EventTask {
+                            task_id,
+                            subject: subject.clone(),
+                            status: "completed".to_string(),
+                            owner: None,
+                        });
+                    entry.status = "completed".to_string();
+                    if !subject.is_empty() {
+                        entry.subject = subject;
+                    }
                 }
                 _ => {}
+            },
+            Err(_) => {
+                eprintln!(
+                    "[hive] Malformed event line in {}: {}",
+                    path.display(),
+                    &trimmed[..trimmed.len().min(100)]
+                );
             }
         }
     }
 
-    // Total = max of task_count (from TaskCreate events) and highest task_id seen
-    let max_task_id = task_statuses
-        .keys()
-        .filter_map(|id| id.parse::<usize>().ok())
-        .max()
-        .unwrap_or(0);
+    let mut tasks: Vec<EventTask> = task_map.into_values().collect();
+    tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+    tasks
+}
 
-    let total = task_count.max(max_task_id);
-    let completed = task_statuses
-        .values()
-        .filter(|s| s.as_str() == "completed")
-        .count();
-
+/// Reconstruct progress from events.ndjson by replaying TaskCreate/TaskUpdate events.
+/// Returns (completed_count, total_count).
+pub fn reconstruct_progress(drone_name: &str) -> (usize, usize) {
+    let tasks = reconstruct_tasks(drone_name);
+    let total = tasks.len();
+    let completed = tasks.iter().filter(|t| t.status == "completed").count();
     (completed, total)
 }
 
@@ -178,6 +224,14 @@ impl EventReader {
         };
 
         let file_size = meta.len();
+        if file_size < self.offset {
+            // File was truncated (e.g. recreated), reset offset
+            eprintln!(
+                "[hive] Events file truncated for {}, resetting",
+                self.path.display()
+            );
+            self.offset = 0;
+        }
         if file_size <= self.offset {
             return Vec::new();
         }
@@ -205,8 +259,15 @@ impl EventReader {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if let Ok(event) = serde_json::from_str::<HiveEvent>(trimmed) {
-                        events.push(event);
+                    match serde_json::from_str::<HiveEvent>(trimmed) {
+                        Ok(event) => events.push(event),
+                        Err(_) => {
+                            eprintln!(
+                                "[hive] Malformed event line in {}: {}",
+                                self.path.display(),
+                                &trimmed[..trimmed.len().min(100)]
+                            );
+                        }
                     }
                 }
                 Err(_) => break,

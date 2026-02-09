@@ -7,6 +7,8 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::{Command as ProcessCommand, Output};
+use std::time::{Duration, Instant};
 
 use crate::types::{DroneStatus, Plan};
 
@@ -77,52 +79,7 @@ pub fn load_prd(path: &Path) -> Option<Plan> {
     serde_json::from_str(&contents).ok()
 }
 
-/// Reconcile status with actual PRD.
-/// Returns (completed_tasks, total_tasks) from Agent Teams progress.
-/// Also updates status.json with latest progress as a cache.
-///
-/// Returns (valid_completed_count, total).
-pub fn reconcile_progress(status: &DroneStatus) -> (usize, usize) {
-    let (completed, total) = agent_teams_progress(&status.drone);
-
-    // Persist progress to status.json as a cache
-    if total > 0 && (completed != status.completed.len() || total != status.total) {
-        let status_path = PathBuf::from(".hive/drones")
-            .join(&status.drone)
-            .join("status.json");
-        if status_path.exists() {
-            if let Ok(contents) = fs::read_to_string(&status_path) {
-                if let Ok(mut cached_status) = serde_json::from_str::<DroneStatus>(&contents) {
-                    cached_status.total = total;
-                    // Update completed list length to match
-                    cached_status.completed.truncate(completed);
-                    while cached_status.completed.len() < completed {
-                        cached_status
-                            .completed
-                            .push(format!("task-{}", cached_status.completed.len() + 1));
-                    }
-                    cached_status.updated = chrono::Utc::now().to_rfc3339();
-                    let _ = fs::write(
-                        &status_path,
-                        serde_json::to_string_pretty(&cached_status).unwrap_or_default(),
-                    );
-                }
-            }
-        }
-    }
-
-    (completed, total)
-}
-
-/// Reconcile status with a provided PRD.
-/// Returns Agent Teams task progress.
-///
-/// Returns (valid_completed_count, total).
-pub fn reconcile_progress_with_prd(status: &DroneStatus, _prd: &Plan) -> (usize, usize) {
-    agent_teams_progress(&status.drone)
-}
-
-/// Get progress from Agent Teams task list (for plan-only PRDs).
+/// Get read-only progress from Agent Teams task list.
 ///
 /// Multi-source fallback:
 /// 1. Try live tasks from `~/.claude/tasks/<drone>/` (current logic)
@@ -130,11 +87,13 @@ pub fn reconcile_progress_with_prd(status: &DroneStatus, _prd: &Plan) -> (usize,
 /// 3. If both empty, return (0, 0)
 ///
 /// Returns (completed_tasks, total_tasks). Filters out internal tracking tasks.
-fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
+/// Note: This is a simple read-only function. The snapshot store in the TUI
+/// provides monotonicity guarantees on top of this.
+pub fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
     use crate::agent_teams;
     use crate::events;
 
-    let tasks = agent_teams::read_task_list(drone_name).unwrap_or_default();
+    let tasks = agent_teams::read_task_list_safe(drone_name);
 
     // Filter out internal tasks (auto-created teammate tracking)
     let user_tasks: Vec<_> = tasks
@@ -162,14 +121,16 @@ fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
     // Source 2: internal tasks (team lead used TeamCreate, not TaskCreate)
     let all_total = tasks.len();
     let all_completed = tasks.iter().filter(|t| t.status == "completed").count();
-    if all_total > 0 {
-        return (all_completed, all_total);
-    }
 
-    // Source 3: fall back to event-sourced progress from events.ndjson
+    // Source 3: event-sourced progress from events.ndjson
     let (event_completed, event_total) = events::reconstruct_progress(drone_name);
-    if event_total > 0 {
-        return (event_completed, event_total);
+
+    // Use the source with the most progress. Internal task files are often stale
+    // (agents don't reliably update them), so events.ndjson may have better data.
+    if all_total > 0 || event_total > 0 {
+        let best_total = all_total.max(event_total);
+        let best_completed = all_completed.max(event_completed);
+        return (best_completed, best_total);
     }
 
     // Source 4: nothing available
@@ -216,23 +177,38 @@ pub fn read_drone_pid(drone_name: &str) -> Option<i32> {
 // PR / GitHub Utilities
 // ============================================================================
 
-/// Check if a PR for the given branch has been merged.
+/// Run a command with a timeout. Returns None if the command times out or fails to spawn.
+pub fn command_with_timeout(cmd: &mut ProcessCommand, timeout_secs: u64) -> Option<Output> {
+    let mut child = cmd.spawn().ok()?;
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return child.wait_with_output().ok(),
+            Ok(None) if start.elapsed() > Duration::from_secs(timeout_secs) => {
+                let _ = child.kill();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(_) => return None,
+        }
+    }
+}
+
+/// Check if a PR for the given branch has been merged. Times out after 5 seconds.
 pub fn is_pr_merged(branch: &str) -> bool {
-    std::process::Command::new("gh")
-        .args(["pr", "view", branch, "--json", "state", "-q", ".state"])
-        .output()
-        .ok()
+    let mut cmd = ProcessCommand::new("gh");
+    cmd.args(["pr", "view", branch, "--json", "state", "-q", ".state"]);
+    command_with_timeout(&mut cmd, 5)
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim() == "MERGED")
         .unwrap_or(false)
 }
 
-/// Check if a PR exists and is open for the given branch.
+/// Check if a PR exists and is open for the given branch. Times out after 5 seconds.
 pub fn is_pr_open(branch: &str) -> bool {
-    std::process::Command::new("gh")
-        .args(["pr", "view", branch, "--json", "state", "-q", ".state"])
-        .output()
-        .ok()
+    let mut cmd = ProcessCommand::new("gh");
+    cmd.args(["pr", "view", branch, "--json", "state", "-q", ".state"]);
+    command_with_timeout(&mut cmd, 5)
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim() == "OPEN")
         .unwrap_or(false)
