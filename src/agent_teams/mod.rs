@@ -107,6 +107,50 @@ pub fn read_task_list_safe(team_name: &str) -> Vec<AgentTeamTask> {
     read_task_list(team_name).unwrap_or_default()
 }
 
+/// Auto-complete all in_progress tasks for a team.
+/// Called when the drone's process shuts down to avoid tasks stuck in in_progress forever.
+pub fn auto_complete_tasks(team_name: &str) -> Result<()> {
+    let tasks_dir = team_tasks_dir(team_name);
+    if !tasks_dir.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(&tasks_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        if path.file_name().and_then(|n| n.to_str()) == Some("tasks.json") {
+            continue;
+        }
+
+        let contents = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let mut task: AgentTeamTask = match serde_json::from_str(&contents) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        if task.status == "in_progress" {
+            task.status = "completed".to_string();
+            task.updated_at = Some(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+            );
+            if let Ok(json) = serde_json::to_string_pretty(&task) {
+                let _ = fs::write(&path, json);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Clean up Agent Teams directories for a team.
 pub fn cleanup_team(team_name: &str) -> Result<()> {
     let tasks_dir = team_tasks_dir(team_name);

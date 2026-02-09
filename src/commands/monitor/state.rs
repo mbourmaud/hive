@@ -177,6 +177,8 @@ impl TuiState {
                 if matches!(event, HiveEvent::Stop { .. })
                     && !self.auto_stopped_drones.contains(name)
                 {
+                    // Auto-complete in_progress tasks before stopping (#56)
+                    let _ = crate::agent_teams::auto_complete_tasks(name);
                     self.auto_stopped_drones.insert(name.clone());
                     let _ = crate::commands::kill_clean::kill_quiet(name.clone());
                 }
@@ -206,6 +208,9 @@ impl TuiState {
                     .map(is_process_running)
                     .unwrap_or(false);
                 if !pid_alive {
+                    // Auto-complete in_progress tasks when process dies (#56)
+                    let _ = crate::agent_teams::auto_complete_tasks(name);
+
                     // Check if there's a Stop event — if so, the drone exited gracefully
                     if crate::events::has_stop_event(name) {
                         // Graceful exit — mark as Completed or Stopped, not Zombie
