@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Launch autonomous Claude agents that buzz through your PRDs while you sip coffee.
+  Launch autonomous Claude agents that buzz through your plans while you sip coffee.
 </p>
 
 <p align="center">
@@ -63,12 +63,36 @@ hive init
 
 ---
 
+## 🔄 Upgrading from v2.x
+
+**Hive v3.0.0** is a major simplification. Key changes:
+
+| v2.x | v3.0.0 |
+|------|--------|
+| `/hive:prd` | `/hive:plan` |
+| `hive start --prd <file>` | `hive start <name>` (auto-detects plan) |
+| `.hive/prds/` | `.hive/plans/` |
+| Story-based workflow | Task-based workflow |
+| `hive kill` | `hive stop` |
+| `hive sessions` | `hive list` |
+| `hive start --resume` | Removed (just use `hive start <name>`) |
+| `hive unblock` | Removed (drones don't block) |
+| Blocking workflow | Removed entirely |
+
+**Migration steps:**
+1. Update Hive: `brew upgrade hive-ai` or download latest release
+2. Rename `.hive/prds/` to `.hive/plans/`
+3. Update your plans (remove stories, use task-based format - see PLAN_GUIDE.md)
+4. Use new command syntax
+
+---
+
 ## 🐝 How to Bee Productive
 
 | Step | Command |
 |------|---------|
 | **1. Initialize Your Hive** | `hive init` |
-| **2. Create a PRD** <sup>`IN CLAUDE CODE`</sup> | `/hive:prd` |
+| **2. Create a Plan** <sup>`IN CLAUDE CODE`</sup> | `/hive:plan` |
 | **3. Launch Your Drones!** <sup>`IN CLAUDE CODE`</sup> | `/hive:start` |
 | **4. Be the Queen** <sup>`IN CLAUDE CODE`</sup> | `/hive:status` |
 | **5. Harvest the Honey!** | Review, PR, merge 🍯 |
@@ -81,13 +105,13 @@ Run `/hive:statusline` in Claude Code to enable drone tracking in your statuslin
 
 ```
 project │ main │ Opus 4.5 │ 45% │ ⬢ 22
-👑 Hive v1.2.0 | 🐝 security (4/10) | 🐝 ui-refactor ✓
+👑 Hive v3.0.0 | 🐝 security 🔄 | 🐝 ui-refactor ✓
 ```
 
 See all your drones at a glance:
-- **🐝 name (X/Y)** - Drone in progress (X stories done out of Y)
-- **🐝 name ✓** - Drone completed all stories
-- **🔄** - Drone currently running
+- **🐝 name 🔄** - Drone currently working
+- **🐝 name ✓** - Drone completed
+- **🐝 name ⚠** - Drone needs attention
 
 ---
 
@@ -96,8 +120,8 @@ See all your drones at a glance:
 | In Claude Code | CLI | What it does |
 |----------------|-----|--------------|
 | `/hive:init` | `hive init` | Set up the hive in your project |
-| `/hive:prd` | - | Generate a PRD from description |
-| `/hive:start` | `hive start --prd <file>` | Launch a drone |
+| `/hive:plan` | - | Generate a plan from description |
+| `/hive:start` | `hive start <name>` | Launch a drone |
 | `/hive:status` | `hive monitor` | TUI dashboard for all drones |
 | `/hive:logs` | `hive logs <name>` | View drone activity |
 | `/hive:stop` | `hive stop <name>` | Stop a running drone |
@@ -108,13 +132,13 @@ See all your drones at a glance:
 
 ## 🔔 Desktop Notifications
 
-Get notified when drones start, complete, or pause:
+Get notified when drones start, complete, or need attention:
 
 | Event | Notification |
 |-------|--------------|
-| 🐝 Started | "security: 10 stories" |
-| 🎉 Completed | "security: 10/10 done!" |
-| ⏸️ Paused | "security: 7/10 (max iterations)" |
+| 🐝 Started | "security: drone started" |
+| 🎉 Completed | "security: completed!" |
+| ⚠️ Needs attention | "security: needs review" |
 
 Works on macOS, Linux, and Windows/WSL.
 
@@ -130,18 +154,18 @@ Works on macOS, Linux, and Windows/WSL.
 ├──────────────────────────────────────────────────────┤
 │  🐝 Drone: security                                  │
 │  Branch: hive/security                               │
-│  Implementing SEC-001 → SEC-010 autonomously         │
+│  Working through tasks autonomously                  │
 ├──────────────────────────────────────────────────────┤
 │  🐝 Drone: ui-refactor                               │
 │  Branch: hive/ui-refactor                            │
-│  Implementing UI-001 → UI-025 autonomously           │
+│  Working through tasks autonomously                  │
 └──────────────────────────────────────────────────────┘
 ```
 
 Each drone:
 - Gets its own **git worktree** (isolated workspace) in `~/.hive/worktrees/<project>/<drone>/`
 - Works on its own **branch** (`hive/<name>`)
-- **Commits** each story: `feat(SEC-001): description`
+- **Commits** progress regularly with descriptive messages
 - Updates **status.json** in real-time
 - Shares `.hive/` state with main project via symlink
 
@@ -152,20 +176,12 @@ Each drone:
 ```
 your-project/                        # 👑 Queen
 ├── .hive/                           # Shared state
-│   ├── prds/                        # Your PRD files
-│   │   └── prd-security.json
+│   ├── plans/                       # Your plan files
+│   │   └── security.json
 │   └── drones/                      # Drone status
 │       └── security/
-│           ├── status.json          # Progress: 4/10
-│           ├── activity.log         # What it's doing
-│           ├── blocked.md           # Blocking info (if blocked)
-│           └── logs/                # Detailed execution logs
-│               ├── SEC-001/
-│               │   ├── attempt-1.log
-│               │   ├── attempt-1-metadata.json
-│               │   └── attempt-2.log
-│               └── SEC-002/
-│                   └── attempt-1.log
+│           ├── status.json          # Real-time progress
+│           └── activity.log         # What it's doing
 
 ~/.hive/worktrees/                   # Global worktree base
 └── your-project/                    # Per-project directory
@@ -176,58 +192,28 @@ your-project/                        # 👑 Queen
 
 ---
 
-## 📊 Comprehensive Logging
+## 📊 Real-Time Monitoring
 
-Hive now captures detailed execution logs for every Claude invocation:
+Track drone progress with live updates:
 
-**Story-specific logs** - Each story gets its own directory:
+**Activity logs** - Each drone maintains a real-time activity log:
 ```
-.hive/drones/security/logs/SEC-001/
-  ├── attempt-1.log              # Complete Claude output
-  ├── attempt-1-metadata.json    # Duration, exit code, timestamps
-  └── attempt-2.log              # Retry attempts (if needed)
+.hive/drones/security/
+  ├── status.json      # Current progress and state
+  └── activity.log     # Live activity feed
 ```
 
-**Metadata tracking** - Every attempt includes:
-- Start and end timestamps
-- Duration in seconds
-- Exit code (success/failure)
-- Model used
-- Iteration number
+**Status tracking** includes:
+- Current task being worked on
+- Overall progress
+- Duration and timestamps
+- Model being used
 
 **View in TUI**:
 ```bash
 hive monitor
 # Select drone → View logs, stop, clean
 ```
-
----
-
-## 🚫 Human-in-the-Loop Blocking
-
-Drones automatically block when they encounter repeated errors, preventing wasted resources:
-
-**Automatic blocking** - After 3+ failed attempts on the same story:
-- Drone sets status to `blocked`
-- Creates `blocked.md` with context and questions
-- Sends desktop notification
-- Stops execution
-
-**Unblock workflow**:
-```bash
-hive unblock <drone-name>
-# 1. Shows blocked.md with context
-# 2. Offers to edit PRD
-# 3. Prompts to resume
-
-# OR resume directly:
-hive start --resume <drone-name>
-```
-
-**Blocked drone indicators**:
-- `hive monitor --simple` - Shows ⚠ in RED
-- `hive monitor` - Highlights in TUI
-- Desktop notification
 
 ---
 

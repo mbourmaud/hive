@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hive - Let Your Bees Do the Work!</title>
-    <meta name="description" content="Launch autonomous Claude agents (drones) on PRD files. Your personal army of coding bees!">
+    <meta name="description" content="Launch autonomous Claude agents (drones) on plan files. Your personal army of coding bees!">
 
     <!-- Favicons -->
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
@@ -14,7 +14,7 @@
     <!-- Open Graph / Social -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="Hive - Let Your Bees Do the Work!">
-    <meta property="og:description" content="Launch autonomous Claude agents (drones) on PRD files. Your personal army of coding bees!">
+    <meta property="og:description" content="Launch autonomous Claude agents (drones) on plan files. Your personal army of coding bees!">
     <meta property="og:image" content="assets/logo.png">
     <meta name="twitter:card" content="summary_large_image">
 
@@ -537,7 +537,7 @@
         <h1>Hive</h1>
         <p class="tagline">Let Your Bees Do the Work! 🍯</p>
         <p class="description">
-            Launch autonomous Claude agents that buzz through your PRDs while you sip coffee.
+            Launch autonomous Claude agents that buzz through your plans while you sip coffee.
         </p>
         <div class="install-box" onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | bash')">
             curl -fsSL https://...hive.../install.sh | bash
@@ -566,11 +566,11 @@
             <div class="timeline-item">
                 <span class="step-number">3</span>
                 <div class="header-row">
-                    <h3><span class="emoji">📝</span> Create a PRD</h3>
+                    <h3><span class="emoji">📝</span> Create a Plan</h3>
                     <span class="claude-tag">in Claude Code</span>
                 </div>
-                <p>Describe what you want to build. Use Claude Code to generate a proper PRD with stories.</p>
-                <code>/hive:prd</code>
+                <p>Describe what you want to build. Use Claude Code to generate a proper plan.</p>
+                <code>/hive:plan</code>
                 <p style="margin-top: 12px; font-size: 0.95rem;"><em>Optional:</em> Enable the statusline to track your drones at a glance. <a href="#statusline" class="more-link">More →</a></p>
                 <code>/hive:statusline</code>
             </div>
@@ -581,7 +581,7 @@
                     <h3><span class="emoji">🚀</span> Launch Your Drones!</h3>
                     <span class="claude-tag">in Claude Code</span>
                 </div>
-                <p>Send your bees to work! Each drone gets its own git worktree and buzzes through stories.</p>
+                <p>Send your bees to work! Each drone gets its own git worktree and executes the plan.</p>
                 <code>/hive:start</code>
             </div>
 
@@ -612,7 +612,7 @@
                 <div class="monitor-placeholder" style="display: none;">
                     <pre>
 ┌─────────────────────────────────────────────────────────────┐
-│  👑 Hive Monitor                                    v1.0.0  │
+│  👑 Hive Monitor                                    v3.0.0  │
 ├─────────────────────────────────────────────────────────────┤
 │  🐝 security        in_progress   ████████░░  8/10  (80%)   │
 │  🐝 ui-refactor     completed     ██████████  5/5   (100%)  │
@@ -635,7 +635,7 @@
             </div>
             <div class="statusline-preview">
                 <span class="statusline-text">project │ main │ Opus 4.5 │ 45%</span>
-                <span class="statusline-hive">👑 Hive v1.2.0 | 🐝 security (4/10) | 🐝 ui-refactor ✓</span>
+                <span class="statusline-hive">👑 Hive v3.0.0 | 🐝 security (4/10) | 🐝 ui-refactor ✓</span>
             </div>
             <div class="statusline-legend">
                 <span><strong>🐝 name (X/Y)</strong> — In progress</span>
@@ -649,8 +649,7 @@
             <span class="big-emoji">🐝 + 🤖 = 💛</span>
             <h2>Did You Know?</h2>
             <p>
-                A real bee visits 50-100 flowers per trip. Your Hive drones can implement
-                50-100 stories per PRD. Coincidence? We think not! 🍯
+                A real bee visits 50-100 flowers per trip. Your Hive drones can execute complex plans autonomously. Coincidence? We think not! 🍯
             </p>
         </div>
     </section>
