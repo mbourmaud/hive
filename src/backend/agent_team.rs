@@ -66,9 +66,9 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 
     let prd: crate::types::Plan = {
         let contents = fs::read_to_string(&config.prd_path)?;
-        serde_json::from_str(&contents).context("Failed to parse PRD for team lead prompt")?
+        serde_json::from_str(&contents).context("Failed to parse plan file")?
     };
-    let prd_text = agent_teams::format_prd_for_prompt(&prd);
+    let prd_text = agent_teams::format_plan_for_prompt(&prd);
 
     let prompt = format!(
         r#"You are coordinating work on this project.
@@ -80,7 +80,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 {worktree_path}
 
 ## Instructions
-- Create an agent team named "{drone_name}" to implement this PRD
+- Create an agent team named "{drone_name}" to implement this plan
 - Use delegate mode — coordinate only, do not write code yourself
 - IMPORTANT: Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items. Each task should be a meaningful unit of work (e.g. "Simplify PRD types", "Update TUI render", "Fix tests"). This allows progress monitoring.
 - Be cost-conscious with teammate models: use haiku for simple tasks, sonnet for implementation, opus only if truly needed

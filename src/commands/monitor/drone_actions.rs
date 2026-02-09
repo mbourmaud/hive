@@ -11,10 +11,10 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
     use dialoguer::{theme::ColorfulTheme, Input, Select};
     use std::io;
 
-    // Find all PRD files
-    let prds = find_prd_files()?;
+    // Find all plan files
+    let plans = find_plan_files()?;
 
-    if prds.is_empty() {
+    if plans.is_empty() {
         return Ok(Some(
             "No PRD files found in .hive/prds/ or project root".to_string(),
         ));
@@ -25,23 +25,23 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
     crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
 
     let result = (|| -> Result<Option<String>> {
-        // Let user select PRD
-        let prd_names: Vec<String> = prds.iter().map(|p| p.display().to_string()).collect();
+        // Let user select plan
+        let plan_names: Vec<String> = plans.iter().map(|p| p.display().to_string()).collect();
         let selection = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select PRD")
-            .items(&prd_names)
+            .items(&plan_names)
             .default(0)
             .interact_opt()?;
 
-        let prd_path = match selection {
-            Some(idx) => &prds[idx],
+        let plan_path = match selection {
+            Some(idx) => &plans[idx],
             None => return Ok(None), // User cancelled
         };
 
-        // Read PRD to get default name
-        let prd_contents = fs::read_to_string(prd_path)?;
-        let prd: Plan = serde_json::from_str(&prd_contents)?;
-        let default_name = prd.id.clone();
+        // Read plan to get default name
+        let plan_contents = fs::read_to_string(plan_path)?;
+        let plan: Plan = serde_json::from_str(&plan_contents)?;
+        let default_name = plan.id.clone();
 
         // Prompt for drone name
         let drone_name: String = Input::with_theme(&ColorfulTheme::default())
@@ -72,8 +72,8 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
 }
 
 // Find all plan files in .hive/plans/, .hive/prds/ (compat), and project root
-pub(crate) fn find_prd_files() -> Result<Vec<PathBuf>> {
-    let mut prds = Vec::new();
+pub(crate) fn find_plan_files() -> Result<Vec<PathBuf>> {
+    let mut plans = Vec::new();
 
     // Search in .hive/plans/ first, then .hive/prds/ for compat
     for dir_name in &["plans", "prds"] {
@@ -83,7 +83,7 @@ pub(crate) fn find_prd_files() -> Result<Vec<PathBuf>> {
                 let entry = entry?;
                 let path = entry.path();
                 if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    prds.push(path);
+                    plans.push(path);
                 }
             }
             break; // prds is usually a symlink to plans, avoid duplicates
@@ -98,12 +98,12 @@ pub(crate) fn find_prd_files() -> Result<Vec<PathBuf>> {
             if (name.starts_with("plan") || name.starts_with("prd"))
                 && path.extension().and_then(|s| s.to_str()) == Some("json")
             {
-                prds.push(path);
+                plans.push(path);
             }
         }
     }
 
-    Ok(prds)
+    Ok(plans)
 }
 
 /// Extract the last meaningful activity from a stream-json activity log.
@@ -186,7 +186,6 @@ pub(crate) fn extract_last_activity(log_contents: &str) -> String {
     String::new()
 }
 
-/// Extract a meaningful title from an Agent Teams task description.
 // Handler for 'Stop' action (uses quiet mode to avoid corrupting TUI)
 pub(crate) fn handle_stop_drone(drone_name: &str) -> Result<String> {
     crate::commands::kill_clean::kill_quiet(drone_name.to_string())?;
@@ -199,15 +198,13 @@ pub(crate) fn handle_clean_drone(drone_name: &str) -> Result<String> {
     Ok(format!("\u{1f9f9} Cleaning drone: {}", drone_name))
 }
 
-// Handler for 'Resume' action - resumes a drone with new stories or stopped drone
+// Handler for 'Resume' action - resumes a stopped drone
 pub(crate) fn handle_resume_drone(drone_name: &str) -> Result<String> {
-    // Update status.json to reflect new PRD story count
+    // Reset status to in_progress
     let status_path = PathBuf::from(".hive")
         .join("drones")
         .join(drone_name)
         .join("status.json");
-    let _prd_path_dir = PathBuf::from(".hive").join("prds");
-
     if let Ok(status_content) = fs::read_to_string(&status_path) {
         if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&status_content) {
             // Reset status to in_progress (total is tracked by Agent Teams tasks)

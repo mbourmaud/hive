@@ -80,7 +80,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                         "Active Tasks".bright_yellow().bold()
                     );
                     for task in &in_progress {
-                        let story = task.story_id.as_deref().unwrap_or(&task.id);
+                        let story = &task.id;
                         let agent = task
                             .owner
                             .as_deref()
@@ -107,7 +107,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                         completed.len()
                     );
                     for task in &completed {
-                        let story = task.story_id.as_deref().unwrap_or(&task.id);
+                        let story = &task.id;
                         println!(
                             "    {} {} {}",
                             "●".green(),
@@ -127,7 +127,7 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                         pending.len()
                     );
                     for task in &pending {
-                        let story = task.story_id.as_deref().unwrap_or(&task.id);
+                        let story = &task.id;
                         println!(
                             "    {} {} {}",
                             "○".bright_black(),

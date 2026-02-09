@@ -111,7 +111,7 @@ impl TuiState {
             lines.push(Line::from(vec![
                 Span::raw("    "),
                 Span::styled("1. ", Style::default().fg(Color::Cyan)),
-                Span::styled("Create a PRD with ", Style::default().fg(Color::White)),
+                Span::styled("Create a plan with ", Style::default().fg(Color::White)),
                 Span::styled(
                     "/hive:plan",
                     Style::default()
@@ -253,15 +253,15 @@ impl TuiState {
             };
 
             // Plan mode: count from Agent Teams tasks
-            let (valid_completed, prd_story_count) = task_sync::read_team_task_states(name)
+            let (valid_completed, task_count) = task_sync::read_team_task_states(name)
                 .map(|tasks| {
                     let completed = tasks.values().filter(|t| t.status == "completed").count();
                     (completed, tasks.len())
                 })
                 .unwrap_or((0, 0));
 
-            let percentage = if prd_story_count > 0 {
-                (valid_completed as f32 / prd_story_count as f32 * 100.0) as u16
+            let percentage = if task_count > 0 {
+                (valid_completed as f32 / task_count as f32 * 100.0) as u16
             } else {
                 0
             };
@@ -333,12 +333,12 @@ impl TuiState {
                 Span::styled(empty_bar, Style::default().fg(Color::DarkGray)),
                 Span::raw(" "),
                 Span::styled(
-                    if prd_story_count > 0 {
-                        format!("{}/{}", valid_completed, prd_story_count)
+                    if task_count > 0 {
+                        format!("{}/{}", valid_completed, task_count)
                     } else {
                         "Planning...".to_string()
                     },
-                    Style::default().fg(if prd_story_count == 0 {
+                    Style::default().fg(if task_count == 0 {
                         Color::DarkGray
                     } else {
                         Color::White
@@ -546,15 +546,12 @@ impl TuiState {
                     .map(|f| format!(" ({})", f))
                     .unwrap_or_default();
 
-                let elapsed_str = String::new();
-
                 let task_prefix_len = 8;
                 let badge_len = agent_badge_with_color
                     .as_ref()
                     .map(|(text, _)| text.len())
                     .unwrap_or(0)
-                    + active_form.len()
-                    + elapsed_str.len();
+                    + active_form.len();
                 let task_available_width = area.width as usize;
                 let max_task_title_width =
                     task_available_width.saturating_sub(task_prefix_len + badge_len + 1);
@@ -571,12 +568,6 @@ impl TuiState {
                         spans.push(Span::styled(
                             badge_text.clone(),
                             Style::default().fg(*badge_color),
-                        ));
-                    }
-                    if !elapsed_str.is_empty() {
-                        spans.push(Span::styled(
-                            elapsed_str.clone(),
-                            Style::default().fg(Color::DarkGray),
                         ));
                     }
                     lines.push(Line::from(spans));
@@ -621,12 +612,6 @@ impl TuiState {
                                         Style::default().fg(*badge_color),
                                     ));
                                 }
-                                if !elapsed_str.is_empty() {
-                                    spans.push(Span::styled(
-                                        elapsed_str.clone(),
-                                        Style::default().fg(Color::DarkGray),
-                                    ));
-                                }
                             }
                             lines.push(Line::from(spans));
                             first_line = false;
@@ -646,12 +631,6 @@ impl TuiState {
                                     spans.push(Span::styled(
                                         badge_text.clone(),
                                         Style::default().fg(*badge_color),
-                                    ));
-                                }
-                                if !elapsed_str.is_empty() {
-                                    spans.push(Span::styled(
-                                        elapsed_str.clone(),
-                                        Style::default().fg(Color::DarkGray),
                                     ));
                                 }
                             }

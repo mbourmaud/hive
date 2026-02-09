@@ -25,9 +25,6 @@ pub struct Plan {
     pub plan: String,
 }
 
-/// Backwards-compatible alias for Plan (formerly Prd)
-pub type Prd = Plan;
-
 /// Drone execution status
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DroneStatus {
@@ -175,7 +172,7 @@ mod tests {
             "plan": "## Goal\nBuild X\n\n## Requirements\n- Thing A"
         }"###;
 
-        let prd: Prd = serde_json::from_str(json).unwrap();
+        let prd: Plan = serde_json::from_str(json).unwrap();
         assert_eq!(prd.id, "my-feature");
         assert_eq!(prd.plan, "## Goal\nBuild X\n\n## Requirements\n- Thing A");
     }
@@ -188,7 +185,7 @@ mod tests {
             "plan": "Do the thing"
         }"#;
 
-        let prd: Prd = serde_json::from_str(json).unwrap();
+        let prd: Plan = serde_json::from_str(json).unwrap();
         assert_eq!(prd.id, "minimal");
         assert_eq!(prd.plan, "Do the thing");
     }

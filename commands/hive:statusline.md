@@ -111,4 +111,4 @@ imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
 ## Related Skills
 
 - `/hive:start` - Launch a new drone
-- `/hive:prd` - Create a PRD for drones
+- `/hive:plan` - Create a plan for drones

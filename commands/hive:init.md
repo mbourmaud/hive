@@ -45,7 +45,7 @@ hive init
 Or manually create structure:
 
 ```bash
-mkdir -p .hive/prds .hive/drones
+mkdir -p .hive/plans .hive/drones
 
 cat > .hive/config.json << EOF
 {
@@ -87,14 +87,14 @@ Tell the user:
 Structure created:
   .hive/
   ├── config.json
-  ├── prds/        # Store your PRD files here
+  ├── plans/       # Store your plan files here
   └── drones/      # Drone state (auto-managed)
 
 Drone worktrees: ~/.hive/worktrees/<project>/<drone>/
 
 Next steps:
-  1. Create a PRD:     /hive:prd
-  2. Launch a drone:   /hive:start --prd .hive/prds/your-prd.json
+  1. Create a PRD:     /hive:plan
+  2. Launch a drone:   hive start <name>
   3. Monitor:          /hive:status
 ```
 
@@ -109,4 +109,4 @@ Next steps:
 - Creates `.hive/` folder (gitignored)
 - Safe to run multiple times (idempotent)
 - Requires being in a git repository
-- PRD files go in `.hive/prds/`
+- Plan files go in `.hive/plans/`

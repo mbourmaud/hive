@@ -46,7 +46,7 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         execution_mode: ExecutionMode::AgentTeam,
         backend: "agent_team".to_string(),
         status: DroneState::InProgress,
-        current_task: Some("STORY-001".to_string()),
+        current_task: Some("TASK-001".to_string()),
         completed: vec![],
         story_times: HashMap::new(),
         total: 5,
@@ -63,7 +63,7 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
     // Create activity log
     fs::write(
         drone_dir.join("activity.log"),
-        "[10:00:00] 🔨 Début STORY-001\n",
+        "[10:00:00] 🔨 Starting TASK-001\n",
     )
     .unwrap();
 }
@@ -180,7 +180,7 @@ fn test_existing_prd_compatibility() {
     assert!(prd.is_ok());
     let prd = prd.unwrap();
     assert_eq!(prd.id, "existing-prd");
-    // Stories field is ignored in plan mode - only plan field is used
+    // Old JSON with extra fields parses fine — Plan ignores unknown fields
     assert!(prd.plan.is_empty()); // No plan field in old JSON, defaults to empty string
 }
 

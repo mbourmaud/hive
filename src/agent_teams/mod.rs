@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::types::Plan;
 
-/// An Agent Teams task, mapped from a PRD story.
+/// An Agent Teams task.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTeamTask {
@@ -33,9 +33,9 @@ pub struct AgentTeamTask {
     pub updated_at: Option<u64>,
 }
 
-/// Format PRD content as readable text for the team lead prompt.
-pub fn format_prd_for_prompt(prd: &Plan) -> String {
-    format!("# {}\n\n{}", prd.title, prd.plan)
+/// Format plan content for the team lead prompt.
+pub fn format_plan_for_prompt(plan: &Plan) -> String {
+    format!("# {}\n\n{}", plan.title, plan.plan)
 }
 
 /// Get the task list directory for a team.
@@ -285,9 +285,9 @@ mod tests {
     }
 
     #[test]
-    fn test_format_prd_for_prompt() {
+    fn test_format_plan_for_prompt() {
         let prd = make_test_prd();
-        let output = format_prd_for_prompt(&prd);
+        let output = format_plan_for_prompt(&prd);
 
         assert!(output.starts_with("# Test PRD"));
         assert!(output.contains("## Goal"));
@@ -296,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_prd_minimal() {
+    fn test_format_plan_minimal() {
         let prd = Plan {
             id: "minimal".to_string(),
             title: "Minimal".to_string(),
@@ -308,7 +308,7 @@ mod tests {
             base_branch: None,
             plan: "Just do it".to_string(),
         };
-        let output = format_prd_for_prompt(&prd);
+        let output = format_plan_for_prompt(&prd);
 
         assert_eq!(output, "# Minimal\n\nJust do it");
     }

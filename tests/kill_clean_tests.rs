@@ -81,14 +81,14 @@ fn setup_test_env(test_name: &str) -> PathBuf {
         "worktree": "/tmp/test-worktree",
         "local_mode": false,
         "status": "stopped",
-        "current_story": null,
+        "current_task": null,
         "completed": [],
         "story_times": {},
         "total": 5,
         "started": "2024-01-01T00:00:00Z",
         "updated": "2024-01-01T00:00:00Z",
         "error_count": 0,
-        "last_error_story": null
+        "last_error": null
     }"#;
 
     fs::write(drone_dir.join("status.json"), status).unwrap();

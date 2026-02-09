@@ -30,7 +30,6 @@ pub(crate) struct TuiState {
     pub messages_selected_index: usize,
     pub expanded_drones: HashSet<String>,
     // Tracking
-    pub _auto_resumed_drones: HashSet<String>,
     pub auto_stopped_drones: HashSet<String>,
     pub last_completed_counts: HashMap<String, usize>,
     pub last_drone_states: HashMap<String, DroneState>,
@@ -46,7 +45,7 @@ pub(crate) struct TuiState {
     // Computed per-tick
     pub drones: Vec<(String, DroneStatus)>,
     pub display_order: Vec<usize>,
-    pub prd_cache: HashMap<String, Plan>,
+    pub plan_cache: HashMap<String, Plan>,
 }
 
 impl TuiState {
@@ -75,7 +74,6 @@ impl TuiState {
             messages_scroll: 0,
             messages_selected_index: usize::MAX,
             expanded_drones,
-            _auto_resumed_drones: HashSet::new(),
             auto_stopped_drones: HashSet::new(),
             last_completed_counts: HashMap::new(),
             last_drone_states: HashMap::new(),
@@ -88,7 +86,7 @@ impl TuiState {
             zombie_first_seen: HashMap::new(),
             drones: Vec::new(),
             display_order: Vec::new(),
-            prd_cache: HashMap::new(),
+            plan_cache: HashMap::new(),
         })
     }
 
@@ -328,8 +326,8 @@ impl TuiState {
             DroneState::Completed => 3,
         });
 
-        // Load PRDs for story info (needed for archive calculation)
-        self.prd_cache = self
+        // Load plans for archive calculation
+        self.plan_cache = self
             .drones
             .iter()
             .filter_map(|(_, status)| {
@@ -345,13 +343,13 @@ impl TuiState {
 
         for (idx, (_, status)) in self.drones.iter().enumerate() {
             if status.status == DroneState::Completed {
-                let (valid_completed, prd_story_count) = self
-                    .prd_cache
+                let (valid_completed, task_count) = self
+                    .plan_cache
                     .get(&status.prd)
                     .map(|prd| reconcile_progress_with_prd(status, prd))
                     .unwrap_or((status.completed.len(), status.total));
 
-                if valid_completed >= prd_story_count {
+                if valid_completed >= task_count {
                     let inactive_secs = parse_timestamp(&status.updated)
                         .map(|updated| now.signed_duration_since(updated).num_seconds())
                         .unwrap_or(0);

@@ -77,9 +77,9 @@ fn tui_status_dashboard_single_drone() {
     let drone = create_mock_drone(
         "test-drone",
         DroneState::InProgress,
-        vec!["STORY-1", "STORY-2"],
+        vec!["TASK-1", "TASK-2"],
         5,
-        Some("STORY-3"),
+        Some("TASK-3"),
     );
     let drones = vec![drone];
 
@@ -173,23 +173,23 @@ fn tui_status_dashboard_multiple_drones() {
         create_mock_drone(
             "frontend",
             DroneState::InProgress,
-            vec!["STORY-1"],
+            vec!["TASK-1"],
             3,
-            Some("STORY-2"),
+            Some("TASK-2"),
         ),
         create_mock_drone(
             "backend",
             DroneState::Completed,
-            vec!["STORY-1", "STORY-2", "STORY-3"],
+            vec!["TASK-1", "TASK-2", "TASK-3"],
             3,
             None,
         ),
         create_mock_drone(
             "database",
             DroneState::Error,
-            vec!["STORY-1"],
+            vec!["TASK-1"],
             5,
-            Some("STORY-2"),
+            Some("TASK-2"),
         ),
     ];
 
@@ -282,9 +282,9 @@ fn tui_drone_detail_view() {
     let drone = create_mock_drone(
         "test-drone",
         DroneState::InProgress,
-        vec!["STORY-1", "STORY-2"],
+        vec!["TASK-1", "TASK-2"],
         5,
-        Some("STORY-3"),
+        Some("TASK-3"),
     );
 
     let output = render_to_string(80, 24, |f| {
@@ -333,7 +333,7 @@ fn tui_drone_detail_view() {
         let current_text = if let Some(ref story) = drone.1.current_task {
             format!("Working on: {}", story)
         } else {
-            "No story in progress".to_string()
+            "No task in progress".to_string()
         };
         let current_widget = Paragraph::new(current_text)
             .style(Style::default().fg(Color::Yellow))
@@ -350,7 +350,7 @@ fn tui_drone_detail_view() {
         let completed_list = List::new(completed_items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Completed Stories"),
+                .title("Completed Tasks"),
         );
         f.render_widget(completed_list, chunks[3]);
 

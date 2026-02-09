@@ -39,8 +39,8 @@ for dir in .hive/drones/*/; do
     status=$(jq -r '.status' "$dir/status.json")
     completed=$(jq -r '.completed | length' "$dir/status.json")
     total=$(jq -r '.total' "$dir/status.json")
-    current=$(jq -r '.current_story // "none"' "$dir/status.json")
-    prd=$(jq -r '.prd_file // "unknown"' "$dir/status.json")
+    current=$(jq -r '.current_task // "none"' "$dir/status.json")
+    prd=$(jq -r '.prd // "unknown"' "$dir/status.json")
 
     echo "🐝 $name"
     echo "   Status: $status"
@@ -61,13 +61,13 @@ Show a formatted table:
 
 🐝 security
    Status:   in_progress
-   Progress: 4/10 stories
-   Current:  SEC-005
+   Progress: 4/10 tasks
+   Current:  TASK-005
    PRD:      .hive/prds/prd-security.json
 
 🐝 feature
    Status:   completed ✓
-   Progress: 5/5 stories
+   Progress: 5/5 tasks
    PRD:      .hive/prds/prd-feature.json
 
 ──────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ Total: 2 drones | 1 active | 1 completed
 ### Step 4: Suggest Next Actions
 
 Based on status, suggest:
-- If drone is running: `hive logs <name>` or `hive kill <name>`
+- If drone is running: `hive logs <name>` or `hive stop <name>`
 - If drone is completed: `hive clean <name>` to cleanup
 - If drone failed: Check logs with `hive logs <name>`
 

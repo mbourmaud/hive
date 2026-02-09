@@ -14,7 +14,6 @@ pub struct TeamTaskInfo {
     pub status: String,
     pub owner: Option<String>,
     pub active_form: Option<String>,
-    pub story_id: Option<String>,
     pub model: Option<String>,
     /// Whether this is an internal teammate tracking task
     pub is_internal: bool,
@@ -54,12 +53,6 @@ pub fn read_team_task_states(team_name: &str) -> Result<HashMap<String, TeamTask
 
     let mut states = HashMap::new();
     for task in tasks {
-        let story_id = task
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("storyId"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
         let is_internal = task
             .metadata
             .as_ref()
@@ -80,7 +73,6 @@ pub fn read_team_task_states(team_name: &str) -> Result<HashMap<String, TeamTask
                 status: task.status,
                 owner: task.owner,
                 active_form: task.active_form,
-                story_id,
                 model,
                 is_internal,
             },
