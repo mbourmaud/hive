@@ -619,12 +619,13 @@ fn render_user_task(
     member_color_map: &HashMap<String, usize>,
     area: Rect,
 ) {
-    let (task_icon, task_color) = if task.status == "completed" {
-        ("●", Color::Green)
+    // Icon color reflects status; text color is white for readability (#57)
+    let (task_icon, icon_color, text_color) = if task.status == "completed" {
+        ("●", Color::Green, Color::DarkGray)
     } else if task.status == "in_progress" {
-        ("◐", Color::Yellow)
+        ("◐", Color::Yellow, Color::White)
     } else {
-        ("○", Color::DarkGray)
+        ("○", Color::DarkGray, Color::White)
     };
 
     let (title, agent_name) = if task.is_internal {
@@ -681,9 +682,9 @@ fn render_user_task(
     if title.chars().count() <= max_task_title_width || max_task_title_width < 20 {
         let mut spans = vec![
             Span::raw("      "),
-            Span::styled(task_icon, Style::default().fg(task_color)),
+            Span::styled(task_icon, Style::default().fg(icon_color)),
             Span::raw(" "),
-            Span::styled(title, Style::default().fg(task_color)),
+            Span::styled(title, Style::default().fg(text_color)),
             Span::styled(active_form.clone(), Style::default().fg(Color::DarkGray)),
         ];
         if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
@@ -725,9 +726,9 @@ fn render_user_task(
             if first_line {
                 let mut spans = vec![
                     Span::raw("      "),
-                    Span::styled(task_icon, Style::default().fg(task_color)),
+                    Span::styled(task_icon, Style::default().fg(icon_color)),
                     Span::raw(" "),
-                    Span::styled(chunk.to_string(), Style::default().fg(task_color)),
+                    Span::styled(chunk.to_string(), Style::default().fg(text_color)),
                 ];
                 if is_last {
                     spans.push(Span::styled(
@@ -746,7 +747,7 @@ fn render_user_task(
             } else {
                 let mut spans = vec![
                     Span::raw(task_title_indent),
-                    Span::styled(chunk.to_string(), Style::default().fg(task_color)),
+                    Span::styled(chunk.to_string(), Style::default().fg(text_color)),
                 ];
                 if is_last {
                     spans.push(Span::styled(
@@ -775,12 +776,12 @@ fn render_nested_internal(
     member_color_map: &HashMap<String, usize>,
     area: Rect,
 ) {
-    let (task_icon, task_color) = if task.status == "completed" {
-        ("●", Color::Green)
+    let (task_icon, icon_color, text_color) = if task.status == "completed" {
+        ("●", Color::Green, Color::DarkGray)
     } else if task.status == "in_progress" {
-        ("◐", Color::Yellow)
+        ("◐", Color::Yellow, Color::White)
     } else {
-        ("○", Color::DarkGray)
+        ("○", Color::DarkGray, Color::White)
     };
 
     let agent_name = &task.subject;
@@ -800,7 +801,7 @@ fn render_nested_internal(
 
     lines.push(Line::from(vec![
         Span::styled("        └─ ", Style::default().fg(Color::DarkGray)),
-        Span::styled(task_icon, Style::default().fg(task_color)),
+        Span::styled(task_icon, Style::default().fg(icon_color)),
         Span::raw(" "),
         Span::styled(
             agent_badge,
@@ -808,6 +809,6 @@ fn render_nested_internal(
                 .fg(agent_color)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(title_display, Style::default().fg(task_color)),
+        Span::styled(title_display, Style::default().fg(text_color)),
     ]));
 }
