@@ -22,6 +22,7 @@ imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
 - `🐝 name ⏸ (5/10)` - In progress, paused (light gray) - process not running
 - `🐝 name ✓ (10/10)` - Completed (yellow + green check)
 - `🐝 name ✗ (5/10)` - Error (yellow + red cross)
+- `🐝 name ⏹ (5/10)` - Stopped/zombie (light gray)
 
 ## Instructions
 
@@ -50,36 +51,58 @@ The statusline is configured in `settings.json` under:
 The drone line logic should:
 
 1. Get hive version: `hive version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'`
-2. Scan for drone directories: `${HIVE_WORKTREE_BASE:-$HOME/Projects}/${project_name}-*/`
-3. Read status from `drone-status.json` or `ralph-status.json`
-4. Build the drone line with crown + version + drones
-5. Only show line 2 if there are active drones AND hive is installed
+2. Find the current project's `.hive` directory
+3. Read status from `.hive/drones/*/status.json` files
+4. Check PID files at `.hive/drones/{name}/.pid`
+5. Build the drone line with crown + version + drones
+6. Only show line 2 if there are active drones AND hive is installed
 
 Key code for drone display:
 ```bash
-# Check if process is running
-pid_file="${drone_dir}.pid"
-is_running="no"
-if [ -f "$pid_file" ]; then
-  pid=$(cat "$pid_file" 2>/dev/null)
-  ps -p "$pid" >/dev/null 2>&1 && is_running="yes"
-fi
+# Find .hive directory in project
+hive_dir="$CLAUDE_PROJECT_DIR/.hive"
 
-# For each drone, format based on status:
-if [ "$d_status" = "in_progress" ] || [ "$d_status" = "starting" ]; then
-  if [ "$is_running" = "yes" ]; then
-    # 🐝 name (done/total) - yellow (running)
-    drone_line="${drone_line}$(printf \"\\033[33m🐝 %s (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
-  else
-    # 🐝 name ⏸ (done/total) - light gray (paused)
-    drone_line="${drone_line}$(printf \"\\033[37m🐝 %s ⏸ (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
-  fi
-elif [ "$d_status" = "completed" ]; then
-  # 🐝 name ✓ (done/total) - yellow with green check
-  drone_line="${drone_line}$(printf \"\\033[33m🐝 %s \\033[92m✓\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
-elif [ "$d_status" = "error" ]; then
-  # 🐝 name ✗ (done/total) - yellow with red cross
-  drone_line="${drone_line}$(printf \"\\033[33m🐝 %s \\033[91m✗\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+if [ -d "$hive_dir/drones" ]; then
+  for status_file in "$hive_dir"/drones/*/status.json; do
+    [ -f "$status_file" ] || continue
+
+    drone_dir="$(dirname "$status_file")"
+    d_name=$(jq -r '.drone' "$status_file" 2>/dev/null)
+    d_status=$(jq -r '.status' "$status_file" 2>/dev/null)
+    d_done=$(jq '.completed | length' "$status_file" 2>/dev/null)
+    d_total=$(jq -r '.total' "$status_file" 2>/dev/null)
+
+    # Check if process is running
+    pid_file="$drone_dir/.pid"
+    is_running="no"
+    if [ -f "$pid_file" ]; then
+      pid=$(cat "$pid_file" 2>/dev/null)
+      ps -p "$pid" >/dev/null 2>&1 && is_running="yes"
+    fi
+
+    # Format based on status and PID state
+    if [ "$d_status" = "in_progress" ] || [ "$d_status" = "starting" ] || [ "$d_status" = "resuming" ]; then
+      if [ "$is_running" = "yes" ]; then
+        # 🐝 name (done/total) - yellow (running)
+        drone_line="${drone_line}$(printf \"\\033[33m🐝 %s (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+      else
+        # 🐝 name ⏸ (done/total) - light gray (paused)
+        drone_line="${drone_line}$(printf \"\\033[37m🐝 %s ⏸ (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+      fi
+    elif [ "$d_status" = "completed" ]; then
+      # 🐝 name ✓ (done/total) - yellow with green check
+      drone_line="${drone_line}$(printf \"\\033[33m🐝 %s \\033[92m✓\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+    elif [ "$d_status" = "error" ]; then
+      # 🐝 name ✗ (done/total) - yellow with red cross
+      drone_line="${drone_line}$(printf \"\\033[33m🐝 %s \\033[91m✗\\033[0m \\033[90m(%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+    elif [ "$d_status" = "stopped" ] || [ "$d_status" = "zombie" ]; then
+      # 🐝 name ⏹ (done/total) - light gray (stopped)
+      drone_line="${drone_line}$(printf \"\\033[37m🐝 %s ⏹ (%s/%s)\\033[0m\" \"$d_name\" \"$d_done\" \"$d_total\")"
+    fi
+
+    # Add separator if not first drone
+    [ -n "$drone_line" ] && drone_line="${drone_line}${sep2}"
+  done
 fi
 ```
 
@@ -103,8 +126,9 @@ imanisa-finance │ main │ Opus 4.5 │ 45% │ ⬢ 22
 
 ## Notes
 
-- Drones are detected by looking for `{project}-{drone}/drone-status.json` in `${HIVE_WORKTREE_BASE:-$HOME/Projects}/`
-- Also supports legacy `ralph-status.json` files
+- Drones are detected from `.hive/drones/*/status.json` in the current project directory
+- Status fields: `.drone` (name), `.status` (state), `.completed` (array of done tasks), `.total` (total count)
+- PID files are at `.hive/drones/{name}/.pid` (not in worktree directories)
 - The statusline refreshes on each user message
 - Line 2 only appears if both hive is installed AND drones exist
 
