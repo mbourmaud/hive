@@ -41,8 +41,6 @@ pub(crate) struct TuiState {
     pub cost_refresh_counter: u32,
     pub merge_check_counter: u32,
     pub pr_completion_check_counter: u32,
-    /// Tracks when we first saw a task as in_progress: (drone_name, task_id) -> Instant
-    pub task_start_times: HashMap<(String, String), Instant>,
     /// Tracks when we first detected a zombie drone
     pub zombie_first_seen: HashMap<String, Instant>,
     // Computed per-tick
@@ -87,7 +85,6 @@ impl TuiState {
             cost_refresh_counter: 0,
             merge_check_counter: 0,
             pr_completion_check_counter: 0,
-            task_start_times: HashMap::new(),
             zombie_first_seen: HashMap::new(),
             drones: Vec::new(),
             display_order: Vec::new(),

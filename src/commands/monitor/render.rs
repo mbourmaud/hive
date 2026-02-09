@@ -7,7 +7,6 @@ use ratatui::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Instant;
 
 use crate::agent_teams::task_sync;
 use crate::commands::common::{
@@ -489,7 +488,7 @@ impl TuiState {
                 let (task_icon, task_color) = if task.status == "completed" {
                     ("●", Color::Green)
                 } else if task.status == "in_progress" {
-                    ("◐", Color::DarkGray)
+                    ("◐", Color::Yellow)
                 } else {
                     ("○", Color::DarkGray)
                 };
@@ -523,9 +522,13 @@ impl TuiState {
                         })
                         .filter(|s| !s.is_empty())
                         .unwrap_or_else(|| task.subject.clone());
+                    // Strip markdown header prefixes (e.g. "## Title" → "Title")
+                    let task_line = task_line.trim_start_matches('#').trim().to_string();
                     (task_line, Some(task.subject.clone()))
                 } else {
-                    (task.subject.clone(), task.owner.clone())
+                    // Strip markdown header prefixes
+                    let subj = task.subject.trim_start_matches('#').trim().to_string();
+                    (subj, task.owner.clone())
                 };
 
                 let agent_badge_with_color = agent_name.map(|a| {
@@ -543,28 +546,7 @@ impl TuiState {
                     .map(|f| format!(" ({})", f))
                     .unwrap_or_default();
 
-                // Track and display elapsed time for in_progress tasks
-                let task_key = (name.to_string(), task.id.clone());
-                if task.status == "in_progress" {
-                    self.task_start_times
-                        .entry(task_key.clone())
-                        .or_insert_with(Instant::now);
-                }
-                let elapsed_str = if task.status == "in_progress" {
-                    self.task_start_times
-                        .get(&task_key)
-                        .map(|start| {
-                            let secs = start.elapsed().as_secs();
-                            if secs < 60 {
-                                format!(" {}s", secs)
-                            } else {
-                                format!(" {}m{}s", secs / 60, secs % 60)
-                            }
-                        })
-                        .unwrap_or_default()
-                } else {
-                    String::new()
-                };
+                let elapsed_str = String::new();
 
                 let task_prefix_len = 8;
                 let badge_len = agent_badge_with_color
