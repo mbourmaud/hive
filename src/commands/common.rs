@@ -220,6 +220,17 @@ pub fn is_pr_merged(branch: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Check if a PR exists and is open for the given branch.
+pub fn is_pr_open(branch: &str) -> bool {
+    std::process::Command::new("gh")
+        .args(["pr", "view", branch, "--json", "state", "-q", ".state"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim() == "OPEN")
+        .unwrap_or(false)
+}
+
 // ============================================================================
 // Drone Listing
 // ============================================================================

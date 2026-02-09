@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::commands::common::{
-    elapsed_since, is_pr_merged, is_process_running, list_drones, load_prd, parse_timestamp,
-    read_drone_pid, reconcile_progress, reconcile_progress_with_prd,
+    elapsed_since, is_pr_merged, is_pr_open, is_process_running, list_drones, load_prd,
+    parse_timestamp, read_drone_pid, reconcile_progress, reconcile_progress_with_prd,
     DEFAULT_INACTIVE_THRESHOLD_SECS,
 };
 use crate::events::{EventReader, HiveEvent};
@@ -39,6 +39,7 @@ pub(crate) struct TuiState {
     pub cost_cache: HashMap<String, CostSummary>,
     pub cost_refresh_counter: u32,
     pub merge_check_counter: u32,
+    pub pr_completion_check_counter: u32,
     /// Tracks when we first saw a task as in_progress: (drone_name, task_id) -> Instant
     pub task_start_times: HashMap<(String, String), Instant>,
     /// Tracks when we first detected a zombie drone
@@ -83,6 +84,7 @@ impl TuiState {
             cost_cache: HashMap::new(),
             cost_refresh_counter: 0,
             merge_check_counter: 0,
+            pr_completion_check_counter: 0,
             task_start_times: HashMap::new(),
             zombie_first_seen: HashMap::new(),
             drones: Vec::new(),
@@ -200,6 +202,102 @@ impl TuiState {
                 .iter()
                 .any(|(n, s)| n == name && s.status == DroneState::Zombie)
         });
+
+        // Completion marker detection: check for .hive_complete file
+        for (name, status) in &mut self.drones {
+            if matches!(
+                status.status,
+                DroneState::InProgress | DroneState::Starting | DroneState::Resuming
+            ) {
+                let marker = PathBuf::from(&status.worktree).join(".hive_complete");
+                if marker.exists() {
+                    // Mark as completed
+                    status.status = DroneState::Completed;
+                    status.updated = Utc::now().to_rfc3339();
+
+                    // Update status.json
+                    let status_path = PathBuf::from(".hive/drones")
+                        .join(&**name)
+                        .join("status.json");
+                    let _ = fs::write(
+                        &status_path,
+                        serde_json::to_string_pretty(&*status).unwrap_or_default(),
+                    );
+
+                    // Kill the process
+                    let _ = crate::commands::kill_clean::kill_quiet(name.to_string());
+
+                    // Clean up marker
+                    let _ = fs::remove_file(&marker);
+
+                    // Notification
+                    notification::notify(&format!("Hive - {}", name), "Drone completed!");
+                }
+            }
+        }
+
+        // PR-based completion detection (fallback): every ~300 ticks (30 seconds)
+        // Check if InProgress drones have created a PR
+        self.pr_completion_check_counter += 1;
+        if self.pr_completion_check_counter >= 300 {
+            self.pr_completion_check_counter = 0;
+
+            for (name, status) in &mut self.drones {
+                if matches!(status.status, DroneState::InProgress) {
+                    // Check if PR exists and is open
+                    if is_pr_open(&status.branch) {
+                        // Check if all tasks are completed by reading tasks.json
+                        let tasks_path = PathBuf::from(format!(
+                            "{}/.claude/tasks/{}/tasks.json",
+                            std::env::var("HOME").unwrap_or_default(),
+                            name
+                        ));
+
+                        let all_tasks_done = if tasks_path.exists() {
+                            fs::read_to_string(&tasks_path)
+                                .ok()
+                                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                                .and_then(|v| v.get("tasks").and_then(|t| t.as_array()).cloned())
+                                .map(|tasks| {
+                                    tasks.iter().all(|t| {
+                                        t.get("status")
+                                            .and_then(|s| s.as_str())
+                                            .map(|s| s == "completed")
+                                            .unwrap_or(false)
+                                    })
+                                })
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        };
+
+                        if all_tasks_done {
+                            // Mark as completed
+                            status.status = DroneState::Completed;
+                            status.updated = Utc::now().to_rfc3339();
+
+                            // Update status.json
+                            let status_path = PathBuf::from(".hive/drones")
+                                .join(&**name)
+                                .join("status.json");
+                            let _ = fs::write(
+                                &status_path,
+                                serde_json::to_string_pretty(&*status).unwrap_or_default(),
+                            );
+
+                            // Kill the process
+                            let _ = crate::commands::kill_clean::kill_quiet(name.to_string());
+
+                            // Notification
+                            notification::notify(
+                                &format!("Hive - {}", name),
+                                "Drone completed (PR created)!",
+                            );
+                        }
+                    }
+                }
+            }
+        }
 
         // PR merge detection: every ~600 ticks (60 seconds), check completed/stopped drones
         self.merge_check_counter += 1;
