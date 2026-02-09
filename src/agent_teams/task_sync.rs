@@ -106,24 +106,84 @@ pub struct InboxMessage {
 /// Read inbox messages for all team members.
 pub fn read_team_inboxes(team_name: &str) -> Result<HashMap<String, Vec<InboxMessage>>> {
     let inboxes_dir = super::team_dir(team_name).join("inboxes");
-    if !inboxes_dir.exists() {
+
+    // Try reading from live Claude data first
+    if inboxes_dir.exists() {
+        let mut result = HashMap::new();
+        for entry in fs::read_dir(&inboxes_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                let member_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                let contents = fs::read_to_string(&path)?;
+                if let Ok(messages) = serde_json::from_str::<Vec<InboxMessage>>(&contents) {
+                    result.insert(member_name, messages);
+                }
+            }
+        }
+        if !result.is_empty() {
+            return Ok(result);
+        }
+    }
+
+    // Fallback: read from .hive/drones/<name>/messages.ndjson
+    read_persisted_messages_fallback(team_name)
+}
+
+/// Fallback: read messages from .hive/drones/<name>/messages.ndjson
+fn read_persisted_messages_fallback(team_name: &str) -> Result<HashMap<String, Vec<InboxMessage>>> {
+    use std::path::PathBuf;
+
+    let messages_file = PathBuf::from(".hive/drones")
+        .join(team_name)
+        .join("messages.ndjson");
+
+    if !messages_file.exists() {
         return Ok(HashMap::new());
     }
 
-    let mut result = HashMap::new();
-    for entry in fs::read_dir(&inboxes_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("json") {
-            let member_name = path
-                .file_stem()
-                .and_then(|s| s.to_str())
+    let contents = fs::read_to_string(&messages_file)?;
+    let mut result: HashMap<String, Vec<InboxMessage>> = HashMap::new();
+
+    for line in contents.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(msg) = serde_json::from_str::<serde_json::Value>(line) {
+            let from = msg
+                .get("from")
+                .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let contents = fs::read_to_string(&path)?;
-            if let Ok(messages) = serde_json::from_str::<Vec<InboxMessage>>(&contents) {
-                result.insert(member_name, messages);
-            }
+            let to = msg
+                .get("to")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let content = msg
+                .get("content")
+                .and_then(|v| v.as_str())
+                .or_else(|| msg.get("summary").and_then(|v| v.as_str()))
+                .unwrap_or("")
+                .to_string();
+            let timestamp = msg
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let inbox_msg = InboxMessage {
+                from,
+                text: content,
+                timestamp,
+                read: false,
+            };
+
+            result.entry(to).or_default().push(inbox_msg);
         }
     }
 

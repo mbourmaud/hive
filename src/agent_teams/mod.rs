@@ -81,12 +81,71 @@ struct TasksJsonWrapper {
     tasks: Vec<TasksJsonTask>,
 }
 
+/// Fallback: read tasks from .hive/drones/<name>/tasks.json if Claude data is gone
+fn read_persisted_tasks_fallback(team_name: &str) -> Result<Vec<AgentTeamTask>> {
+    let tasks_file = PathBuf::from(".hive/drones")
+        .join(team_name)
+        .join("tasks.json");
+
+    if !tasks_file.exists() {
+        return Ok(Vec::new());
+    }
+
+    let contents = fs::read_to_string(&tasks_file)?;
+    let tasks_array: Vec<serde_json::Value> = serde_json::from_str(&contents)?;
+
+    let mut result = Vec::new();
+    for t in tasks_array {
+        let id = t
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let title = t
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let description = t
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let status = t
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("pending")
+            .to_string();
+        let owner = t
+            .get("owner")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        result.push(AgentTeamTask {
+            id,
+            subject: title,
+            description,
+            status,
+            owner,
+            active_form: None,
+            blocked_by: Vec::new(),
+            blocks: Vec::new(),
+            metadata: None,
+            created_at: None,
+            updated_at: None,
+        });
+    }
+
+    Ok(result)
+}
+
 /// Read the Agent Teams task list for a team.
 pub fn read_task_list(team_name: &str) -> Result<Vec<AgentTeamTask>> {
     let tasks_dir = team_tasks_dir(team_name);
 
+    // Fallback: if ~/.claude/tasks/<team_name> doesn't exist, try .hive/drones/<name>/tasks.json
     if !tasks_dir.exists() {
-        return Ok(Vec::new());
+        return read_persisted_tasks_fallback(team_name);
     }
 
     let mut tasks = Vec::new();
@@ -181,6 +240,11 @@ pub fn read_task_list(team_name: &str) -> Result<Vec<AgentTeamTask>> {
                 }
             }
         }
+    }
+
+    // If no tasks found in Claude directory, try fallback
+    if tasks.is_empty() {
+        return read_persisted_tasks_fallback(team_name);
     }
 
     Ok(tasks)
