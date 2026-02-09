@@ -72,7 +72,13 @@ fn parse_message_text(raw: &str) -> String {
 }
 
 /// Render the fullscreen chat-style messages view for a specific drone
-pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, scroll: usize) {
+/// Returns (message_count, message_line_starts)
+pub(crate) fn render_messages_view(
+    f: &mut Frame,
+    area: Rect,
+    drone_name: &str,
+    selected_index: usize,
+) -> (usize, Vec<usize>) {
     // Layout: header + content + footer
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -141,6 +147,7 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
 
     // Build display lines — chat bubble style
     let mut lines: Vec<Line> = Vec::new();
+    let mut message_line_starts: Vec<usize> = Vec::new();
     let max_width = area.width.saturating_sub(10) as usize;
 
     if messages.is_empty() {
@@ -153,11 +160,16 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
 
     let mut last_from: Option<String> = None;
 
-    for msg in &messages {
+    for (msg_idx, msg) in messages.iter().enumerate() {
+        // Record the line index where this message starts
+        message_line_starts.push(lines.len());
         let from_color = agent_index
             .get(&msg.from)
             .map(|&idx| agent_color(idx))
             .unwrap_or(Color::Cyan);
+
+        // Check if this message is selected (not in auto-scroll mode)
+        let is_selected = selected_index != usize::MAX && msg_idx == selected_index;
 
         let time_str = if msg.timestamp.len() >= 19 {
             &msg.timestamp[11..16] // HH:MM only
@@ -175,8 +187,19 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
 
             let lead_badge = if msg.is_lead { " 👑" } else { "" };
 
+            let left_marker = if is_selected {
+                Span::styled(
+                    "▶ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("  ")
+            };
+
             lines.push(Line::from(vec![
-                Span::raw("  "),
+                left_marker.clone(),
                 Span::styled(
                     format!("{}{}", msg.from, lead_badge),
                     Style::default().fg(from_color).add_modifier(Modifier::BOLD),
@@ -192,8 +215,19 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
             ]));
         } else {
             // Same sender, just show timestamp hint for context
+            let left_marker = if is_selected {
+                Span::styled(
+                    "▶ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("  ")
+            };
+
             lines.push(Line::from(vec![
-                Span::raw("  "),
+                left_marker,
                 Span::styled(
                     format!("→ {}  {}", msg.to, time_str),
                     Style::default().fg(Color::DarkGray),
@@ -221,8 +255,19 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
                 (&remaining[..break_at], remaining[break_at..].trim_start())
             };
 
+            let left_marker = if is_selected {
+                Span::styled(
+                    "▶ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("  ")
+            };
+
             lines.push(Line::from(vec![
-                Span::raw("  "),
+                left_marker,
                 Span::styled("│ ", Style::default().fg(from_color)),
                 Span::styled(chunk, Style::default().fg(Color::White)),
             ]));
@@ -232,14 +277,22 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
         last_from = Some(msg.from.clone());
     }
 
-    // Scrolling — auto-scroll to bottom by default
+    // Scrolling — convert selected_index to scroll position
     let content_height = chunks[1].height as usize;
     let total_lines = lines.len();
     let auto_scroll = total_lines.saturating_sub(content_height);
-    let effective_scroll = if scroll == 0 {
+
+    let effective_scroll = if selected_index == usize::MAX {
+        // Auto-scroll mode: scroll to bottom
         auto_scroll
+    } else if selected_index < message_line_starts.len() {
+        // Manual mode: show selected message at ~1/3 from top
+        let selected_line = message_line_starts[selected_index];
+        let target_offset = content_height / 3;
+        selected_line.saturating_sub(target_offset).min(auto_scroll)
     } else {
-        scroll.min(auto_scroll)
+        // Invalid index: fall back to auto-scroll
+        auto_scroll
     };
 
     let visible_lines: Vec<Line> = lines
@@ -273,8 +326,10 @@ pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, 
 
     // Footer
     let footer = Paragraph::new(Line::from(vec![Span::styled(
-        " ↑↓ scroll  q back",
+        " ↑↓ navigate  g/G first/last  q back",
         Style::default().fg(Color::DarkGray),
     )]));
     f.render_widget(footer, chunks[2]);
+
+    (messages.len(), message_line_starts)
 }
