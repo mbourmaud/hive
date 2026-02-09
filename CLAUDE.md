@@ -8,7 +8,7 @@ Rust CLI for orchestrating multiple Claude Code instances (drones) via git workt
 
 ```bash
 hive init                              # Initialize Hive in current repo
-hive start --prd <file>                # Launch a drone with a PRD
+hive start <name>                      # Launch a drone with a plan
 hive monitor                           # TUI dashboard for all drones
 hive logs <name>                       # View drone activity log
 hive stop <name>                       # Stop a running drone
@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/mbourmaud/hive/main/install.sh | ba
 ```
 .hive/              # Created by 'hive init'
   config.json       # Configuration
-  prds/             # PRD files
+  plans/            # Plan files
   drones/           # Drone status and logs
     <name>/
       status.json   # Real-time progress
