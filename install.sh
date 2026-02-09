@@ -29,7 +29,7 @@ fi
 
 REPO="mbourmaud/hive"
 # This version is automatically updated by CI when a release is fully built
-STABLE_VERSION="3.1.5"
+STABLE_VERSION="3.2.0"
 
 echo ""
 echo -e "${YELLOW}"

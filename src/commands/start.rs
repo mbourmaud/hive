@@ -321,6 +321,11 @@ fn load_prd(path: &PathBuf) -> Result<Plan> {
         bail!("Plan field cannot be empty");
     }
 
+    // Validate that tasks array is non-empty
+    if prd.tasks.is_empty() {
+        bail!("Plan must include at least one task in the 'tasks' array. Recreate the plan with /hive:plan");
+    }
+
     Ok(prd)
 }
 

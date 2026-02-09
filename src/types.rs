@@ -2,6 +2,16 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// A task from the plan, pre-seeded into Claude's task list at drone startup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanTask {
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub files: Vec<String>,
+}
+
 /// Plan (formerly PRD) structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Plan {
@@ -23,6 +33,10 @@ pub struct Plan {
     /// Freeform markdown plan — sent directly to the team lead
     #[serde(default)]
     pub plan: String,
+    /// Structured tasks — pre-seeded into ~/.claude/tasks/<drone>/ at startup.
+    /// Required: plans without tasks will fail validation.
+    #[serde(default)]
+    pub tasks: Vec<PlanTask>,
 }
 
 /// Drone execution status
@@ -169,16 +183,41 @@ mod tests {
             "version": "1.0.0",
             "target_branch": "feature/my-feature",
             "base_branch": "main",
-            "plan": "## Goal\nBuild X\n\n## Requirements\n- Thing A"
+            "plan": "## Goal\nBuild X\n\n## Requirements\n- Thing A",
+            "tasks": [
+                {"title": "Task A", "description": "Do A"},
+                {"title": "Task B", "description": "Do B"}
+            ]
         }"###;
 
         let prd: Plan = serde_json::from_str(json).unwrap();
         assert_eq!(prd.id, "my-feature");
         assert_eq!(prd.plan, "## Goal\nBuild X\n\n## Requirements\n- Thing A");
+        assert_eq!(prd.tasks.len(), 2);
+        assert_eq!(prd.tasks[0].title, "Task A");
+        assert_eq!(prd.tasks[1].description, "Do B");
+    }
+
+    #[test]
+    fn test_parse_plan_with_tasks_and_files() {
+        let json = r#"{
+            "id": "refactor",
+            "title": "Refactor",
+            "plan": "Refactor the thing",
+            "tasks": [
+                {"title": "Update module", "description": "Rewrite mod.rs", "files": ["src/mod.rs"]}
+            ]
+        }"#;
+
+        let prd: Plan = serde_json::from_str(json).unwrap();
+        assert_eq!(prd.tasks.len(), 1);
+        assert_eq!(prd.tasks[0].files, vec!["src/mod.rs"]);
     }
 
     #[test]
     fn test_parse_minimal_prd() {
+        // Plans without tasks still deserialize (tasks defaults to empty vec),
+        // but will fail validation at `hive start` time.
         let json = r#"{
             "id": "minimal",
             "title": "Minimal PRD",
@@ -188,6 +227,7 @@ mod tests {
         let prd: Plan = serde_json::from_str(json).unwrap();
         assert_eq!(prd.id, "minimal");
         assert_eq!(prd.plan, "Do the thing");
+        assert!(prd.tasks.is_empty());
     }
 
     #[test]

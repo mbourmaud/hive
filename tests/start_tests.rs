@@ -79,7 +79,8 @@ fn setup_test_env(test_name: &str) -> PathBuf {
         \"description\": \"A test PRD\",
         \"version\": \"1.0.0\",
         \"created_at\": \"2024-01-01T00:00:00Z\",
-        \"plan\": \"# Test Plan\\n\\nThis is a test plan for the test drone.\"
+        \"plan\": \"# Test Plan\\n\\nThis is a test plan for the test drone.\",
+        \"tasks\": [{\"title\": \"Test task\", \"description\": \"A test task\"}]
     }";
 
     fs::write(temp_dir.join(".hive/prds/prd-test-drone.json"), prd).unwrap();

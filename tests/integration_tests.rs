@@ -1,4 +1,6 @@
-use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, HiveConfig, Plan, StoryTiming};
+use hive_lib::types::{
+    DroneState, DroneStatus, ExecutionMode, HiveConfig, Plan, PlanTask, StoryTiming,
+};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,6 +28,11 @@ fn create_test_prd(prds_dir: &Path, prd_name: &str) {
         target_branch: Some("main".to_string()),
         base_branch: None,
         plan: "# Test Plan\n\nThis is a test plan.".to_string(),
+        tasks: vec![PlanTask {
+            title: "Test task".to_string(),
+            description: "A test task".to_string(),
+            files: vec![],
+        }],
     };
 
     let prd_path = prds_dir.join(format!("{}.json", prd_name));

@@ -68,7 +68,19 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
         let contents = fs::read_to_string(&config.prd_path)?;
         serde_json::from_str(&contents).context("Failed to parse plan file")?
     };
+
+    // Pre-seed tasks from plan into Claude's task directory
+    agent_teams::seed_tasks(&config.drone_name, &prd.tasks)?;
+
     let prd_text = agent_teams::format_plan_for_prompt(&prd);
+    let task_instruction = if prd.tasks.is_empty() {
+        "- Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items.".to_string()
+    } else {
+        format!(
+            "- {} tasks have been pre-seeded in the task list. Review them with TaskList, then assign and execute. You may add more tasks if you discover additional work.",
+            prd.tasks.len()
+        )
+    };
 
     let prompt = format!(
         r#"You are coordinating work on this project.
@@ -82,7 +94,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 ## Instructions
 - Create an agent team named "{drone_name}" to implement this plan
 - Use delegate mode — coordinate only, do not write code yourself
-- IMPORTANT: Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items. Each task should be a meaningful unit of work (e.g. "Simplify PRD types", "Update TUI render", "Fix tests"). This allows progress monitoring.
+{task_instruction}
 - Use sonnet for teammates by default, haiku for simple tasks
 - Maximum {max_agents} concurrent teammates
 - When all tasks are done, create a PR via `gh pr create` and verify CI passes
@@ -103,6 +115,7 @@ content: HIVE_COMPLETE
         prd_text = prd_text,
         worktree_path = config.worktree_path.display(),
         drone_name = config.drone_name,
+        task_instruction = task_instruction,
         max_agents = config.max_agents,
     );
 
