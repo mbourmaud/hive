@@ -9,7 +9,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[command(version = VERSION)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -126,95 +126,104 @@ fn main() {
     commands::utils::check_for_updates_background();
 
     match cli.command {
-        Commands::Init => {
-            if let Err(e) = commands::init::run() {
+        None => {
+            // Default: launch chat TUI
+            if let Err(e) = hive_lib::chat::run_chat() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        Commands::Start {
-            name,
-            local,
-            model,
-            max_agents,
-            dry_run,
-        } => {
-            if let Err(e) = commands::start::run(name, local, model, max_agents, dry_run) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+        Some(command) => match command {
+            Commands::Init => {
+                if let Err(e) = commands::init::run() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Monitor { name } => {
-            if let Err(e) = commands::monitor::run_monitor(name) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::Start {
+                name,
+                local,
+                model,
+                max_agents,
+                dry_run,
+            } => {
+                if let Err(e) = commands::start::run(name, local, model, max_agents, dry_run) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Logs {
-            name,
-            lines,
-            follow,
-        } => {
-            if let Err(e) = commands::logs::run(name, lines, follow) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::Monitor { name } => {
+                if let Err(e) = commands::monitor::run_monitor(name) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Stop { name } => {
-            if let Err(e) = commands::kill_clean::kill(name) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::Logs {
+                name,
+                lines,
+                follow,
+            } => {
+                if let Err(e) = commands::logs::run(name, lines, follow) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Clean { name, force } => {
-            if let Err(e) = commands::kill_clean::clean(name, force) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::Stop { name } => {
+                if let Err(e) = commands::kill_clean::kill(name) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::List => {
-            if let Err(e) = commands::utils::list() {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::Clean { name, force } => {
+                if let Err(e) = commands::kill_clean::clean(name, force) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Version => {
-            println!("🐝 Hive v{}", VERSION);
-            println!("Drone orchestration for Claude Code");
-        }
-        Commands::Update => {
-            if let Err(e) = commands::utils::update() {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::List => {
+                if let Err(e) = commands::utils::list() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Profile { command } => {
-            let result = match command {
-                ProfileCommands::List => commands::profile::list(),
-                ProfileCommands::Create { name } => commands::profile::create(name),
-                ProfileCommands::Use { name } => commands::profile::use_profile(name),
-                ProfileCommands::Delete { name } => commands::profile::delete(name),
-            };
+            Commands::Version => {
+                println!("🐝 Hive v{}", VERSION);
+                println!("Drone orchestration for Claude Code");
+            }
+            Commands::Update => {
+                if let Err(e) = commands::utils::update() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            Commands::Profile { command } => {
+                let result = match command {
+                    ProfileCommands::List => commands::profile::list(),
+                    ProfileCommands::Create { name } => commands::profile::create(name),
+                    ProfileCommands::Use { name } => commands::profile::use_profile(name),
+                    ProfileCommands::Delete { name } => commands::profile::delete(name),
+                };
 
-            if let Err(e) = result {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+                if let Err(e) = result {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::Install {
-            skills_only,
-            bin_only,
-        } => {
-            if let Err(e) = commands::install::run(skills_only, bin_only) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+            Commands::Install {
+                skills_only,
+                bin_only,
+            } => {
+                if let Err(e) = commands::install::run(skills_only, bin_only) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
-        Commands::McpServer => {
-            if let Err(e) = hive_lib::mcp::run_server() {
-                eprintln!("MCP Server error: {}", e);
-                std::process::exit(1);
+            Commands::McpServer => {
+                if let Err(e) = hive_lib::mcp::run_server() {
+                    eprintln!("MCP Server error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        }
+        },
     }
 }
