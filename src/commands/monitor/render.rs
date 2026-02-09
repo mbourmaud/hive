@@ -43,7 +43,8 @@ impl TuiState {
 
         // Messages view (toggle with 'm')
         if let Some(ref drone_name) = self.messages_view {
-            render_messages_view(f, area, drone_name, self.messages_scroll);
+            let (_message_count, _message_line_starts) =
+                render_messages_view(f, area, drone_name, self.messages_selected_index);
             return;
         }
 

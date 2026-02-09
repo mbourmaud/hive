@@ -34,22 +34,46 @@ impl TuiState {
                 if self.messages_view.is_some() {
                     self.messages_view = None;
                     self.messages_scroll = 0;
+                    self.messages_selected_index = usize::MAX;
                 } else {
                     return Ok(KeyAction::Break);
                 }
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if self.messages_view.is_some() {
-                    self.messages_scroll += 1;
+                    // Switch from auto-scroll (usize::MAX) to manual mode
+                    if self.messages_selected_index == usize::MAX {
+                        self.messages_selected_index = 0;
+                    } else {
+                        self.messages_selected_index += 1;
+                    }
                 } else if !self.drones.is_empty() && self.selected_index < self.drones.len() - 1 {
                     self.selected_index += 1;
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 if self.messages_view.is_some() {
-                    self.messages_scroll = self.messages_scroll.saturating_sub(1);
+                    // Switch from auto-scroll (usize::MAX) to manual mode
+                    if self.messages_selected_index == usize::MAX {
+                        self.messages_selected_index = 0;
+                    } else {
+                        self.messages_selected_index =
+                            self.messages_selected_index.saturating_sub(1);
+                    }
                 } else {
                     self.selected_index = self.selected_index.saturating_sub(1);
+                }
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                if self.messages_view.is_some() {
+                    // Jump to first message
+                    self.messages_selected_index = 0;
+                }
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                if self.messages_view.is_some() {
+                    // Jump to last message / auto-scroll mode
+                    self.messages_selected_index = usize::MAX;
                 }
             }
             KeyCode::Enter | KeyCode::Right => {
@@ -84,6 +108,7 @@ impl TuiState {
                     let drone_name = self.drones[current_drone_idx].0.clone();
                     self.messages_view = Some(drone_name);
                     self.messages_scroll = 0;
+                    self.messages_selected_index = usize::MAX; // Start in auto-scroll mode
                 }
             }
             KeyCode::Char('x') | KeyCode::Char('X') => {

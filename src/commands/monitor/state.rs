@@ -27,6 +27,7 @@ pub(crate) struct TuiState {
     // Views
     pub messages_view: Option<String>,
     pub messages_scroll: usize,
+    pub messages_selected_index: usize,
     pub expanded_drones: HashSet<String>,
     // Tracking
     pub _auto_resumed_drones: HashSet<String>,
@@ -74,6 +75,7 @@ impl TuiState {
             message_color: Color::Green,
             messages_view: None,
             messages_scroll: 0,
+            messages_selected_index: usize::MAX,
             expanded_drones,
             _auto_resumed_drones: HashSet::new(),
             auto_stopped_drones: HashSet::new(),
