@@ -8,7 +8,8 @@ use std::time::Instant;
 
 use crate::commands::common::{
     elapsed_since, is_pr_merged, is_process_running, list_drones, load_prd, parse_timestamp,
-    read_drone_pid, reconcile_progress_with_prd, DEFAULT_INACTIVE_THRESHOLD_SECS,
+    read_drone_pid, reconcile_progress, reconcile_progress_with_prd,
+    DEFAULT_INACTIVE_THRESHOLD_SECS,
 };
 use crate::events::{EventReader, HiveEvent};
 use crate::notification;
@@ -95,21 +96,22 @@ impl TuiState {
 
         // Desktop notifications for state changes
         for (name, status) in &self.drones {
-            let completed_count = status.completed.len();
+            // Get live progress from ~/.claude/tasks/<drone>/ instead of stale status.json
+            let (completed_count, total_count) = reconcile_progress(status);
             let prev_count = self.last_completed_counts.get(name).copied().unwrap_or(0);
             let prev_state = self.last_drone_states.get(name).cloned();
 
             // Task completed
             if completed_count > prev_count && prev_count > 0 {
-                if completed_count >= status.total && status.total > 0 {
+                if completed_count >= total_count && total_count > 0 {
                     notification::notify(
                         &format!("Hive - {}", name),
-                        &format!("Done! {}/{} tasks", completed_count, status.total),
+                        &format!("Done! {}/{} tasks", completed_count, total_count),
                     );
                 } else {
                     notification::notify(
                         &format!("Hive - {}", name),
-                        &format!("Task completed ({}/{})", completed_count, status.total),
+                        &format!("Task completed ({}/{})", completed_count, total_count),
                     );
                 }
             }
