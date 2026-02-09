@@ -46,7 +46,7 @@ fn create_mock_drone(
     status: DroneState,
     completed: Vec<&str>,
     total: usize,
-    current_story: Option<&str>,
+    current_task: Option<&str>,
 ) -> (String, DroneStatus) {
     (
         name.to_string(),
@@ -59,14 +59,14 @@ fn create_mock_drone(
             execution_mode: ExecutionMode::AgentTeam,
             backend: "agent_team".to_string(),
             status,
-            current_story: current_story.map(String::from),
+            current_task: current_task.map(String::from),
             completed: completed.iter().map(|s| s.to_string()).collect(),
             story_times: HashMap::new(),
             total,
             started: "2024-01-01T00:00:00Z".to_string(),
             updated: "2024-01-01T00:00:00Z".to_string(),
             error_count: 0,
-            last_error_story: None,
+            last_error: None,
             active_agents: HashMap::new(),
         },
     )
@@ -114,7 +114,9 @@ fn tui_status_dashboard_single_drone() {
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
-                    DroneState::Stopped | DroneState::Cleaning | DroneState::Zombie => Color::DarkGray,
+                    DroneState::Stopped | DroneState::Cleaning | DroneState::Zombie => {
+                        Color::DarkGray
+                    }
                 };
 
                 let progress = if status.total > 0 {
@@ -222,7 +224,9 @@ fn tui_status_dashboard_multiple_drones() {
                     DroneState::InProgress => Color::Green,
                     DroneState::Completed => Color::Green,
                     DroneState::Error => Color::Red,
-                    DroneState::Stopped | DroneState::Cleaning | DroneState::Zombie => Color::DarkGray,
+                    DroneState::Stopped | DroneState::Cleaning | DroneState::Zombie => {
+                        Color::DarkGray
+                    }
                 };
 
                 let progress = if status.total > 0 {
@@ -326,7 +330,7 @@ fn tui_drone_detail_view() {
         f.render_widget(status_widget, chunks[1]);
 
         // Current story
-        let current_text = if let Some(ref story) = drone.1.current_story {
+        let current_text = if let Some(ref story) = drone.1.current_task {
             format!("Working on: {}", story)
         } else {
             "No story in progress".to_string()

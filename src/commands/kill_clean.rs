@@ -44,13 +44,21 @@ fn kill_impl(name: String, quiet: bool) -> Result<()> {
         bail!("No status file found for drone '{}'", name);
     };
 
-    // Update status.json BEFORE stopping the process.
-    // Claude's graceful shutdown can delete the drone directory (via .hive symlink),
-    // so we must persist the "stopped" state first.
+    // Persist progress from events.ndjson before stopping
     {
+        let (completed, total) = crate::events::reconstruct_progress(&name);
         let mut updated_status = status.clone();
         updated_status.status = DroneState::Stopped;
         updated_status.updated = Utc::now().to_rfc3339();
+        if total > 0 {
+            updated_status.total = total;
+            updated_status.completed.truncate(completed);
+            while updated_status.completed.len() < completed {
+                updated_status
+                    .completed
+                    .push(format!("task-{}", updated_status.completed.len() + 1));
+            }
+        }
         let _ = fs::write(&status_path, serde_json::to_string_pretty(&updated_status)?);
     }
 
@@ -103,7 +111,9 @@ pub fn clean_quiet(name: String) -> Result<()> {
 /// Sets drone status to "cleaning" so the TUI can show it.
 pub fn clean_background(name: String) {
     // Mark as "cleaning" in status.json before background thread starts
-    let status_path = PathBuf::from(".hive/drones").join(&name).join("status.json");
+    let status_path = PathBuf::from(".hive/drones")
+        .join(&name)
+        .join("status.json");
     if let Ok(contents) = fs::read_to_string(&status_path) {
         if let Ok(mut status) = serde_json::from_str::<DroneStatus>(&contents) {
             status.status = crate::types::DroneState::Cleaning;
@@ -158,7 +168,7 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
             let _ = backend.stop(&handle);
         } else {
             bail!(
-                "Drone '{}' is still running. Stop it first with 'hive kill {}'",
+                "Drone '{}' is still running. Stop it first with 'hive stop {}'",
                 name,
                 name
             );
@@ -232,11 +242,7 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
     // Clean up Agent Teams directories
     if let Err(e) = crate::agent_teams::cleanup_team(&name) {
         if !quiet {
-            println!(
-                "  {} Failed to clean Agent Teams dirs: {}",
-                "⚠".yellow(),
-                e
-            );
+            println!("  {} Failed to clean Agent Teams dirs: {}", "⚠".yellow(), e);
         }
     } else if !quiet {
         println!("  {} Cleaned Agent Teams directories", "✓".green());
@@ -252,4 +258,3 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
 
     Ok(())
 }
-

@@ -12,7 +12,7 @@ use crate::commands::common::{
 };
 use crate::events::{EventReader, HiveEvent};
 use crate::notification;
-use crate::types::{DroneState, DroneStatus, Prd};
+use crate::types::{DroneState, DroneStatus, Plan};
 
 use super::cost::{parse_cost_from_log, CostSummary};
 
@@ -40,10 +40,12 @@ pub(crate) struct TuiState {
     pub merge_check_counter: u32,
     /// Tracks when we first saw a task as in_progress: (drone_name, task_id) -> Instant
     pub task_start_times: HashMap<(String, String), Instant>,
+    /// Tracks when we first detected a zombie drone
+    pub zombie_first_seen: HashMap<String, Instant>,
     // Computed per-tick
     pub drones: Vec<(String, DroneStatus)>,
     pub display_order: Vec<usize>,
-    pub prd_cache: HashMap<String, Prd>,
+    pub prd_cache: HashMap<String, Plan>,
 }
 
 impl TuiState {
@@ -81,6 +83,7 @@ impl TuiState {
             cost_refresh_counter: 0,
             merge_check_counter: 0,
             task_start_times: HashMap::new(),
+            zombie_first_seen: HashMap::new(),
             drones: Vec::new(),
             display_order: Vec::new(),
             prd_cache: HashMap::new(),
@@ -96,17 +99,17 @@ impl TuiState {
             let prev_count = self.last_completed_counts.get(name).copied().unwrap_or(0);
             let prev_state = self.last_drone_states.get(name).cloned();
 
-            // Story completed
+            // Task completed
             if completed_count > prev_count && prev_count > 0 {
                 if completed_count >= status.total && status.total > 0 {
                     notification::notify(
                         &format!("Hive - {}", name),
-                        &format!("Done! {}/{} stories", completed_count, status.total),
+                        &format!("Done! {}/{} tasks", completed_count, status.total),
                     );
                 } else {
                     notification::notify(
                         &format!("Hive - {}", name),
-                        &format!("Story completed ({}/{})", completed_count, status.total),
+                        &format!("Task completed ({}/{})", completed_count, status.total),
                     );
                 }
             }
@@ -116,10 +119,7 @@ impl TuiState {
                 if prev != DroneState::Error && status.status == DroneState::Error {
                     notification::notify(
                         &format!("Hive - {} ERROR", name),
-                        &format!(
-                            "Error in {}",
-                            status.last_error_story.as_deref().unwrap_or("?")
-                        ),
+                        &format!("Error in {}", status.last_error.as_deref().unwrap_or("?")),
                     );
                 }
             }
@@ -162,6 +162,7 @@ impl TuiState {
         }
 
         // Zombie detection: mark drones whose process died but status is still active
+        // Grace period: don't mark as zombie if a Stop event exists (graceful exit)
         for (name, status) in &mut self.drones {
             if matches!(
                 status.status,
@@ -171,9 +172,18 @@ impl TuiState {
                     .map(is_process_running)
                     .unwrap_or(false);
                 if !pid_alive {
-                    status.status = DroneState::Zombie;
-                    let status_path =
-                        PathBuf::from(".hive/drones").join(name).join("status.json");
+                    // Check if there's a Stop event — if so, the drone exited gracefully
+                    if crate::events::has_stop_event(name) {
+                        // Graceful exit — mark as Completed or Stopped, not Zombie
+                        status.status = DroneState::Stopped;
+                    } else {
+                        status.status = DroneState::Zombie;
+                        // Record first-seen timestamp for zombie age display
+                        self.zombie_first_seen
+                            .entry(name.clone())
+                            .or_insert_with(Instant::now);
+                    }
+                    let status_path = PathBuf::from(".hive/drones").join(name).join("status.json");
                     let _ = fs::write(
                         &status_path,
                         serde_json::to_string_pretty(&*status).unwrap_or_default(),
@@ -182,18 +192,12 @@ impl TuiState {
             }
         }
 
-        // Auto-clean zombie drones
-        let zombies: Vec<String> = self
-            .drones
-            .iter()
-            .filter(|(_, s)| s.status == DroneState::Zombie)
-            .map(|(name, _)| name.clone())
-            .collect();
-
-        for name in &zombies {
-            crate::commands::kill_clean::clean_background(name.clone());
-            notification::notify("Hive", &format!("Zombie drone '{}' auto-cleaned", name));
-        }
+        // Clean up zombie_first_seen entries for drones that are no longer zombie
+        self.zombie_first_seen.retain(|name, _| {
+            self.drones
+                .iter()
+                .any(|(n, s)| n == name && s.status == DroneState::Zombie)
+        });
 
         // PR merge detection: every ~600 ticks (60 seconds), check completed/stopped drones
         self.merge_check_counter += 1;
@@ -203,9 +207,7 @@ impl TuiState {
             let merged: Vec<String> = self
                 .drones
                 .iter()
-                .filter(|(_, s)| {
-                    matches!(s.status, DroneState::Completed | DroneState::Stopped)
-                })
+                .filter(|(_, s)| matches!(s.status, DroneState::Completed | DroneState::Stopped))
                 .filter(|(_, s)| is_pr_merged(&s.branch))
                 .map(|(name, _)| name.clone())
                 .collect();
@@ -232,7 +234,7 @@ impl TuiState {
             .drones
             .iter()
             .filter_map(|(_, status)| {
-                let prd_path = PathBuf::from(".hive").join("prds").join(&status.prd);
+                let prd_path = PathBuf::from(".hive").join("plans").join(&status.prd);
                 load_prd(&prd_path).map(|prd| (status.prd.clone(), prd))
             })
             .collect();
@@ -286,19 +288,9 @@ impl TuiState {
         use crate::commands::common::{duration_between, format_duration};
 
         if status.status == DroneState::Completed {
-            let last_completed = status
-                .story_times
-                .values()
-                .filter_map(|t| t.completed.as_ref())
-                .max();
-            if let (Some(last), Some(start)) =
-                (last_completed, parse_timestamp(&status.started))
-            {
-                if let Some(end) = parse_timestamp(last) {
-                    format_duration(end.signed_duration_since(start))
-                } else {
-                    elapsed_since(&status.started).unwrap_or_default()
-                }
+            // Use updated timestamp as completion time
+            if let Some(duration) = duration_between(&status.started, &status.updated) {
+                format_duration(duration)
             } else {
                 elapsed_since(&status.started).unwrap_or_default()
             }

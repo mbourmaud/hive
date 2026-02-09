@@ -17,15 +17,10 @@ enum Commands {
     /// Initialize Hive in the current git repository
     Init,
 
-    /// Launch a drone to work on a PRD autonomously
+    /// Launch a drone to work on a plan autonomously
     Start {
         /// Drone name
         name: String,
-        /// Custom prompt to send to the drone
-        prompt: Option<String>,
-        /// Resume a blocked or stopped drone
-        #[arg(long)]
-        resume: bool,
         /// Run in current directory instead of worktree
         #[arg(long)]
         local: bool,
@@ -53,9 +48,6 @@ enum Commands {
         /// Number of lines to display
         #[arg(long)]
         lines: Option<usize>,
-        /// Show logs for specific story
-        #[arg(long)]
-        story: Option<String>,
         /// Follow mode - continuously tail logs
         #[arg(short, long)]
         follow: bool,
@@ -63,13 +55,6 @@ enum Commands {
 
     /// Stop a running drone
     Stop {
-        /// Drone name
-        name: String,
-    },
-
-    /// [DEPRECATED] Use 'stop' instead
-    #[command(hide = true)]
-    Kill {
         /// Drone name
         name: String,
     },
@@ -96,15 +81,6 @@ enum Commands {
     Profile {
         #[command(subcommand)]
         command: ProfileCommands,
-    },
-
-    /// Browse Claude conversation logs
-    Sessions {
-        /// Drone name
-        name: String,
-        /// Open most recent session directly
-        #[arg(long)]
-        latest: bool,
     },
 
     /// Install Hive binary and skills
@@ -158,22 +134,12 @@ fn main() {
         }
         Commands::Start {
             name,
-            prompt,
-            resume,
             local,
             model,
             max_agents,
             dry_run,
         } => {
-            if let Err(e) = commands::start::run(
-                name,
-                prompt,
-                resume,
-                local,
-                model,
-                max_agents,
-                dry_run,
-            ) {
+            if let Err(e) = commands::start::run(name, local, model, max_agents, dry_run) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -187,22 +153,14 @@ fn main() {
         Commands::Logs {
             name,
             lines,
-            story,
             follow,
         } => {
-            if let Err(e) = commands::logs::run(name, lines, story, follow) {
+            if let Err(e) = commands::logs::run(name, lines, follow) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
         Commands::Stop { name } => {
-            if let Err(e) = commands::kill_clean::kill(name) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Kill { name } => {
-            eprintln!("Warning: 'hive kill' is deprecated. Use 'hive stop' instead.");
             if let Err(e) = commands::kill_clean::kill(name) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -239,12 +197,6 @@ fn main() {
             };
 
             if let Err(e) = result {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-        Commands::Sessions { name, latest } => {
-            if let Err(e) = commands::sessions::run(name, latest) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -17,11 +17,20 @@ pub fn run() -> Result<()> {
 
     // 2. Create .hive directory structure
     let hive_dir = PathBuf::from(".hive");
-    let prds_dir = hive_dir.join("prds");
+    let plans_dir = hive_dir.join("plans");
     let drones_dir = hive_dir.join("drones");
 
-    std::fs::create_dir_all(&prds_dir).context("Failed to create .hive/prds directory")?;
+    std::fs::create_dir_all(&plans_dir).context("Failed to create .hive/plans directory")?;
     std::fs::create_dir_all(&drones_dir).context("Failed to create .hive/drones directory")?;
+
+    // Backwards compat: symlink prds -> plans if prds doesn't exist
+    let prds_link = hive_dir.join("prds");
+    if !prds_link.exists() {
+        #[cfg(unix)]
+        {
+            let _ = std::os::unix::fs::symlink("plans", &prds_link);
+        }
+    }
 
     println!("  {} Created .hive directory structure", "✓".green());
 
@@ -83,13 +92,12 @@ pub fn run() -> Result<()> {
     }
 
     // 7. Install skills and MCP server for Claude Code integration
-    println!("\n{}", "Setting up Claude Code integration...".bright_blue());
+    println!(
+        "\n{}",
+        "Setting up Claude Code integration...".bright_blue()
+    );
     if let Err(e) = install::run(true, false) {
-        println!(
-            "  {} Failed to install skills: {}",
-            "⚠".yellow(),
-            e
-        );
+        println!("  {} Failed to install skills: {}", "⚠".yellow(), e);
         println!("    Run 'hive install --skills-only' manually to retry");
     }
 
@@ -98,9 +106,38 @@ pub fn run() -> Result<()> {
         "✓".green().bold(),
         project_name.bright_cyan()
     );
+    // Auto-migrate: if .hive/prds/ exists as a real directory (not symlink), migrate to plans/
+    let prds_dir = hive_dir.join("prds");
+    if prds_dir.is_dir() && !prds_dir.is_symlink() && plans_dir.exists() {
+        // Move files from prds/ to plans/
+        if let Ok(entries) = std::fs::read_dir(&prds_dir) {
+            let mut migrated = 0;
+            for entry in entries.flatten() {
+                let src = entry.path();
+                let dest = plans_dir.join(entry.file_name());
+                if !dest.exists() && std::fs::rename(&src, &dest).is_ok() {
+                    migrated += 1;
+                }
+            }
+            if migrated > 0 {
+                println!(
+                    "  {} Migrated {} plan files from .hive/prds/ to .hive/plans/",
+                    "✓".green(),
+                    migrated
+                );
+            }
+            // Replace prds/ directory with symlink
+            let _ = std::fs::remove_dir(&prds_dir);
+            #[cfg(unix)]
+            {
+                let _ = std::os::unix::fs::symlink("plans", &prds_dir);
+            }
+        }
+    }
+
     println!("\n{}", "Next steps:".bright_yellow());
     println!("  1. Restart Claude Code to load the skills");
-    println!("  2. Use /hive:prd to create a PRD");
+    println!("  2. Use /hive:plan to create a plan");
     println!("  3. Use /hive:start to launch a drone");
 
     Ok(())

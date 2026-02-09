@@ -49,7 +49,9 @@ pub(crate) fn parse_cost_from_log(drone_name: &str) -> CostSummary {
             if let Some(output) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
                 summary.output_tokens = output;
             }
-            if let Some(cache_read) = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64())
+            if let Some(cache_read) = usage
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
             {
                 summary.cache_read_tokens = cache_read;
             }

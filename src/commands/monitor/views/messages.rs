@@ -42,10 +42,7 @@ fn parse_message_text(raw: &str) -> String {
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(raw) else {
         return raw.to_string();
     };
-    let msg_type = parsed
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let msg_type = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
     match msg_type {
         "idle_notification" => "[idle]".to_string(),
         "shutdown_request" => {
@@ -75,18 +72,13 @@ fn parse_message_text(raw: &str) -> String {
 }
 
 /// Render the fullscreen chat-style messages view for a specific drone
-pub(crate) fn render_messages_view(
-    f: &mut Frame,
-    area: Rect,
-    drone_name: &str,
-    scroll: usize,
-) {
+pub(crate) fn render_messages_view(f: &mut Frame, area: Rect, drone_name: &str, scroll: usize) {
     // Layout: header + content + footer
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Header
-            Constraint::Min(0),   // Messages
+            Constraint::Min(0),    // Messages
             Constraint::Length(1), // Footer
         ])
         .split(area);
@@ -94,14 +86,12 @@ pub(crate) fn render_messages_view(
     // Header
     let header = Paragraph::new(vec![
         Line::raw(""),
-        Line::from(vec![
-            Span::styled(
-                format!("  💬 Messages — {}", drone_name),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
+        Line::from(vec![Span::styled(
+            format!("  💬 Messages — {}", drone_name),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
     ]);
     f.render_widget(header, chunks[0]);
 
@@ -157,10 +147,7 @@ pub(crate) fn render_messages_view(
         lines.push(Line::raw(""));
         lines.push(Line::from(vec![
             Span::raw("  "),
-            Span::styled(
-                "No messages yet",
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled("No messages yet", Style::default().fg(Color::DarkGray)),
         ]));
     }
 
@@ -192,9 +179,7 @@ pub(crate) fn render_messages_view(
                 Span::raw("  "),
                 Span::styled(
                     format!("{}{}", msg.from, lead_badge),
-                    Style::default()
-                        .fg(from_color)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(from_color).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!("  → {}", msg.to),
@@ -232,13 +217,8 @@ pub(crate) fn render_messages_view(
                     .nth(max_width)
                     .map(|(i, _)| i)
                     .unwrap_or(remaining.len());
-                let break_at = remaining[..byte_limit]
-                    .rfind(' ')
-                    .unwrap_or(byte_limit);
-                (
-                    &remaining[..break_at],
-                    remaining[break_at..].trim_start(),
-                )
+                let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
+                (&remaining[..break_at], remaining[break_at..].trim_start())
             };
 
             lines.push(Line::from(vec![
@@ -256,7 +236,11 @@ pub(crate) fn render_messages_view(
     let content_height = chunks[1].height as usize;
     let total_lines = lines.len();
     let auto_scroll = total_lines.saturating_sub(content_height);
-    let effective_scroll = if scroll == 0 { auto_scroll } else { scroll.min(auto_scroll) };
+    let effective_scroll = if scroll == 0 {
+        auto_scroll
+    } else {
+        scroll.min(auto_scroll)
+    };
 
     let visible_lines: Vec<Line> = lines
         .into_iter()

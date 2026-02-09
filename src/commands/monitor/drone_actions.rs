@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::{DroneState, DroneStatus, Prd};
+use crate::types::{DroneState, DroneStatus, Plan};
 
 // Handler for 'New Drone' action - browse PRDs and launch
 pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
@@ -40,7 +40,7 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
 
         // Read PRD to get default name
         let prd_contents = fs::read_to_string(prd_path)?;
-        let prd: Prd = serde_json::from_str(&prd_contents)?;
+        let prd: Plan = serde_json::from_str(&prd_contents)?;
         let default_name = prd.id.clone();
 
         // Prompt for drone name
@@ -59,15 +59,7 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
         let model = models[model_idx].to_string();
 
         // Launch drone using start command
-        crate::commands::start::run(
-            drone_name.clone(),
-            None,
-            false,
-            false,
-            model,
-            3,
-            false,
-        )?;
+        crate::commands::start::run(drone_name.clone(), false, model, 3, false)?;
 
         Ok(Some(format!("\u{1f41d} Launched drone: {}", drone_name)))
     })();
@@ -79,28 +71,32 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
     result
 }
 
-// Find all PRD files in .hive/prds/ and project root
+// Find all plan files in .hive/plans/, .hive/prds/ (compat), and project root
 pub(crate) fn find_prd_files() -> Result<Vec<PathBuf>> {
     let mut prds = Vec::new();
 
-    // Search in .hive/prds/
-    let hive_prds = PathBuf::from(".hive").join("prds");
-    if hive_prds.exists() {
-        for entry in fs::read_dir(&hive_prds)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                prds.push(path);
+    // Search in .hive/plans/ first, then .hive/prds/ for compat
+    for dir_name in &["plans", "prds"] {
+        let hive_dir = PathBuf::from(".hive").join(dir_name);
+        if hive_dir.exists() {
+            for entry in fs::read_dir(&hive_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    prds.push(path);
+                }
             }
+            break; // prds is usually a symlink to plans, avoid duplicates
         }
     }
 
-    // Search in project root for prd*.json
+    // Search in project root for plan*.json and prd*.json
     for entry in fs::read_dir(".")? {
         let entry = entry?;
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-            if name.starts_with("prd") && path.extension().and_then(|s| s.to_str()) == Some("json")
+            if (name.starts_with("plan") || name.starts_with("prd"))
+                && path.extension().and_then(|s| s.to_str()) == Some("json")
             {
                 prds.push(path);
             }
@@ -151,9 +147,12 @@ pub(crate) fn extract_last_activity(log_contents: &str) -> String {
                         // TodoWrite: look at the first in_progress todo
                         if let Some(todos) = input.get("todos").and_then(|t| t.as_array()) {
                             for todo in todos {
-                                let status = todo.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                                let status =
+                                    todo.get("status").and_then(|s| s.as_str()).unwrap_or("");
                                 if status == "in_progress" {
-                                    if let Some(form) = todo.get("activeForm").and_then(|f| f.as_str()) {
+                                    if let Some(form) =
+                                        todo.get("activeForm").and_then(|f| f.as_str())
+                                    {
                                         return form.to_string();
                                     }
                                 }
@@ -163,7 +162,8 @@ pub(crate) fn extract_last_activity(log_contents: &str) -> String {
                 }
 
                 // For other tools, show a description
-                let desc = item.pointer("/input/description")
+                let desc = item
+                    .pointer("/input/description")
                     .and_then(|d| d.as_str())
                     .unwrap_or("");
                 if !desc.is_empty() {
@@ -221,11 +221,9 @@ pub(crate) fn handle_resume_drone(drone_name: &str) -> Result<String> {
         }
     }
 
-    // Launch drone with resume flag
+    // Launch drone (auto-resume detects existing drone)
     crate::commands::start::run(
         drone_name.to_string(),
-        None,
-        true,
         false,
         "sonnet".to_string(),
         3,
@@ -242,5 +240,4 @@ mod tests {
     fn test_extract_last_activity_empty() {
         assert_eq!(extract_last_activity(""), "");
     }
-
 }

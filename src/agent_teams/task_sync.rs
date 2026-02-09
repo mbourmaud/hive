@@ -41,9 +41,7 @@ pub struct TeamConfig {
 }
 
 /// Read task states for TUI display without writing to status.json.
-pub fn read_team_task_states(
-    team_name: &str,
-) -> Result<HashMap<String, TeamTaskInfo>> {
+pub fn read_team_task_states(team_name: &str) -> Result<HashMap<String, TeamTaskInfo>> {
     let tasks = read_task_list(team_name)?;
 
     // Build owner->model map from team members
@@ -56,28 +54,37 @@ pub fn read_team_task_states(
 
     let mut states = HashMap::new();
     for task in tasks {
-        let story_id = task.metadata.as_ref()
+        let story_id = task
+            .metadata
+            .as_ref()
             .and_then(|m| m.get("storyId"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        let is_internal = task.metadata.as_ref()
+        let is_internal = task
+            .metadata
+            .as_ref()
             .and_then(|m| m.get("_internal"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        let model = task.owner.as_ref()
+        let model = task
+            .owner
+            .as_ref()
             .and_then(|owner| member_models.get(owner))
             .cloned();
-        states.insert(task.id.clone(), TeamTaskInfo {
-            id: task.id,
-            subject: task.subject,
-            description: task.description,
-            status: task.status,
-            owner: task.owner,
-            active_form: task.active_form,
-            story_id,
-            model,
-            is_internal,
-        });
+        states.insert(
+            task.id.clone(),
+            TeamTaskInfo {
+                id: task.id,
+                subject: task.subject,
+                description: task.description,
+                status: task.status,
+                owner: task.owner,
+                active_form: task.active_form,
+                story_id,
+                model,
+                is_internal,
+            },
+        );
     }
     Ok(states)
 }
@@ -132,7 +139,9 @@ pub fn read_team_members(team_name: &str) -> Result<Vec<TeamMember>> {
     let contents = fs::read_to_string(&config_path)?;
     let config: TeamConfig = serde_json::from_str(&contents)?;
     // Filter out the team-lead/coordinator, only return actual workers
-    Ok(config.members.into_iter()
+    Ok(config
+        .members
+        .into_iter()
         .filter(|m| m.agent_type != "team-lead" && m.agent_type != "coordinator")
         .collect())
 }

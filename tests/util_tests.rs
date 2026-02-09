@@ -1,4 +1,4 @@
-use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, StoryTiming};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode};
 use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
@@ -28,18 +28,10 @@ fn create_test_drone(
     fs::create_dir_all(&drone_dir).unwrap();
 
     let mut completed_stories = Vec::new();
-    let mut story_times = HashMap::new();
 
     for i in 0..completed {
         let story_id = format!("TEST-{:03}", i + 1);
-        completed_stories.push(story_id.clone());
-        story_times.insert(
-            story_id,
-            StoryTiming {
-                started: Some("2024-01-01T00:00:00Z".to_string()),
-                completed: Some("2024-01-01T01:00:00Z".to_string()),
-            },
-        );
+        completed_stories.push(story_id);
     }
 
     let drone_status = DroneStatus {
@@ -51,14 +43,14 @@ fn create_test_drone(
         execution_mode: ExecutionMode::AgentTeam,
         backend: "agent_team".to_string(),
         status,
-        current_story: None,
+        current_task: None,
         completed: completed_stories,
-        story_times,
+        story_times: HashMap::new(),
         total,
         started: "2024-01-01T00:00:00Z".to_string(),
         updated: "2024-01-01T01:00:00Z".to_string(),
         error_count: 0,
-        last_error_story: None,
+        last_error: None,
         active_agents: HashMap::new(),
     };
 

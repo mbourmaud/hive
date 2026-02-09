@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::types::{DroneStatus, Prd};
+use crate::types::{DroneStatus, Plan};
 
 // ============================================================================
 // Constants
@@ -19,9 +19,6 @@ pub const DEFAULT_INACTIVE_THRESHOLD_SECS: i64 = 3600;
 
 /// Maximum drone name length before truncation
 pub const MAX_DRONE_NAME_LEN: usize = 35;
-
-/// Maximum story title length before truncation
-pub const MAX_STORY_TITLE_LEN: usize = 40;
 
 /// Seconds in an hour
 pub const SECONDS_PER_HOUR: i64 = 3600;
@@ -75,32 +72,67 @@ pub fn elapsed_since(start: &str) -> Option<String> {
 // ============================================================================
 
 /// Load a PRD from the given file path.
-pub fn load_prd(path: &Path) -> Option<Prd> {
+pub fn load_prd(path: &Path) -> Option<Plan> {
     let contents = fs::read_to_string(path).ok()?;
     serde_json::from_str(&contents).ok()
 }
 
 /// Reconcile status with actual PRD.
 /// Returns (completed_tasks, total_tasks) from Agent Teams progress.
+/// Also updates status.json with latest progress as a cache.
 ///
 /// Returns (valid_completed_count, total).
 pub fn reconcile_progress(status: &DroneStatus) -> (usize, usize) {
-    agent_teams_progress(&status.drone)
+    let (completed, total) = agent_teams_progress(&status.drone);
+
+    // Persist progress to status.json as a cache
+    if total > 0 && (completed != status.completed.len() || total != status.total) {
+        let status_path = PathBuf::from(".hive/drones")
+            .join(&status.drone)
+            .join("status.json");
+        if status_path.exists() {
+            if let Ok(contents) = fs::read_to_string(&status_path) {
+                if let Ok(mut cached_status) = serde_json::from_str::<DroneStatus>(&contents) {
+                    cached_status.total = total;
+                    // Update completed list length to match
+                    cached_status.completed.truncate(completed);
+                    while cached_status.completed.len() < completed {
+                        cached_status
+                            .completed
+                            .push(format!("task-{}", cached_status.completed.len() + 1));
+                    }
+                    cached_status.updated = chrono::Utc::now().to_rfc3339();
+                    let _ = fs::write(
+                        &status_path,
+                        serde_json::to_string_pretty(&cached_status).unwrap_or_default(),
+                    );
+                }
+            }
+        }
+    }
+
+    (completed, total)
 }
 
 /// Reconcile status with a provided PRD.
 /// Returns Agent Teams task progress.
 ///
 /// Returns (valid_completed_count, total).
-pub fn reconcile_progress_with_prd(status: &DroneStatus, _prd: &Prd) -> (usize, usize) {
+pub fn reconcile_progress_with_prd(status: &DroneStatus, _prd: &Plan) -> (usize, usize) {
     agent_teams_progress(&status.drone)
 }
 
 /// Get progress from Agent Teams task list (for plan-only PRDs).
 ///
+/// Multi-source fallback:
+/// 1. Try live tasks from `~/.claude/tasks/<drone>/` (current logic)
+/// 2. If empty, fall back to `reconstruct_progress()` from events.ndjson
+/// 3. If both empty, return (0, 0)
+///
 /// Returns (completed_tasks, total_tasks). Filters out internal tracking tasks.
 fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
     use crate::agent_teams;
+    use crate::events;
 
     let tasks = agent_teams::read_task_list(drone_name).unwrap_or_default();
 
@@ -122,7 +154,19 @@ fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
         .filter(|t| t.status == "completed")
         .count();
 
-    (completed, total)
+    // Source 1: live tasks are available
+    if total > 0 {
+        return (completed, total);
+    }
+
+    // Source 2: fall back to event-sourced progress from events.ndjson
+    let (event_completed, event_total) = events::reconstruct_progress(drone_name);
+    if event_total > 0 {
+        return (event_completed, event_total);
+    }
+
+    // Source 3: nothing available
+    (0, 0)
 }
 
 // ============================================================================

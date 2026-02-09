@@ -2,9 +2,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// PRD (Product Requirements Document) structure
+/// Plan (formerly PRD) structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Prd {
+pub struct Plan {
     pub id: String,
     /// Title of the PRD (also accepts "name" for backwards compatibility)
     #[serde(alias = "name")]
@@ -25,6 +25,8 @@ pub struct Prd {
     pub plan: String,
 }
 
+/// Backwards-compatible alias for Plan (formerly Prd)
+pub type Prd = Plan;
 
 /// Drone execution status
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,19 +43,20 @@ pub struct DroneStatus {
     #[serde(default = "default_backend")]
     pub backend: String,
     pub status: DroneState,
-    #[serde(default)]
-    pub current_story: Option<String>,
+    #[serde(default, alias = "current_story")]
+    pub current_task: Option<String>,
     #[serde(default)]
     pub completed: Vec<String>,
-    #[serde(default)]
+    /// Legacy field — kept for deserialization compat, skipped on serialization
+    #[serde(default, skip_serializing)]
     pub story_times: HashMap<String, StoryTiming>,
     pub total: usize,
     pub started: String,
     pub updated: String,
     pub error_count: usize,
-    #[serde(default)]
-    pub last_error_story: Option<String>,
-    /// Active agents and their current story (for Agent Teams mode)
+    #[serde(default, alias = "last_error_story")]
+    pub last_error: Option<String>,
+    /// Active agents and their current task (for Agent Teams mode)
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub active_agents: HashMap<String, String>,
 }
@@ -62,7 +65,7 @@ fn default_backend() -> String {
     "agent_team".to_string()
 }
 
-/// Story timing information
+/// Story timing information (deprecated, kept for backwards compat deserialization)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoryTiming {
     pub started: Option<String>,
@@ -174,10 +177,7 @@ mod tests {
 
         let prd: Prd = serde_json::from_str(json).unwrap();
         assert_eq!(prd.id, "my-feature");
-        assert_eq!(
-            prd.plan,
-            "## Goal\nBuild X\n\n## Requirements\n- Thing A"
-        );
+        assert_eq!(prd.plan, "## Goal\nBuild X\n\n## Requirements\n- Thing A");
     }
 
     #[test]
@@ -215,7 +215,7 @@ mod tests {
         let status: DroneStatus = serde_json::from_str(json).unwrap();
         assert_eq!(status.drone, "test-drone");
         assert_eq!(status.status, DroneState::InProgress);
-        assert_eq!(status.current_story, Some("TEST-001".to_string()));
+        assert_eq!(status.current_task, Some("TEST-001".to_string()));
     }
 
     #[test]

@@ -68,19 +68,17 @@ impl TuiState {
                     self.expanded_drones.remove(drone_name);
                 }
             }
-            KeyCode::Char('n') | KeyCode::Char('N') => {
-                match handle_new_drone(terminal) {
-                    Ok(Some(msg)) => {
-                        self.message = Some(msg);
-                        self.message_color = Color::Green;
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        self.message = Some(format!("Error: {}", e));
-                        self.message_color = Color::Red;
-                    }
+            KeyCode::Char('n') | KeyCode::Char('N') => match handle_new_drone(terminal) {
+                Ok(Some(msg)) => {
+                    self.message = Some(msg);
+                    self.message_color = Color::Green;
                 }
-            }
+                Ok(None) => {}
+                Err(e) => {
+                    self.message = Some(format!("Error: {}", e));
+                    self.message_color = Color::Red;
+                }
+            },
             KeyCode::Char('m') | KeyCode::Char('M') => {
                 if !self.drones.is_empty() {
                     let drone_name = self.drones[current_drone_idx].0.clone();
@@ -137,8 +135,7 @@ impl TuiState {
                             }
                         }
                     } else {
-                        self.message =
-                            Some(format!("Drone {} is already running", drone_name));
+                        self.message = Some(format!("Drone {} is already running", drone_name));
                         self.message_color = Color::Yellow;
                     }
                 }

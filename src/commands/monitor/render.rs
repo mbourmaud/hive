@@ -11,8 +11,8 @@ use std::time::Instant;
 
 use crate::agent_teams::task_sync;
 use crate::commands::common::{
-    is_process_running, parse_timestamp, read_drone_pid,
-    truncate_with_ellipsis, DEFAULT_INACTIVE_THRESHOLD_SECS, MAX_DRONE_NAME_LEN,
+    is_process_running, parse_timestamp, read_drone_pid, truncate_with_ellipsis,
+    DEFAULT_INACTIVE_THRESHOLD_SECS, MAX_DRONE_NAME_LEN,
 };
 use crate::events::HiveEvent;
 use crate::types::DroneState;
@@ -113,7 +113,7 @@ impl TuiState {
                 Span::styled("1. ", Style::default().fg(Color::Cyan)),
                 Span::styled("Create a PRD with ", Style::default().fg(Color::White)),
                 Span::styled(
-                    "/hive:prd",
+                    "/hive:plan",
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
@@ -235,7 +235,7 @@ impl TuiState {
             }
 
             // Status icon and color
-            let is_active_process = process_running || status.current_story.is_some();
+            let is_active_process = process_running || status.current_task.is_some();
             let (icon, status_color) = match status.status {
                 DroneState::Starting | DroneState::Resuming => ("◐", Color::Yellow),
                 DroneState::InProgress => {
@@ -377,8 +377,7 @@ impl TuiState {
             if selected_line < self.scroll_offset {
                 self.scroll_offset = selected_line;
             } else if selected_line >= self.scroll_offset + content_height.saturating_sub(2) {
-                self.scroll_offset =
-                    selected_line.saturating_sub(content_height.saturating_sub(3));
+                self.scroll_offset = selected_line.saturating_sub(content_height.saturating_sub(3));
             }
         }
 
@@ -431,12 +430,7 @@ impl TuiState {
         f.render_widget(footer, chunks[2]);
     }
 
-    fn render_expanded_drone(
-        &mut self,
-        lines: &mut Vec<Line>,
-        drone_idx: usize,
-        area: Rect,
-    ) {
+    fn render_expanded_drone(&mut self, lines: &mut Vec<Line>, drone_idx: usize, area: Rect) {
         let (name, _status) = &self.drones[drone_idx];
 
         // Read task states for Agent Teams rendering
@@ -480,8 +474,7 @@ impl TuiState {
                 ];
                 for (idx, m) in members.iter().enumerate() {
                     if idx > 0 {
-                        member_spans
-                            .push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+                        member_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
                     }
                     member_spans.push(Span::styled(
                         m.name.clone(),
@@ -589,10 +582,7 @@ impl TuiState {
                         Span::styled(task_icon, Style::default().fg(task_color)),
                         Span::raw(" "),
                         Span::styled(title, Style::default().fg(task_color)),
-                        Span::styled(
-                            active_form.clone(),
-                            Style::default().fg(Color::DarkGray),
-                        ),
+                        Span::styled(active_form.clone(), Style::default().fg(Color::DarkGray)),
                     ];
                     if let Some((badge_text, badge_color)) = agent_badge_with_color.as_ref() {
                         spans.push(Span::styled(
@@ -609,8 +599,7 @@ impl TuiState {
                     lines.push(Line::from(spans));
                 } else {
                     let task_title_indent = "        "; // 8 spaces
-                    let wrap_width =
-                        task_available_width.saturating_sub(task_prefix_len + 1);
+                    let wrap_width = task_available_width.saturating_sub(task_prefix_len + 1);
                     let mut remaining = title.as_str();
                     let mut first_line = true;
 
@@ -625,13 +614,8 @@ impl TuiState {
                                 .nth(wrap_width)
                                 .map(|(i, _)| i)
                                 .unwrap_or(remaining.len());
-                            let break_at = remaining[..byte_limit]
-                                .rfind(' ')
-                                .unwrap_or(byte_limit);
-                            (
-                                &remaining[..break_at],
-                                remaining[break_at..].trim_start(),
-                            )
+                            let break_at = remaining[..byte_limit].rfind(' ').unwrap_or(byte_limit);
+                            (&remaining[..break_at], remaining[break_at..].trim_start())
                         };
 
                         if first_line {
@@ -639,10 +623,7 @@ impl TuiState {
                                 Span::raw("      "),
                                 Span::styled(task_icon, Style::default().fg(task_color)),
                                 Span::raw(" "),
-                                Span::styled(
-                                    chunk.to_string(),
-                                    Style::default().fg(task_color),
-                                ),
+                                Span::styled(chunk.to_string(), Style::default().fg(task_color)),
                             ];
                             if is_last {
                                 spans.push(Span::styled(
@@ -669,10 +650,7 @@ impl TuiState {
                         } else {
                             let mut spans = vec![
                                 Span::raw(task_title_indent),
-                                Span::styled(
-                                    chunk.to_string(),
-                                    Style::default().fg(task_color),
-                                ),
+                                Span::styled(chunk.to_string(), Style::default().fg(task_color)),
                             ];
                             if is_last {
                                 spans.push(Span::styled(
@@ -710,8 +688,10 @@ impl TuiState {
                 if !last_activity.is_empty() {
                     let prefix_len = 8; // "      ◦ "
                     let max_width = area.width as usize;
-                    let activity_display =
-                        truncate_with_ellipsis(&last_activity, max_width.saturating_sub(prefix_len));
+                    let activity_display = truncate_with_ellipsis(
+                        &last_activity,
+                        max_width.saturating_sub(prefix_len),
+                    );
                     lines.push(Line::from(vec![
                         Span::raw("      "),
                         Span::styled("◦ ", Style::default().fg(Color::DarkGray)),
@@ -787,6 +767,5 @@ impl TuiState {
                 Span::styled(event_display, Style::default().fg(Color::DarkGray)),
             ]));
         }
-
     }
 }

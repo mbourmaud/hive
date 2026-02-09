@@ -7,25 +7,46 @@ use std::process::Command as ProcessCommand;
 use crate::backend::{self, SpawnConfig};
 use crate::commands::profile;
 use crate::config;
-use crate::types::{DroneState, DroneStatus, ExecutionMode, Prd};
+use crate::types::{DroneState, DroneStatus, ExecutionMode, Plan};
 
 pub fn run(
     name: String,
-    _prompt: Option<String>,
-    resume: bool,
     local: bool,
     model: String,
     max_agents: usize,
     dry_run: bool,
 ) -> Result<()> {
-    println!(
-        "{} Launching team '{}'...",
-        "→".bright_blue(),
-        name.bright_cyan()
-    );
-
     // 0. Load active profile to get Claude binary and environment
     let active_profile = profile::load_active_profile()?;
+
+    // 1. Auto-resume logic: if drone exists, check if process is alive
+    let drone_dir = PathBuf::from(".hive/drones").join(&name);
+    let is_resume = if drone_dir.exists() {
+        let pid_alive = crate::commands::common::read_drone_pid(&name)
+            .map(crate::commands::common::is_process_running)
+            .unwrap_or(false);
+        if pid_alive {
+            bail!(
+                "Drone '{}' is already running. Use 'hive stop {}' first.",
+                name,
+                name
+            );
+        }
+        // Process is dead — auto-resume
+        println!(
+            "{} Resuming team '{}'...",
+            "→".bright_blue(),
+            name.bright_cyan()
+        );
+        true
+    } else {
+        println!(
+            "{} Launching team '{}'...",
+            "→".bright_blue(),
+            name.bright_cyan()
+        );
+        false
+    };
 
     if active_profile.name != "default" {
         println!(
@@ -35,16 +56,10 @@ pub fn run(
         );
     }
 
-    // 1. Check if drone already exists
-    let drone_dir = PathBuf::from(".hive/drones").join(&name);
-    if drone_dir.exists() && !resume {
-        bail!("Drone '{}' already exists. Use --resume to resume.", name);
-    }
-
-    // 2. Find PRD
-    let prd_path = find_prd(&name)?;
+    // 2. Find plan
+    let prd_path = find_plan(&name)?;
     let prd = load_prd(&prd_path)?;
-    println!("  {} Found PRD: {}", "✓".green(), prd.title);
+    println!("  {} Found plan: {}", "✓".green(), prd.title);
 
     // 3. Determine branch and check for existing worktree
     let default_branch = format!("hive/{}", name);
@@ -93,32 +108,48 @@ pub fn run(
     write_hooks_config(&worktree_path, &name)?;
     println!("  {} Configured hooks", "✓".green());
 
-    // 6. Create drone status
+    // 6. Create or update drone status
     fs::create_dir_all(&drone_dir)?;
-    let status = DroneStatus {
-        drone: name.clone(),
-        prd: prd_path.file_name().unwrap().to_string_lossy().to_string(),
-        branch: branch.to_string(),
-        worktree: worktree_path.to_string_lossy().to_string(),
-        local_mode: local,
-        execution_mode: ExecutionMode::AgentTeam,
-        backend: "agent_team".to_string(),
-        status: DroneState::Starting,
-        current_story: None,
-        completed: Vec::new(),
-        story_times: std::collections::HashMap::new(),
-        total: 0, // Total is 0 initially, tracked by Agent Teams tasks
-        started: chrono::Utc::now().to_rfc3339(),
-        updated: chrono::Utc::now().to_rfc3339(),
-        error_count: 0,
-        last_error_story: None,
-        active_agents: std::collections::HashMap::new(),
-    };
-
     let status_path = drone_dir.join("status.json");
-    let status_json = serde_json::to_string_pretty(&status)?;
-    fs::write(&status_path, status_json)?;
-    println!("  {} Created status.json", "✓".green());
+
+    if is_resume {
+        // Update existing status to Resuming
+        if let Ok(contents) = fs::read_to_string(&status_path) {
+            if let Ok(mut existing_status) = serde_json::from_str::<DroneStatus>(&contents) {
+                existing_status.status = DroneState::Resuming;
+                existing_status.updated = chrono::Utc::now().to_rfc3339();
+                let _ = fs::write(
+                    &status_path,
+                    serde_json::to_string_pretty(&existing_status)?,
+                );
+            }
+        }
+        println!("  {} Updated status.json (resuming)", "✓".green());
+    } else {
+        let status = DroneStatus {
+            drone: name.clone(),
+            prd: prd_path.file_name().unwrap().to_string_lossy().to_string(),
+            branch: branch.to_string(),
+            worktree: worktree_path.to_string_lossy().to_string(),
+            local_mode: local,
+            execution_mode: ExecutionMode::AgentTeam,
+            backend: "agent_team".to_string(),
+            status: DroneState::Starting,
+            current_task: None,
+            completed: Vec::new(),
+            story_times: std::collections::HashMap::new(),
+            total: 0,
+            started: chrono::Utc::now().to_rfc3339(),
+            updated: chrono::Utc::now().to_rfc3339(),
+            error_count: 0,
+            last_error: None,
+            active_agents: std::collections::HashMap::new(),
+        };
+
+        let status_json = serde_json::to_string_pretty(&status)?;
+        fs::write(&status_path, status_json)?;
+        println!("  {} Created status.json", "✓".green());
+    }
 
     // Ensure inbox/outbox directories exist for inter-drone messaging
     let inbox_dir = drone_dir.join("inbox");
@@ -177,20 +208,26 @@ pub fn run(
     Ok(())
 }
 
-fn find_prd(name: &str) -> Result<PathBuf> {
+fn find_plan(name: &str) -> Result<PathBuf> {
+    // Search in .hive/plans/ first, fall back to .hive/prds/ for backwards compat
+    let plans_dir = PathBuf::from(".hive/plans");
     let prds_dir = PathBuf::from(".hive/prds");
 
-    if !prds_dir.exists() {
-        bail!("No PRDs directory found. Run 'hive init' first.");
-    }
+    let search_dir = if plans_dir.exists() {
+        &plans_dir
+    } else if prds_dir.exists() {
+        &prds_dir
+    } else {
+        bail!("No plans directory found. Run 'hive init' first.");
+    };
 
     let mut candidates = Vec::new();
 
-    // Search patterns: prd-<name>.json, <name>.json, <name>-prd.json
+    // Search patterns: plan-<name>.json, <name>.json, prd-<name>.json (compat)
     let patterns = vec![
-        prds_dir.join(format!("prd-{}.json", name)),
-        prds_dir.join(format!("{}.json", name)),
-        prds_dir.join(format!("{}-prd.json", name)),
+        search_dir.join(format!("plan-{}.json", name)),
+        search_dir.join(format!("{}.json", name)),
+        search_dir.join(format!("prd-{}.json", name)),
     ];
 
     for pattern in patterns {
@@ -199,14 +236,16 @@ fn find_prd(name: &str) -> Result<PathBuf> {
         }
     }
 
-    // Also search in project root for prd*.json files
+    // Also search in project root for plan*.json and prd*.json files
     let root_dir = std::env::current_dir()?;
     if let Ok(entries) = fs::read_dir(&root_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if filename.starts_with("prd") && filename.ends_with(".json") {
+                    if (filename.starts_with("plan") || filename.starts_with("prd"))
+                        && filename.ends_with(".json")
+                    {
                         candidates.push(path);
                     }
                 }
@@ -214,10 +253,10 @@ fn find_prd(name: &str) -> Result<PathBuf> {
         }
     }
 
-    // If no candidates found, list available PRDs
+    // If no candidates found, list available plans
     if candidates.is_empty() {
         let mut available = Vec::new();
-        for entry in fs::read_dir(&prds_dir)?.flatten() {
+        for entry in fs::read_dir(search_dir)?.flatten() {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
@@ -228,12 +267,12 @@ fn find_prd(name: &str) -> Result<PathBuf> {
 
         if available.is_empty() {
             bail!(
-                "No PRD found for drone '{}'. No PRDs available in .hive/prds/",
+                "No plan found for drone '{}'. No plans available in .hive/plans/",
                 name
             );
         } else {
             bail!(
-                "No PRD found for drone '{}'. Available PRDs:\n  {}",
+                "No plan found for drone '{}'. Available plans:\n  {}",
                 name,
                 available.join("\n  ")
             );
@@ -262,13 +301,13 @@ fn find_prd(name: &str) -> Result<PathBuf> {
     Ok(candidates[selection].clone())
 }
 
-fn load_prd(path: &PathBuf) -> Result<Prd> {
+fn load_prd(path: &PathBuf) -> Result<Plan> {
     let contents = fs::read_to_string(path).context("Failed to read PRD")?;
-    let prd: Prd = serde_json::from_str(&contents).context("Failed to parse PRD")?;
+    let prd: Plan = serde_json::from_str(&contents).context("Failed to parse PRD")?;
 
     // Validate that plan is not empty
     if prd.plan.trim().is_empty() {
-        bail!("PRD plan field cannot be empty");
+        bail!("Plan field cannot be empty");
     }
 
     Ok(prd)
@@ -573,12 +612,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
         write_hooks_config(dir.path(), "timeout-test").unwrap();
 
-        let contents = fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
+        let contents =
+            fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
         let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
         let post_tool = settings["hooks"]["PostToolUse"].as_array().unwrap();
         for hook in post_tool {
-            assert_eq!(hook.get("async").unwrap().as_bool().unwrap(), true);
+            assert!(hook.get("async").unwrap().as_bool().unwrap());
             assert_eq!(hook.get("timeout").unwrap().as_u64().unwrap(), 5);
         }
     }

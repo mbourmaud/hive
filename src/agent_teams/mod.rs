@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::Prd;
+use crate::types::Plan;
 
 /// An Agent Teams task, mapped from a PRD story.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +34,7 @@ pub struct AgentTeamTask {
 }
 
 /// Format PRD content as readable text for the team lead prompt.
-pub fn format_prd_for_prompt(prd: &Prd) -> String {
+pub fn format_prd_for_prompt(prd: &Plan) -> String {
     format!("# {}\n\n{}", prd.title, prd.plan)
 }
 
@@ -120,7 +120,9 @@ pub fn read_task_list(team_name: &str) -> Result<Vec<AgentTeamTask>> {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
             if is_internal {
-                t.id.parse::<usize>().ok().map(|idx| (idx, t.subject.clone()))
+                t.id.parse::<usize>()
+                    .ok()
+                    .map(|idx| (idx, t.subject.clone()))
             } else {
                 None
             }
@@ -143,7 +145,10 @@ pub fn read_task_list(team_name: &str) -> Result<Vec<AgentTeamTask>> {
                     // Resolve generic owner names (teammate-N) to real agent names
                     let owner = t.owner.map(|o| {
                         if o.starts_with("teammate-") {
-                            if let Some(idx) = o.strip_prefix("teammate-").and_then(|n| n.parse::<usize>().ok()) {
+                            if let Some(idx) = o
+                                .strip_prefix("teammate-")
+                                .and_then(|n| n.parse::<usize>().ok())
+                            {
                                 if let Some(real_name) = agent_names.get(&idx) {
                                     return real_name.clone();
                                 }
@@ -185,14 +190,12 @@ pub fn read_task_list(team_name: &str) -> Result<Vec<AgentTeamTask>> {
 pub fn cleanup_team(team_name: &str) -> Result<()> {
     let tasks_dir = team_tasks_dir(team_name);
     if tasks_dir.exists() {
-        fs::remove_dir_all(&tasks_dir)
-            .context("Failed to remove Agent Teams tasks directory")?;
+        fs::remove_dir_all(&tasks_dir).context("Failed to remove Agent Teams tasks directory")?;
     }
 
     let teams_dir = team_dir(team_name);
     if teams_dir.exists() {
-        fs::remove_dir_all(&teams_dir)
-            .context("Failed to remove Agent Teams team directory")?;
+        fs::remove_dir_all(&teams_dir).context("Failed to remove Agent Teams team directory")?;
     }
 
     Ok(())
@@ -201,10 +204,10 @@ pub fn cleanup_team(team_name: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Prd;
+    use crate::types::Plan;
 
-    fn make_test_prd() -> Prd {
-        Prd {
+    fn make_test_prd() -> Plan {
+        Plan {
             id: "test".to_string(),
             title: "Test PRD".to_string(),
             description: "Test".to_string(),
@@ -230,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_format_prd_minimal() {
-        let prd = Prd {
+        let prd = Plan {
             id: "minimal".to_string(),
             title: "Minimal".to_string(),
             description: String::new(),

@@ -64,6 +64,93 @@ impl HiveEvent {
     }
 }
 
+/// Reconstruct progress from events.ndjson by replaying TaskCreate/TaskUpdate events.
+/// Returns (completed_count, total_count).
+pub fn reconstruct_progress(drone_name: &str) -> (usize, usize) {
+    let path = PathBuf::from(".hive/drones")
+        .join(drone_name)
+        .join("events.ndjson");
+
+    let contents = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return (0, 0),
+    };
+
+    // Track tasks: task_id -> status
+    // TaskCreate events don't have a task_id, but they signal a new task was created.
+    // TaskUpdate events have task_id and status.
+    let mut task_statuses: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut task_count: usize = 0;
+
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Ok(event) = serde_json::from_str::<HiveEvent>(trimmed) {
+            match event {
+                HiveEvent::TaskCreate { .. } => {
+                    task_count += 1;
+                    // We don't have a task_id in TaskCreate, so we track by count
+                }
+                HiveEvent::TaskUpdate {
+                    task_id, status, ..
+                } => {
+                    if !status.is_empty() {
+                        task_statuses.insert(task_id, status);
+                    }
+                }
+                HiveEvent::TaskDone { task_id, .. } => {
+                    task_statuses.insert(task_id, "completed".to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Total = max of task_count (from TaskCreate events) and highest task_id seen
+    let max_task_id = task_statuses
+        .keys()
+        .filter_map(|id| id.parse::<usize>().ok())
+        .max()
+        .unwrap_or(0);
+
+    let total = task_count.max(max_task_id);
+    let completed = task_statuses
+        .values()
+        .filter(|s| s.as_str() == "completed")
+        .count();
+
+    (completed, total)
+}
+
+/// Check if a Stop event exists in the drone's events.ndjson.
+pub fn has_stop_event(drone_name: &str) -> bool {
+    let path = PathBuf::from(".hive/drones")
+        .join(drone_name)
+        .join("events.ndjson");
+
+    let contents = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    for line in contents.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Ok(event) = serde_json::from_str::<HiveEvent>(trimmed) {
+            if matches!(event, HiveEvent::Stop { .. }) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 /// Incrementally reads events from an ndjson file, tracking byte offset.
 pub struct EventReader {
     offset: u64,
@@ -140,7 +227,11 @@ mod tests {
         let json = r#"{"event":"TaskCreate","ts":"2025-01-15T10:00:00Z","subject":"Implement auth","description":"Add JWT auth"}"#;
         let event: HiveEvent = serde_json::from_str(json).unwrap();
         match event {
-            HiveEvent::TaskCreate { ts, subject, description } => {
+            HiveEvent::TaskCreate {
+                ts,
+                subject,
+                description,
+            } => {
                 assert_eq!(ts, "2025-01-15T10:00:00Z");
                 assert_eq!(subject, "Implement auth");
                 assert_eq!(description, "Add JWT auth");
@@ -154,7 +245,12 @@ mod tests {
         let json = r#"{"event":"TaskUpdate","ts":"2025-01-15T10:01:00Z","task_id":"1","status":"in_progress","owner":"researcher"}"#;
         let event: HiveEvent = serde_json::from_str(json).unwrap();
         match event {
-            HiveEvent::TaskUpdate { ts, task_id, status, owner } => {
+            HiveEvent::TaskUpdate {
+                ts,
+                task_id,
+                status,
+                owner,
+            } => {
                 assert_eq!(ts, "2025-01-15T10:01:00Z");
                 assert_eq!(task_id, "1");
                 assert_eq!(status, "in_progress");
@@ -181,7 +277,11 @@ mod tests {
 
         // Write some events
         let mut file = fs::File::create(&events_path).unwrap();
-        writeln!(file, r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#).unwrap();
+        writeln!(
+            file,
+            r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#
+        )
+        .unwrap();
         writeln!(file, r#"{{"event":"TaskCreate","ts":"2025-01-15T10:01:00Z","subject":"Story 1","description":"desc"}}"#).unwrap();
 
         let mut reader = EventReader {
@@ -197,7 +297,10 @@ mod tests {
         assert!(events.is_empty());
 
         // Append more
-        let mut file = fs::OpenOptions::new().append(true).open(&events_path).unwrap();
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .open(&events_path)
+            .unwrap();
         writeln!(file, r#"{{"event":"Stop","ts":"2025-01-15T10:05:00Z"}}"#).unwrap();
 
         let events = reader.read_new();
@@ -221,7 +324,11 @@ mod tests {
         let events_path = dir.path().join("events.ndjson");
 
         let mut file = fs::File::create(&events_path).unwrap();
-        writeln!(file, r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#).unwrap();
+        writeln!(
+            file,
+            r#"{{"event":"Start","ts":"2025-01-15T10:00:00Z","model":"opus"}}"#
+        )
+        .unwrap();
         writeln!(file, "not valid json").unwrap();
         writeln!(file, r#"{{"event":"Stop","ts":"2025-01-15T10:05:00Z"}}"#).unwrap();
 

@@ -108,12 +108,12 @@ fn cleanup(path: &PathBuf) {
 }
 
 #[test]
-fn test_kill_nonexistent_drone() {
+fn test_stop_nonexistent_drone() {
     let binary = get_binary_path();
     let temp_dir = setup_test_env("nonexistent");
 
     let output = Command::new(&binary)
-        .args(["kill", "nonexistent"])
+        .args(["stop", "nonexistent"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();
@@ -128,12 +128,12 @@ fn test_kill_nonexistent_drone() {
 }
 
 #[test]
-fn test_kill_stopped_drone() {
+fn test_stop_stopped_drone() {
     let binary = get_binary_path();
     let temp_dir = setup_test_env("stopped");
 
     let output = Command::new(&binary)
-        .args(["kill", "test-drone"])
+        .args(["stop", "test-drone"])
         .current_dir(&temp_dir)
         .output()
         .unwrap();

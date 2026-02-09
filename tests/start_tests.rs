@@ -145,7 +145,7 @@ fn test_start_no_prd() {
     println!("stderr: {}", stderr);
 
     assert!(!output.status.success());
-    assert!(stderr.contains("No PRD found"));
+    assert!(stderr.contains("No plan found"));
 
     cleanup(&temp_dir);
 }

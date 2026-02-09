@@ -229,6 +229,41 @@ pub fn update() -> Result<()> {
         .bright_yellow()
     );
 
+    // Check for breaking changes: major version bump or BREAKING in release notes
+    let release_body = release["body"].as_str().unwrap_or("");
+    let is_breaking = {
+        let current_major = current_parts.first().copied().unwrap_or(0);
+        let latest_major = latest_parts.first().copied().unwrap_or(0);
+        latest_major > current_major || release_body.contains("BREAKING")
+    };
+
+    if is_breaking {
+        println!(
+            "\n{}",
+            "⚠  This release contains BREAKING CHANGES:".red().bold()
+        );
+        // Show first 500 chars of release notes
+        let preview = if release_body.len() > 500 {
+            format!("{}...", &release_body[..500])
+        } else {
+            release_body.to_string()
+        };
+        if !preview.is_empty() {
+            println!("{}", preview.bright_white());
+        }
+        println!();
+
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt("Proceed with update?")
+            .default(false)
+            .interact()?;
+
+        if !confirmed {
+            println!("Update cancelled.");
+            return Ok(());
+        }
+    }
+
     // Detect platform and map to asset naming convention
     let asset_name = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
         "hive-darwin-arm64.tar.gz"

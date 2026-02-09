@@ -1,4 +1,4 @@
-use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, HiveConfig, Prd, StoryTiming};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, HiveConfig, Plan, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,7 +16,7 @@ fn create_hive_structure(temp_dir: &TempDir) -> PathBuf {
 }
 
 fn create_test_prd(prds_dir: &Path, prd_name: &str) {
-    let prd = Prd {
+    let prd = Plan {
         id: prd_name.to_string(),
         title: format!("{} Title", prd_name),
         description: format!("{} Description", prd_name),
@@ -46,14 +46,14 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         execution_mode: ExecutionMode::AgentTeam,
         backend: "agent_team".to_string(),
         status: DroneState::InProgress,
-        current_story: Some("STORY-001".to_string()),
+        current_task: Some("STORY-001".to_string()),
         completed: vec![],
         story_times: HashMap::new(),
         total: 5,
         started: "2024-01-01T00:00:00Z".to_string(),
         updated: "2024-01-01T01:00:00Z".to_string(),
         error_count: 0,
-        last_error_story: None,
+        last_error: None,
         active_agents: HashMap::new(),
     };
 
@@ -175,7 +175,7 @@ fn test_existing_prd_compatibility() {
 
     // Try to parse it
     let contents = fs::read_to_string(prds_dir.join("existing-prd.json")).unwrap();
-    let prd: Result<Prd, _> = serde_json::from_str(&contents);
+    let prd: Result<Plan, _> = serde_json::from_str(&contents);
 
     assert!(prd.is_ok());
     let prd = prd.unwrap();
@@ -270,14 +270,14 @@ fn test_drone_state_transitions() {
             execution_mode: ExecutionMode::AgentTeam,
             backend: "agent_team".to_string(),
             status: state.clone(),
-            current_story: None,
+            current_task: None,
             completed: vec![],
             story_times: HashMap::new(),
             total: 1,
             started: "2024-01-01T00:00:00Z".to_string(),
             updated: "2024-01-01T01:00:00Z".to_string(),
             error_count: 0,
-            last_error_story: None,
+            last_error: None,
             active_agents: HashMap::new(),
         };
 

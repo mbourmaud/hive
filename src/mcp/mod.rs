@@ -200,7 +200,7 @@ fn list_tools() -> Vec<ToolInfo> {
         },
         ToolInfo {
             name: "hive_drone_status".to_string(),
-            description: "Get detailed status of a specific drone including current story, completed stories, timing, and error info.".to_string(),
+            description: "Get detailed status of a specific drone including current task, completed tasks, timing, and error info.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -214,7 +214,7 @@ fn list_tools() -> Vec<ToolInfo> {
         },
         ToolInfo {
             name: "hive_drone_progress".to_string(),
-            description: "Get the progress (completed/total stories) of a drone, reconciled with the current PRD.".to_string(),
+            description: "Get the progress (completed/total tasks) of a drone, reconciled with the current plan.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -224,24 +224,6 @@ fn list_tools() -> Vec<ToolInfo> {
                     }
                 },
                 "required": ["drone_name"]
-            }),
-        },
-        ToolInfo {
-            name: "hive_query_dependencies".to_string(),
-            description: "Check if the dependencies of a specific story are satisfied (all depended-on stories are completed).".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "drone_name": {
-                        "type": "string",
-                        "description": "Name of the drone"
-                    },
-                    "story_id": {
-                        "type": "string",
-                        "description": "ID of the story to check dependencies for"
-                    }
-                },
-                "required": ["drone_name", "story_id"]
             }),
         },
         ToolInfo {
@@ -270,7 +252,6 @@ fn call_tool(name: &str, arguments: &Value) -> ToolResult {
         "hive_list_drones" => tool_list_drones(),
         "hive_drone_status" => tool_drone_status(arguments),
         "hive_drone_progress" => tool_drone_progress(arguments),
-        "hive_query_dependencies" => tool_query_dependencies(arguments),
         "hive_team_status" => tool_team_status(arguments),
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     };
@@ -309,7 +290,7 @@ fn tool_list_drones() -> Result<String> {
             "execution_mode": status.execution_mode.to_string(),
             "backend": status.backend,
             "progress": format!("{}/{}", completed, total),
-            "current_story": status.current_story,
+            "current_task": status.current_task,
             "branch": status.branch,
             "updated": status.updated,
         }));
@@ -345,7 +326,7 @@ fn tool_drone_progress(args: &Value) -> Result<String> {
         .find(|(name, _)| name == drone_name)
         .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
 
-    let prd_path = PathBuf::from(".hive/prds").join(&status.prd);
+    let prd_path = PathBuf::from(".hive/plans").join(&status.prd);
     let (completed, total) = if let Some(prd) = load_prd(&prd_path) {
         reconcile_progress_with_prd(status, &prd)
     } else {
@@ -357,37 +338,12 @@ fn tool_drone_progress(args: &Value) -> Result<String> {
         "completed": completed,
         "total": total,
         "percentage": if total > 0 { (completed as f64 / total as f64 * 100.0).round() as u32 } else { 0 },
-        "completed_stories": status.completed,
-        "current_story": status.current_story,
+        "completed_tasks": status.completed,
+        "current_task": status.current_task,
         "status": status.status.to_string(),
     });
 
     Ok(serde_json::to_string_pretty(&result)?)
-}
-
-fn tool_query_dependencies(args: &Value) -> Result<String> {
-    let drone_name = args
-        .get("drone_name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: drone_name"))?;
-    let story_id = args
-        .get("story_id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: story_id"))?;
-
-    let drones = list_drones()?;
-    let (_, _status) = drones
-        .iter()
-        .find(|(name, _)| name == drone_name)
-        .ok_or_else(|| anyhow::anyhow!("Drone '{}' not found", drone_name))?;
-
-    // Stories removed in plan mode - dependencies not supported
-    Ok(serde_json::to_string_pretty(&serde_json::json!({
-        "story_id": story_id,
-        "has_dependencies": false,
-        "all_satisfied": true,
-        "message": "Story dependencies not supported in plan mode"
-    }))?)
 }
 
 fn tool_team_status(args: &Value) -> Result<String> {
