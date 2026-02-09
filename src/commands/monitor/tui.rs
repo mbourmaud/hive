@@ -35,10 +35,14 @@ pub(crate) fn run_tui(_name: Option<String>) -> Result<()> {
         terminal.draw(|f| state.render(f))?;
         state.clear_message();
 
+        let mut d_pressed = false;
         if event::poll(std::time::Duration::from_millis(TUI_POLL_TIMEOUT_MS))? {
             match event::read()? {
                 Event::Resize(_, _) => continue,
                 Event::Key(key) => {
+                    if key.code == KeyCode::Char('D') {
+                        d_pressed = true;
+                    }
                     // Ctrl+C always quits immediately
                     if key.modifiers.contains(KeyModifiers::CONTROL)
                         && key.code == KeyCode::Char('c')
@@ -51,6 +55,15 @@ pub(crate) fn run_tui(_name: Option<String>) -> Result<()> {
                 }
                 _ => {}
             }
+        }
+
+        // Cancel pending clean when D is released (no D event this tick)
+        if !d_pressed && state.pending_clean.is_some() {
+            state.pending_clean = None;
+            state.set_message(
+                "Clean cancelled".to_string(),
+                ratatui::style::Color::DarkGray,
+            );
         }
     }
 

@@ -477,14 +477,19 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
         serde_json::json!({})
     };
 
-    let events_file = format!(
-        "$CLAUDE_PROJECT_DIR/.hive/drones/{}/events.ndjson",
-        drone_name
-    );
-    let messages_file = format!(
-        "$CLAUDE_PROJECT_DIR/.hive/drones/{}/messages.ndjson",
-        drone_name
-    );
+    // Use absolute path for drone directory — $CLAUDE_PROJECT_DIR is unreliable
+    let drone_dir = std::env::current_dir()?
+        .join(".hive/drones")
+        .join(drone_name);
+    fs::create_dir_all(&drone_dir)?;
+    let events_file = drone_dir
+        .join("events.ndjson")
+        .to_string_lossy()
+        .to_string();
+    let messages_file = drone_dir
+        .join("messages.ndjson")
+        .to_string_lossy()
+        .to_string();
 
     // Build hook commands — each appends one line to events.ndjson via jq (lean, no persistence scripts)
     let hooks = serde_json::json!({

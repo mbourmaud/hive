@@ -95,13 +95,11 @@ impl TuiState {
             }
             KeyCode::Char('n') | KeyCode::Char('N') => match handle_new_drone(terminal) {
                 Ok(Some(msg)) => {
-                    self.message = Some(msg);
-                    self.message_color = Color::Green;
+                    self.set_message(msg, Color::Green);
                 }
                 Ok(None) => {}
                 Err(e) => {
-                    self.message = Some(format!("Error: {}", e));
-                    self.message_color = Color::Red;
+                    self.set_message(format!("Error: {}", e), Color::Red);
                 }
             },
             KeyCode::Char('m') | KeyCode::Char('M') => {
@@ -116,14 +114,8 @@ impl TuiState {
                 if !self.drones.is_empty() {
                     let drone_name = self.drones[current_drone_idx].0.clone();
                     match handle_stop_drone(&drone_name) {
-                        Ok(msg) => {
-                            self.message = Some(msg);
-                            self.message_color = Color::Green;
-                        }
-                        Err(e) => {
-                            self.message = Some(format!("Error: {}", e));
-                            self.message_color = Color::Red;
-                        }
+                        Ok(msg) => self.set_message(msg, Color::Green),
+                        Err(e) => self.set_message(format!("Error: {}", e), Color::Red),
                     }
                 }
             }
@@ -131,36 +123,42 @@ impl TuiState {
                 if !self.drones.is_empty() {
                     let drone_name = self.drones[current_drone_idx].0.clone();
                     if let Some((ref pending, when)) = self.pending_clean {
-                        if pending == &drone_name && when.elapsed() < Duration::from_secs(5) {
-                            // Second D within 5 seconds = confirmed
-                            self.pending_clean = None;
-                            match handle_clean_drone(&drone_name) {
-                                Ok(msg) => {
-                                    self.message = Some(msg);
-                                    self.message_color = Color::Green;
+                        if pending == &drone_name {
+                            let elapsed = when.elapsed();
+                            if elapsed >= Duration::from_secs(3) {
+                                // Held D for 3 seconds — execute clean
+                                let name = pending.clone();
+                                self.pending_clean = None;
+                                match handle_clean_drone(&name) {
+                                    Ok(msg) => self.set_message(msg, Color::Green),
+                                    Err(e) => self.set_message(format!("Error: {}", e), Color::Red),
                                 }
-                                Err(e) => {
-                                    self.message = Some(format!("Error: {}", e));
-                                    self.message_color = Color::Red;
-                                }
+                            } else {
+                                // Still holding — update countdown
+                                let remaining = 3 - elapsed.as_secs();
+                                self.set_message(
+                                    format!(
+                                        "Cleaning '{}' in {}s... (release to cancel)",
+                                        drone_name, remaining
+                                    ),
+                                    Color::Yellow,
+                                );
                             }
                         } else {
-                            // Different drone or timeout — reset
+                            // Different drone — reset
                             self.pending_clean = Some((drone_name.clone(), Instant::now()));
-                            self.message = Some(format!(
-                                "Press D again to confirm cleaning '{}'",
-                                drone_name
-                            ));
-                            self.message_color = Color::Yellow;
+                            self.set_message(
+                                format!("Cleaning '{}' in 3s... (release to cancel)", drone_name),
+                                Color::Yellow,
+                            );
                         }
                     } else {
-                        // First D — prompt
+                        // First D — start countdown
                         self.pending_clean = Some((drone_name.clone(), Instant::now()));
-                        self.message = Some(format!(
-                            "Press D again to confirm cleaning '{}'",
-                            drone_name
-                        ));
-                        self.message_color = Color::Yellow;
+                        self.set_message(
+                            format!("Cleaning '{}' in 3s... (release to cancel)", drone_name),
+                            Color::Yellow,
+                        );
                     }
                 }
             }
@@ -173,22 +171,24 @@ impl TuiState {
                         || status.status == DroneState::Stopped
                     {
                         match handle_resume_drone(&drone_name) {
-                            Ok(msg) => {
-                                self.message = Some(msg);
-                                self.message_color = Color::Green;
-                            }
-                            Err(e) => {
-                                self.message = Some(format!("Error: {}", e));
-                                self.message_color = Color::Red;
-                            }
+                            Ok(msg) => self.set_message(msg, Color::Green),
+                            Err(e) => self.set_message(format!("Error: {}", e), Color::Red),
                         }
                     } else {
-                        self.message = Some(format!("Drone {} is already running", drone_name));
-                        self.message_color = Color::Yellow;
+                        self.set_message(
+                            format!("Drone {} is already running", drone_name),
+                            Color::Yellow,
+                        );
                     }
                 }
             }
-            _ => {}
+            _ => {
+                // Any other key cancels pending clean
+                if self.pending_clean.is_some() {
+                    self.pending_clean = None;
+                    self.set_message("Clean cancelled".to_string(), Color::DarkGray);
+                }
+            }
         }
 
         Ok(KeyAction::Continue)

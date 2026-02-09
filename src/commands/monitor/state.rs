@@ -4,7 +4,7 @@ use ratatui::style::Color;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::agent_teams::snapshot::TaskSnapshotStore;
 use crate::commands::common::{
@@ -50,6 +50,7 @@ pub(crate) struct TuiState {
     // Messages
     pub message: Option<String>,
     pub message_color: Color,
+    pub message_time: Option<Instant>,
     // Views
     pub messages_view: Option<String>,
     pub messages_scroll: usize,
@@ -75,7 +76,7 @@ pub(crate) struct TuiState {
     pub snapshot_store: TaskSnapshotStore,
     /// Cached PR state to avoid calling gh on every tick cycle
     pub pr_state_cache: HashMap<String, (String, Instant)>, // branch -> (state, when_checked)
-    /// Two-step clean confirmation: (drone_name, when_prompted)
+    /// Countdown clean: (drone_name, when_started, countdown_secs)
     pub pending_clean: Option<(String, Instant)>,
     /// Tracks when all tasks were first detected as completed for idle auto-stop (#58)
     pub all_tasks_done_since: HashMap<String, Instant>,
@@ -105,6 +106,7 @@ impl TuiState {
             scroll_offset: 0,
             message: None,
             message_color: Color::Green,
+            message_time: None,
             messages_view: None,
             messages_scroll: 0,
             messages_selected_index: usize::MAX,
@@ -468,9 +470,18 @@ impl TuiState {
         Ok(())
     }
 
+    pub fn set_message(&mut self, msg: String, color: Color) {
+        self.message = Some(msg);
+        self.message_color = color;
+        self.message_time = Some(Instant::now());
+    }
+
     pub fn clear_message(&mut self) {
-        if self.message.is_some() {
-            self.message = None;
+        if let Some(when) = self.message_time {
+            if when.elapsed() > Duration::from_secs(3) {
+                self.message = None;
+                self.message_time = None;
+            }
         }
     }
 

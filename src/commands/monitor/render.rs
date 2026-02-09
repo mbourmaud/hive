@@ -398,7 +398,7 @@ impl TuiState {
         let footer_text = if let Some(msg) = &self.message {
             msg.clone()
         } else {
-            " ↵ expand  m msgs  x stop  D clean  r resume  q quit".to_string()
+            " ↵ expand  m msgs  x stop  hold D clean  r resume  q quit".to_string()
         };
 
         let footer = Paragraph::new(Line::from(vec![Span::styled(
