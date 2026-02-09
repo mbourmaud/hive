@@ -77,6 +77,10 @@ pub(crate) struct TuiState {
     pub pr_state_cache: HashMap<String, (String, Instant)>, // branch -> (state, when_checked)
     /// Two-step clean confirmation: (drone_name, when_prompted)
     pub pending_clean: Option<(String, Instant)>,
+    /// Tracks when all tasks were first detected as completed for idle auto-stop (#58)
+    pub all_tasks_done_since: HashMap<String, Instant>,
+    /// Tracks the last time a new event was received per drone (#58)
+    pub last_event_time: HashMap<String, Instant>,
 }
 
 impl TuiState {
@@ -120,6 +124,8 @@ impl TuiState {
             snapshot_store: TaskSnapshotStore::new(),
             pr_state_cache: HashMap::new(),
             pending_clean: None,
+            all_tasks_done_since: HashMap::new(),
+            last_event_time: HashMap::new(),
         })
     }
 
@@ -183,6 +189,7 @@ impl TuiState {
                     let _ = crate::commands::kill_clean::kill_quiet(name.clone());
                 }
 
+                self.last_event_time.insert(name.clone(), Instant::now());
                 self.last_events.insert(name.clone(), event);
             }
         }
@@ -337,6 +344,64 @@ impl TuiState {
                     &format!("PR merged — drone '{}' auto-cleaned", name),
                 );
             }
+        }
+
+        // Idle detection: auto-stop drones that have all tasks done and no new events (#58)
+        // If all tasks completed + no new events for 2 minutes → auto-complete the drone
+        const IDLE_TIMEOUT_SECS: u64 = 120;
+        let idle_candidates: Vec<String> = self
+            .drones
+            .iter()
+            .filter(|(_, s)| matches!(s.status, DroneState::InProgress))
+            .filter(|(name, _)| !self.auto_stopped_drones.contains(name))
+            .filter_map(|(name, _)| {
+                let (completed, total) = self.snapshot_store.progress(name);
+                if total > 0 && completed >= total {
+                    // Track when we first saw all tasks done
+                    let first_seen = self
+                        .all_tasks_done_since
+                        .entry(name.clone())
+                        .or_insert_with(Instant::now);
+                    // Also check no new events recently
+                    let last_event = self.last_event_time.get(name).copied();
+                    let idle_long_enough =
+                        first_seen.elapsed() > std::time::Duration::from_secs(IDLE_TIMEOUT_SECS);
+                    let no_recent_events = last_event
+                        .map(|t| t.elapsed() > std::time::Duration::from_secs(IDLE_TIMEOUT_SECS))
+                        .unwrap_or(true);
+                    if idle_long_enough && no_recent_events {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    // Tasks not all done — remove from tracking
+                    self.all_tasks_done_since.remove(name);
+                    None
+                }
+            })
+            .collect();
+
+        for name in &idle_candidates {
+            let _ = crate::agent_teams::auto_complete_tasks(name);
+            self.auto_stopped_drones.insert(name.clone());
+            let _ = crate::commands::kill_clean::kill_quiet(name.clone());
+
+            if let Some((_, status)) = self.drones.iter_mut().find(|(n, _)| n == name) {
+                status.status = DroneState::Completed;
+                status.updated = Utc::now().to_rfc3339();
+
+                let status_path = PathBuf::from(".hive/drones").join(name).join("status.json");
+                let _ = fs::write(
+                    &status_path,
+                    serde_json::to_string_pretty(&*status).unwrap_or_default(),
+                );
+            }
+
+            notification::notify(
+                &format!("Hive - {}", name),
+                "Drone auto-completed (all tasks done, idle timeout)",
+            );
         }
 
         // Sort: in_progress first, then blocked, then completed
