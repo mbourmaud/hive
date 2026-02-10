@@ -58,12 +58,33 @@ pub(crate) fn run_tui(_name: Option<String>) -> Result<()> {
         }
 
         // Cancel pending clean when D is released (no D event this tick)
-        if !d_pressed && state.pending_clean.is_some() {
-            state.pending_clean = None;
-            state.set_message(
-                "Clean cancelled".to_string(),
-                ratatui::style::Color::DarkGray,
-            );
+        // But only cancel if the countdown hasn't already completed (3s).
+        // If it already hit 3s, the clean was executed and pending_clean was
+        // cleared by handle_key, so this won't fire. The grace period handles
+        // the edge case where key-repeat jitter causes a single tick gap.
+        if !d_pressed {
+            if let Some((_, when)) = &state.pending_clean {
+                if when.elapsed() < std::time::Duration::from_secs(3) {
+                    // User released before 3 seconds — cancel
+                    state.pending_clean = None;
+                    state.set_message(
+                        "Clean cancelled".to_string(),
+                        ratatui::style::Color::DarkGray,
+                    );
+                }
+                // If elapsed >= 3s but pending_clean is still Some, it means
+                // we missed the D event that would have triggered the clean.
+                // Execute it now instead of cancelling.
+                else {
+                    let name = state.pending_clean.take().unwrap().0;
+                    match super::drone_actions::handle_clean_drone(&name) {
+                        Ok(msg) => state.set_message(msg, ratatui::style::Color::Green),
+                        Err(e) => {
+                            state.set_message(format!("Error: {}", e), ratatui::style::Color::Red)
+                        }
+                    }
+                }
+            }
         }
     }
 
