@@ -477,6 +477,7 @@ mod tests {
             updated: chrono::Utc::now().to_rfc3339(),
             error_count: 0,
             last_error: None,
+            lead_model: None,
             active_agents: Default::default(),
         }
     }
