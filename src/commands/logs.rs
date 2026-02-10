@@ -56,87 +56,109 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
         }
 
         // 2. Show task states with agents
-        match task_sync::read_team_task_states(team_name) {
-            Ok(tasks) if !tasks.is_empty() => {
-                // Filter out internal tasks (auto-created for agent spawning)
-                let tasks: std::collections::HashMap<_, _> =
-                    tasks.into_iter().filter(|(_, t)| !t.is_internal).collect();
-                if tasks.is_empty() {
-                    println!("  {} No tasks found", "○".dimmed());
-                    println!();
-                } else {
-                    // Separate into categories
-                    let mut in_progress: Vec<_> = tasks
-                        .values()
-                        .filter(|t| t.status == "in_progress")
-                        .collect();
-                    let mut completed: Vec<_> =
-                        tasks.values().filter(|t| t.status == "completed").collect();
-                    let mut pending: Vec<_> =
-                        tasks.values().filter(|t| t.status == "pending").collect();
-
-                    in_progress.sort_by_key(|t| &t.id);
-                    completed.sort_by_key(|t| &t.id);
-                    pending.sort_by_key(|t| &t.id);
-
-                    // Active tasks
-                    if !in_progress.is_empty() {
-                        println!(
-                            "  {} {}",
-                            "◐".yellow(),
-                            "Active Tasks".bright_yellow().bold()
-                        );
-                        for task in &in_progress {
-                            let (title, agent) = extract_task_display(task);
-                            let agent_str = agent
-                                .map(|a| format!(" @{}", a.bright_cyan().bold()))
-                                .unwrap_or_default();
-                            println!(
-                                "    {} {}{}",
-                                "◐".yellow(),
-                                title.bright_yellow(),
-                                agent_str
-                            );
-                        }
-                        println!();
-                    }
-
-                    // Completed tasks
-                    if !completed.is_empty() {
-                        println!(
-                            "  {} {} ({})",
-                            "●".green(),
-                            "Completed".green().bold(),
-                            completed.len()
-                        );
-                        for task in &completed {
-                            let (title, agent) = extract_task_display(task);
-                            let agent_str = agent
-                                .map(|a| format!(" @{}", a.bright_cyan().bold()))
-                                .unwrap_or_default();
-                            println!("    {} {}{}", "●".green(), title.green(), agent_str);
-                        }
-                        println!();
-                    }
-
-                    // Pending tasks
-                    if !pending.is_empty() {
-                        println!(
-                            "  {} {} ({})",
-                            "○".bright_black(),
-                            "Pending".bright_black().bold(),
-                            pending.len()
-                        );
-                        for task in &pending {
-                            let (title, _) = extract_task_display(task);
-                            println!("    {} {}", "○".bright_black(), title.bright_black());
-                        }
-                        println!();
-                    }
-                }
-            }
+        // Try live tasks first, fall back to event-sourced tasks
+        let tasks_result = task_sync::read_team_task_states(team_name);
+        let tasks_map = match tasks_result {
+            Ok(tasks) if !tasks.is_empty() => tasks,
             _ => {
-                println!("  {}", "No tasks found".bright_black());
+                // Fallback: reconstruct from events.ndjson
+                let event_tasks = crate::events::reconstruct_tasks(team_name);
+                event_tasks
+                    .into_iter()
+                    .map(|et| {
+                        (
+                            et.task_id.clone(),
+                            task_sync::TeamTaskInfo {
+                                id: et.task_id,
+                                subject: et.subject,
+                                description: String::new(),
+                                status: et.status,
+                                owner: et.owner,
+                                active_form: None,
+                                model: None,
+                                is_internal: false,
+                                created_at: None,
+                                updated_at: None,
+                            },
+                        )
+                    })
+                    .collect()
+            }
+        };
+        // Filter out internal tasks (auto-created for agent spawning)
+        let tasks: std::collections::HashMap<_, _> = tasks_map
+            .into_iter()
+            .filter(|(_, t)| !t.is_internal)
+            .collect();
+        if tasks.is_empty() {
+            println!("  {} No tasks found", "○".dimmed());
+            println!();
+        } else {
+            // Separate into categories
+            let mut in_progress: Vec<_> = tasks
+                .values()
+                .filter(|t| t.status == "in_progress")
+                .collect();
+            let mut completed: Vec<_> =
+                tasks.values().filter(|t| t.status == "completed").collect();
+            let mut pending: Vec<_> = tasks.values().filter(|t| t.status == "pending").collect();
+
+            in_progress.sort_by_key(|t| &t.id);
+            completed.sort_by_key(|t| &t.id);
+            pending.sort_by_key(|t| &t.id);
+
+            // Active tasks
+            if !in_progress.is_empty() {
+                println!(
+                    "  {} {}",
+                    "◐".yellow(),
+                    "Active Tasks".bright_yellow().bold()
+                );
+                for task in &in_progress {
+                    let (title, agent) = extract_task_display(task);
+                    let agent_str = agent
+                        .map(|a| format!(" @{}", a.bright_cyan().bold()))
+                        .unwrap_or_default();
+                    println!(
+                        "    {} {}{}",
+                        "◐".yellow(),
+                        title.bright_yellow(),
+                        agent_str
+                    );
+                }
+                println!();
+            }
+
+            // Completed tasks
+            if !completed.is_empty() {
+                println!(
+                    "  {} {} ({})",
+                    "●".green(),
+                    "Completed".green().bold(),
+                    completed.len()
+                );
+                for task in &completed {
+                    let (title, agent) = extract_task_display(task);
+                    let agent_str = agent
+                        .map(|a| format!(" @{}", a.bright_cyan().bold()))
+                        .unwrap_or_default();
+                    println!("    {} {}{}", "●".green(), title.green(), agent_str);
+                }
+                println!();
+            }
+
+            // Pending tasks
+            if !pending.is_empty() {
+                println!(
+                    "  {} {} ({})",
+                    "○".bright_black(),
+                    "Pending".bright_black().bold(),
+                    pending.len()
+                );
+                for task in &pending {
+                    let (title, _) = extract_task_display(task);
+                    println!("    {} {}", "○".bright_black(), title.bright_black());
+                }
                 println!();
             }
         }

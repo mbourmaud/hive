@@ -100,6 +100,13 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 - When all tasks are done, create a PR via `gh pr create` and verify CI passes
 - Do NOT modify any files under .hive/ — those are managed by the orchestrator
 
+## CRITICAL: Task Progress Tracking
+You MUST keep task status up to date — this drives the progress dashboard.
+- When you assign a task to a teammate: call TaskUpdate with status "in_progress" and set the owner
+- When a teammate reports completion: call TaskUpdate with status "completed" IMMEDIATELY, before doing anything else
+- NEVER skip TaskUpdate calls — the monitoring dashboard relies on accurate task status
+- After marking a task completed, check TaskList for the next pending task to assign
+
 ## Completion Signal
 CRITICAL: Once ALL tasks are completed AND the PR is successfully created, you MUST signal completion to the orchestrator:
 1. Use the Write tool to create a file named '.hive_complete' in the working directory

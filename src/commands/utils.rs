@@ -66,11 +66,16 @@ pub fn list() -> Result<()> {
         };
 
         let mode_emoji = "\u{1f41d}";
+        let model_badge = status
+            .lead_model
+            .as_ref()
+            .map(|m| format!(" [{}]", m))
+            .unwrap_or_default();
 
         println!(
             "{:<20} {:<15} {:<15} {:<10}",
             format!("{} {}", mode_emoji, name).yellow().bold(),
-            status_str,
+            format!("{}{}", status_str, model_badge.bright_magenta()),
             format!("{} ({}%)", progress, percentage).bright_white(),
             cost_str.bright_black(),
         );

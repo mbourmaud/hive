@@ -51,6 +51,7 @@ fn create_test_drone(
         updated: "2024-01-01T01:00:00Z".to_string(),
         error_count: 0,
         last_error: None,
+        lead_model: None,
         active_agents: HashMap::new(),
     };
 

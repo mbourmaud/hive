@@ -144,6 +144,7 @@ pub fn run(
             updated: chrono::Utc::now().to_rfc3339(),
             error_count: 0,
             last_error: None,
+            lead_model: Some("opus".to_string()),
             active_agents: std::collections::HashMap::new(),
         };
 
@@ -197,8 +198,9 @@ pub fn run(
         }
 
         println!(
-            "  {} Launched Agent Teams lead (model: {}, teammates: haiku/sonnet, max: {})",
+            "  {} Launched Agent Teams lead (lead: {}, teammates: {}, max: {})",
             "✓".green(),
+            "opus".bright_cyan(),
             model.bright_cyan(),
             max_agents.to_string().bright_cyan()
         );

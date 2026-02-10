@@ -312,6 +312,13 @@ impl TuiState {
                 Color::Green
             };
 
+            // Show lead model badge if available
+            let model_badge = status
+                .lead_model
+                .as_ref()
+                .map(|m| format!(" [{}]", m))
+                .unwrap_or_default();
+
             let header_line = Line::from(vec![
                 Span::raw(format!(" {} ", select_char)),
                 Span::styled(icon, Style::default().fg(status_color)),
@@ -334,6 +341,7 @@ impl TuiState {
                         Color::White
                     }),
                 ),
+                Span::styled(model_badge, Style::default().fg(Color::Magenta)),
                 Span::styled(cost_str, Style::default().fg(cost_color)),
                 Span::raw("  "),
                 Span::styled(elapsed, Style::default().fg(Color::DarkGray)),

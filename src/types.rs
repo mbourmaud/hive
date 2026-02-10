@@ -67,6 +67,9 @@ pub struct DroneStatus {
     pub error_count: usize,
     #[serde(default, alias = "last_error_story")]
     pub last_error: Option<String>,
+    /// Model used for the team lead (e.g. "opus", "sonnet")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lead_model: Option<String>,
     /// Active agents and their current task (for Agent Teams mode)
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub active_agents: HashMap<String, String>,
