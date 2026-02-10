@@ -97,8 +97,22 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 {task_instruction}
 - Use sonnet for teammates by default, haiku for simple tasks
 - Maximum {max_agents} concurrent teammates
-- When all tasks are done, create a PR via `gh pr create` and verify CI passes
 - Do NOT modify any files under .hive/ — those are managed by the orchestrator
+
+## Environment Setup (FIRST STEP)
+Before assigning any tasks, verify the project builds:
+1. Detect project type (package.json, Cargo.toml, go.mod, etc.)
+2. Install dependencies if needed (npm install, pnpm install, cargo build, etc.)
+3. Run code generation if applicable (prisma generate, protoc, etc.)
+4. Verify the project compiles/type-checks — fix any issues before delegating work
+
+## PR Creation (LAST STEP)
+After all tasks are completed:
+1. Run linting/formatting (cargo fmt, prettier, etc.)
+2. Run tests relevant to changed files
+3. Commit all changes with a conventional commit message
+4. Push the branch
+5. Create a PR via `gh pr create` with a description summarizing the changes
 
 ## CRITICAL: Task Progress Tracking
 You MUST keep task status up to date — this drives the progress dashboard.

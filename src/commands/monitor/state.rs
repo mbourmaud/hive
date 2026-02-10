@@ -418,6 +418,47 @@ impl TuiState {
             );
         }
 
+        // Stall detection: notify user when a drone appears stuck (rate limit, etc.) (#61)
+        // If InProgress + tasks NOT all done + no events for 10 minutes + process alive → stalled
+        const STALL_TIMEOUT_SECS: u64 = 600; // 10 minutes
+        for (name, status) in &self.drones {
+            if !matches!(status.status, DroneState::InProgress) {
+                continue;
+            }
+            if self.auto_stopped_drones.contains(name) {
+                continue;
+            }
+
+            let (completed, total) = self.snapshot_store.progress(name);
+            if total > 0 && completed >= total {
+                continue; // all done, idle detection handles this
+            }
+
+            let process_alive = read_drone_pid(name)
+                .map(is_process_running)
+                .unwrap_or(false);
+            if !process_alive {
+                continue; // zombie detection handles dead processes
+            }
+
+            let last_event = self.last_event_time.get(name).copied();
+            let stalled = last_event
+                .map(|t| t.elapsed() > Duration::from_secs(STALL_TIMEOUT_SECS))
+                .unwrap_or(false);
+
+            if stalled {
+                // Only notify once — check if we already set the message
+                let stall_key = format!("stall-{}", name);
+                if !self.auto_stopped_drones.contains(&stall_key) {
+                    self.auto_stopped_drones.insert(stall_key);
+                    notification::notify(
+                        &format!("Hive - {} STALLED", name),
+                        "No activity for 10 min (rate limit?). Run: hive stop && hive start to restart.",
+                    );
+                }
+            }
+        }
+
         // Sort: in_progress first, then blocked, then completed
         self.drones.sort_by_key(|(_, status)| match status.status {
             DroneState::InProgress | DroneState::Starting | DroneState::Resuming => 0,
