@@ -8,6 +8,7 @@ use ratatui::{
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+use crate::agent_teams::snapshot::SnapshotSource;
 use crate::agent_teams::task_sync::TeamTaskInfo;
 use crate::commands::common::{
     format_duration, is_process_running, parse_timestamp, read_drone_pid, truncate_with_ellipsis,
@@ -20,6 +21,7 @@ use super::cost::format_token_count;
 use super::drone_actions::extract_last_activity;
 use super::state::TuiState;
 use super::views::render_messages_view;
+use super::views::render_tools_view;
 
 /// Get a unique color for an agent based on their index
 fn get_agent_color(agent_index: usize) -> Color {
@@ -40,10 +42,16 @@ impl TuiState {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
 
+        // Tools view (toggle with 't')
+        if let Some(ref drone_name) = self.tools_view {
+            let tool_history = self.tool_history.get(drone_name);
+            render_tools_view(f, area, drone_name, tool_history);
+            return;
+        }
+
         // Messages view (toggle with 'm')
         if let Some(ref drone_name) = self.messages_view {
-            let (_message_count, _message_line_starts) =
-                render_messages_view(f, area, drone_name, self.messages_selected_index);
+            render_messages_view(f, area, drone_name, self.messages_selected_index);
             return;
         }
 
@@ -297,16 +305,17 @@ impl TuiState {
             let mode_emoji = "🐝";
             let name_display = truncate_with_ellipsis(name, MAX_DRONE_NAME_LEN);
 
-            // Cost display
-            let cost = self.cost_cache.get(name).cloned().unwrap_or_default();
-            let cost_str = if cost.total_cost_usd > 0.0 {
-                format!(" ${:.2}", cost.total_cost_usd)
+            // Cost display from log-based parsing
+            let c = self.cost_cache.get(name).cloned().unwrap_or_default();
+            let cost_usd = c.total_cost_usd;
+            let cost_str = if c.total_cost_usd > 0.0 {
+                format!(" ${:.2}", c.total_cost_usd)
             } else {
                 String::new()
             };
-            let cost_color = if cost.total_cost_usd >= 5.0 {
+            let cost_color = if cost_usd >= 5.0 {
                 Color::Red
-            } else if cost.total_cost_usd >= 1.0 {
+            } else if cost_usd >= 1.0 {
                 Color::Yellow
             } else {
                 Color::Green
@@ -403,11 +412,9 @@ impl TuiState {
         }
 
         // Footer - shortcuts (context-dependent)
-        let footer_text = if let Some(msg) = &self.message {
-            msg.clone()
-        } else {
-            " ↵ expand  m msgs  x stop  hold D clean  r resume  q quit".to_string()
-        };
+        let footer_text = self.message.clone().unwrap_or_else(|| {
+            " ↵ expand  t tools  m msgs  x stop  hold D clean  r resume  q quit".to_string()
+        });
 
         let footer = Paragraph::new(Line::from(vec![Span::styled(
             footer_text,
@@ -421,7 +428,7 @@ impl TuiState {
     }
 
     fn render_expanded_drone(&mut self, lines: &mut Vec<Line>, drone_idx: usize, area: Rect) {
-        let (name, _status) = &self.drones[drone_idx];
+        let (name, status) = &self.drones[drone_idx];
 
         // Read task states from snapshot store (single source of truth)
         let task_list: Vec<TeamTaskInfo> = self
@@ -436,35 +443,110 @@ impl TuiState {
             let mut tasks = task_list;
             tasks.sort_by(|a, b| a.id.cmp(&b.id));
 
-            // Build agent color map from team members (same order as Team: line)
+            // Lead model from status.json
+            let lead_model = status.lead_model.as_ref().map(|m| shorten_model_name(m));
+
+            // Build agent list: prefer team config files, fallback to snapshot agents, then task owners
             let members = self
                 .snapshot_store
                 .get(name)
                 .map(|s| s.members.clone())
                 .unwrap_or_default();
-            let member_color_map: HashMap<String, usize> = members
-                .iter()
-                .enumerate()
-                .map(|(idx, m)| (m.name.clone(), idx))
-                .collect();
+
+            // Extract agents from snapshot (built from events.ndjson AgentSpawn/SubagentStart/Stop)
+            let snapshot_agents = self
+                .snapshot_store
+                .get(name)
+                .map(|s| &s.agents)
+                .filter(|a| !a.is_empty());
+            let ws_agents: Vec<(String, Option<String>)> = if members.is_empty() {
+                if let Some(agents) = snapshot_agents {
+                    agents
+                        .iter()
+                        .map(|a| (a.name.clone(), a.model.clone()))
+                        .collect()
+                } else {
+                    // Fallback: extract agent names from task owners
+                    let mut agent_map: HashMap<String, Option<String>> = HashMap::new();
+                    for t in &tasks {
+                        if let Some(ref owner) = t.owner {
+                            agent_map.entry(owner.clone()).or_insert(None);
+                        }
+                    }
+                    let mut agents: Vec<(String, Option<String>)> = agent_map.into_iter().collect();
+                    agents.sort_by(|a, b| a.0.cmp(&b.0));
+                    agents
+                }
+            } else {
+                Vec::new()
+            };
+
+            // Build color map: team members first, then WS-discovered agents
+            let member_color_map: HashMap<String, usize> = if !members.is_empty() {
+                members
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, m)| (m.name.clone(), idx))
+                    .collect()
+            } else {
+                ws_agents
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, (aname, _))| (aname.clone(), idx))
+                    .collect()
+            };
+
+            // Team line: lead model + agents with their models
+            let mut team_spans: Vec<Span> = vec![
+                Span::raw("      "),
+                Span::styled("Lead", Style::default().fg(Color::DarkGray)),
+            ];
+            if let Some(ref model) = lead_model {
+                team_spans.push(Span::styled(
+                    format!(" ({})", model),
+                    Style::default().fg(Color::Magenta),
+                ));
+            }
             if !members.is_empty() {
-                let mut member_spans: Vec<Span> = vec![
-                    Span::raw("      "),
-                    Span::styled("Team: ", Style::default().fg(Color::DarkGray)),
-                ];
+                team_spans.push(Span::styled(" | ", Style::default().fg(Color::DarkGray)));
                 for (idx, m) in members.iter().enumerate() {
                     if idx > 0 {
-                        member_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+                        team_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
                     }
-                    member_spans.push(Span::styled(
+                    team_spans.push(Span::styled(
                         format!("@{}", m.name),
                         Style::default()
                             .fg(get_agent_color(idx))
                             .add_modifier(Modifier::BOLD),
                     ));
+                    if !m.model.is_empty() {
+                        team_spans.push(Span::styled(
+                            format!(" ({})", shorten_model_name(&m.model)),
+                            Style::default().fg(Color::DarkGray),
+                        ));
+                    }
                 }
-                lines.push(Line::from(member_spans));
+            } else if !ws_agents.is_empty() {
+                team_spans.push(Span::styled(" | ", Style::default().fg(Color::DarkGray)));
+                for (idx, (agent_name, agent_model)) in ws_agents.iter().enumerate() {
+                    if idx > 0 {
+                        team_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+                    }
+                    team_spans.push(Span::styled(
+                        format!("@{}", agent_name),
+                        Style::default()
+                            .fg(get_agent_color(idx))
+                            .add_modifier(Modifier::BOLD),
+                    ));
+                    if let Some(ref model) = agent_model {
+                        team_spans.push(Span::styled(
+                            format!(" ({})", shorten_model_name(model)),
+                            Style::default().fg(Color::DarkGray),
+                        ));
+                    }
+                }
             }
+            lines.push(Line::from(team_spans));
 
             // Split tasks into user vs internal
             let user_tasks: Vec<_> = tasks.iter().filter(|t| !t.is_internal).collect();
@@ -523,23 +605,63 @@ impl TuiState {
             }
         }
 
-        // Show cost details in expanded view
-        let cost = self.cost_cache.get(name).cloned().unwrap_or_default();
-        if cost.total_cost_usd > 0.0 {
+        // Show data source indicator
+        if let Some(snapshot) = self.snapshot_store.get(name) {
+            if !snapshot.tasks.is_empty() {
+                let (source_label, source_color) = match snapshot.source {
+                    SnapshotSource::LiveTasks => ("Live", Color::Cyan),
+                    SnapshotSource::Events => ("Events", Color::Yellow),
+                    SnapshotSource::Cache => ("Cache", Color::DarkGray),
+                };
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled("src: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(source_label, Style::default().fg(source_color)),
+                ]));
+            }
+        }
+
+        // Show recent tools from hook events (if available)
+        if let Some(tool_history) = self.tool_history.get(name) {
+            if !tool_history.is_empty() {
+                let len = tool_history.len();
+                let start = len.saturating_sub(6);
+                let tools_summary: String = tool_history
+                    .iter()
+                    .skip(start)
+                    .map(|r| r.tool.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                let prefix_len = 10; // "      🔧 "
+                let max_width = area.width as usize;
+                let tools_display =
+                    truncate_with_ellipsis(&tools_summary, max_width.saturating_sub(prefix_len));
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled("🔧 ", Style::default().fg(Color::Cyan)),
+                    Span::styled(tools_display, Style::default().fg(Color::DarkGray)),
+                ]));
+            }
+        }
+
+        // Show cost details in expanded view (from log parsing)
+        let c = self.cost_cache.get(name).cloned().unwrap_or_default();
+        if c.total_cost_usd > 0.0 {
+            let cache_suffix = if c.cache_read_tokens > 0 || c.cache_creation_tokens > 0 {
+                format!(
+                    " | Cache: {} read, {} created",
+                    format_token_count(c.cache_read_tokens),
+                    format_token_count(c.cache_creation_tokens)
+                )
+            } else {
+                String::new()
+            };
             let cost_detail = format!(
                 "      Cost: ${:.2} | In: {} | Out: {}{}",
-                cost.total_cost_usd,
-                format_token_count(cost.input_tokens),
-                format_token_count(cost.output_tokens),
-                if cost.cache_read_tokens > 0 || cost.cache_creation_tokens > 0 {
-                    format!(
-                        " | Cache: {} read, {} created",
-                        format_token_count(cost.cache_read_tokens),
-                        format_token_count(cost.cache_creation_tokens)
-                    )
-                } else {
-                    String::new()
-                }
+                c.total_cost_usd,
+                format_token_count(c.input_tokens),
+                format_token_count(c.output_tokens),
+                cache_suffix,
             );
             lines.push(Line::from(vec![Span::styled(
                 cost_detail,
@@ -548,7 +670,7 @@ impl TuiState {
         }
 
         // Show last event from hooks (if available)
-        if let Some(ref event) = self.last_events.get(name) {
+        if let Some(event) = self.last_events.get(name) {
             let event_desc = match event {
                 HiveEvent::TaskCreate { subject, .. } => {
                     format!("Created: {}", subject)
@@ -578,6 +700,41 @@ impl TuiState {
                 HiveEvent::Start { model, .. } => {
                     format!("Started ({})", model)
                 }
+                HiveEvent::AgentSpawn { name, model, .. } => {
+                    format!(
+                        "Agent: {}{}",
+                        name,
+                        model
+                            .as_ref()
+                            .map(|m| format!(" ({})", m))
+                            .unwrap_or_default()
+                    )
+                }
+                HiveEvent::SubagentStart { agent_type, .. } => {
+                    format!(
+                        "Subagent started{}",
+                        agent_type
+                            .as_ref()
+                            .map(|t| format!(" ({})", t))
+                            .unwrap_or_default()
+                    )
+                }
+                HiveEvent::SubagentStop { agent_type, .. } => {
+                    format!(
+                        "Subagent stopped{}",
+                        agent_type
+                            .as_ref()
+                            .map(|t| format!(" ({})", t))
+                            .unwrap_or_default()
+                    )
+                }
+                HiveEvent::ToolDone { tool, .. } => {
+                    format!("Tool: {}", tool)
+                }
+                HiveEvent::TodoSnapshot { todos, .. } => {
+                    let done = todos.iter().filter(|t| t.status == "completed").count();
+                    format!("Todos: {}/{}", done, todos.len())
+                }
             };
             let prefix_len = 8; // "      ⚡ "
             let max_width = area.width as usize;
@@ -589,6 +746,15 @@ impl TuiState {
                 Span::styled(event_display, Style::default().fg(Color::DarkGray)),
             ]));
         }
+    }
+}
+
+/// Get the icon, icon color, and text color for a task based on its status.
+fn task_status_style(status: &str) -> (&'static str, Color, Color) {
+    match status {
+        "completed" => ("●", Color::Green, Color::DarkGray),
+        "in_progress" => ("◐", Color::Yellow, Color::White),
+        _ => ("○", Color::DarkGray, Color::White),
     }
 }
 
@@ -627,14 +793,7 @@ fn render_user_task(
     member_color_map: &HashMap<String, usize>,
     area: Rect,
 ) {
-    // Icon color reflects status; text color is white for readability (#57)
-    let (task_icon, icon_color, text_color) = if task.status == "completed" {
-        ("●", Color::Green, Color::DarkGray)
-    } else if task.status == "in_progress" {
-        ("◐", Color::Yellow, Color::White)
-    } else {
-        ("○", Color::DarkGray, Color::White)
-    };
+    let (task_icon, icon_color, text_color) = task_status_style(&task.status);
 
     let (title, agent_name) = if task.is_internal {
         (
@@ -784,13 +943,7 @@ fn render_nested_internal(
     member_color_map: &HashMap<String, usize>,
     area: Rect,
 ) {
-    let (task_icon, icon_color, text_color) = if task.status == "completed" {
-        ("●", Color::Green, Color::DarkGray)
-    } else if task.status == "in_progress" {
-        ("◐", Color::Yellow, Color::White)
-    } else {
-        ("○", Color::DarkGray, Color::White)
-    };
+    let (task_icon, icon_color, text_color) = task_status_style(&task.status);
 
     let agent_name = &task.subject;
     let agent_color = member_color_map
@@ -819,4 +972,32 @@ fn render_nested_internal(
         ),
         Span::styled(title_display, Style::default().fg(text_color)),
     ]));
+}
+
+/// Shorten a Claude model name for compact display.
+/// e.g. "claude-sonnet-4-5-20250929" → "sonnet-4.5"
+///      "claude-opus-4-6" → "opus-4.6"
+///      "claude-haiku-4-5-20251001" → "haiku-4.5"
+fn shorten_model_name(model: &str) -> String {
+    // Strip "claude-" prefix
+    let name = model.strip_prefix("claude-").unwrap_or(model);
+
+    // Try to extract family and version: "sonnet-4-5-20250929" → "sonnet", "4", "5"
+    let parts: Vec<&str> = name.split('-').collect();
+    if parts.len() >= 3 {
+        let family = parts[0]; // sonnet, opus, haiku
+                               // Check if parts[1] and parts[2] are version digits
+        if parts[1].chars().all(|c| c.is_ascii_digit())
+            && parts[2].chars().all(|c| c.is_ascii_digit())
+        {
+            return format!("{}-{}.{}", family, parts[1], parts[2]);
+        }
+    }
+
+    // Fallback: just use the stripped name, truncated
+    if name.len() > 15 {
+        name[..15].to_string()
+    } else {
+        name.to_string()
+    }
 }

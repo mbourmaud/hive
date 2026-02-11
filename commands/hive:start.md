@@ -7,34 +7,33 @@ Launch an autonomous drone on a plan file.
 The `hive start` CLI uses this syntax:
 
 ```bash
-hive start <NAME> [PROMPT] [OPTIONS]
+hive start <NAME> [OPTIONS]
 ```
 
-Where `<NAME>` **must match the plan filename** (without `plan-` prefix and `.json` suffix).
+Where `<NAME>` **must match the plan filename** (without `.md` extension).
 
-**Example:** For a plan file `.hive/plans/plan-fix-auth-bug.json`, use:
+**Example:** For a plan file `.hive/plans/fix-auth-bug.md`, use:
 ```bash
 hive start fix-auth-bug --model sonnet
 ```
-
-**NOT** `--prd .hive/plans/plan-fix-auth-bug.json` (this flag doesn't exist!)
 
 ## Quick Reference
 
 | Plan File | Launch Command |
 |----------|----------------|
-| `.hive/plans/plan-security-api.json` | `hive start security-api` |
-| `.hive/plans/plan-fix-login-bug.json` | `hive start fix-login-bug` |
-| `.hive/plans/plan-add-dark-mode.json` | `hive start add-dark-mode` |
+| `.hive/plans/fix-auth-bug.md` | `hive start fix-auth-bug` |
+| `.hive/plans/security-api.md` | `hive start security-api` |
+| `.hive/plans/add-dark-mode.md` | `hive start add-dark-mode` |
+
+Legacy JSON plans (`plan-<name>.json`) are also supported for backward compatibility.
 
 ## Available Options
 
 ```
-hive start [OPTIONS] <NAME> [PROMPT]
+hive start [OPTIONS] <NAME>
 
 Arguments:
-  <NAME>    Drone name (must match plan id: plan-<NAME>.json)
-  [PROMPT]  Optional custom prompt to send to the drone
+  <NAME>    Drone name (must match plan filename: <NAME>.md)
 
 Options:
   --local        Run in current directory instead of worktree
@@ -50,9 +49,6 @@ hive start fix-auth-bug
 
 # Launch with specific model
 hive start security-api --model opus
-
-# Launch with custom prompt
-hive start my-feature "Focus on the authentication part first"
 
 # Run in current directory (no worktree)
 hive start quick-fix --local
@@ -76,12 +72,12 @@ If not initialized, run `hive init`.
 
 List plan files to find the correct name:
 ```bash
-ls .hive/plans/*.json 2>/dev/null
+ls .hive/plans/*.md 2>/dev/null
 ```
 
 Extract the drone name from the filename:
-- `plan-fix-auth-bug.json` → drone name is `fix-auth-bug`
-- `plan-security-api.json` → drone name is `security-api`
+- `fix-auth-bug.md` → drone name is `fix-auth-bug`
+- `security-api.md` → drone name is `security-api`
 
 ### Step 3: Launch the Drone
 
@@ -103,7 +99,7 @@ Stop:     hive stop <name>
 
 ## Important Notes
 
-1. **The drone name MUST match the plan id** - `plan-<name>.json` → `hive start <name>`
+1. **The drone name MUST match the plan filename** - `<name>.md` → `hive start <name>`
 2. **Default model is sonnet** - Use `--model opus` for complex tasks
 3. **Worktree is created automatically** - Unless `--local` is specified
 4. **Plan must exist** - The command will error if no matching plan is found
@@ -112,8 +108,4 @@ Stop:     hive stop <name>
 
 **Error: "No plan found for drone 'X'"**
 - Check the plan filename matches: `ls .hive/plans/`
-- The name must match exactly (without `plan-` prefix and `.json` suffix)
-
-**Error: "unexpected argument '--prd' found"**
-- Don't use `--prd` flag - it doesn't exist
-- Use: `hive start <name>` where name matches the PRD id
+- The name must match exactly (the filename without `.md` extension)

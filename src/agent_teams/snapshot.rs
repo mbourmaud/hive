@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::task_sync::{TeamMember, TeamTaskInfo};
 
@@ -13,11 +13,21 @@ pub enum SnapshotSource {
     Cache,
 }
 
+/// Info about an agent spawned by the team lead.
+#[derive(Debug, Clone)]
+pub struct AgentInfo {
+    pub name: String,
+    pub model: Option<String>,
+    /// true after SubagentStart, false after SubagentStop
+    pub active: bool,
+}
+
 /// A snapshot of a drone's task state at a point in time.
 #[derive(Debug, Clone)]
 pub struct TaskSnapshot {
     pub tasks: Vec<TeamTaskInfo>,
     pub members: Vec<TeamMember>,
+    pub agents: Vec<AgentInfo>,
     pub progress: (usize, usize),
     pub source: SnapshotSource,
 }
@@ -34,7 +44,7 @@ pub struct TaskSnapshotStore {
     /// High-water marks for progress: (max_completed, max_total) per drone
     high_water_marks: HashMap<String, (usize, usize)>,
     /// Track per-task completed status for monotonicity
-    completed_tasks: HashMap<String, std::collections::HashSet<String>>,
+    completed_tasks: HashMap<String, HashSet<String>>,
 }
 
 impl Default for TaskSnapshotStore {
@@ -67,6 +77,8 @@ impl TaskSnapshotStore {
 
     /// Update the snapshot for a drone by reading all sources and merging.
     ///
+    /// Priority: live_tasks > events > cache
+    ///
     /// Returns the updated snapshot reference.
     pub fn update(&mut self, drone_name: &str) -> &TaskSnapshot {
         use crate::agent_teams::task_sync;
@@ -86,7 +98,7 @@ impl TaskSnapshotStore {
         // Read team members (best-effort)
         let members = task_sync::read_team_members(drone_name).unwrap_or_default();
 
-        // Merge: prefer live if non-empty → events if non-empty → cache
+        // Merge: live → events → cache
         // Include ALL tasks (user + internal) so the TUI can render internals nested
         let (mut task_list, source) = if let Some(ref live) = live_tasks {
             (live.values().cloned().collect(), SnapshotSource::LiveTasks)
@@ -162,15 +174,82 @@ impl TaskSnapshotStore {
         self.high_water_marks
             .insert(drone_name.to_string(), (final_completed, final_total));
 
+        // Build agents list from events.ndjson
+        let agents = Self::build_agents_from_events(drone_name);
+
         let snapshot = TaskSnapshot {
             tasks: task_list,
             members,
+            agents,
             progress: (final_completed, final_total),
             source,
         };
 
         self.snapshots.insert(drone_name.to_string(), snapshot);
         self.snapshots.get(drone_name).unwrap()
+    }
+
+    /// Build agent info from events.ndjson by replaying AgentSpawn/SubagentStart/SubagentStop.
+    fn build_agents_from_events(drone_name: &str) -> Vec<AgentInfo> {
+        use crate::events::HiveEvent;
+        use std::fs;
+        use std::path::PathBuf;
+
+        let path = PathBuf::from(".hive/drones")
+            .join(drone_name)
+            .join("events.ndjson");
+
+        let contents = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+
+        let mut agents: HashMap<String, AgentInfo> = HashMap::new();
+
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Ok(event) = serde_json::from_str::<HiveEvent>(trimmed) {
+                match event {
+                    HiveEvent::AgentSpawn { name, model, .. } => {
+                        agents
+                            .entry(name.clone())
+                            .and_modify(|a| {
+                                if model.is_some() {
+                                    a.model = model.clone();
+                                }
+                            })
+                            .or_insert(AgentInfo {
+                                name,
+                                model,
+                                active: true,
+                            });
+                    }
+                    HiveEvent::SubagentStart { agent_id, .. } => {
+                        agents
+                            .entry(agent_id.clone())
+                            .and_modify(|a| a.active = true)
+                            .or_insert(AgentInfo {
+                                name: agent_id,
+                                model: None,
+                                active: true,
+                            });
+                    }
+                    HiveEvent::SubagentStop { agent_id, .. } => {
+                        if let Some(a) = agents.get_mut(&agent_id) {
+                            a.active = false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut result: Vec<AgentInfo> = agents.into_values().collect();
+        result.sort_by(|a, b| a.name.cmp(&b.name));
+        result
     }
 }
 

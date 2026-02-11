@@ -32,7 +32,9 @@ impl TuiState {
 
         match key.code {
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                if self.messages_view.is_some() {
+                if self.tools_view.is_some() {
+                    self.tools_view = None;
+                } else if self.messages_view.is_some() {
                     self.messages_view = None;
                     self.messages_scroll = 0;
                     self.messages_selected_index = usize::MAX;
@@ -110,6 +112,14 @@ impl TuiState {
                     self.messages_selected_index = usize::MAX; // Start in auto-scroll mode
                 }
             }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                if self.tools_view.is_some() {
+                    self.tools_view = None;
+                } else if !self.drones.is_empty() {
+                    let drone_name = self.drones[current_drone_idx].0.clone();
+                    self.tools_view = Some(drone_name);
+                }
+            }
             KeyCode::Char('x') | KeyCode::Char('X') => {
                 if !self.drones.is_empty() {
                     let drone_name = self.drones[current_drone_idx].0.clone();
@@ -167,9 +177,7 @@ impl TuiState {
                     let drone_name = self.drones[current_drone_idx].0.clone();
                     let status = &self.drones[current_drone_idx].1;
 
-                    if status.status == DroneState::Completed
-                        || status.status == DroneState::Stopped
-                    {
+                    if matches!(status.status, DroneState::Completed | DroneState::Stopped) {
                         match handle_resume_drone(&drone_name) {
                             Ok(msg) => self.set_message(msg, Color::Green),
                             Err(e) => self.set_message(format!("Error: {}", e), Color::Red),

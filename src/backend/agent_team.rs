@@ -17,11 +17,10 @@ impl ExecutionBackend for AgentTeamBackend {
     }
 
     fn is_running(&self, handle: &SpawnHandle) -> bool {
-        if let Some(pid) = handle.pid {
-            crate::commands::common::is_process_running(pid as i32)
-        } else {
-            false
-        }
+        handle
+            .pid
+            .map(|pid| crate::commands::common::is_process_running(pid as i32))
+            .unwrap_or(false)
     }
 
     fn stop(&self, handle: &SpawnHandle) -> Result<()> {
@@ -64,29 +63,14 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
         let _ = fs::File::create(&events_path);
     }
 
-    let prd: crate::types::Plan = {
-        let contents = fs::read_to_string(&config.prd_path)?;
-        serde_json::from_str(&contents).context("Failed to parse plan file")?
-    };
-
-    // Pre-seed tasks from plan into Claude's task directory
-    agent_teams::seed_tasks(&config.drone_name, &prd.tasks)?;
-
-    let prd_text = agent_teams::format_plan_for_prompt(&prd);
-    let task_instruction = if prd.tasks.is_empty() {
-        "- Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items.".to_string()
-    } else {
-        format!(
-            "- {} tasks have been pre-seeded in the task list. Review them with TaskList, then assign and execute. You may add more tasks if you discover additional work.",
-            prd.tasks.len()
-        )
-    };
+    // Read plan content — markdown is passed directly as the project requirements
+    let plan_content = fs::read_to_string(&config.prd_path).context("Failed to read plan file")?;
 
     let prompt = format!(
         r#"You are coordinating work on this project.
 
 ## Project Requirements
-{prd_text}
+{plan_content}
 
 ## Working directory
 {worktree_path}
@@ -94,7 +78,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 ## Instructions
 - Create an agent team named "{drone_name}" to implement this plan
 - Use delegate mode — coordinate only, do not write code yourself
-{task_instruction}
+- Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items.
 - Use sonnet for teammates by default, haiku for simple tasks
 - Maximum {max_agents} concurrent teammates
 - Do NOT modify any files under .hive/ — those are managed by the orchestrator
@@ -133,10 +117,9 @@ Write tool:
 file_path: {worktree_path}/.hive_complete
 content: HIVE_COMPLETE
 ```"#,
-        prd_text = prd_text,
+        plan_content = plan_content,
         worktree_path = config.worktree_path.display(),
         drone_name = config.drone_name,
-        task_instruction = task_instruction,
         max_agents = config.max_agents,
     );
 

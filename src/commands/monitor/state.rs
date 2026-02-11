@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use ratatui::style::Color;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -17,6 +17,18 @@ use crate::types::{DroneState, DroneStatus, Plan};
 
 use super::cost::{parse_cost_from_log, CostSummary};
 
+/// A record of a completed tool call, for the tools view.
+#[derive(Debug, Clone)]
+pub struct ToolRecord {
+    pub tool: String,
+    pub tool_use_id: String,
+    #[allow(dead_code)]
+    pub timestamp: Instant,
+}
+
+/// Max tool records per drone (ring buffer)
+const MAX_TOOL_RECORDS: usize = 50;
+
 /// Check PR state with timeout. Returns true if PR is in expected state.
 /// Uses a cache reference to avoid redundant gh calls (cache entries valid for 60s).
 fn check_pr_state(
@@ -26,7 +38,7 @@ fn check_pr_state(
 ) -> bool {
     // Check cache first (valid for 60 seconds)
     if let Some((cached_state, when)) = cache.get(branch) {
-        if when.elapsed() < std::time::Duration::from_secs(60) {
+        if when.elapsed() < Duration::from_secs(60) {
             return cached_state == expected_state;
         }
     }
@@ -82,6 +94,12 @@ pub(crate) struct TuiState {
     pub all_tasks_done_since: HashMap<String, Instant>,
     /// Tracks the last time a new event was received per drone (#58)
     pub last_event_time: HashMap<String, Instant>,
+    /// Per-drone tool call history from PostToolUse events
+    pub tool_history: HashMap<String, VecDeque<ToolRecord>>,
+    /// Full-screen tools view: Some(drone_name) when active
+    pub tools_view: Option<String>,
+    /// TTL cache for list_drones() — only re-read every second
+    pub drones_cache_time: Option<Instant>,
 }
 
 impl TuiState {
@@ -101,7 +119,7 @@ impl TuiState {
             .map(|(name, _)| name.clone())
             .collect();
 
-        Ok(Self {
+        let state = Self {
             selected_index: 0,
             scroll_offset: 0,
             message: None,
@@ -128,11 +146,24 @@ impl TuiState {
             pending_clean: None,
             all_tasks_done_since: HashMap::new(),
             last_event_time: HashMap::new(),
-        })
+            tool_history: HashMap::new(),
+            tools_view: None,
+            drones_cache_time: None,
+        };
+
+        Ok(state)
     }
 
     pub fn tick(&mut self) -> Result<()> {
-        self.drones = list_drones()?;
+        // TTL cache: only re-read drones from disk every second
+        let stale = self
+            .drones_cache_time
+            .map(|t| t.elapsed() > Duration::from_secs(1))
+            .unwrap_or(true);
+        if stale {
+            self.drones = list_drones()?;
+            self.drones_cache_time = Some(Instant::now());
+        }
 
         // Desktop notifications for state changes
         for (name, status) in &self.drones {
@@ -173,7 +204,7 @@ impl TuiState {
         }
 
         // Read new events from hooks (incremental ndjson tailing)
-        for (name, _status) in &self.drones {
+        for (name, _) in &self.drones {
             let reader = self
                 .event_readers
                 .entry(name.clone())
@@ -189,6 +220,24 @@ impl TuiState {
                     let _ = crate::agent_teams::auto_complete_tasks(name);
                     self.auto_stopped_drones.insert(name.clone());
                     let _ = crate::commands::kill_clean::kill_quiet(name.clone());
+                }
+
+                // Capture ToolDone events into tool_history ring buffer
+                if let HiveEvent::ToolDone {
+                    ref tool,
+                    ref tool_use_id,
+                    ..
+                } = event
+                {
+                    let history = self.tool_history.entry(name.clone()).or_default();
+                    if history.len() >= MAX_TOOL_RECORDS {
+                        history.pop_front();
+                    }
+                    history.push_back(ToolRecord {
+                        tool: tool.clone(),
+                        tool_use_id: tool_use_id.clone().unwrap_or_default(),
+                        timestamp: Instant::now(),
+                    });
                 }
 
                 self.last_event_time.insert(name.clone(), Instant::now());
@@ -379,9 +428,9 @@ impl TuiState {
                     // Also check no new events recently
                     let last_event = self.last_event_time.get(name).copied();
                     let idle_long_enough =
-                        first_seen.elapsed() > std::time::Duration::from_secs(IDLE_TIMEOUT_SECS);
+                        first_seen.elapsed() > Duration::from_secs(IDLE_TIMEOUT_SECS);
                     let no_recent_events = last_event
-                        .map(|t| t.elapsed() > std::time::Duration::from_secs(IDLE_TIMEOUT_SECS))
+                        .map(|t| t.elapsed() > Duration::from_secs(IDLE_TIMEOUT_SECS))
                         .unwrap_or(true);
                     if idle_long_enough && no_recent_events {
                         Some(name.clone())
@@ -535,21 +584,16 @@ impl TuiState {
     pub fn drone_elapsed(status: &DroneStatus) -> String {
         use crate::commands::common::{duration_between, format_duration};
 
-        if status.status == DroneState::Completed {
-            // Use updated timestamp as completion time
-            if let Some(duration) = duration_between(&status.started, &status.updated) {
-                format_duration(duration)
-            } else {
-                elapsed_since(&status.started).unwrap_or_else(|| "?".to_string())
+        match status.status {
+            DroneState::Completed | DroneState::Stopped | DroneState::Zombie => {
+                // Use duration between start and last update (completion/stop time)
+                duration_between(&status.started, &status.updated)
+                    .map(format_duration)
+                    .unwrap_or_else(|| {
+                        elapsed_since(&status.started).unwrap_or_else(|| "?".to_string())
+                    })
             }
-        } else if matches!(status.status, DroneState::Stopped | DroneState::Zombie) {
-            if let Some(duration) = duration_between(&status.started, &status.updated) {
-                format_duration(duration)
-            } else {
-                elapsed_since(&status.started).unwrap_or_else(|| "?".to_string())
-            }
-        } else {
-            elapsed_since(&status.started).unwrap_or_else(|| "?".to_string())
+            _ => elapsed_since(&status.started).unwrap_or_else(|| "?".to_string()),
         }
     }
 }

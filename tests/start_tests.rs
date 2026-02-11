@@ -72,18 +72,15 @@ fn setup_test_env(test_name: &str) -> PathBuf {
         .output()
         .unwrap();
 
-    // Create a test PRD
-    let prd = "{
-        \"id\": \"test-prd\",
-        \"title\": \"Test PRD\",
-        \"description\": \"A test PRD\",
-        \"version\": \"1.0.0\",
-        \"created_at\": \"2024-01-01T00:00:00Z\",
-        \"plan\": \"# Test Plan\\n\\nThis is a test plan for the test drone.\",
-        \"tasks\": [{\"title\": \"Test task\", \"description\": \"A test task\"}]
-    }";
+    // Create a test plan (markdown)
+    let plan_content = "# Test Plan\n\nThis is a test plan for the test drone.\n\n## Goal\nTest the drone.\n\n## Tasks\n- Do the thing\n";
 
-    fs::write(temp_dir.join(".hive/prds/prd-test-drone.json"), prd).unwrap();
+    // Ensure plans directory exists (hive init creates it)
+    let plans_dir = temp_dir.join(".hive/plans");
+    if !plans_dir.exists() {
+        fs::create_dir_all(&plans_dir).unwrap();
+    }
+    fs::write(plans_dir.join("test-drone.md"), plan_content).unwrap();
 
     temp_dir
 }
@@ -133,8 +130,8 @@ fn test_start_no_prd() {
     let binary = get_binary_path();
     let temp_dir = setup_test_env("noprd");
 
-    // Remove PRD
-    fs::remove_file(temp_dir.join(".hive/prds/prd-test-drone.json")).unwrap();
+    // Remove plan file
+    let _ = fs::remove_file(temp_dir.join(".hive/plans/test-drone.md"));
 
     let output = Command::new(&binary)
         .args(["start", "nonexistent-drone", "--local", "--dry-run"])

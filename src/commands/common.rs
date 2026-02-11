@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Output};
 use std::time::{Duration, Instant};
 
-use crate::types::{DroneStatus, Plan};
+use crate::types::{DroneStatus, LegacyJsonPlan, Plan};
 
 // ============================================================================
 // Constants
@@ -73,10 +73,30 @@ pub fn elapsed_since(start: &str) -> Option<String> {
 // PRD Utilities
 // ============================================================================
 
-/// Load a PRD from the given file path.
+/// Load a plan from the given file path (supports .md and legacy .json).
 pub fn load_prd(path: &Path) -> Option<Plan> {
     let contents = fs::read_to_string(path).ok()?;
-    serde_json::from_str(&contents).ok()
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    match ext {
+        "md" => {
+            let id = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            Some(Plan {
+                id,
+                content: contents,
+                target_branch: None,
+                base_branch: None,
+            })
+        }
+        "json" => {
+            let legacy: LegacyJsonPlan = serde_json::from_str(&contents).ok()?;
+            Some(legacy.into())
+        }
+        _ => None,
+    }
 }
 
 /// Get read-only progress from Agent Teams task list.
@@ -255,14 +275,15 @@ pub fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
 // String Utilities
 // ============================================================================
 
-/// Truncate a string with ellipsis if it exceeds max_len.
+/// Truncate a string with ellipsis if it exceeds max_len (char-aware).
 pub fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else if max_len > 3 {
-        format!("{}...", &s[..max_len - 3])
+        let truncated: String = s.chars().take(max_len - 3).collect();
+        format!("{}...", truncated)
     } else {
-        s[..max_len].to_string()
+        s.chars().take(max_len).collect()
     }
 }
 

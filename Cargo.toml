@@ -1,6 +1,6 @@
 [package]
 name = "hive"
-version = "3.2.2"
+version = "3.3.0"
 edition = "2021"
 authors = ["Mathieu Bourmaud <mathieu.bourmaud@gmail.com>"]
 description = "CLI tool for orchestrating multiple Claude Code instances via git worktrees"
@@ -35,6 +35,11 @@ nix = { version = "0.29", features = ["signal"] }
 [dev-dependencies]
 tempfile = "3"
 insta = { version = "1", features = ["yaml"] }
+
+[profile.dev]
+opt-level = 0
+debug = 1            # Limited debug info — faster linking
+incremental = true
 
 [profile.release]
 strip = true

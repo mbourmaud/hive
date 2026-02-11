@@ -2,7 +2,8 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::{DroneState, DroneStatus, Plan};
+use crate::commands::common::load_prd;
+use crate::types::{DroneState, DroneStatus};
 
 // Handler for 'New Drone' action - browse PRDs and launch
 pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
@@ -39,8 +40,7 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
         };
 
         // Read plan to get default name
-        let plan_contents = fs::read_to_string(plan_path)?;
-        let plan: Plan = serde_json::from_str(&plan_contents)?;
+        let plan = load_prd(plan_path).ok_or_else(|| anyhow::anyhow!("Failed to load plan"))?;
         let default_name = plan.id.clone();
 
         // Prompt for drone name
@@ -71,7 +71,7 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
     result
 }
 
-// Find all plan files in .hive/plans/, .hive/prds/ (compat), and project root
+// Find all plan files in .hive/plans/, .hive/prds/ (compat)
 pub(crate) fn find_plan_files() -> Result<Vec<PathBuf>> {
     let mut plans = Vec::new();
 
@@ -82,24 +82,12 @@ pub(crate) fn find_plan_files() -> Result<Vec<PathBuf>> {
             for entry in fs::read_dir(&hive_dir)? {
                 let entry = entry?;
                 let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let ext = path.extension().and_then(|s| s.to_str());
+                if ext == Some("md") || ext == Some("json") {
                     plans.push(path);
                 }
             }
             break; // prds is usually a symlink to plans, avoid duplicates
-        }
-    }
-
-    // Search in project root for plan*.json and prd*.json
-    for entry in fs::read_dir(".")? {
-        let entry = entry?;
-        let path = entry.path();
-        if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-            if (name.starts_with("plan") || name.starts_with("prd"))
-                && path.extension().and_then(|s| s.to_str()) == Some("json")
-            {
-                plans.push(path);
-            }
         }
     }
 

@@ -2,41 +2,55 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A task from the plan, pre-seeded into Claude's task list at drone startup.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlanTask {
-    pub title: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub files: Vec<String>,
-}
-
-/// Plan (formerly PRD) structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Plan — a markdown file with metadata extracted from content/filename.
+#[derive(Debug, Clone)]
 pub struct Plan {
     pub id: String,
-    /// Title of the PRD (also accepts "name" for backwards compatibility)
+    /// Raw markdown content — sent directly to the team lead as prompt
+    pub content: String,
+    pub target_branch: Option<String>,
+    /// Base branch to create worktree from (defaults to origin/master or origin/main)
+    pub base_branch: Option<String>,
+}
+
+impl Plan {
+    /// Extract a title from the first `# ...` heading in the markdown, if present.
+    pub fn title(&self) -> &str {
+        self.content
+            .lines()
+            .find(|line| line.starts_with("# "))
+            .map(|line| line.trim_start_matches("# ").trim())
+            .unwrap_or(&self.id)
+    }
+}
+
+/// Legacy JSON plan format — kept for backward compatibility with existing .json plans.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LegacyJsonPlan {
+    pub id: String,
     #[serde(alias = "name")]
     pub title: String,
     #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub version: String,
-    #[serde(default)]
-    pub created_at: String,
-    pub target_platforms: Option<Vec<String>>,
-    pub target_branch: Option<String>,
-    /// Base branch to create worktree from (defaults to origin/master or origin/main)
-    /// For master/main, always uses origin/ version (up-to-date remote)
-    pub base_branch: Option<String>,
-    /// Freeform markdown plan — sent directly to the team lead
-    #[serde(default)]
     pub plan: String,
-    /// Structured tasks — pre-seeded into ~/.claude/tasks/<drone>/ at startup.
-    /// Required: plans without tasks will fail validation.
-    #[serde(default)]
-    pub tasks: Vec<PlanTask>,
+    pub target_branch: Option<String>,
+    pub base_branch: Option<String>,
+}
+
+impl From<LegacyJsonPlan> for Plan {
+    fn from(legacy: LegacyJsonPlan) -> Self {
+        // Use the freeform `plan` field as content, prefixed with the title
+        let content = if legacy.plan.is_empty() {
+            format!("# {}", legacy.title)
+        } else {
+            format!("# {}\n\n{}", legacy.title, legacy.plan)
+        };
+        Plan {
+            id: legacy.id,
+            content,
+            target_branch: legacy.target_branch,
+            base_branch: legacy.base_branch,
+        }
+    }
 }
 
 /// Drone execution status
@@ -113,12 +127,9 @@ impl<'de> serde::Deserialize<'de> for ExecutionMode {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        // Map old "worktree" values to AgentTeam for backwards compat
-        match s.as_str() {
-            "agent_team" | "worktree" => Ok(ExecutionMode::AgentTeam),
-            _ => Ok(ExecutionMode::AgentTeam),
-        }
+        // All values map to AgentTeam (only mode; "worktree" kept for backwards compat)
+        let _s = String::deserialize(deserializer)?;
+        Ok(ExecutionMode::AgentTeam)
     }
 }
 
@@ -179,7 +190,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_plan_prd() {
+    fn test_plan_from_markdown() {
+        let plan = Plan {
+            id: "my-feature".to_string(),
+            content: "# My Feature\n\n## Goal\nBuild X\n\n## Requirements\n- Thing A".to_string(),
+            target_branch: Some("feature/my-feature".to_string()),
+            base_branch: Some("main".to_string()),
+        };
+
+        assert_eq!(plan.id, "my-feature");
+        assert_eq!(plan.title(), "My Feature");
+        assert!(plan.content.contains("## Goal"));
+    }
+
+    #[test]
+    fn test_plan_title_fallback() {
+        let plan = Plan {
+            id: "no-heading".to_string(),
+            content: "Just some content without a heading".to_string(),
+            target_branch: None,
+            base_branch: None,
+        };
+
+        // Falls back to id when no heading is present
+        assert_eq!(plan.title(), "no-heading");
+    }
+
+    #[test]
+    fn test_legacy_json_plan_conversion() {
         let json = r###"{
             "id": "my-feature",
             "title": "My Feature",
@@ -188,49 +226,30 @@ mod tests {
             "base_branch": "main",
             "plan": "## Goal\nBuild X\n\n## Requirements\n- Thing A",
             "tasks": [
-                {"title": "Task A", "description": "Do A"},
-                {"title": "Task B", "description": "Do B"}
+                {"title": "Task A", "description": "Do A"}
             ]
         }"###;
 
-        let prd: Plan = serde_json::from_str(json).unwrap();
-        assert_eq!(prd.id, "my-feature");
-        assert_eq!(prd.plan, "## Goal\nBuild X\n\n## Requirements\n- Thing A");
-        assert_eq!(prd.tasks.len(), 2);
-        assert_eq!(prd.tasks[0].title, "Task A");
-        assert_eq!(prd.tasks[1].description, "Do B");
+        let legacy: LegacyJsonPlan = serde_json::from_str(json).unwrap();
+        let plan: Plan = legacy.into();
+        assert_eq!(plan.id, "my-feature");
+        assert_eq!(plan.title(), "My Feature");
+        assert!(plan.content.contains("## Goal"));
+        assert!(plan.content.contains("Build X"));
     }
 
     #[test]
-    fn test_parse_plan_with_tasks_and_files() {
-        let json = r#"{
-            "id": "refactor",
-            "title": "Refactor",
-            "plan": "Refactor the thing",
-            "tasks": [
-                {"title": "Update module", "description": "Rewrite mod.rs", "files": ["src/mod.rs"]}
-            ]
-        }"#;
-
-        let prd: Plan = serde_json::from_str(json).unwrap();
-        assert_eq!(prd.tasks.len(), 1);
-        assert_eq!(prd.tasks[0].files, vec!["src/mod.rs"]);
-    }
-
-    #[test]
-    fn test_parse_minimal_prd() {
-        // Plans without tasks still deserialize (tasks defaults to empty vec),
-        // but will fail validation at `hive start` time.
+    fn test_legacy_json_plan_empty_plan_field() {
         let json = r#"{
             "id": "minimal",
             "title": "Minimal PRD",
-            "plan": "Do the thing"
+            "plan": ""
         }"#;
 
-        let prd: Plan = serde_json::from_str(json).unwrap();
-        assert_eq!(prd.id, "minimal");
-        assert_eq!(prd.plan, "Do the thing");
-        assert!(prd.tasks.is_empty());
+        let legacy: LegacyJsonPlan = serde_json::from_str(json).unwrap();
+        let plan: Plan = legacy.into();
+        assert_eq!(plan.id, "minimal");
+        assert_eq!(plan.content, "# Minimal PRD");
     }
 
     #[test]

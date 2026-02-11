@@ -7,7 +7,7 @@ use std::process::Command as ProcessCommand;
 use crate::backend::{self, SpawnConfig};
 use crate::commands::profile;
 use crate::config;
-use crate::types::{DroneState, DroneStatus, ExecutionMode, Plan};
+use crate::types::{DroneState, DroneStatus, ExecutionMode, LegacyJsonPlan, Plan};
 
 pub fn run(
     name: String,
@@ -58,8 +58,8 @@ pub fn run(
 
     // 2. Find plan
     let prd_path = find_plan(&name)?;
-    let prd = load_prd(&prd_path)?;
-    println!("  {} Found plan: {}", "✓".green(), prd.title);
+    let prd = load_plan(&prd_path)?;
+    println!("  {} Found plan: {}", "✓".green(), prd.title());
 
     // 3. Determine branch and check for existing worktree
     let default_branch = format!("hive/{}", name);
@@ -138,14 +138,14 @@ pub fn run(
             status: DroneState::Starting,
             current_task: None,
             completed: Vec::new(),
-            story_times: std::collections::HashMap::new(),
+            story_times: Default::default(),
             total: 0,
             started: chrono::Utc::now().to_rfc3339(),
             updated: chrono::Utc::now().to_rfc3339(),
             error_count: 0,
             last_error: None,
             lead_model: Some("opus".to_string()),
-            active_agents: std::collections::HashMap::new(),
+            active_agents: Default::default(),
         };
 
         let status_json = serde_json::to_string_pretty(&status)?;
@@ -223,112 +223,94 @@ pub fn run(
 
 fn find_plan(name: &str) -> Result<PathBuf> {
     // Search in .hive/plans/ first, fall back to .hive/prds/ for backwards compat
+    // Note: prds/ is often a symlink to plans/, so only search one directory
     let plans_dir = PathBuf::from(".hive/plans");
     let prds_dir = PathBuf::from(".hive/prds");
 
     let search_dir = if plans_dir.exists() {
-        &plans_dir
+        plans_dir
     } else if prds_dir.exists() {
-        &prds_dir
+        prds_dir
     } else {
         bail!("No plans directory found. Run 'hive init' first.");
     };
 
-    let mut candidates = Vec::new();
-
-    // Search patterns: plan-<name>.json, <name>.json, prd-<name>.json (compat)
-    let patterns = vec![
-        search_dir.join(format!("plan-{}.json", name)),
-        search_dir.join(format!("{}.json", name)),
-        search_dir.join(format!("prd-{}.json", name)),
+    // Search in priority order: markdown first (preferred), then legacy JSON (backward compat)
+    let candidates = [
+        format!("{}.md", name),
+        format!("plan-{}.md", name),
+        format!("plan-{}.json", name),
+        format!("{}.json", name),
+        format!("prd-{}.json", name),
     ];
 
-    for pattern in patterns {
-        if pattern.exists() {
-            candidates.push(pattern);
+    for filename in &candidates {
+        let path = search_dir.join(filename);
+        if path.exists() {
+            return Ok(path);
         }
     }
 
-    // Also search in project root for plan*.json and prd*.json files
-    let root_dir = std::env::current_dir()?;
-    if let Ok(entries) = fs::read_dir(&root_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if (filename.starts_with("plan") || filename.starts_with("prd"))
-                        && filename.ends_with(".json")
-                    {
-                        candidates.push(path);
-                    }
-                }
+    // No candidates found — list available plans
+    let mut available = Vec::new();
+    for entry in fs::read_dir(&search_dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let ext = path.extension().and_then(|s| s.to_str());
+        if ext == Some("md") || ext == Some("json") {
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                available.push(filename.to_string());
             }
         }
     }
 
-    // If no candidates found, list available plans
-    if candidates.is_empty() {
-        let mut available = Vec::new();
-        for entry in fs::read_dir(search_dir)?.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    available.push(filename.to_string());
-                }
-            }
-        }
-
-        if available.is_empty() {
-            bail!(
-                "No plan found for drone '{}'. No plans available in .hive/plans/",
-                name
-            );
-        } else {
-            bail!(
-                "No plan found for drone '{}'. Available plans:\n  {}",
-                name,
-                available.join("\n  ")
-            );
-        }
+    if available.is_empty() {
+        bail!(
+            "No plan found for drone '{}'. No plans available in .hive/plans/",
+            name
+        );
+    } else {
+        bail!(
+            "No plan found for drone '{}'. Available plans:\n  {}",
+            name,
+            available.join("\n  ")
+        );
     }
-
-    // If only one candidate, use it
-    if candidates.len() == 1 {
-        return Ok(candidates.into_iter().next().unwrap());
-    }
-
-    // Multiple candidates - prompt user to select
-    use dialoguer::Select;
-
-    println!("{}", "Multiple PRD files found:".bright_yellow());
-    let selection = Select::new()
-        .items(
-            &candidates
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>(),
-        )
-        .default(0)
-        .interact()?;
-
-    Ok(candidates[selection].clone())
 }
 
-fn load_prd(path: &PathBuf) -> Result<Plan> {
-    let contents = fs::read_to_string(path).context("Failed to read PRD")?;
-    let prd: Plan = serde_json::from_str(&contents).context("Failed to parse PRD")?;
+fn load_plan(path: &Path) -> Result<Plan> {
+    let contents = fs::read_to_string(path).context("Failed to read plan")?;
 
-    // Validate that plan is not empty
-    if prd.plan.trim().is_empty() {
-        bail!("Plan field cannot be empty");
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    let plan = match ext {
+        "md" => {
+            // Markdown plan: ID from filename, content is the raw markdown
+            let id = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            Plan {
+                id,
+                content: contents,
+                target_branch: None,
+                base_branch: None,
+            }
+        }
+        "json" => {
+            // Legacy JSON plan: convert to Plan
+            let legacy: LegacyJsonPlan =
+                serde_json::from_str(&contents).context("Failed to parse plan JSON")?;
+            legacy.into()
+        }
+        _ => bail!("Unsupported plan file format: {}", ext),
+    };
+
+    // Validate non-empty content
+    if plan.content.trim().is_empty() {
+        bail!("Plan content cannot be empty");
     }
 
-    // Validate that tasks array is non-empty
-    if prd.tasks.is_empty() {
-        bail!("Plan must include at least one task in the 'tasks' array. Recreate the plan with /hive:plan");
-    }
-
-    Ok(prd)
+    Ok(plan)
 }
 
 fn get_project_name() -> Result<String> {
@@ -500,45 +482,100 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
         .to_string();
 
     // Build hook commands — each appends one line to events.ndjson via jq (lean, no persistence scripts)
+    //
+    // Hooks use PreToolUse (fires before execution) for task/agent/message tracking,
+    // PostToolUse (fires after) for tool completion tracking, and
+    // SubagentStart/SubagentStop for agent lifecycle.
     let hooks = serde_json::json!({
-        "PostToolUse": [
+        "PreToolUse": [
             {
-                "matcher": "TaskCreate",
-                "command": format!(
-                    r#"cat | jq -c '{{event:"TaskCreate",ts:(now|todate),subject:.tool_input.subject,description:(.tool_input.description // "")}}' >> {}"#,
-                    events_file
-                ),
-                "async": true,
-                "timeout": 5
+                "matcher": "Task",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"AgentSpawn",ts:(now|todate),name:(.tool_input.description // .tool_input.name // ""),model:(.tool_input.model // null),subagent_type:(.tool_input.subagent_type // null)}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
             },
             {
-                "matcher": "TaskUpdate",
-                "command": format!(
-                    r#"cat | jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:.tool_input.taskId,status:(.tool_input.status // ""),owner:.tool_input.owner}}' >> {}"#,
-                    events_file
-                ),
-                "async": true,
-                "timeout": 5
+                "matcher": "TodoWrite",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"TodoSnapshot",ts:(now|todate),todos:[.tool_input.todos[]? | {{content:.content,status:(.status // "pending"),activeForm:(.activeForm // null)}}]}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
             },
             {
                 "matcher": "SendMessage",
-                "command": format!(
-                    r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"Message",ts:(now|todate),recipient:(.tool_input.recipient // ""),summary:(.tool_input.summary // (.tool_input.content // "" | .[0:200]))}}' >> {} && \
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"Message",ts:(now|todate),recipient:(.tool_input.recipient // ""),summary:(.tool_input.summary // (.tool_input.content // "" | .[0:200]))}}' >> {} && \
     echo "$INPUT" | jq -c '{{timestamp:(now|todate),from:"{}",to:(.tool_input.recipient // ""),content:(.tool_input.content // ""),summary:(.tool_input.summary // "")}}' >> {}"#,
-                    events_file, drone_name, messages_file
-                ),
-                "async": true,
-                "timeout": 5
+                        events_file, drone_name, messages_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"ToolDone",ts:(now|todate),tool:.tool_name,tool_use_id:.tool_use_id}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
+            }
+        ],
+        "SubagentStart": [
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"SubagentStart",ts:(now|todate),agent_id:.agent_id,agent_type:.agent_type}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
+            }
+        ],
+        "SubagentStop": [
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"SubagentStop",ts:(now|todate),agent_id:.agent_id,agent_type:.agent_type}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
             }
         ],
         "Stop": [
             {
-                "command": format!(
-                    "echo '{{\"event\":\"Stop\",\"ts\":\"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'\"}}' >> {}",
-                    events_file
-                ),
-                "async": true,
-                "timeout": 5
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        "echo '{{\"event\":\"Stop\",\"ts\":\"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'\"}}' >> {}",
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
             }
         ]
     });
@@ -558,10 +595,8 @@ fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
     let hive_dir = std::env::current_dir()?.join(".hive");
     let symlink_path = worktree.join(".hive");
 
-    if symlink_path.exists() {
-        if symlink_path.is_symlink() {
-            fs::remove_file(&symlink_path)?;
-        } else if symlink_path.is_dir() {
+    if symlink_path.exists() || symlink_path.is_symlink() {
+        if symlink_path.is_dir() && !symlink_path.is_symlink() {
             fs::remove_dir_all(&symlink_path)?;
         } else {
             fs::remove_file(&symlink_path)?;
@@ -592,27 +627,30 @@ mod tests {
 
         assert!(settings.get("hooks").is_some());
         let hooks = settings.get("hooks").unwrap();
+        assert!(hooks.get("PreToolUse").is_some());
         assert!(hooks.get("PostToolUse").is_some());
+        assert!(hooks.get("SubagentStart").is_some());
+        assert!(hooks.get("SubagentStop").is_some());
         assert!(hooks.get("Stop").is_some());
 
-        // Verify PostToolUse has 3 matchers
-        let post_tool = hooks.get("PostToolUse").unwrap().as_array().unwrap();
-        assert_eq!(post_tool.len(), 3);
+        // Verify PreToolUse has 3 matchers: Task, TodoWrite, SendMessage
+        let pre_tool = hooks.get("PreToolUse").unwrap().as_array().unwrap();
+        assert_eq!(pre_tool.len(), 3);
 
-        // Verify drone name is baked in
-        let command = post_tool[0].get("command").unwrap().as_str().unwrap();
+        // Verify PostToolUse has 1 entry (no matcher — captures all tools)
+        let post_tool = hooks.get("PostToolUse").unwrap().as_array().unwrap();
+        assert_eq!(post_tool.len(), 1);
+
+        // Verify TodoWrite matcher exists and contains drone name
+        let todo_matcher = &pre_tool[1];
+        assert_eq!(todo_matcher["matcher"].as_str().unwrap(), "TodoWrite");
+        let command = todo_matcher["hooks"][0]
+            .get("command")
+            .unwrap()
+            .as_str()
+            .unwrap();
         assert!(command.contains("test-drone"));
         assert!(command.contains("events.ndjson"));
-
-        // Verify no Python scripts in any hook command
-        for hook in post_tool {
-            let cmd = hook.get("command").unwrap().as_str().unwrap();
-            assert!(
-                !cmd.contains("python3"),
-                "Hook command should not contain python3: {}",
-                cmd
-            );
-        }
     }
 
     #[test]
@@ -654,10 +692,24 @@ mod tests {
             fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
         let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
+        // Check PreToolUse hooks have async + timeout
+        let pre_tool = settings["hooks"]["PreToolUse"].as_array().unwrap();
+        for entry in pre_tool {
+            let hooks = entry["hooks"].as_array().unwrap();
+            for hook in hooks {
+                assert!(hook.get("async").unwrap().as_bool().unwrap());
+                assert_eq!(hook.get("timeout").unwrap().as_u64().unwrap(), 5);
+            }
+        }
+
+        // Check PostToolUse hooks
         let post_tool = settings["hooks"]["PostToolUse"].as_array().unwrap();
-        for hook in post_tool {
-            assert!(hook.get("async").unwrap().as_bool().unwrap());
-            assert_eq!(hook.get("timeout").unwrap().as_u64().unwrap(), 5);
+        for entry in post_tool {
+            let hooks = entry["hooks"].as_array().unwrap();
+            for hook in hooks {
+                assert!(hook.get("async").unwrap().as_bool().unwrap());
+                assert_eq!(hook.get("timeout").unwrap().as_u64().unwrap(), 5);
+            }
         }
     }
 }

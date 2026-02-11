@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, Seek, SeekFrom};
 use std::path::PathBuf;
@@ -48,6 +49,51 @@ pub enum HiveEvent {
         #[serde(default)]
         model: String,
     },
+    /// Agent spawned via PreToolUse Task matcher
+    AgentSpawn {
+        ts: String,
+        name: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        subagent_type: Option<String>,
+    },
+    /// Subagent started (SubagentStart hook)
+    SubagentStart {
+        ts: String,
+        agent_id: String,
+        #[serde(default)]
+        agent_type: Option<String>,
+    },
+    /// Subagent stopped (SubagentStop hook)
+    SubagentStop {
+        ts: String,
+        agent_id: String,
+        #[serde(default)]
+        agent_type: Option<String>,
+    },
+    /// Tool completed (PostToolUse hook)
+    ToolDone {
+        ts: String,
+        tool: String,
+        #[serde(default)]
+        tool_use_id: Option<String>,
+    },
+    /// Full snapshot of all todos from TodoWrite (full-replace semantics)
+    TodoSnapshot {
+        ts: String,
+        todos: Vec<TodoItem>,
+    },
+}
+
+/// A single todo item from Claude Code's TodoWrite tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoItem {
+    pub content: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default, rename = "activeForm")]
+    pub active_form: Option<String>,
 }
 
 impl HiveEvent {
@@ -60,6 +106,11 @@ impl HiveEvent {
             HiveEvent::Idle { ts, .. } => ts,
             HiveEvent::Stop { ts } => ts,
             HiveEvent::Start { ts, .. } => ts,
+            HiveEvent::AgentSpawn { ts, .. } => ts,
+            HiveEvent::SubagentStart { ts, .. } => ts,
+            HiveEvent::SubagentStop { ts, .. } => ts,
+            HiveEvent::ToolDone { ts, .. } => ts,
+            HiveEvent::TodoSnapshot { ts, .. } => ts,
         }
     }
 }
@@ -84,8 +135,7 @@ pub fn reconstruct_tasks(drone_name: &str) -> Vec<EventTask> {
         Err(_) => return Vec::new(),
     };
 
-    let mut task_map: std::collections::HashMap<String, EventTask> =
-        std::collections::HashMap::new();
+    let mut task_map: HashMap<String, EventTask> = HashMap::new();
     let mut create_counter: usize = 0;
 
     for line in contents.lines() {
@@ -95,6 +145,29 @@ pub fn reconstruct_tasks(drone_name: &str) -> Vec<EventTask> {
         }
         match serde_json::from_str::<HiveEvent>(trimmed) {
             Ok(event) => match event {
+                HiveEvent::TodoSnapshot { todos, .. } => {
+                    // Full-replace: clear previous state and rebuild from snapshot
+                    task_map.clear();
+                    create_counter = 0;
+                    for todo in todos {
+                        create_counter += 1;
+                        let id = create_counter.to_string();
+                        let status = if todo.status.is_empty() {
+                            "pending".to_string()
+                        } else {
+                            todo.status
+                        };
+                        task_map.insert(
+                            id.clone(),
+                            EventTask {
+                                task_id: id,
+                                subject: todo.content,
+                                status,
+                                owner: None,
+                            },
+                        );
+                    }
+                }
                 HiveEvent::TaskCreate { subject, .. } => {
                     create_counter += 1;
                     let id = create_counter.to_string();
@@ -409,5 +482,51 @@ mod tests {
             model: "opus".to_string(),
         };
         assert_eq!(event.timestamp(), "2025-01-15T10:00:00Z");
+    }
+
+    #[test]
+    fn test_parse_todo_snapshot() {
+        let json = r#"{"event":"TodoSnapshot","ts":"2025-01-15T10:00:00Z","todos":[{"content":"Build auth","status":"completed","activeForm":"Building auth"},{"content":"Write tests","status":"in_progress","activeForm":"Writing tests"},{"content":"Deploy","status":"pending"}]}"#;
+        let event: HiveEvent = serde_json::from_str(json).unwrap();
+        match event {
+            HiveEvent::TodoSnapshot { ts, todos } => {
+                assert_eq!(ts, "2025-01-15T10:00:00Z");
+                assert_eq!(todos.len(), 3);
+                assert_eq!(todos[0].content, "Build auth");
+                assert_eq!(todos[0].status, "completed");
+                assert_eq!(todos[1].status, "in_progress");
+                assert_eq!(todos[2].status, "pending");
+                assert_eq!(todos[0].active_form, Some("Building auth".to_string()));
+            }
+            _ => panic!("Expected TodoSnapshot"),
+        }
+    }
+
+    #[test]
+    fn test_reconstruct_tasks_from_todo_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let drone_dir = dir.path().join(".hive/drones/snap-test");
+        fs::create_dir_all(&drone_dir).unwrap();
+        let events_path = drone_dir.join("events.ndjson");
+
+        let mut file = fs::File::create(&events_path).unwrap();
+        // First snapshot: 2 tasks
+        writeln!(file, r#"{{"event":"TodoSnapshot","ts":"T1","todos":[{{"content":"Task A","status":"pending"}},{{"content":"Task B","status":"pending"}}]}}"#).unwrap();
+        // Second snapshot: Task A completed, Task B in_progress
+        writeln!(file, r#"{{"event":"TodoSnapshot","ts":"T2","todos":[{{"content":"Task A","status":"completed"}},{{"content":"Task B","status":"in_progress"}}]}}"#).unwrap();
+
+        // We need to be in the right directory for reconstruct_tasks to find files
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let tasks = reconstruct_tasks("snap-test");
+
+        std::env::set_current_dir(original_dir).unwrap();
+
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].subject, "Task A");
+        assert_eq!(tasks[0].status, "completed");
+        assert_eq!(tasks[1].subject, "Task B");
+        assert_eq!(tasks[1].status, "in_progress");
     }
 }

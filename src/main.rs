@@ -39,6 +39,9 @@ enum Commands {
     Monitor {
         /// Drone name (optional)
         name: Option<String>,
+        /// Open web dashboard in browser instead of TUI
+        #[arg(long)]
+        web: bool,
     },
 
     /// View drone activity logs
@@ -147,8 +150,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Monitor { name } => {
-            if let Err(e) = commands::monitor::run_monitor(name) {
+        Commands::Monitor { name, web } => {
+            if let Err(e) = commands::monitor::run_monitor(name, web) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

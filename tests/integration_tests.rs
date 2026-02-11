@@ -1,6 +1,4 @@
-use hive_lib::types::{
-    DroneState, DroneStatus, ExecutionMode, HiveConfig, Plan, PlanTask, StoryTiming,
-};
+use hive_lib::types::{DroneState, DroneStatus, ExecutionMode, HiveConfig, StoryTiming};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,35 +7,24 @@ use tempfile::TempDir;
 fn create_hive_structure(temp_dir: &TempDir) -> PathBuf {
     let hive_dir = temp_dir.path().join(".hive");
     let drones_dir = hive_dir.join("drones");
+    let plans_dir = hive_dir.join("plans");
+    // Also create prds dir for backward compat tests
     let prds_dir = hive_dir.join("prds");
 
     fs::create_dir_all(&drones_dir).unwrap();
+    fs::create_dir_all(&plans_dir).unwrap();
     fs::create_dir_all(&prds_dir).unwrap();
 
     hive_dir
 }
 
-fn create_test_prd(prds_dir: &Path, prd_name: &str) {
-    let prd = Plan {
-        id: prd_name.to_string(),
-        title: format!("{} Title", prd_name),
-        description: format!("{} Description", prd_name),
-        version: "1.0.0".to_string(),
-        created_at: "2024-01-01T00:00:00Z".to_string(),
-        target_platforms: Some(vec!["macos".to_string(), "linux".to_string()]),
-        target_branch: Some("main".to_string()),
-        base_branch: None,
-        plan: "# Test Plan\n\nThis is a test plan.".to_string(),
-        tasks: vec![PlanTask {
-            title: "Test task".to_string(),
-            description: "A test task".to_string(),
-            files: vec![],
-        }],
-    };
-
-    let prd_path = prds_dir.join(format!("{}.json", prd_name));
-    let json = serde_json::to_string_pretty(&prd).unwrap();
-    fs::write(&prd_path, json).unwrap();
+fn create_test_plan(plans_dir: &Path, plan_name: &str) {
+    let content = format!(
+        "# {} Title\n\n## Goal\nThis is a test plan.\n\n## Tasks\n- Test task: A test task\n",
+        plan_name
+    );
+    let plan_path = plans_dir.join(format!("{}.md", plan_name));
+    fs::write(&plan_path, content).unwrap();
 }
 
 fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
@@ -86,16 +73,16 @@ fn test_complete_hive_workflow() {
     let config_json = serde_json::to_string_pretty(&config).unwrap();
     fs::write(hive_dir.join("config.json"), config_json).unwrap();
 
-    // Create PRD
-    create_test_prd(&hive_dir.join("prds"), "test-prd");
+    // Create plan (markdown)
+    create_test_plan(&hive_dir.join("plans"), "test-plan");
 
     // Create drone
-    create_test_drone(&hive_dir.join("drones"), "test-drone", "test-prd");
+    create_test_drone(&hive_dir.join("drones"), "test-drone", "test-plan");
 
     // Verify structure
     assert!(hive_dir.exists());
     assert!(hive_dir.join("config.json").exists());
-    assert!(hive_dir.join("prds").join("test-prd.json").exists());
+    assert!(hive_dir.join("plans").join("test-plan.md").exists());
     assert!(hive_dir
         .join("drones")
         .join("test-drone")
@@ -156,7 +143,7 @@ fn test_existing_prd_compatibility() {
     let temp_dir = TempDir::new().unwrap();
     let hive_dir = create_hive_structure(&temp_dir);
 
-    // Create a PRD similar to existing ones
+    // Create a PRD similar to existing ones (legacy JSON format)
     let prd_json = r#"{
         "id": "existing-prd",
         "title": "Existing PRD Title",
@@ -181,15 +168,14 @@ fn test_existing_prd_compatibility() {
     let prds_dir = hive_dir.join("prds");
     fs::write(prds_dir.join("existing-prd.json"), prd_json).unwrap();
 
-    // Try to parse it
+    // LegacyJsonPlan can still parse old JSON (ignores unknown fields)
     let contents = fs::read_to_string(prds_dir.join("existing-prd.json")).unwrap();
-    let prd: Result<Plan, _> = serde_json::from_str(&contents);
+    let legacy: Result<hive_lib::types::LegacyJsonPlan, _> = serde_json::from_str(&contents);
 
-    assert!(prd.is_ok());
-    let prd = prd.unwrap();
-    assert_eq!(prd.id, "existing-prd");
-    // Old JSON with extra fields parses fine — Plan ignores unknown fields
-    assert!(prd.plan.is_empty()); // No plan field in old JSON, defaults to empty string
+    assert!(legacy.is_ok());
+    let legacy = legacy.unwrap();
+    assert_eq!(legacy.id, "existing-prd");
+    assert!(legacy.plan.is_empty()); // No plan field in old JSON, defaults to empty string
 }
 
 #[test]
@@ -237,24 +223,24 @@ fn test_multiple_drones_workflow() {
     let temp_dir = TempDir::new().unwrap();
     let hive_dir = create_hive_structure(&temp_dir);
 
-    // Create multiple PRDs and drones
+    // Create multiple plans and drones
     for i in 1..=3 {
-        let prd_name = format!("prd-{}", i);
+        let plan_name = format!("plan-{}", i);
         let drone_name = format!("drone-{}", i);
 
-        create_test_prd(&hive_dir.join("prds"), &prd_name);
-        create_test_drone(&hive_dir.join("drones"), &drone_name, &prd_name);
+        create_test_plan(&hive_dir.join("plans"), &plan_name);
+        create_test_drone(&hive_dir.join("drones"), &drone_name, &plan_name);
     }
 
     // Verify all exist
     for i in 1..=3 {
-        let prd_path = hive_dir.join("prds").join(format!("prd-{}.json", i));
+        let plan_path = hive_dir.join("plans").join(format!("plan-{}.md", i));
         let drone_path = hive_dir
             .join("drones")
             .join(format!("drone-{}", i))
             .join("status.json");
 
-        assert!(prd_path.exists());
+        assert!(plan_path.exists());
         assert!(drone_path.exists());
     }
 }

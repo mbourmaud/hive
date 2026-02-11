@@ -8,7 +8,11 @@ mod views;
 
 use anyhow::Result;
 
-/// Run the monitor TUI dashboard.
-pub fn run_monitor(name: Option<String>) -> Result<()> {
-    tui::run_tui(name)
+/// Run the monitor TUI dashboard, or web-only mode with `--web`.
+pub fn run_monitor(name: Option<String>, web: bool) -> Result<()> {
+    if web {
+        tui::run_web_only()
+    } else {
+        tui::run_tui(name)
+    }
 }

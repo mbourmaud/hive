@@ -171,6 +171,19 @@ pub(crate) fn render_messages_view(
         // Check if this message is selected (not in auto-scroll mode)
         let is_selected = selected_index != usize::MAX && msg_idx == selected_index;
 
+        let left_marker = || -> Span {
+            if is_selected {
+                Span::styled(
+                    "▶ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("  ")
+            }
+        };
+
         let time_str = if msg.timestamp.len() >= 19 {
             &msg.timestamp[11..16] // HH:MM only
         } else {
@@ -187,19 +200,8 @@ pub(crate) fn render_messages_view(
 
             let lead_badge = if msg.is_lead { " 👑" } else { "" };
 
-            let left_marker = if is_selected {
-                Span::styled(
-                    "▶ ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else {
-                Span::raw("  ")
-            };
-
             lines.push(Line::from(vec![
-                left_marker.clone(),
+                left_marker(),
                 Span::styled(
                     format!("@{}{}", msg.from, lead_badge),
                     Style::default().fg(from_color).add_modifier(Modifier::BOLD),
@@ -215,19 +217,8 @@ pub(crate) fn render_messages_view(
             ]));
         } else {
             // Same sender, just show timestamp hint for context
-            let left_marker = if is_selected {
-                Span::styled(
-                    "▶ ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else {
-                Span::raw("  ")
-            };
-
             lines.push(Line::from(vec![
-                left_marker,
+                left_marker(),
                 Span::styled(
                     format!("→ @{}  {}", msg.to, time_str),
                     Style::default().fg(Color::DarkGray),
@@ -243,24 +234,11 @@ pub(crate) fn render_messages_view(
             &msg.text
         };
 
-        let left_marker_fn = |sel: bool| -> Span {
-            if sel {
-                Span::styled(
-                    "▶ ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else {
-                Span::raw("  ")
-            }
-        };
-
         for logical_line in body.split('\n') {
             if logical_line.trim().is_empty() {
                 // Empty line → spacer with just the border
                 lines.push(Line::from(vec![
-                    left_marker_fn(is_selected),
+                    left_marker(),
                     Span::styled("│", Style::default().fg(from_color)),
                 ]));
                 continue;
@@ -297,7 +275,7 @@ pub(crate) fn render_messages_view(
                 };
 
                 lines.push(Line::from(vec![
-                    left_marker_fn(is_selected),
+                    left_marker(),
                     Span::styled("│ ", Style::default().fg(from_color)),
                     Span::styled(
                         format!("{}{}", indent, chunk),
