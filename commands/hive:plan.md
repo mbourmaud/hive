@@ -33,7 +33,12 @@ DO NOT use `EnterPlanMode` or `ExitPlanMode`. These are platform APIs that cause
 Then:
 1. Explore the codebase to understand the project structure, patterns, and affected areas
 2. **Detect the project type** — look for `package.json` (pnpm/npm/yarn), `Cargo.toml`, `go.mod`, `pyproject.toml`, etc. This determines setup and CI commands.
-3. **Detect the git hosting platform** — run `git remote get-url origin` to determine if the project is on **GitHub** (`gh pr create`) or **GitLab** (`glab mr create`). This is **CRITICAL** — using the wrong CLI tool will crash the drone. Look for `github.com` or `gitlab` in the remote URL. Use this throughout the plan (PR/MR creation, CI commands, etc.).
+3. **Detect the git hosting platform** — run `git remote get-url origin` and identify the platform from the URL:
+   - `github.com` → GitHub — use `gh pr create`
+   - `gitlab` → GitLab — use `glab mr create`
+   - `bitbucket` → Bitbucket — push only, or use `bb pr create` if available
+   - Other/self-hosted → push only, skip PR creation
+   This is **CRITICAL** — using the wrong CLI tool will crash the drone (e.g. `gh` on a GitLab repo). Use the detected platform throughout the plan for PR/MR creation and CI commands.
 4. Discuss the approach with the user — ask clarifying questions, propose alternatives
 5. Iterate on the plan until the user is satisfied
 
@@ -46,7 +51,7 @@ As you explore and discuss, build up a freeform markdown plan. **Every plan MUST
 1. **Goal**: What we're trying to achieve (1-2 sentences)
 2. **Tasks**: Ordered list of work items. **The first and last tasks are MANDATORY:**
    - **Task 1 — Environment Setup** (ALWAYS FIRST): Install dependencies, verify project builds/compiles, run codegen if needed. Be specific to the project (e.g., `pnpm install && pnpm build` for a Node project, `cargo build` for Rust).
-   - **Task N — PR/MR & CI** (ALWAYS LAST): Lint/format, run tests, commit, push, create PR/MR, verify CI passes. **Use the correct CLI based on the git hosting detected in step 3**: `gh pr create` for GitHub, `glab mr create` for GitLab. **NEVER use `gh` on a GitLab project or `glab` on a GitHub project** — this will crash the drone. Include the specific lint/test commands for the project.
+   - **Task N — PR/MR & CI** (ALWAYS LAST): Lint/format, run tests, commit, push, create PR/MR, verify CI passes. **Use the correct CLI based on the git hosting detected in step 3** — using the wrong one crashes the drone. If the platform is unknown or self-hosted, just push the branch and skip PR creation. Include the specific lint/test commands for the project.
    - In between: the actual implementation tasks.
 3. **Definition of Done**: Explicit, verifiable checklist that Claude can use to confirm the work is complete. This is **CRITICAL** — without it, Claude will not know when to stop or what to validate.
 

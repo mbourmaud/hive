@@ -6,42 +6,16 @@ use std::process::{Command as ProcessCommand, Stdio};
 use super::{ExecutionBackend, SpawnConfig, SpawnHandle};
 use crate::agent_teams;
 
-/// Git hosting platform detected from remote URL.
-enum GitHosting {
-    GitHub,
-    GitLab,
-    Unknown,
-}
-
-impl std::fmt::Display for GitHosting {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GitHosting::GitHub => write!(f, "GitHub (`gh` CLI)"),
-            GitHosting::GitLab => write!(f, "GitLab (`glab` CLI)"),
-            GitHosting::Unknown => write!(f, "Unknown"),
-        }
-    }
-}
-
-/// Detect the git hosting platform by inspecting the origin remote URL.
-fn detect_git_hosting(worktree_path: &Path) -> GitHosting {
-    let output = ProcessCommand::new("git")
+/// Read the origin remote URL from a git repo. Returns empty string if unavailable.
+fn get_git_remote_url(worktree_path: &Path) -> String {
+    ProcessCommand::new("git")
         .args(["remote", "get-url", "origin"])
         .current_dir(worktree_path)
-        .output();
-
-    let url = match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        _ => return GitHosting::Unknown,
-    };
-
-    if url.contains("github.com") {
-        GitHosting::GitHub
-    } else if url.contains("gitlab") {
-        GitHosting::GitLab
-    } else {
-        GitHosting::Unknown
-    }
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
 }
 
 /// Agent Teams execution backend.
@@ -104,19 +78,8 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
     // Read plan content — markdown is passed directly as the project requirements
     let plan_content = fs::read_to_string(&config.prd_path).context("Failed to read plan file")?;
 
-    // Detect git hosting platform from remote URL to use the right PR/MR commands
-    let hosting = detect_git_hosting(&config.worktree_path);
-    let pr_instructions = match hosting {
-        GitHosting::GitLab => {
-            "5. Create a merge request via `glab mr create` with a description summarizing the changes\n6. If `glab` is not available, instruct the user to create the MR manually"
-        }
-        GitHosting::GitHub => {
-            "5. Create a PR via `gh pr create` with a description summarizing the changes"
-        }
-        GitHosting::Unknown => {
-            "5. Create a PR/MR using the appropriate CLI tool (`gh pr create` for GitHub, `glab mr create` for GitLab). Check the git remote URL to determine the platform."
-        }
-    };
+    // Pass the git remote URL so the lead knows which platform it's on
+    let remote_url = get_git_remote_url(&config.worktree_path);
 
     let prompt = format!(
         r#"You are coordinating work on this project.
@@ -127,8 +90,8 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
 ## Working directory
 {worktree_path}
 
-## Git hosting
-{hosting_name}
+## Git remote
+{remote_url}
 
 ## Instructions
 - Create an agent team named "{drone_name}" to implement this plan
@@ -151,7 +114,12 @@ After all tasks are completed:
 2. Run tests relevant to changed files
 3. Commit all changes with a conventional commit message
 4. Push the branch
-{pr_instructions}
+5. Create a PR/MR with a description summarizing the changes. **Detect the platform from the git remote URL above** and use the correct CLI:
+   - GitHub (github.com) → `gh pr create`
+   - GitLab (gitlab) → `glab mr create`
+   - Bitbucket (bitbucket) → manual or `bb pr create`
+   - Other/self-hosted → commit and push only, skip PR creation
+   **CRITICAL: Using the wrong CLI (e.g. `gh` on GitLab) will fail. Check the remote URL first.**
 
 ## CRITICAL: Task Progress Tracking
 You MUST keep task status up to date — this drives the progress dashboard.
@@ -174,10 +142,9 @@ content: HIVE_COMPLETE
 ```"#,
         plan_content = plan_content,
         worktree_path = config.worktree_path.display(),
-        hosting_name = hosting,
+        remote_url = remote_url,
         drone_name = config.drone_name,
         max_agents = config.max_agents,
-        pr_instructions = pr_instructions,
     );
 
     // Force Opus for team lead — Sonnet struggles with Agent Teams coordination
