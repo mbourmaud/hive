@@ -5,4 +5,5 @@ pub mod config;
 pub mod events;
 pub mod mcp;
 pub mod notification;
+pub mod plan_parser;
 pub mod types;

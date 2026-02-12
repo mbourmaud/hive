@@ -1,21 +1,29 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command as ProcessCommand, Stdio};
 
 use super::{ExecutionBackend, SpawnConfig, SpawnHandle};
 use crate::agent_teams;
+use crate::types::{StructuredTask, TaskType};
 
-/// Read the origin remote URL from a git repo. Returns empty string if unavailable.
-fn get_git_remote_url(worktree_path: &Path) -> String {
-    ProcessCommand::new("git")
-        .args(["remote", "get-url", "origin"])
-        .current_dir(worktree_path)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
+/// Detect the git hosting platform from the remote URL and return the exact
+/// PR/MR creation instruction. This avoids the LLM guessing (and using `gh`
+/// on GitLab repos, which always fails).
+fn detect_pr_instructions(remote_url: &str) -> String {
+    let url_lower = remote_url.to_lowercase();
+    if url_lower.contains("github.com") {
+        "Create a Pull Request: `gh pr create --fill`\n**IMPORTANT: This is a GitHub repo. Use `gh` only, NEVER `glab`.**".to_string()
+    } else if url_lower.contains("gitlab") {
+        "Create a Merge Request: `glab mr create --fill --yes`\n**IMPORTANT: This is a GitLab repo. Use `glab` only, NEVER `gh`.**".to_string()
+    } else if url_lower.contains("bitbucket") {
+        "Push the branch. Do NOT attempt to create a PR via CLI (Bitbucket CLI is not available)."
+            .to_string()
+    } else if remote_url.is_empty() {
+        "No git remote detected. Push the branch only, skip PR/MR creation.".to_string()
+    } else {
+        format!("Push the branch only. The remote `{}` is not a recognized platform — skip PR/MR creation.", remote_url)
+    }
 }
 
 /// Agent Teams execution backend.
@@ -64,6 +72,84 @@ impl ExecutionBackend for AgentTeamBackend {
     }
 }
 
+/// Build the prompt for a structured plan (pure dispatcher mode).
+/// Tasks are pre-created — the team lead only dispatches and monitors.
+fn build_structured_prompt(config: &SpawnConfig, tasks: &[StructuredTask]) -> String {
+    let pr_instructions = detect_pr_instructions(&config.remote_url);
+    let worktree_path = config.worktree_path.display();
+
+    // Build task summary table
+    let work_tasks: Vec<&StructuredTask> = tasks
+        .iter()
+        .filter(|t| t.task_type == TaskType::Work)
+        .collect();
+
+    let mut task_summary = String::new();
+    for task in &work_tasks {
+        task_summary.push_str(&format!("- **{}. {}**", task.number, task.title));
+        if let Some(ref model) = task.model {
+            task_summary.push_str(&format!(" (model: {})", model));
+        }
+        if task.parallel {
+            task_summary.push_str(" [parallel]");
+        }
+        if !task.depends_on.is_empty() {
+            let deps: Vec<String> = task.depends_on.iter().map(|d| d.to_string()).collect();
+            task_summary.push_str(&format!(" [depends_on: {}]", deps.join(", ")));
+        }
+        if !task.files.is_empty() {
+            task_summary.push_str(&format!(" [files: {}]", task.files.join(", ")));
+        }
+        task_summary.push('\n');
+        if !task.body.is_empty() {
+            for line in task.body.lines() {
+                task_summary.push_str(&format!("  {}\n", line));
+            }
+        }
+    }
+
+    format!(
+        r#"You are a task dispatcher for team "{drone_name}".
+
+## Pre-created Tasks
+Tasks are already created in the task list. Do NOT call TaskCreate.
+Call TaskList to see their IDs, then dispatch to teammates.
+
+{task_summary}
+## Rules
+- PURE DISPATCHER: do NOT write code yourself
+- Do NOT create new tasks — only dispatch pre-created ones
+- Do NOT run environment setup — already done
+- Respect the model specified per task (use the model field from task metadata when spawning teammates)
+- Respect depends_on ordering (blocked tasks cannot start until their dependencies complete)
+- Tasks marked parallel can run concurrently
+- Maximum {max_agents} concurrent teammates
+- ALWAYS call TaskUpdate when assigning (status "in_progress" + set owner) and when a teammate reports completion (status "completed")
+- Do NOT modify any files under .hive/ — those are managed by the orchestrator
+
+## PR/MR (LAST STEP)
+After ALL work tasks are completed:
+1. Run linting/formatting
+2. Run tests relevant to changed files
+3. Commit all changes with a conventional commit message
+4. Push the branch
+{pr_instructions}
+
+## Completion
+After PR/MR is created successfully, write '.hive_complete' with content "HIVE_COMPLETE":
+```
+Write tool:
+file_path: {worktree_path}/.hive_complete
+content: HIVE_COMPLETE
+```"#,
+        drone_name = config.drone_name,
+        task_summary = task_summary.trim(),
+        max_agents = config.max_agents,
+        pr_instructions = pr_instructions,
+        worktree_path = worktree_path,
+    )
+}
+
 fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
     let drone_dir = PathBuf::from(".hive/drones").join(&config.drone_name);
     let log_path = drone_dir.join("activity.log");
@@ -75,77 +161,7 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
         let _ = fs::File::create(&events_path);
     }
 
-    // Read plan content — markdown is passed directly as the project requirements
-    let plan_content = fs::read_to_string(&config.prd_path).context("Failed to read plan file")?;
-
-    // Pass the git remote URL so the lead knows which platform it's on
-    let remote_url = get_git_remote_url(&config.worktree_path);
-
-    let prompt = format!(
-        r#"You are coordinating work on this project.
-
-## Project Requirements
-{plan_content}
-
-## Working directory
-{worktree_path}
-
-## Git remote
-{remote_url}
-
-## Instructions
-- Create an agent team named "{drone_name}" to implement this plan
-- Use delegate mode — coordinate only, do not write code yourself
-- Before delegating work, create tasks in the task list (using TaskCreate) to break down the plan into concrete, trackable work items.
-- Use sonnet for teammates by default, haiku for simple tasks
-- Maximum {max_agents} concurrent teammates
-- Do NOT modify any files under .hive/ — those are managed by the orchestrator
-
-## Environment Setup (FIRST STEP)
-Before assigning any tasks, verify the project builds:
-1. Detect project type (package.json, Cargo.toml, go.mod, etc.)
-2. Install dependencies if needed (npm install, pnpm install, cargo build, etc.)
-3. Run code generation if applicable (prisma generate, protoc, etc.)
-4. Verify the project compiles/type-checks — fix any issues before delegating work
-
-## PR/MR Creation (LAST STEP)
-After all tasks are completed:
-1. Run linting/formatting (cargo fmt, prettier, etc.)
-2. Run tests relevant to changed files
-3. Commit all changes with a conventional commit message
-4. Push the branch
-5. Create a PR/MR with a description summarizing the changes. **Detect the platform from the git remote URL above** and use the correct CLI:
-   - GitHub (github.com) → `gh pr create`
-   - GitLab (gitlab) → `glab mr create`
-   - Bitbucket (bitbucket) → manual or `bb pr create`
-   - Other/self-hosted → commit and push only, skip PR creation
-   **CRITICAL: Using the wrong CLI (e.g. `gh` on GitLab) will fail. Check the remote URL first.**
-
-## CRITICAL: Task Progress Tracking
-You MUST keep task status up to date — this drives the progress dashboard.
-- When you assign a task to a teammate: call TaskUpdate with status "in_progress" and set the owner
-- When a teammate reports completion: call TaskUpdate with status "completed" IMMEDIATELY, before doing anything else
-- NEVER skip TaskUpdate calls — the monitoring dashboard relies on accurate task status
-- After marking a task completed, check TaskList for the next pending task to assign
-
-## Completion Signal
-CRITICAL: Once ALL tasks are completed AND the PR is successfully created, you MUST signal completion to the orchestrator:
-1. Use the Write tool to create a file named '.hive_complete' in the working directory
-2. The file content should be the single word: HIVE_COMPLETE
-3. This signals the orchestrator that the drone can be safely stopped
-
-Example:
-```
-Write tool:
-file_path: {worktree_path}/.hive_complete
-content: HIVE_COMPLETE
-```"#,
-        plan_content = plan_content,
-        worktree_path = config.worktree_path.display(),
-        remote_url = remote_url,
-        drone_name = config.drone_name,
-        max_agents = config.max_agents,
-    );
+    let prompt = build_structured_prompt(config, &config.structured_tasks);
 
     // Force Opus for team lead — Sonnet struggles with Agent Teams coordination
     // (skips TaskCreate/TaskUpdate, poor task delegation). Falls back to user's

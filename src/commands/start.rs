@@ -169,10 +169,24 @@ pub fn run(
         bail!("'jq' is required for event streaming but not found. Install: brew install jq");
     }
 
+    // 7b. ALWAYS run environment setup — mandatory for Hive to work
+    println!("  {} Running environment setup...", "→".bright_blue());
+    crate::commands::setup::run_setup(&worktree_path)?;
+    println!("  {} Environment setup complete", "✓".green());
+
+    // 7c. Pre-seed tasks
+    let seeded = crate::agent_teams::preseed_tasks(&name, &prd.structured_tasks, &drone_dir)?;
+    if !seeded.is_empty() {
+        println!("  {} Pre-seeded {} tasks", "✓".green(), seeded.len());
+    }
+
     // 8. Launch Claude via ExecutionBackend
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {
+        // Detect git remote URL for PR/MR instructions
+        let remote_url = get_git_remote_url(&worktree_path);
+
         let backend = backend::resolve_agent_team_backend();
 
         let spawn_config = SpawnConfig {
@@ -187,6 +201,8 @@ pub fn run(
             max_agents,
             claude_binary: active_profile.claude_wrapper.clone(),
             environment: active_profile.environment.clone(),
+            structured_tasks: prd.structured_tasks.clone(),
+            remote_url,
         };
 
         let handle = backend.spawn(&spawn_config)?;
@@ -289,11 +305,19 @@ fn load_plan(path: &Path) -> Result<Plan> {
                 .and_then(|s| s.to_str())
                 .unwrap_or("unknown")
                 .to_string();
+
+            // Parse YAML frontmatter for target_branch/base_branch
+            let (target_branch, base_branch, content) = parse_frontmatter(&contents);
+
+            // Parse structured tasks from ## Tasks section
+            let structured_tasks = crate::plan_parser::parse_tasks(&content);
+
             Plan {
                 id,
-                content: contents,
-                target_branch: None,
-                base_branch: None,
+                content,
+                target_branch,
+                base_branch,
+                structured_tasks,
             }
         }
         "json" => {
@@ -311,6 +335,52 @@ fn load_plan(path: &Path) -> Result<Plan> {
     }
 
     Ok(plan)
+}
+
+/// Read the origin remote URL from a git repo. Returns empty string if unavailable.
+fn get_git_remote_url(worktree_path: &Path) -> String {
+    ProcessCommand::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(worktree_path)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Parse optional YAML frontmatter from markdown content.
+/// Returns (target_branch, base_branch, content_without_frontmatter).
+fn parse_frontmatter(raw: &str) -> (Option<String>, Option<String>, String) {
+    let trimmed = raw.trim_start();
+    if !trimmed.starts_with("---") {
+        return (None, None, raw.to_string());
+    }
+
+    // Find the closing ---
+    let after_opening = &trimmed[3..];
+    if let Some(end) = after_opening.find("\n---") {
+        let frontmatter = &after_opening[..end];
+        let rest = &after_opening[end + 4..]; // skip \n---
+
+        let mut target_branch = None;
+        let mut base_branch = None;
+
+        for line in frontmatter.lines() {
+            let line = line.trim();
+            if let Some(value) = line.strip_prefix("target_branch:") {
+                target_branch = Some(value.trim().to_string());
+            } else if let Some(value) = line.strip_prefix("base_branch:") {
+                base_branch = Some(value.trim().to_string());
+            }
+        }
+
+        // Strip leading newline from rest
+        let content = rest.strip_prefix('\n').unwrap_or(rest);
+        (target_branch, base_branch, content.to_string())
+    } else {
+        (None, None, raw.to_string())
+    }
 }
 
 fn get_project_name() -> Result<String> {

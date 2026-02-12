@@ -3,6 +3,8 @@ pub mod agent_team;
 use anyhow::Result;
 use std::path::PathBuf;
 
+use crate::types::StructuredTask;
+
 /// Configuration for spawning a drone process.
 pub struct SpawnConfig {
     pub drone_name: String,
@@ -20,6 +22,10 @@ pub struct SpawnConfig {
     pub claude_binary: String,
     /// Environment variables to set when spawning Claude
     pub environment: Option<Vec<(String, String)>>,
+    /// Structured tasks parsed from plan
+    pub structured_tasks: Vec<StructuredTask>,
+    /// Git remote URL (for PR/MR detection)
+    pub remote_url: String,
 }
 
 /// Handle returned by a backend after spawning a drone.

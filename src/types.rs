@@ -2,6 +2,48 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Task type for structured plans.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskType {
+    /// Environment setup (install deps, verify build) — handled by Hive before launch
+    Setup,
+    /// PR/MR creation — handled by Hive after all work tasks complete
+    Pr,
+    /// Implementation work — dispatched to teammates
+    Work,
+}
+
+impl std::fmt::Display for TaskType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskType::Setup => write!(f, "setup"),
+            TaskType::Pr => write!(f, "pr"),
+            TaskType::Work => write!(f, "work"),
+        }
+    }
+}
+
+/// A structured task parsed from a plan's `## Tasks` section.
+#[derive(Debug, Clone)]
+pub struct StructuredTask {
+    /// Task number (from `### N. Title`)
+    pub number: usize,
+    /// Task title (from `### N. Title`)
+    pub title: String,
+    /// Task body text (everything after metadata bullets)
+    pub body: String,
+    /// Task type: setup, pr, or work (default: work)
+    pub task_type: TaskType,
+    /// Model to use for this task (e.g., "sonnet", "haiku", "opus")
+    pub model: Option<String>,
+    /// Whether this task can run in parallel with other parallel tasks
+    pub parallel: bool,
+    /// Files this task owns / will modify
+    pub files: Vec<String>,
+    /// Task numbers this task depends on
+    pub depends_on: Vec<usize>,
+}
+
 /// Plan — a markdown file with metadata extracted from content/filename.
 #[derive(Debug, Clone)]
 pub struct Plan {
@@ -11,6 +53,8 @@ pub struct Plan {
     pub target_branch: Option<String>,
     /// Base branch to create worktree from (defaults to origin/master or origin/main)
     pub base_branch: Option<String>,
+    /// Structured tasks parsed from `## Tasks` section
+    pub structured_tasks: Vec<StructuredTask>,
 }
 
 impl Plan {
@@ -49,6 +93,7 @@ impl From<LegacyJsonPlan> for Plan {
             content,
             target_branch: legacy.target_branch,
             base_branch: legacy.base_branch,
+            structured_tasks: Vec::new(),
         }
     }
 }
@@ -196,6 +241,7 @@ mod tests {
             content: "# My Feature\n\n## Goal\nBuild X\n\n## Requirements\n- Thing A".to_string(),
             target_branch: Some("feature/my-feature".to_string()),
             base_branch: Some("main".to_string()),
+            structured_tasks: Vec::new(),
         };
 
         assert_eq!(plan.id, "my-feature");
@@ -210,10 +256,37 @@ mod tests {
             content: "Just some content without a heading".to_string(),
             target_branch: None,
             base_branch: None,
+            structured_tasks: Vec::new(),
         };
 
         // Falls back to id when no heading is present
         assert_eq!(plan.title(), "no-heading");
+    }
+
+    #[test]
+    fn test_task_type_display() {
+        assert_eq!(TaskType::Setup.to_string(), "setup");
+        assert_eq!(TaskType::Pr.to_string(), "pr");
+        assert_eq!(TaskType::Work.to_string(), "work");
+    }
+
+    #[test]
+    fn test_structured_task_defaults() {
+        let task = StructuredTask {
+            number: 1,
+            title: "Test task".to_string(),
+            body: String::new(),
+            task_type: TaskType::Work,
+            model: None,
+            parallel: false,
+            files: Vec::new(),
+            depends_on: Vec::new(),
+        };
+
+        assert_eq!(task.number, 1);
+        assert_eq!(task.task_type, TaskType::Work);
+        assert!(!task.parallel);
+        assert!(task.model.is_none());
     }
 
     #[test]

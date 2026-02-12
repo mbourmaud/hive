@@ -84,11 +84,13 @@ pub fn load_prd(path: &Path) -> Option<Plan> {
                 .and_then(|s| s.to_str())
                 .unwrap_or("unknown")
                 .to_string();
+            let structured_tasks = crate::plan_parser::parse_tasks(&contents);
             Some(Plan {
                 id,
                 content: contents,
                 target_branch: None,
                 base_branch: None,
+                structured_tasks,
             })
         }
         "json" => {
