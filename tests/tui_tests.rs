@@ -82,7 +82,7 @@ fn tui_status_dashboard_single_drone() {
         5,
         Some("TASK-3"),
     );
-    let drones = vec![drone];
+    let drones = [drone];
 
     let output = render_to_string(80, 24, |f| {
         let chunks = Layout::default()
@@ -170,7 +170,7 @@ fn tui_status_dashboard_single_drone() {
 
 #[test]
 fn tui_status_dashboard_multiple_drones() {
-    let drones = vec![
+    let drones = [
         create_mock_drone(
             "frontend",
             DroneState::InProgress,

@@ -1,14 +1,16 @@
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 use super::task_sync::{TeamMember, TeamTaskInfo};
+use super::{read_task_list_safe, AgentTeamTask};
 
 /// Source of the snapshot data
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SnapshotSource {
-    /// Reconstructed from events.ndjson
-    Events,
-    /// Cached from a previous snapshot (events disappeared)
-    Cache,
+    /// Read from ~/.claude/tasks/ filesystem (live)
+    Tasks,
+    /// Loaded from .hive/drones/<name>/tasks-snapshot.json (persisted)
+    Persisted,
 }
 
 /// Info about an agent spawned by the team lead.
@@ -16,7 +18,6 @@ pub enum SnapshotSource {
 pub struct AgentInfo {
     pub name: String,
     pub model: Option<String>,
-    /// true after SubagentStart, false after SubagentStop
     pub active: bool,
 }
 
@@ -30,12 +31,41 @@ pub struct TaskSnapshot {
     pub source: SnapshotSource,
 }
 
+/// Serializable snapshot persisted to `.hive/drones/<name>/tasks-snapshot.json`.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PersistedSnapshot {
+    tasks: Vec<PersistedTask>,
+    members: Vec<TeamMember>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PersistedTask {
+    id: String,
+    subject: String,
+    #[serde(default)]
+    description: String,
+    status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    active_form: Option<String>,
+    #[serde(default)]
+    is_internal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    updated_at: Option<u64>,
+}
+
 /// Single source of truth for all task/progress data in the TUI.
+///
+/// Reads task state directly from `~/.claude/tasks/<team>/*.json` (filesystem).
+/// Every live read is persisted to `.hive/drones/<name>/tasks-snapshot.json`
+/// so that task history survives team cleanup (e.g. `hive stop`).
 ///
 /// Key invariants:
 /// - **Monotonic progress**: completed count NEVER decreases
 /// - **Monotonic task status**: a task that reached `completed` cannot regress
-/// - **Cached on disappearance**: when live data vanishes (TeamDelete), last known snapshot is retained
 /// - **Single update point per tick**: one function reads all sources and merges them
 pub struct TaskSnapshotStore {
     snapshots: HashMap<String, TaskSnapshot>,
@@ -73,48 +103,33 @@ impl TaskSnapshotStore {
             .unwrap_or((0, 0))
     }
 
-    /// Update the snapshot for a drone by reading all sources and merging.
+    /// Update the snapshot for a drone.
     ///
-    /// Events from hooks (`events.ndjson`) are the single source of truth.
-    /// They capture the full lifecycle: TodoSnapshot from planning,
-    /// TaskCreate/TaskUpdate/TaskDone from execution. Cache is used only
-    /// when events disappear (e.g. file deleted) to preserve the last state.
+    /// 1. Try live filesystem (`~/.claude/tasks/<team>/*.json`)
+    /// 2. If empty, load persisted snapshot (`.hive/drones/<name>/tasks-snapshot.json`)
+    /// 3. When live data is found, persist it to disk for future recovery
     ///
     /// Returns the updated snapshot reference.
     pub fn update(&mut self, drone_name: &str) -> &TaskSnapshot {
         use crate::agent_teams::task_sync;
-        use crate::events;
 
-        // Primary: reconstruct tasks from events.ndjson
-        let event_tasks = events::reconstruct_tasks(drone_name);
-
-        // Fallback: previous snapshot (cache)
-        let previous = self.snapshots.get(drone_name).cloned();
-
-        // Read team members (best-effort, still from Agent Teams config)
+        // Try live filesystem first
+        let fs_tasks = read_task_list_safe(drone_name);
         let members = task_sync::read_team_members(drone_name).unwrap_or_default();
 
-        let (mut task_list, source) = if !event_tasks.is_empty() {
-            let infos: Vec<TeamTaskInfo> = event_tasks
-                .into_iter()
-                .map(|et| TeamTaskInfo {
-                    id: et.task_id,
-                    subject: et.subject,
-                    description: String::new(),
-                    status: et.status,
-                    owner: et.owner,
-                    active_form: None,
-                    model: None,
-                    is_internal: false,
-                    created_at: None,
-                    updated_at: None,
-                })
-                .collect();
-            (infos, SnapshotSource::Events)
-        } else if let Some(ref prev) = previous {
-            (prev.tasks.clone(), SnapshotSource::Cache)
+        let (mut task_list, members, source) = if !fs_tasks.is_empty() {
+            let infos: Vec<TeamTaskInfo> = fs_tasks.into_iter().map(map_task).collect();
+            // Persist to disk so it survives team cleanup
+            persist_snapshot(drone_name, &infos, &members);
+            (infos, members, SnapshotSource::Tasks)
         } else {
-            (Vec::new(), SnapshotSource::Cache)
+            // Live files gone — load from persisted snapshot
+            match load_persisted_snapshot(drone_name) {
+                Some((tasks, persisted_members)) => {
+                    (tasks, persisted_members, SnapshotSource::Persisted)
+                }
+                None => (Vec::new(), Vec::new(), SnapshotSource::Persisted),
+            }
         };
 
         // Enforce per-task monotonicity: completed tasks cannot regress
@@ -123,14 +138,12 @@ impl TaskSnapshotStore {
             .entry(drone_name.to_string())
             .or_default();
 
-        // Record newly completed tasks
         for task in &task_list {
             if task.status == "completed" {
                 completed_set.insert(task.id.clone());
             }
         }
 
-        // Force completed status on tasks that were previously completed
         for task in &mut task_list {
             if completed_set.contains(&task.id) && task.status != "completed" {
                 task.status = "completed".to_string();
@@ -147,7 +160,6 @@ impl TaskSnapshotStore {
             let t = task_list.iter().filter(|t| !t.is_internal).count();
             (c, t)
         } else {
-            // Planning phase — only internals exist, count them
             let c = task_list.iter().filter(|t| t.status == "completed").count();
             (c, task_list.len())
         };
@@ -165,8 +177,19 @@ impl TaskSnapshotStore {
         self.high_water_marks
             .insert(drone_name.to_string(), (final_completed, final_total));
 
-        // Build agents list from events.ndjson
-        let agents = Self::build_agents_from_events(drone_name);
+        // Build agents from team config members
+        let agents: Vec<AgentInfo> = members
+            .iter()
+            .map(|m| AgentInfo {
+                name: m.name.clone(),
+                model: if m.model.is_empty() {
+                    None
+                } else {
+                    Some(m.model.clone())
+                },
+                active: true,
+            })
+            .collect();
 
         let snapshot = TaskSnapshot {
             tasks: task_list,
@@ -179,68 +202,84 @@ impl TaskSnapshotStore {
         self.snapshots.insert(drone_name.to_string(), snapshot);
         self.snapshots.get(drone_name).unwrap()
     }
+}
 
-    /// Build agent info from events.ndjson by replaying AgentSpawn/SubagentStart/SubagentStop.
-    fn build_agents_from_events(drone_name: &str) -> Vec<AgentInfo> {
-        use crate::events::HiveEvent;
-        use std::fs;
-        use std::path::PathBuf;
+fn snapshot_path(drone_name: &str) -> PathBuf {
+    PathBuf::from(".hive/drones")
+        .join(drone_name)
+        .join("tasks-snapshot.json")
+}
 
-        let path = PathBuf::from(".hive/drones")
-            .join(drone_name)
-            .join("events.ndjson");
+/// Persist current task state to `.hive/drones/<name>/tasks-snapshot.json`.
+fn persist_snapshot(drone_name: &str, tasks: &[TeamTaskInfo], members: &[TeamMember]) {
+    let persisted = PersistedSnapshot {
+        tasks: tasks
+            .iter()
+            .map(|t| PersistedTask {
+                id: t.id.clone(),
+                subject: t.subject.clone(),
+                description: t.description.clone(),
+                status: t.status.clone(),
+                owner: t.owner.clone(),
+                active_form: t.active_form.clone(),
+                is_internal: t.is_internal,
+                created_at: t.created_at,
+                updated_at: t.updated_at,
+            })
+            .collect(),
+        members: members.to_vec(),
+    };
 
-        let contents = match fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => return Vec::new(),
-        };
+    if let Ok(json) = serde_json::to_string(&persisted) {
+        let _ = std::fs::write(snapshot_path(drone_name), json);
+    }
+}
 
-        let mut agents: HashMap<String, AgentInfo> = HashMap::new();
+/// Load persisted snapshot from `.hive/drones/<name>/tasks-snapshot.json`.
+fn load_persisted_snapshot(drone_name: &str) -> Option<(Vec<TeamTaskInfo>, Vec<TeamMember>)> {
+    let contents = std::fs::read_to_string(snapshot_path(drone_name)).ok()?;
+    let persisted: PersistedSnapshot = serde_json::from_str(&contents).ok()?;
 
-        for line in contents.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if let Ok(event) = serde_json::from_str::<HiveEvent>(trimmed) {
-                match event {
-                    HiveEvent::AgentSpawn { name, model, .. } => {
-                        agents
-                            .entry(name.clone())
-                            .and_modify(|a| {
-                                if model.is_some() {
-                                    a.model = model.clone();
-                                }
-                            })
-                            .or_insert(AgentInfo {
-                                name,
-                                model,
-                                active: true,
-                            });
-                    }
-                    HiveEvent::SubagentStart { agent_id, .. } => {
-                        agents
-                            .entry(agent_id.clone())
-                            .and_modify(|a| a.active = true)
-                            .or_insert(AgentInfo {
-                                name: agent_id,
-                                model: None,
-                                active: true,
-                            });
-                    }
-                    HiveEvent::SubagentStop { agent_id, .. } => {
-                        if let Some(a) = agents.get_mut(&agent_id) {
-                            a.active = false;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
+    let tasks = persisted
+        .tasks
+        .into_iter()
+        .map(|t| TeamTaskInfo {
+            id: t.id,
+            subject: t.subject,
+            description: t.description,
+            status: t.status,
+            owner: t.owner,
+            active_form: t.active_form,
+            model: None,
+            is_internal: t.is_internal,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+        })
+        .collect();
 
-        let mut result: Vec<AgentInfo> = agents.into_values().collect();
-        result.sort_by(|a, b| a.name.cmp(&b.name));
-        result
+    Some((tasks, persisted.members))
+}
+
+/// Map an `AgentTeamTask` (from filesystem JSON) to `TeamTaskInfo` (for TUI display).
+fn map_task(t: AgentTeamTask) -> TeamTaskInfo {
+    let is_internal = t
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("_internal"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    TeamTaskInfo {
+        id: t.id,
+        subject: t.subject,
+        description: t.description,
+        status: t.status,
+        owner: t.owner,
+        active_form: t.active_form,
+        model: None,
+        is_internal,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
     }
 }
 
@@ -267,21 +306,17 @@ mod tests {
     fn test_monotonic_progress_never_decreases() {
         let mut store = TaskSnapshotStore::new();
 
-        // Simulate having a previous high-water mark of (3, 5)
         store
             .high_water_marks
             .insert("test-drone".to_string(), (3, 5));
 
-        // Even with empty data, progress should not decrease
-        // (update() will read from filesystem which won't work in tests,
-        //  so we test the invariant directly)
         let (prev_completed, prev_total) = store
             .high_water_marks
             .get("test-drone")
             .copied()
             .unwrap_or((0, 0));
 
-        let current_completed = 0; // empty data
+        let current_completed = 0;
         let current_total = 0;
 
         let final_completed = current_completed.max(prev_completed);
@@ -295,14 +330,12 @@ mod tests {
     fn test_task_status_monotonicity() {
         let mut store = TaskSnapshotStore::new();
 
-        // Mark a task as completed
         let completed_set = store
             .completed_tasks
             .entry("test-drone".to_string())
             .or_default();
         completed_set.insert("1".to_string());
 
-        // Now if the task comes back as in_progress, it should stay completed
         let mut tasks = vec![make_task("1", "in_progress"), make_task("2", "pending")];
 
         let set = store.completed_tasks.get("test-drone").unwrap();
@@ -321,5 +354,124 @@ mod tests {
         let store = TaskSnapshotStore::new();
         assert!(store.get("nonexistent").is_none());
         assert_eq!(store.progress("nonexistent"), (0, 0));
+    }
+
+    #[test]
+    fn test_map_task_internal_flag() {
+        let task = AgentTeamTask {
+            id: "1".to_string(),
+            subject: "internal-task".to_string(),
+            description: String::new(),
+            status: "pending".to_string(),
+            owner: None,
+            active_form: None,
+            blocked_by: Vec::new(),
+            blocks: Vec::new(),
+            metadata: Some(serde_json::json!({"_internal": true})),
+            created_at: Some(1000),
+            updated_at: Some(2000),
+        };
+
+        let info = map_task(task);
+        assert!(info.is_internal);
+        assert_eq!(info.created_at, Some(1000));
+        assert_eq!(info.updated_at, Some(2000));
+    }
+
+    #[test]
+    fn test_map_task_not_internal_by_default() {
+        let task = AgentTeamTask {
+            id: "2".to_string(),
+            subject: "user-task".to_string(),
+            description: String::new(),
+            status: "in_progress".to_string(),
+            owner: Some("worker".to_string()),
+            active_form: Some("Working".to_string()),
+            blocked_by: Vec::new(),
+            blocks: Vec::new(),
+            metadata: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        let info = map_task(task);
+        assert!(!info.is_internal);
+        assert_eq!(info.owner, Some("worker".to_string()));
+        assert_eq!(info.active_form, Some("Working".to_string()));
+    }
+
+    #[test]
+    fn test_persist_and_load_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let drone_name = "persist-test";
+        let drone_dir = dir.path().join(".hive/drones").join(drone_name);
+        std::fs::create_dir_all(&drone_dir).unwrap();
+
+        // Must run from temp dir so snapshot_path resolves
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let tasks = vec![
+            TeamTaskInfo {
+                id: "1".to_string(),
+                subject: "Task A".to_string(),
+                description: "Do A".to_string(),
+                status: "completed".to_string(),
+                owner: Some("worker-1".to_string()),
+                active_form: None,
+                model: None,
+                is_internal: false,
+                created_at: Some(1000),
+                updated_at: Some(2000),
+            },
+            TeamTaskInfo {
+                id: "2".to_string(),
+                subject: "Task B".to_string(),
+                description: String::new(),
+                status: "in_progress".to_string(),
+                owner: None,
+                active_form: Some("Working".to_string()),
+                model: None,
+                is_internal: true,
+                created_at: None,
+                updated_at: None,
+            },
+        ];
+        let members = vec![TeamMember {
+            name: "worker-1".to_string(),
+            agent_type: "general-purpose".to_string(),
+            model: "sonnet".to_string(),
+            cwd: String::new(),
+        }];
+
+        persist_snapshot(drone_name, &tasks, &members);
+
+        let (loaded_tasks, loaded_members) = load_persisted_snapshot(drone_name).unwrap();
+
+        std::env::set_current_dir(original_dir).unwrap();
+
+        assert_eq!(loaded_tasks.len(), 2);
+        assert_eq!(loaded_tasks[0].subject, "Task A");
+        assert_eq!(loaded_tasks[0].status, "completed");
+        assert_eq!(loaded_tasks[0].owner, Some("worker-1".to_string()));
+        assert!(loaded_tasks[1].is_internal);
+        assert_eq!(loaded_tasks[1].active_form, Some("Working".to_string()));
+
+        assert_eq!(loaded_members.len(), 1);
+        assert_eq!(loaded_members[0].name, "worker-1");
+        assert_eq!(loaded_members[0].model, "sonnet");
+    }
+
+    #[test]
+    fn test_load_persisted_snapshot_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let result = load_persisted_snapshot("no-such-drone");
+
+        std::env::set_current_dir(original_dir).unwrap();
+
+        assert!(result.is_none());
     }
 }

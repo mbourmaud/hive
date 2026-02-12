@@ -497,6 +497,7 @@ impl TuiState {
             };
 
             // Team line: lead model + agents with their models
+            // Agents are shown on a separate line if needed, with truncated names
             let mut team_spans: Vec<Span> = vec![
                 Span::raw("      "),
                 Span::styled("Lead", Style::default().fg(Color::DarkGray)),
@@ -507,46 +508,90 @@ impl TuiState {
                     Style::default().fg(Color::Magenta),
                 ));
             }
-            if !members.is_empty() {
-                team_spans.push(Span::styled(" | ", Style::default().fg(Color::DarkGray)));
-                for (idx, m) in members.iter().enumerate() {
-                    if idx > 0 {
-                        team_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+
+            // Collect agent entries: (display_name, color, model_str)
+            let agent_entries: Vec<(String, Color, Option<String>)> = if !members.is_empty() {
+                members
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, m)| {
+                        let model_str = if !m.model.is_empty() {
+                            Some(shorten_model_name(&m.model))
+                        } else {
+                            None
+                        };
+                        (m.name.clone(), get_agent_color(idx), model_str)
+                    })
+                    .collect()
+            } else {
+                ws_agents
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, (aname, amodel))| {
+                        let model_str = amodel.as_ref().map(|m| shorten_model_name(m));
+                        (aname.clone(), get_agent_color(idx), model_str)
+                    })
+                    .collect()
+            };
+
+            if !agent_entries.is_empty() {
+                let max_agent_name_len = 20;
+                let max_line_width = area.width as usize;
+
+                team_spans.push(Span::styled(
+                    format!(" | {} agents", agent_entries.len()),
+                    Style::default().fg(Color::DarkGray),
+                ));
+                lines.push(Line::from(team_spans));
+
+                // Render agents on continuation lines, wrapping as needed
+                let indent = "        "; // 8 spaces
+                let mut current_spans: Vec<Span> = vec![Span::raw(indent.to_string())];
+                let mut current_len = indent.len();
+
+                for (i, (name, color, model_str)) in agent_entries.iter().enumerate() {
+                    let display_name = truncate_with_ellipsis(name, max_agent_name_len);
+                    let badge = format!("@{}", display_name);
+                    let model_part = model_str
+                        .as_ref()
+                        .map(|m| format!(" ({})", m))
+                        .unwrap_or_default();
+                    let sep = if i > 0 { "  " } else { "" };
+                    let entry_len = sep.len() + badge.len() + model_part.len();
+
+                    // Wrap to next line if this entry would overflow
+                    if current_len + entry_len > max_line_width && current_len > indent.len() {
+                        lines.push(Line::from(current_spans));
+                        current_spans = vec![Span::raw(indent.to_string())];
+                        current_len = indent.len();
+                    } else if i > 0 {
+                        current_spans
+                            .push(Span::styled("  ", Style::default().fg(Color::DarkGray)));
+                        current_len += 2;
                     }
-                    team_spans.push(Span::styled(
-                        format!("@{}", m.name),
-                        Style::default()
-                            .fg(get_agent_color(idx))
-                            .add_modifier(Modifier::BOLD),
+
+                    current_spans.push(Span::styled(
+                        badge.clone(),
+                        Style::default().fg(*color).add_modifier(Modifier::BOLD),
                     ));
-                    if !m.model.is_empty() {
-                        team_spans.push(Span::styled(
-                            format!(" ({})", shorten_model_name(&m.model)),
+                    current_len += badge.len();
+
+                    if let Some(ref m) = model_str {
+                        let part = format!(" ({})", m);
+                        current_spans.push(Span::styled(
+                            part.clone(),
                             Style::default().fg(Color::DarkGray),
                         ));
+                        current_len += part.len();
                     }
                 }
-            } else if !ws_agents.is_empty() {
-                team_spans.push(Span::styled(" | ", Style::default().fg(Color::DarkGray)));
-                for (idx, (agent_name, agent_model)) in ws_agents.iter().enumerate() {
-                    if idx > 0 {
-                        team_spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
-                    }
-                    team_spans.push(Span::styled(
-                        format!("@{}", agent_name),
-                        Style::default()
-                            .fg(get_agent_color(idx))
-                            .add_modifier(Modifier::BOLD),
-                    ));
-                    if let Some(ref model) = agent_model {
-                        team_spans.push(Span::styled(
-                            format!(" ({})", shorten_model_name(model)),
-                            Style::default().fg(Color::DarkGray),
-                        ));
-                    }
+
+                if current_len > indent.len() {
+                    lines.push(Line::from(current_spans));
                 }
+            } else {
+                lines.push(Line::from(team_spans));
             }
-            lines.push(Line::from(team_spans));
 
             // Split tasks into user vs internal
             let user_tasks: Vec<_> = tasks.iter().filter(|t| !t.is_internal).collect();
@@ -609,8 +654,8 @@ impl TuiState {
         if let Some(snapshot) = self.snapshot_store.get(name) {
             if !snapshot.tasks.is_empty() {
                 let (source_label, source_color) = match snapshot.source {
-                    SnapshotSource::Events => ("Events", Color::Cyan),
-                    SnapshotSource::Cache => ("Cache", Color::DarkGray),
+                    SnapshotSource::Tasks => ("Tasks", Color::Green),
+                    SnapshotSource::Persisted => ("Snapshot", Color::DarkGray),
                 };
                 lines.push(Line::from(vec![
                     Span::raw("      "),
