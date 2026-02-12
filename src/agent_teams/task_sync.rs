@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 
-use super::read_task_list;
-
 /// Rich task info for monitoring display
 #[derive(Debug, Clone)]
 pub struct TeamTaskInfo {
@@ -41,50 +39,6 @@ pub struct TeamConfig {
     pub name: String,
     #[serde(default)]
     pub members: Vec<TeamMember>,
-}
-
-/// Read task states for TUI display without writing to status.json.
-pub fn read_team_task_states(team_name: &str) -> Result<HashMap<String, TeamTaskInfo>> {
-    let tasks = read_task_list(team_name)?;
-
-    // Build owner->model map from team members
-    let member_models: HashMap<String, String> = read_team_members(team_name)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|m| !m.model.is_empty())
-        .map(|m| (m.name, m.model))
-        .collect();
-
-    let mut states = HashMap::new();
-    for task in tasks {
-        let is_internal = task
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("_internal"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let model = task
-            .owner
-            .as_ref()
-            .and_then(|owner| member_models.get(owner))
-            .cloned();
-        states.insert(
-            task.id.clone(),
-            TeamTaskInfo {
-                id: task.id,
-                subject: task.subject,
-                description: task.description,
-                status: task.status,
-                owner: task.owner,
-                active_form: task.active_form,
-                model,
-                is_internal,
-                created_at: task.created_at,
-                updated_at: task.updated_at,
-            },
-        );
-    }
-    Ok(states)
 }
 
 /// An inbox message from Agent Teams

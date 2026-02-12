@@ -524,6 +524,30 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
                     "async": true,
                     "timeout": 5
                 }]
+            },
+            {
+                "matcher": "TaskCreate",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"TaskCreate",ts:(now|todate),subject:(.tool_input.subject // ""),description:(.tool_input.description // "")}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
+            },
+            {
+                "matcher": "TaskUpdate",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:(.tool_input.taskId // ""),status:(.tool_input.status // null),owner:(.tool_input.owner // null)}}' >> {}"#,
+                        events_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
             }
         ],
         "PostToolUse": [
@@ -633,9 +657,9 @@ mod tests {
         assert!(hooks.get("SubagentStop").is_some());
         assert!(hooks.get("Stop").is_some());
 
-        // Verify PreToolUse has 3 matchers: Task, TodoWrite, SendMessage
+        // Verify PreToolUse has 5 matchers: Task, TodoWrite, SendMessage, TaskCreate, TaskUpdate
         let pre_tool = hooks.get("PreToolUse").unwrap().as_array().unwrap();
-        assert_eq!(pre_tool.len(), 3);
+        assert_eq!(pre_tool.len(), 5);
 
         // Verify PostToolUse has 1 entry (no matcher — captures all tools)
         let post_tool = hooks.get("PostToolUse").unwrap().as_array().unwrap();

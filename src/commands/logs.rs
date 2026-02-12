@@ -55,36 +55,28 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
             _ => {}
         }
 
-        // 2. Show task states with agents
-        // Try live tasks first, fall back to event-sourced tasks
-        let tasks_result = task_sync::read_team_task_states(team_name);
-        let tasks_map = match tasks_result {
-            Ok(tasks) if !tasks.is_empty() => tasks,
-            _ => {
-                // Fallback: reconstruct from events.ndjson
-                let event_tasks = crate::events::reconstruct_tasks(team_name);
-                event_tasks
-                    .into_iter()
-                    .map(|et| {
-                        (
-                            et.task_id.clone(),
-                            task_sync::TeamTaskInfo {
-                                id: et.task_id,
-                                subject: et.subject,
-                                description: String::new(),
-                                status: et.status,
-                                owner: et.owner,
-                                active_form: None,
-                                model: None,
-                                is_internal: false,
-                                created_at: None,
-                                updated_at: None,
-                            },
-                        )
-                    })
-                    .collect()
-            }
-        };
+        // 2. Show task states with agents (from events.ndjson)
+        let event_tasks = crate::events::reconstruct_tasks(team_name);
+        let tasks_map: std::collections::HashMap<_, _> = event_tasks
+            .into_iter()
+            .map(|et| {
+                (
+                    et.task_id.clone(),
+                    task_sync::TeamTaskInfo {
+                        id: et.task_id,
+                        subject: et.subject,
+                        description: String::new(),
+                        status: et.status,
+                        owner: et.owner,
+                        active_form: None,
+                        model: None,
+                        is_internal: false,
+                        created_at: None,
+                        updated_at: None,
+                    },
+                )
+            })
+            .collect();
         // Filter out internal tasks (auto-created for agent spawning)
         let tasks: std::collections::HashMap<_, _> = tasks_map
             .into_iter()

@@ -5,11 +5,9 @@ use super::task_sync::{TeamMember, TeamTaskInfo};
 /// Source of the snapshot data
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SnapshotSource {
-    /// Read from live ~/.claude/tasks/<drone>/ files
-    LiveTasks,
     /// Reconstructed from events.ndjson
     Events,
-    /// Cached from a previous snapshot (files disappeared)
+    /// Cached from a previous snapshot (events disappeared)
     Cache,
 }
 
@@ -77,33 +75,26 @@ impl TaskSnapshotStore {
 
     /// Update the snapshot for a drone by reading all sources and merging.
     ///
-    /// Priority: live_tasks > events > cache
+    /// Events from hooks (`events.ndjson`) are the single source of truth.
+    /// They capture the full lifecycle: TodoSnapshot from planning,
+    /// TaskCreate/TaskUpdate/TaskDone from execution. Cache is used only
+    /// when events disappear (e.g. file deleted) to preserve the last state.
     ///
     /// Returns the updated snapshot reference.
     pub fn update(&mut self, drone_name: &str) -> &TaskSnapshot {
         use crate::agent_teams::task_sync;
         use crate::events;
 
-        // Source 1: Live tasks from ~/.claude/tasks/<drone>/
-        let live_tasks = task_sync::read_team_task_states(drone_name)
-            .ok()
-            .filter(|t| !t.is_empty());
-
-        // Source 2: Event-sourced tasks from events.ndjson
+        // Primary: reconstruct tasks from events.ndjson
         let event_tasks = events::reconstruct_tasks(drone_name);
 
-        // Source 3: Previous snapshot (cache)
+        // Fallback: previous snapshot (cache)
         let previous = self.snapshots.get(drone_name).cloned();
 
-        // Read team members (best-effort)
+        // Read team members (best-effort, still from Agent Teams config)
         let members = task_sync::read_team_members(drone_name).unwrap_or_default();
 
-        // Merge: live → events → cache
-        // Include ALL tasks (user + internal) so the TUI can render internals nested
-        let (mut task_list, source) = if let Some(ref live) = live_tasks {
-            (live.values().cloned().collect(), SnapshotSource::LiveTasks)
-        } else if !event_tasks.is_empty() {
-            // Convert event tasks to TeamTaskInfo
+        let (mut task_list, source) = if !event_tasks.is_empty() {
             let infos: Vec<TeamTaskInfo> = event_tasks
                 .into_iter()
                 .map(|et| TeamTaskInfo {

@@ -609,8 +609,7 @@ impl TuiState {
         if let Some(snapshot) = self.snapshot_store.get(name) {
             if !snapshot.tasks.is_empty() {
                 let (source_label, source_color) = match snapshot.source {
-                    SnapshotSource::LiveTasks => ("Live", Color::Cyan),
-                    SnapshotSource::Events => ("Events", Color::Yellow),
+                    SnapshotSource::Events => ("Events", Color::Cyan),
                     SnapshotSource::Cache => ("Cache", Color::DarkGray),
                 };
                 lines.push(Line::from(vec![
