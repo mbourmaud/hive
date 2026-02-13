@@ -1,0 +1,20 @@
+# bacon configuration — https://dystroy.org/bacon/
+# For TUI testing, use a separate terminal: cargo run -- monitor
+
+default_job = "check"
+
+[jobs.check]
+command = ["cargo", "check", "--color", "always"]
+need_stdout = false
+
+[jobs.test]
+command = ["cargo", "test", "--color", "always"]
+need_stdout = true
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--color", "always", "--", "-W", "clippy::pedantic"]
+need_stdout = false
+
+[keybindings]
+t = "job:test"
+c = "job:clippy"

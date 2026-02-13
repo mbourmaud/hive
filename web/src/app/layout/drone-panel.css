@@ -1,0 +1,87 @@
+/* ── Drone Panel ──────────────────────────────────────────────────────── */
+
+[data-component="drone-panel"] {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: var(--color-sidebar);
+  border-left: 1px solid var(--color-sidebar-border);
+  overflow: hidden;
+}
+
+[data-component="drone-panel"][data-collapsed] {
+  width: 0;
+  border-left: none;
+}
+
+[data-slot="drone-panel-header"] {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-sidebar-border);
+}
+
+[data-slot="drone-panel-drag-handle"] {
+  width: 4px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+}
+
+[data-slot="drone-panel-drag-handle"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  right: 0;
+  width: 1px;
+  background: var(--color-sidebar-border);
+  transition: background-color 120ms ease;
+}
+
+[data-slot="drone-panel-drag-handle"]:hover::after {
+  background: oklch(from var(--color-accent) l c h / 40%);
+}
+
+/* ── Drone list item ─────────────────────────────────────────────────── */
+
+[data-slot="drone-panel-item"] {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-foreground);
+  transition: background-color 100ms ease;
+  border-bottom: 1px solid oklch(from var(--color-sidebar-border) l c h / 50%);
+}
+
+[data-slot="drone-panel-item"]:hover {
+  background: var(--color-muted);
+}
+
+[data-slot="drone-panel-item"][data-expanded] {
+  background: oklch(from var(--color-accent) l c h / 6%);
+}
+
+/* ── Drone detail (expanded) ─────────────────────────────────────────── */
+
+[data-slot="drone-panel-detail"] {
+  padding: 8px 12px 12px;
+  border-bottom: 1px solid var(--color-sidebar-border);
+  background: oklch(from var(--color-accent) l c h / 4%);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+
+[data-slot="drone-panel-footer"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-sidebar-border);
+  flex-shrink: 0;
+}

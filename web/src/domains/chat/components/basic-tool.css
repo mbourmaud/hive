@@ -1,0 +1,142 @@
+/* BasicTool — collapsible tool wrapper */
+
+[data-component="basic-tool"] {
+  content-visibility: auto;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--color-border, oklch(0.9 0 0));
+  overflow: hidden;
+}
+
+/* Trigger row */
+[data-slot="basic-tool-trigger"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+[data-slot="basic-tool-trigger"]:hover {
+  background: var(--color-muted, oklch(0.97 0 0));
+}
+
+[data-slot="basic-tool-trigger"].cursor-default {
+  cursor: default;
+}
+
+[data-slot="basic-tool-trigger"].cursor-default:hover {
+  background: transparent;
+}
+
+/* Icon */
+[data-slot="basic-tool-icon"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--color-muted-foreground, oklch(0.55 0.013 58));
+}
+
+[data-slot="basic-tool-icon"] svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Running state — tint icon */
+[data-component="basic-tool"][data-status="running"] [data-slot="basic-tool-icon"],
+[data-component="basic-tool"][data-status="pending"] [data-slot="basic-tool-icon"] {
+  color: var(--color-accent, oklch(0.65 0.18 250));
+}
+
+/* Error state — tint icon red */
+[data-component="basic-tool"][data-status="error"] [data-slot="basic-tool-icon"] {
+  color: var(--color-destructive, oklch(0.63 0.24 29));
+}
+
+/* Info line */
+[data-slot="basic-tool-info"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Title */
+[data-slot="basic-tool-title"] {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Subtitle + args — truncate */
+[data-slot="basic-tool-subtitle"],
+[data-slot="basic-tool-arg"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+/* Chevron */
+[data-slot="basic-tool-chevron"] {
+  flex-shrink: 0;
+}
+
+/* Content area */
+[data-slot="basic-tool-content"] {
+  overflow: hidden;
+}
+
+[data-slot="basic-tool-body"] {
+  padding: 0 12px 10px;
+  border-top: 1px solid var(--color-border, oklch(0.9 0 0));
+}
+
+/* Nested code blocks should not double-border */
+[data-slot="basic-tool-body"] [data-component="code-block"] {
+  border: none;
+  border-radius: 0;
+  margin: 0 -12px -10px;
+}
+
+/* Radix collapsible animation */
+[data-slot="basic-tool-content"][data-state="open"] {
+  animation: basicToolSlideDown 150ms ease;
+}
+
+[data-slot="basic-tool-content"][data-state="closed"] {
+  animation: basicToolSlideUp 150ms ease;
+}
+
+@keyframes basicToolSlideDown {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes basicToolSlideUp {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}

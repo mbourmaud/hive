@@ -93,12 +93,29 @@ tests/                  # Rust test suite
 
 ### TypeScript / React
 
+**Type safety (zero tolerance)**:
 - **NEVER use `any`** — use `unknown`, proper types, or `Record<string, unknown>`.
+- **NEVER use `as` type assertions** — use type guards (`is`), discriminated unions, or proper narrowing. The only acceptable `as` is `as const` and React's `as React.CSSProperties` for CSS custom properties.
 - **Discriminated unions**: Use `type` field for union discrimination (see `StreamEvent`, `AssistantPart`).
+- **JSON parsing**: Always parse to `unknown` first, then narrow with type guards. Never `JSON.parse(x) as Foo`.
+
+**Style (Deno style guide)**:
+- **Naming**: `camelCase` for functions/variables, `PascalCase` for types/classes, `UPPER_SNAKE_CASE` for top-level constants. Acronyms follow standard casing (`HttpObject`, not `HTTPObject`).
+- **Exported functions**: Max 2 required args, put the rest into an options object. Export all interfaces used as params or return types.
+- **Top-level functions**: Use `function` keyword, not arrow syntax. Arrow functions are fine for callbacks and local closures.
+- **Minimize dependencies**: Do not make circular imports. No meta-programming or Proxy usage — keep code explicit.
+- **Private fields**: Prefer `#field` syntax over TypeScript `private` keyword.
+- **Error messages**: Start with uppercase, no ending period. Use active voice (e.g., `"Cannot connect to session"`, not `"connection failed."`). Quote values (e.g., `"Cannot find session 'abc'"`).
+- **TODO comments**: Always reference an issue number or GitHub username — `// TODO(mbourmaud): description` or `// TODO(#123): description`.
+- **Tests**: Add tests for new features. Test names should be explicit and descriptive.
+
+**React patterns**:
 - **Hooks**: Follow rules of hooks strictly. Only wrap in `useCallback`/`useMemo` when there's a measurable perf benefit or a dependency requires stable references.
 - **Components**: Use `data-component` and `data-slot` CSS selectors (not className-based styling) for component structure. Keep components focused — extract when >200 lines.
 - **Events**: Always clean up event listeners, timers, observers in `useEffect` return functions.
 - **Keys**: Use stable, unique IDs for list keys — never array indices.
+
+**Linting**: Biome enforces these rules via `web/biome.json`. Run `npm run lint` in `web/` before committing.
 
 ### CSS / Tailwind
 

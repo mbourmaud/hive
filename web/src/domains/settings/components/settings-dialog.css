@@ -1,0 +1,257 @@
+/* ── Settings overlay ───────────────────────────────────────────────────── */
+
+[data-component="settings-overlay"] {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: oklch(0 0 0 / 40%);
+  animation: settings-overlay-in 200ms ease-out;
+}
+
+/* ── Settings dialog ───────────────────────────────────────────────────── */
+
+[data-component="settings-dialog"] {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 101;
+  width: 90vw;
+  max-width: 440px;
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg, 8px);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 32px oklch(0 0 0 / 25%);
+  padding: 20px;
+  animation: settings-dialog-in 200ms ease-out;
+  transform: translate(-50%, -50%);
+}
+
+[data-component="settings-dialog"]:focus {
+  outline: none;
+}
+
+[data-slot="settings-title"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin-bottom: 16px;
+}
+
+[data-slot="settings-close"] {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  padding: 4px;
+  border-radius: var(--radius-sm, 4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 150ms ease;
+}
+
+[data-slot="settings-close"]:hover {
+  color: var(--color-foreground);
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
+
+[data-slot="settings-tab-list"] {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px;
+}
+
+[data-slot="settings-tab"] {
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 150ms ease;
+}
+
+[data-slot="settings-tab"]:hover {
+  color: var(--color-foreground);
+}
+
+[data-slot="settings-tab"][data-state="active"] {
+  color: var(--color-foreground);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ── Panel ──────────────────────────────────────────────────────────────── */
+
+[data-slot="settings-panel"] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-slot="settings-group"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-slot="settings-label"] {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+
+/* ── Option button (toggle / selection) ─────────────────────────────────── */
+
+[data-slot="settings-option"] {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+  text-align: left;
+}
+
+[data-slot="settings-option"]:hover {
+  color: var(--color-foreground);
+  border-color: var(--color-foreground);
+}
+
+[data-slot="settings-option"][data-active] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: oklch(from var(--color-accent) l c h / 8%);
+}
+
+/* ── Stepper button ─────────────────────────────────────────────────────── */
+
+[data-slot="settings-stepper"] {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  padding: 4px;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+[data-slot="settings-stepper"]:hover:not(:disabled) {
+  color: var(--color-foreground);
+  border-color: var(--color-foreground);
+}
+
+[data-slot="settings-stepper"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Theme grid ────────────────────────────────────────────────────────── */
+
+[data-slot="settings-theme-grid"] {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+[data-slot="settings-theme-card"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+[data-slot="settings-theme-card"]:hover {
+  border-color: var(--color-foreground);
+}
+
+[data-slot="settings-theme-card"][data-active] {
+  border-color: var(--color-accent);
+  background: oklch(from var(--color-accent) l c h / 6%);
+}
+
+[data-slot="settings-theme-swatch"] {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-sm, 4px);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-slot="settings-theme-accent"] {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+[data-slot="settings-theme-label"] {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="settings-theme-card"][data-active] [data-slot="settings-theme-label"] {
+  color: var(--color-accent);
+}
+
+/* ── Keybinds grid ─────────────────────────────────────────────────────── */
+
+[data-slot="settings-keybinds-grid"] {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  align-items: center;
+  font-size: 12px;
+}
+
+/* ── Animations (transform + opacity only) ─────────────────────────────── */
+
+@keyframes settings-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes settings-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}

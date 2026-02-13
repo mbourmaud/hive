@@ -1,0 +1,104 @@
+/* ── Icon Bar ─────────────────────────────────────────────────────────── */
+
+[data-component="icon-bar"] {
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  background: var(--color-sidebar);
+  border-right: 1px solid var(--color-sidebar-border);
+  padding: 12px 0;
+  gap: 4px;
+}
+
+[data-slot="icon-bar-item"] {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  position: relative;
+  transition:
+    background-color 120ms ease,
+    transform 80ms ease;
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+}
+
+[data-slot="icon-bar-item"]:hover {
+  background: oklch(from var(--color-accent) l c h / 15%);
+  color: var(--color-accent);
+}
+
+[data-slot="icon-bar-item"][data-active] {
+  background: oklch(from var(--color-accent) l c h / 18%);
+  color: var(--color-accent);
+}
+
+[data-slot="icon-bar-item"][data-active]::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+}
+
+[data-slot="icon-bar-add"] {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px dashed var(--color-border);
+  background: none;
+  color: var(--color-muted-foreground);
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+[data-slot="icon-bar-add"]:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+[data-slot="icon-bar-footer"] {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-slot="icon-bar-footer-btn"] {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+[data-slot="icon-bar-footer-btn"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-muted);
+}
