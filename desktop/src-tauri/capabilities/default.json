@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:default",
+    "notification:default",
+    "clipboard-manager:default",
+    "process:default",
+    "opener:default",
+    "os:default"
+  ]
+}

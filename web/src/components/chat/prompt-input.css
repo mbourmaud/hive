@@ -1,0 +1,50 @@
+/* ── Prompt dock: gradient fade at bottom of chat ──────────────────────────── */
+
+[data-component="prompt-dock"] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding-top: 3rem;
+  padding-bottom: 1rem;
+  z-index: 50;
+  background: linear-gradient(to top, var(--background) 60%, transparent);
+  pointer-events: none;
+}
+
+[data-slot="prompt-input-container"] {
+  pointer-events: auto;
+}
+
+/* ── Textarea auto-resize ──────────────────────────────────────────────────── */
+
+[data-slot="prompt-textarea"] {
+  resize: none;
+  overflow-y: auto;
+  min-height: 2.5rem;
+  max-height: 18rem; /* ~12 rows */
+  line-height: 1.5;
+  scrollbar-width: thin;
+}
+
+[data-slot="prompt-textarea"]:focus {
+  outline: none;
+}
+
+/* ── Status bar ────────────────────────────────────────────────────────────── */
+
+[data-slot="prompt-status"] {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  user-select: none;
+}
+
+/* ── Streaming pulse on status indicator ───────────────────────────────────── */
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+[data-streaming="true"] [data-slot="status-dot"] {
+  animation: status-pulse 1.5s ease-in-out infinite;
+}

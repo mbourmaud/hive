@@ -1,3 +1,5 @@
+mod chat;
+
 use anyhow::Result;
 use axum::{
     extract::{Path, Query, State},
@@ -5,7 +7,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
         Html, IntoResponse,
     },
-    routing::get,
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -97,63 +99,86 @@ struct AppState {
     /// Per-project snapshot stores, keyed by project path
     snapshot_stores: Mutex<HashMap<String, TaskSnapshotStore>>,
     tx: broadcast::Sender<String>,
+    /// Chat session store for Claude CLI sessions
+    #[allow(dead_code)]
+    chat_sessions: chat::SessionStore,
 }
 
 // ===== Server =====
 
 pub fn run_server(port: u16) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
-        let (tx, _rx) = broadcast::channel::<String>(256);
-        let state = Arc::new(AppState {
-            snapshot_stores: Mutex::new(HashMap::new()),
-            tx: tx.clone(),
-        });
+    rt.block_on(start_server_async(port))
+}
 
-        // Background poller: every 2 seconds, poll all projects and push SSE
-        let poll_state = state.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                let projects = poll_all_projects(&poll_state);
-                if let Ok(json) = serde_json::to_string(&projects) {
-                    let _ = poll_state.tx.send(json);
-                }
+/// Async version of `run_server` for embedding in an existing tokio runtime (e.g. Tauri).
+pub async fn start_server_async(port: u16) -> Result<()> {
+    let (tx, _rx) = broadcast::channel::<String>(256);
+    let chat_sessions: chat::SessionStore = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    let state = Arc::new(AppState {
+        snapshot_stores: Mutex::new(HashMap::new()),
+        tx: tx.clone(),
+        chat_sessions: chat_sessions.clone(),
+    });
+
+    // Background poller: every 2 seconds, poll all projects and push SSE
+    let poll_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let projects = poll_all_projects(&poll_state);
+            if let Ok(json) = serde_json::to_string(&projects) {
+                let _ = poll_state.tx.send(json);
             }
-        });
-
-        let app = Router::new()
-            .route("/", get(serve_index))
-            .route("/api/projects", get(api_projects))
-            .route("/api/drones", get(api_drones))
-            .route("/api/drones/{name}", get(api_drone_detail))
-            .route("/api/events", get(api_events_sse))
-            .route("/api/logs/{name}", get(api_logs_sse))
-            .route("/api/logs/{project_path}/{name}", get(api_logs_project_sse))
-            .layer(CorsLayer::permissive())
-            .with_state(state);
-
-        println!("Hive WebUI running at http://localhost:{}", port);
-        if let Some(ip) = local_ip() {
-            println!("  Network: http://{}:{}", ip, port);
         }
+    });
 
-        let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
-            Ok(l) => l,
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::AddrInUse {
-                    anyhow::bail!(
-                        "Port {} is already in use. Try a different port with --port <PORT>",
-                        port
-                    );
-                }
-                return Err(e.into());
+    // Chat routes use SessionStore directly as state
+    let chat_router = Router::new()
+        .route("/api/chat/sessions", post(chat::create_session))
+        .route("/api/chat/sessions", get(chat::list_sessions))
+        .route("/api/chat/sessions/{id}/stream", get(chat::stream_session))
+        .route("/api/chat/sessions/{id}/message", post(chat::send_message))
+        .route("/api/chat/sessions/{id}/abort", post(chat::abort_session))
+        .route("/api/chat/sessions/{id}", delete(chat::delete_session))
+        .route(
+            "/api/chat/sessions/{id}/history",
+            get(chat::session_history),
+        )
+        .with_state(chat_sessions);
+
+    let app = Router::new()
+        .route("/", get(serve_index))
+        .route("/api/projects", get(api_projects))
+        .route("/api/drones", get(api_drones))
+        .route("/api/drones/{name}", get(api_drone_detail))
+        .route("/api/events", get(api_events_sse))
+        .route("/api/logs/{name}", get(api_logs_sse))
+        .route("/api/logs/{project_path}/{name}", get(api_logs_project_sse))
+        .merge(chat_router)
+        .layer(CorsLayer::permissive())
+        .with_state(state);
+
+    println!("Hive WebUI running at http://localhost:{}", port);
+    if let Some(ip) = local_ip() {
+        println!("  Network: http://{}:{}", ip, port);
+    }
+
+    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
+        Ok(l) => l,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::AddrInUse {
+                anyhow::bail!(
+                    "Port {} is already in use. Try a different port with --port <PORT>",
+                    port
+                );
             }
-        };
-        axum::serve(listener, app).await?;
+            return Err(e.into());
+        }
+    };
+    axum::serve(listener, app).await?;
 
-        Ok(())
-    })
+    Ok(())
 }
 
 // ===== Handlers =====

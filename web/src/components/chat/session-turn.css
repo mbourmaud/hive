@@ -1,0 +1,309 @@
+/* ── Session Turn ─────────────────────────────────────────────────────────── */
+
+[data-component="session-turn"] {
+  --session-turn-sticky-height: 0px;
+  position: relative;
+  padding: 0;
+}
+
+[data-slot="session-turn-content"] {
+  position: relative;
+}
+
+[data-slot="session-turn-message-container"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Sticky header ───────────────────────────────────────────────────────── */
+
+[data-slot="session-turn-sticky"] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-background);
+  padding: 16px 0 8px;
+}
+
+[data-slot="session-turn-sticky"]::after {
+  content: "";
+  position: absolute;
+  bottom: -12px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: linear-gradient(to bottom, var(--color-background), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── User message (collapsible) ──────────────────────────────────────────── */
+
+[data-slot="session-turn-message-content"] {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-foreground);
+  font-weight: 500;
+  position: relative;
+}
+
+[data-slot="session-turn-message-content"] p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+[data-slot="session-turn-message-content"][data-can-expand]:not([data-expanded]) {
+  max-height: 64px;
+  overflow: hidden;
+}
+
+[data-slot="session-turn-message-content"][data-can-expand]:not([data-expanded])::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: linear-gradient(to bottom, transparent, var(--color-background));
+  pointer-events: none;
+}
+
+[data-slot="session-turn-expand-btn"] {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+[data-slot="session-turn-expand-btn"]:hover {
+  text-decoration: underline;
+}
+
+/* ── Response trigger (steps toggle) ─────────────────────────────────────── */
+
+[data-slot="session-turn-response-trigger"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  margin-top: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  border-top: 1px solid var(--color-border);
+  transition: opacity 100ms ease;
+}
+
+[data-slot="session-turn-response-trigger"]:hover {
+  opacity: 0.8;
+}
+
+/* ── Steps list ──────────────────────────────────────────────────────────── */
+
+[data-slot="session-turn-steps"] {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
+  padding-bottom: 8px;
+}
+
+/* ── Part: text ──────────────────────────────────────────────────────────── */
+
+[data-slot="session-turn-part-text"] {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+/* ── Part: tool ──────────────────────────────────────────────────────────── */
+
+[data-slot="session-turn-part-tool"] {
+  border-radius: var(--radius-md, 6px);
+}
+
+[data-slot="session-turn-tool-header"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 5px 8px;
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-foreground);
+  transition: background-color 100ms ease;
+  min-width: 0;
+}
+
+[data-slot="session-turn-tool-header"]:hover {
+  background: var(--color-muted);
+}
+
+[data-slot="session-turn-tool-body"] {
+  padding: 8px 12px;
+  margin: 0 4px 4px;
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+[data-slot="session-turn-tool-body"] pre {
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--color-muted-foreground);
+  line-height: 1.5;
+}
+
+[data-slot="session-turn-tool-body"] code {
+  font-family: var(--font-mono, monospace);
+}
+
+/* Tool result section within expanded body */
+[data-slot="session-turn-tool-result"] {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+[data-slot="session-turn-tool-result"][data-error] {
+  color: var(--color-destructive);
+}
+
+[data-slot="session-turn-tool-result"] pre {
+  max-height: 200px;
+}
+
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+
+[data-slot="session-turn-summary"] {
+  position: relative;
+  padding: 12px 0 4px;
+}
+
+/* No animation when streaming — content is live-updating */
+[data-slot="session-turn-summary"][data-streaming] {
+  animation: none;
+}
+
+/* Copy button — hidden by default, shown on hover */
+[data-slot="session-turn-copy"] {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  padding: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="session-turn-summary"]:hover [data-slot="session-turn-copy"] {
+  opacity: 1;
+}
+
+[data-slot="session-turn-copy"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-secondary);
+}
+
+[data-slot="session-turn-copy"]:focus-visible {
+  opacity: 1;
+}
+
+/* ── Error card ──────────────────────────────────────────────────────────── */
+
+[data-slot="session-turn-error"] {
+  margin-top: 8px;
+  padding: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--color-destructive);
+  background: oklch(from var(--color-destructive) l c h / 8%);
+  color: var(--color-destructive);
+}
+
+[data-slot="session-turn-error"] pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── fadeUp animation ────────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-slot="session-turn-summary"][data-fade] {
+  animation: fadeUp 0.4s ease-out both;
+}
+
+/* Stagger children in summary for rich multi-paragraph content.
+   First 10 children get progressive delays; remaining appear at 1s. */
+[data-slot="session-turn-summary"][data-fade] > * {
+  animation: fadeUp 0.4s ease-out both;
+  animation-delay: 1s;
+}
+
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(1) { animation-delay: 0.1s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(2) { animation-delay: 0.2s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(3) { animation-delay: 0.3s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(4) { animation-delay: 0.4s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(5) { animation-delay: 0.5s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(6) { animation-delay: 0.6s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(7) { animation-delay: 0.7s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(8) { animation-delay: 0.8s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(9) { animation-delay: 0.9s; }
+[data-slot="session-turn-summary"][data-fade] > *:nth-child(10) { animation-delay: 1.0s; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  [data-slot="session-turn-sticky"] {
+    padding: 12px 0 6px;
+  }
+
+  [data-slot="session-turn-steps"] {
+    margin-left: 8px;
+    padding-left: 8px;
+  }
+}

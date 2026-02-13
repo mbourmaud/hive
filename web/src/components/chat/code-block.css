@@ -1,0 +1,110 @@
+[data-component="code-block"] {
+  content-visibility: auto;
+  overflow: hidden;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border, oklch(0.90 0 0));
+  font-family: var(--font-mono, "SF Mono", "Fira Code", "JetBrains Mono", monospace);
+  font-size: 13px;
+  line-height: 24px;
+  position: relative;
+  background: var(--surface-inset, oklch(0.985 0.001 106.423));
+}
+
+[data-component="code-block"] pre {
+  margin: 0;
+  padding: 12px 16px;
+  overflow-x: auto;
+  background: transparent !important;
+}
+
+[data-component="code-block"] code {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: transparent;
+}
+
+/* Scrollable content area with max height */
+[data-slot="code-block-scroll"] {
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* Line numbers gutter */
+[data-slot="code-block-table"] {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  padding: 12px 0;
+}
+
+[data-slot="code-block-gutter"] {
+  padding: 0 12px;
+  text-align: right;
+  user-select: none;
+  color: var(--muted-foreground, oklch(0.553 0.013 58.071));
+  opacity: 0.5;
+  font-size: 12px;
+  line-height: 24px;
+  border-right: 1px solid var(--border, oklch(0.90 0 0));
+}
+
+[data-slot="code-block-lines"] {
+  padding: 0 16px;
+  overflow-x: auto;
+}
+
+/* When inside the line-number grid, pre should not add its own padding */
+[data-slot="code-block-lines"] pre {
+  padding: 0;
+}
+
+[data-slot="code-block-lines"] .line {
+  min-height: 24px;
+}
+
+/* Hide line numbers on mobile */
+@media (max-width: 639px) {
+  [data-slot="code-block-gutter"] {
+    display: none;
+  }
+  [data-slot="code-block-table"] {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Language badge */
+[data-slot="code-block-lang"] {
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--muted-foreground, oklch(0.553 0.013 58.071));
+  opacity: 0.6;
+  pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Copy button */
+[data-slot="code-block-copy"] {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  z-index: 1;
+}
+
+[data-component="code-block"]:hover [data-slot="code-block-copy"] {
+  opacity: 1;
+}
+
+[data-slot="code-block-copy"]:focus-visible {
+  opacity: 1;
+}
+
+/* Shiki theme overrides — make background transparent so our container bg shows */
+[data-component="code-block"] .shiki {
+  background-color: transparent !important;
+}
