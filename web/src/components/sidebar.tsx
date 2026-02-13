@@ -3,6 +3,9 @@ import { ThemeToggle } from "./theme-toggle";
 import { DroneItem } from "./drone-item";
 import { cn } from "@/lib/utils";
 import beeIcon from "@/assets/bee-icon.png";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { useActions } from "@/hooks/use-actions";
 
 interface SidebarProps {
   drones: DroneInfo[];
@@ -28,6 +31,11 @@ function SseIndicator({ status }: { status: string }) {
 
 export function Sidebar({ drones, selectedDrone, onSelectDrone, connectionStatus, projectName, showBranding }: SidebarProps) {
   const hasProject = !showBranding && !!projectName;
+  const { isTauri } = useActions();
+
+  const handleNewDrone = () => {
+    alert("Coming soon: Create new drone");
+  };
 
   return (
     <div className={cn(
@@ -81,6 +89,21 @@ export function Sidebar({ drones, selectedDrone, onSelectDrone, connectionStatus
           ))
         )}
       </div>
+
+      {/* New Drone button - only in Tauri */}
+      {isTauri && (
+        <div className="shrink-0 p-3 border-t border-sidebar-border">
+          <Button
+            onClick={handleNewDrone}
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Drone
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

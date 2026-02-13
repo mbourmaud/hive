@@ -101,59 +101,63 @@ struct AppState {
 
 // ===== Server =====
 
+/// Async version of the server — can be spawned as a task in an existing runtime (e.g. Tauri).
+pub async fn start_server_async(port: u16) -> Result<()> {
+    let (tx, _rx) = broadcast::channel::<String>(256);
+    let state = Arc::new(AppState {
+        snapshot_stores: Mutex::new(HashMap::new()),
+        tx: tx.clone(),
+    });
+
+    // Background poller: every 2 seconds, poll all projects and push SSE
+    let poll_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let projects = poll_all_projects(&poll_state);
+            if let Ok(json) = serde_json::to_string(&projects) {
+                let _ = poll_state.tx.send(json);
+            }
+        }
+    });
+
+    let app = Router::new()
+        .route("/", get(serve_index))
+        .route("/api/projects", get(api_projects))
+        .route("/api/drones", get(api_drones))
+        .route("/api/drones/{name}", get(api_drone_detail))
+        .route("/api/events", get(api_events_sse))
+        .route("/api/logs/{name}", get(api_logs_sse))
+        .route("/api/logs/{project_path}/{name}", get(api_logs_project_sse))
+        .layer(CorsLayer::permissive())
+        .with_state(state);
+
+    println!("Hive WebUI running at http://localhost:{}", port);
+    if let Some(ip) = local_ip() {
+        println!("  Network: http://{}:{}", ip, port);
+    }
+
+    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
+        Ok(l) => l,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::AddrInUse {
+                anyhow::bail!(
+                    "Port {} is already in use. Try a different port with --port <PORT>",
+                    port
+                );
+            }
+            return Err(e.into());
+        }
+    };
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+/// Blocking version — creates its own runtime. Used by the CLI.
 pub fn run_server(port: u16) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
-        let (tx, _rx) = broadcast::channel::<String>(256);
-        let state = Arc::new(AppState {
-            snapshot_stores: Mutex::new(HashMap::new()),
-            tx: tx.clone(),
-        });
-
-        // Background poller: every 2 seconds, poll all projects and push SSE
-        let poll_state = state.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                let projects = poll_all_projects(&poll_state);
-                if let Ok(json) = serde_json::to_string(&projects) {
-                    let _ = poll_state.tx.send(json);
-                }
-            }
-        });
-
-        let app = Router::new()
-            .route("/", get(serve_index))
-            .route("/api/projects", get(api_projects))
-            .route("/api/drones", get(api_drones))
-            .route("/api/drones/{name}", get(api_drone_detail))
-            .route("/api/events", get(api_events_sse))
-            .route("/api/logs/{name}", get(api_logs_sse))
-            .route("/api/logs/{project_path}/{name}", get(api_logs_project_sse))
-            .layer(CorsLayer::permissive())
-            .with_state(state);
-
-        println!("Hive WebUI running at http://localhost:{}", port);
-        if let Some(ip) = local_ip() {
-            println!("  Network: http://{}:{}", ip, port);
-        }
-
-        let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
-            Ok(l) => l,
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::AddrInUse {
-                    anyhow::bail!(
-                        "Port {} is already in use. Try a different port with --port <PORT>",
-                        port
-                    );
-                }
-                return Err(e.into());
-            }
-        };
-        axum::serve(listener, app).await?;
-
-        Ok(())
-    })
+    rt.block_on(start_server_async(port))
 }
 
 // ===== Handlers =====
