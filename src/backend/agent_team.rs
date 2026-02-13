@@ -349,6 +349,9 @@ fn launch_agent_team(config: &SpawnConfig) -> Result<SpawnHandle> {
         .arg("--verbose")
         .arg("--dangerously-skip-permissions");
 
+    // Clear CLAUDECODE env var to avoid "nested session" detection
+    cmd.env_remove("CLAUDECODE");
+
     // Only enable Agent Teams for multi-agent mode
     if !is_solo {
         cmd.env("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1");
