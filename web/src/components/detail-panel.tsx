@@ -10,8 +10,10 @@ import { LogViewer } from "./log-viewer";
 import { fmtCost } from "./constants";
 import { useLogs } from "@/hooks/use-logs";
 import { useState } from "react";
-import { ListChecks, Users, MessageSquare, Terminal } from "lucide-react";
+import { ListChecks, Users, MessageSquare, Terminal, Square, Trash2, RotateCcw } from "lucide-react";
 import beeIcon from "@/assets/bee-icon.png";
+import { Button } from "@/components/ui/button";
+import { useActions } from "@/hooks/use-actions";
 
 interface DetailPanelProps {
   drone: DroneInfo | null;
@@ -86,6 +88,32 @@ function SegmentedProgress({ done, total }: { done: number; total: number }) {
 export function DetailPanel({ drone, isMock, projectPath }: DetailPanelProps) {
   const [rawLogs, setRawLogs] = useState(false);
   const { logs } = useLogs(drone?.name ?? null, isMock, projectPath, rawLogs);
+  const { isTauri, stopDrone, cleanDrone } = useActions();
+
+  const handleStop = async () => {
+    if (!drone) return;
+    try {
+      await stopDrone(drone.name);
+    } catch (err) {
+      console.error("Failed to stop drone:", err);
+    }
+  };
+
+  const handleClean = async () => {
+    if (!drone) return;
+    if (!confirm(`Are you sure you want to clean drone "${drone.name}"? This will remove the worktree.`)) {
+      return;
+    }
+    try {
+      await cleanDrone(drone.name);
+    } catch (err) {
+      console.error("Failed to clean drone:", err);
+    }
+  };
+
+  const handleRestart = () => {
+    alert("Restart coming soon!");
+  };
 
   if (!drone) {
     return (
@@ -114,6 +142,22 @@ export function DetailPanel({ drone, isMock, projectPath }: DetailPanelProps) {
           {drone.branch}
         </Badge>
         <Badge variant="outline" className="hidden sm:inline-flex text-accent">{fmtCost(drone.cost.total_usd)}</Badge>
+        {isTauri && (
+          <div className="flex items-center gap-1">
+            <Button variant="destructive" size="sm" onClick={handleStop} className="h-7 px-2 text-xs">
+              <Square className="w-3 h-3 mr-1" />
+              Stop
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleClean} className="h-7 px-2 text-xs">
+              <Trash2 className="w-3 h-3 mr-1" />
+              Clean
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRestart} className="h-7 px-2 text-xs">
+              <RotateCcw className="w-3 h-3 mr-1" />
+              Restart
+            </Button>
+          </div>
+        )}
         <span className="ml-auto text-xs sm:text-sm text-muted-foreground shrink-0">{drone.elapsed}</span>
       </div>
 
