@@ -165,15 +165,18 @@ pub fn save_global_config(config: &HiveConfig) -> Result<()> {
 mod tests {
     use super::*;
     use std::env;
+    use std::sync::Mutex;
+
+    /// Serialize tests that mutate HIVE_MODEL to prevent env var races.
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_get_model_default() {
-        // Save current env
+        let _lock = ENV_MUTEX.lock().unwrap();
         let saved = env::var("HIVE_MODEL").ok();
         env::remove_var("HIVE_MODEL");
         let model = get_model();
         assert_eq!(model, "sonnet");
-        // Restore env
         if let Some(val) = saved {
             env::set_var("HIVE_MODEL", val);
         }
@@ -181,12 +184,11 @@ mod tests {
 
     #[test]
     fn test_get_model_from_env() {
-        // Save current env
+        let _lock = ENV_MUTEX.lock().unwrap();
         let saved = env::var("HIVE_MODEL").ok();
         env::set_var("HIVE_MODEL", "opus");
         let model = get_model();
         assert_eq!(model, "opus");
-        // Restore env
         env::remove_var("HIVE_MODEL");
         if let Some(val) = saved {
             env::set_var("HIVE_MODEL", val);

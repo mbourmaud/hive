@@ -118,21 +118,47 @@ impl TaskSnapshotStore {
 
     /// Update the snapshot for a drone.
     ///
-    /// 1. Try live filesystem (`~/.claude/tasks/<team>/*.json`)
-    /// 2. If empty, load persisted snapshot (`.hive/drones/<name>/tasks-snapshot.json`)
-    /// 3. When live data is found, persist it to disk for future recovery
+    /// Priority:
+    /// 1. `todos.json` (from TodoWrite hook) — real task names and progress
+    /// 2. Live filesystem (`~/.claude/tasks/<team>/*.json`) — agent tracking only
+    /// 3. Persisted snapshot (`.hive/drones/<name>/tasks-snapshot.json`)
+    ///
+    /// When live data is found, persist it to disk for future recovery.
     ///
     /// Returns the updated snapshot reference.
     pub fn update(&mut self, drone_name: &str) -> &TaskSnapshot {
         use crate::agent_teams::task_sync;
 
-        // Try live filesystem first
-        let fs_tasks = read_task_list_safe(drone_name);
         let members = task_sync::read_team_members(drone_name).unwrap_or_default();
 
-        let (mut task_list, members, source) = if !fs_tasks.is_empty() {
+        // Try todos.json first (written by TodoWrite hook — has real task names)
+        let todos_path = if let Some(ref root) = self.project_root {
+            root.join(".hive/drones")
+                .join(drone_name)
+                .join("todos.json")
+        } else {
+            PathBuf::from(".hive/drones")
+                .join(drone_name)
+                .join("todos.json")
+        };
+
+        let todo_tasks = load_todos(&todos_path);
+
+        // Try live Agent Teams filesystem
+        let fs_tasks = read_task_list_safe(drone_name);
+
+        let (mut task_list, members, source) = if !todo_tasks.is_empty() {
+            // TodoWrite gives us real task names — prefer it
+            let infos = todo_tasks;
+            if let Some(ref root) = self.project_root {
+                persist_snapshot_at(root, drone_name, &infos, &members);
+            } else {
+                persist_snapshot(drone_name, &infos, &members);
+            }
+            (infos, members, SnapshotSource::Tasks)
+        } else if !fs_tasks.is_empty() {
+            // Fall back to Agent Teams task files (just agent names)
             let infos: Vec<TeamTaskInfo> = fs_tasks.into_iter().map(map_task).collect();
-            // Persist to disk so it survives team cleanup
             if let Some(ref root) = self.project_root {
                 persist_snapshot_at(root, drone_name, &infos, &members);
             } else {
@@ -172,19 +198,9 @@ impl TaskSnapshotStore {
             }
         }
 
-        // Calculate progress from user tasks only (internal tasks are for nested display)
-        let has_user_tasks = task_list.iter().any(|t| !t.is_internal);
-        let (current_completed, current_total) = if has_user_tasks {
-            let c = task_list
-                .iter()
-                .filter(|t| !t.is_internal && t.status == "completed")
-                .count();
-            let t = task_list.iter().filter(|t| !t.is_internal).count();
-            (c, t)
-        } else {
-            let c = task_list.iter().filter(|t| t.status == "completed").count();
-            (c, task_list.len())
-        };
+        // Calculate progress from all tasks
+        let current_completed = task_list.iter().filter(|t| t.status == "completed").count();
+        let current_total = task_list.len();
 
         // Enforce progress monotonicity via high-water mark
         let (prev_max_completed, prev_max_total) = self
@@ -332,6 +348,52 @@ fn persist_snapshot_at(
     if let Ok(json) = serde_json::to_string(&persisted) {
         let _ = std::fs::write(snapshot_path_at(project_root, drone_name), json);
     }
+}
+
+/// Load tasks from `todos.json` (written by the TodoWrite hook).
+///
+/// The hook captures `[{content, status, activeForm}]` — real task names and progress
+/// from the team lead's TodoWrite calls.
+fn load_todos(path: &std::path::Path) -> Vec<TeamTaskInfo> {
+    #[derive(serde::Deserialize)]
+    struct TodoEntry {
+        content: String,
+        #[serde(default = "default_pending")]
+        status: String,
+        #[serde(default, rename = "activeForm")]
+        active_form: Option<String>,
+    }
+
+    fn default_pending() -> String {
+        "pending".to_string()
+    }
+
+    let contents = match std::fs::read_to_string(path) {
+        Ok(c) if !c.trim().is_empty() => c,
+        _ => return Vec::new(),
+    };
+
+    let entries: Vec<TodoEntry> = match serde_json::from_str(&contents) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(i, e)| TeamTaskInfo {
+            id: (i + 1).to_string(),
+            subject: e.content,
+            description: String::new(),
+            status: e.status,
+            owner: None,
+            active_form: e.active_form,
+            model: None,
+            is_internal: false,
+            created_at: None,
+            updated_at: None,
+        })
+        .collect()
 }
 
 /// Map an `AgentTeamTask` (from filesystem JSON) to `TeamTaskInfo` (for TUI display).

@@ -564,8 +564,11 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
         .to_string_lossy()
         .to_string();
 
-    // Simplified hooks: only Stop (for graceful exit detection) and SendMessage (audit log).
-    // All other data (tasks, agents, progress) comes from filesystem polling.
+    let todos_file = drone_dir.join("todos.json").to_string_lossy().to_string();
+
+    // Hooks: SendMessage (audit), TodoWrite (task tracking), Stop (exit detection).
+    // Agent Teams task files only contain agent names, so we capture TodoWrite
+    // from the team lead to get real task descriptions and progress.
     let hooks = serde_json::json!({
         "PreToolUse": [
             {
@@ -576,6 +579,18 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
                         r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"Message",ts:(now|todate),recipient:(.tool_input.recipient // ""),summary:(.tool_input.summary // (.tool_input.content // "" | .[0:200]))}}' >> {} && \
     echo "$INPUT" | jq -c '{{timestamp:(now|todate),from:"{}",to:(.tool_input.recipient // ""),content:(.tool_input.content // ""),summary:(.tool_input.summary // "")}}' >> {}"#,
                         events_file, drone_name, messages_file
+                    ),
+                    "async": true,
+                    "timeout": 5
+                }]
+            },
+            {
+                "matcher": "TodoWrite",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!(
+                        r#"cat | jq -c '[.tool_input.todos[]? | {{content:.content,status:(.status // "pending"),activeForm:(.activeForm // null)}}]' > {}"#,
+                        todos_file
                     ),
                     "async": true,
                     "timeout": 5
@@ -663,9 +678,9 @@ mod tests {
         assert!(hooks.get("PreToolUse").is_some());
         assert!(hooks.get("Stop").is_some());
 
-        // Simplified hooks: only SendMessage in PreToolUse
+        // PreToolUse has SendMessage + TodoWrite hooks
         let pre_tool = hooks.get("PreToolUse").unwrap().as_array().unwrap();
-        assert_eq!(pre_tool.len(), 1);
+        assert_eq!(pre_tool.len(), 2);
 
         // Verify SendMessage matcher exists and contains drone name
         let send_matcher = &pre_tool[0];
@@ -677,6 +692,16 @@ mod tests {
             .unwrap();
         assert!(command.contains("test-drone"));
         assert!(command.contains("events.ndjson"));
+
+        // Verify TodoWrite matcher exists and writes todos.json
+        let todo_matcher = &pre_tool[1];
+        assert_eq!(todo_matcher["matcher"].as_str().unwrap(), "TodoWrite");
+        let todo_cmd = todo_matcher["hooks"][0]
+            .get("command")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(todo_cmd.contains("todos.json"));
 
         // PostToolUse and SubagentStart/Stop hooks are removed
         assert!(hooks.get("PostToolUse").is_none());
