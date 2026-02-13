@@ -1,6 +1,73 @@
 use crate::types::HiveConfig;
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+// ============================================================================
+// Projects Registry (global, multi-project)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectEntry {
+    pub path: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectsRegistry {
+    pub projects: Vec<ProjectEntry>,
+}
+
+/// Path to the global projects registry: `~/.config/hive/projects.json`
+fn projects_registry_path() -> Result<PathBuf> {
+    let config_dir = dirs::config_dir()
+        .context("Failed to get config directory")?
+        .join("hive");
+    Ok(config_dir.join("projects.json"))
+}
+
+/// Load the global projects registry. Returns default if file doesn't exist.
+pub fn load_projects_registry() -> Result<ProjectsRegistry> {
+    let path = projects_registry_path()?;
+    if !path.exists() {
+        return Ok(ProjectsRegistry::default());
+    }
+    let contents = std::fs::read_to_string(&path).context("Failed to read projects registry")?;
+    let registry: ProjectsRegistry =
+        serde_json::from_str(&contents).context("Failed to parse projects registry")?;
+    Ok(registry)
+}
+
+/// Save the global projects registry.
+pub fn save_projects_registry(registry: &ProjectsRegistry) -> Result<()> {
+    let path = projects_registry_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create config directory")?;
+    }
+    let contents =
+        serde_json::to_string_pretty(registry).context("Failed to serialize projects registry")?;
+    std::fs::write(&path, contents).context("Failed to write projects registry")?;
+    Ok(())
+}
+
+/// Register a project in the global registry (idempotent, deduplicates by path).
+pub fn register_project(abs_path: &Path, name: &str) -> Result<()> {
+    let mut registry = load_projects_registry()?;
+    let path_str = abs_path.to_string_lossy().to_string();
+
+    // Deduplicate by path — update name if already registered
+    if let Some(existing) = registry.projects.iter_mut().find(|p| p.path == path_str) {
+        existing.name = name.to_string();
+    } else {
+        registry.projects.push(ProjectEntry {
+            path: path_str,
+            name: name.to_string(),
+        });
+    }
+
+    save_projects_registry(&registry)?;
+    Ok(())
+}
 
 /// Get worktree base directory with priority: ENV > local > global > default
 pub fn get_worktree_base() -> Result<PathBuf> {

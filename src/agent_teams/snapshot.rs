@@ -73,6 +73,8 @@ pub struct TaskSnapshotStore {
     high_water_marks: HashMap<String, (usize, usize)>,
     /// Track per-task completed status for monotonicity
     completed_tasks: HashMap<String, HashSet<String>>,
+    /// Optional project root for absolute-path operations (multi-project WebUI)
+    project_root: Option<PathBuf>,
 }
 
 impl Default for TaskSnapshotStore {
@@ -87,6 +89,17 @@ impl TaskSnapshotStore {
             snapshots: HashMap::new(),
             high_water_marks: HashMap::new(),
             completed_tasks: HashMap::new(),
+            project_root: None,
+        }
+    }
+
+    /// Create a new store with a specific project root (for multi-project WebUI).
+    pub fn with_project_root(project_root: PathBuf) -> Self {
+        Self {
+            snapshots: HashMap::new(),
+            high_water_marks: HashMap::new(),
+            completed_tasks: HashMap::new(),
+            project_root: Some(project_root),
         }
     }
 
@@ -120,11 +133,20 @@ impl TaskSnapshotStore {
         let (mut task_list, members, source) = if !fs_tasks.is_empty() {
             let infos: Vec<TeamTaskInfo> = fs_tasks.into_iter().map(map_task).collect();
             // Persist to disk so it survives team cleanup
-            persist_snapshot(drone_name, &infos, &members);
+            if let Some(ref root) = self.project_root {
+                persist_snapshot_at(root, drone_name, &infos, &members);
+            } else {
+                persist_snapshot(drone_name, &infos, &members);
+            }
             (infos, members, SnapshotSource::Tasks)
         } else {
             // Live files gone — load from persisted snapshot
-            match load_persisted_snapshot(drone_name) {
+            let loaded = if let Some(ref root) = self.project_root {
+                load_persisted_snapshot_at(root, drone_name)
+            } else {
+                load_persisted_snapshot(drone_name)
+            };
+            match loaded {
                 Some((tasks, persisted_members)) => {
                     (tasks, persisted_members, SnapshotSource::Persisted)
                 }
@@ -210,6 +232,14 @@ fn snapshot_path(drone_name: &str) -> PathBuf {
         .join("tasks-snapshot.json")
 }
 
+/// Snapshot path with absolute project root.
+fn snapshot_path_at(project_root: &std::path::Path, drone_name: &str) -> PathBuf {
+    project_root
+        .join(".hive/drones")
+        .join(drone_name)
+        .join("tasks-snapshot.json")
+}
+
 /// Persist current task state to `.hive/drones/<name>/tasks-snapshot.json`.
 fn persist_snapshot(drone_name: &str, tasks: &[TeamTaskInfo], members: &[TeamMember]) {
     let persisted = PersistedSnapshot {
@@ -237,7 +267,21 @@ fn persist_snapshot(drone_name: &str, tasks: &[TeamTaskInfo], members: &[TeamMem
 
 /// Load persisted snapshot from `.hive/drones/<name>/tasks-snapshot.json`.
 fn load_persisted_snapshot(drone_name: &str) -> Option<(Vec<TeamTaskInfo>, Vec<TeamMember>)> {
-    let contents = std::fs::read_to_string(snapshot_path(drone_name)).ok()?;
+    load_persisted_snapshot_from_path(&snapshot_path(drone_name))
+}
+
+/// Load persisted snapshot with absolute project root.
+fn load_persisted_snapshot_at(
+    project_root: &std::path::Path,
+    drone_name: &str,
+) -> Option<(Vec<TeamTaskInfo>, Vec<TeamMember>)> {
+    load_persisted_snapshot_from_path(&snapshot_path_at(project_root, drone_name))
+}
+
+fn load_persisted_snapshot_from_path(
+    path: &std::path::Path,
+) -> Option<(Vec<TeamTaskInfo>, Vec<TeamMember>)> {
+    let contents = std::fs::read_to_string(path).ok()?;
     let persisted: PersistedSnapshot = serde_json::from_str(&contents).ok()?;
 
     let tasks = persisted
@@ -260,8 +304,38 @@ fn load_persisted_snapshot(drone_name: &str) -> Option<(Vec<TeamTaskInfo>, Vec<T
     Some((tasks, persisted.members))
 }
 
+/// Persist snapshot with absolute project root.
+fn persist_snapshot_at(
+    project_root: &std::path::Path,
+    drone_name: &str,
+    tasks: &[TeamTaskInfo],
+    members: &[TeamMember],
+) {
+    let persisted = PersistedSnapshot {
+        tasks: tasks
+            .iter()
+            .map(|t| PersistedTask {
+                id: t.id.clone(),
+                subject: t.subject.clone(),
+                description: t.description.clone(),
+                status: t.status.clone(),
+                owner: t.owner.clone(),
+                active_form: t.active_form.clone(),
+                is_internal: t.is_internal,
+                created_at: t.created_at,
+                updated_at: t.updated_at,
+            })
+            .collect(),
+        members: members.to_vec(),
+    };
+
+    if let Ok(json) = serde_json::to_string(&persisted) {
+        let _ = std::fs::write(snapshot_path_at(project_root, drone_name), json);
+    }
+}
+
 /// Map an `AgentTeamTask` (from filesystem JSON) to `TeamTaskInfo` (for TUI display).
-fn map_task(t: AgentTeamTask) -> TeamTaskInfo {
+pub fn map_task(t: AgentTeamTask) -> TeamTaskInfo {
     let is_internal = t
         .metadata
         .as_ref()

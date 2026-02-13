@@ -44,9 +44,9 @@ fn kill_impl(name: String, quiet: bool) -> Result<()> {
         bail!("No status file found for drone '{}'", name);
     };
 
-    // Persist progress from events.ndjson before stopping
+    // Persist progress from filesystem before stopping
     {
-        let (completed, total) = crate::events::reconstruct_progress(&name);
+        let (completed, total) = crate::commands::common::agent_teams_progress(&name);
         let mut updated_status = status.clone();
         updated_status.status = DroneState::Stopped;
         updated_status.updated = Utc::now().to_rfc3339();

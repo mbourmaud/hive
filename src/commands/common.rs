@@ -101,19 +101,14 @@ pub fn load_prd(path: &Path) -> Option<Plan> {
     }
 }
 
-/// Get read-only progress from Agent Teams task list.
+/// Get read-only progress from Agent Teams task list (filesystem only).
 ///
-/// Multi-source fallback:
-/// 1. Try live tasks from `~/.claude/tasks/<drone>/` (current logic)
-/// 2. If empty, fall back to `reconstruct_progress()` from events.ndjson
-/// 3. If both empty, return (0, 0)
-///
+/// Reads from `~/.claude/tasks/<drone>/` — no events.ndjson fallback.
 /// Returns (completed_tasks, total_tasks). Filters out internal tracking tasks.
 /// Note: This is a simple read-only function. The snapshot store in the TUI
 /// provides monotonicity guarantees on top of this.
 pub fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
     use crate::agent_teams;
-    use crate::events;
 
     let tasks = agent_teams::read_task_list_safe(drone_name);
 
@@ -143,19 +138,11 @@ pub fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
     // Source 2: internal tasks (team lead used TeamCreate, not TaskCreate)
     let all_total = tasks.len();
     let all_completed = tasks.iter().filter(|t| t.status == "completed").count();
-
-    // Source 3: event-sourced progress from events.ndjson
-    let (event_completed, event_total) = events::reconstruct_progress(drone_name);
-
-    // Use the source with the most progress. Internal task files are often stale
-    // (agents don't reliably update them), so events.ndjson may have better data.
-    if all_total > 0 || event_total > 0 {
-        let best_total = all_total.max(event_total);
-        let best_completed = all_completed.max(event_completed);
-        return (best_completed, best_total);
+    if all_total > 0 {
+        return (all_completed, all_total);
     }
 
-    // Source 4: nothing available
+    // Nothing available
     (0, 0)
 }
 
@@ -216,26 +203,6 @@ pub fn command_with_timeout(cmd: &mut ProcessCommand, timeout_secs: u64) -> Opti
     }
 }
 
-/// Check if a PR for the given branch has been merged. Times out after 5 seconds.
-pub fn is_pr_merged(branch: &str) -> bool {
-    let mut cmd = ProcessCommand::new("gh");
-    cmd.args(["pr", "view", branch, "--json", "state", "-q", ".state"]);
-    command_with_timeout(&mut cmd, 5)
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim() == "MERGED")
-        .unwrap_or(false)
-}
-
-/// Check if a PR exists and is open for the given branch. Times out after 5 seconds.
-pub fn is_pr_open(branch: &str) -> bool {
-    let mut cmd = ProcessCommand::new("gh");
-    cmd.args(["pr", "view", branch, "--json", "state", "-q", ".state"]);
-    command_with_timeout(&mut cmd, 5)
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim() == "OPEN")
-        .unwrap_or(false)
-}
-
 // ============================================================================
 // Drone Listing
 // ============================================================================
@@ -243,7 +210,16 @@ pub fn is_pr_open(branch: &str) -> bool {
 /// List all drones with their status, sorted by most recently updated.
 pub fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
     let drones_dir = PathBuf::from(".hive").join("drones");
+    list_drones_in(drones_dir)
+}
 
+/// List all drones at a specific project root (absolute path).
+pub fn list_drones_at(project_root: &Path) -> Result<Vec<(String, DroneStatus)>> {
+    let drones_dir = project_root.join(".hive").join("drones");
+    list_drones_in(drones_dir)
+}
+
+fn list_drones_in(drones_dir: PathBuf) -> Result<Vec<(String, DroneStatus)>> {
     if !drones_dir.exists() {
         return Ok(Vec::new());
     }
@@ -271,6 +247,19 @@ pub fn list_drones() -> Result<Vec<(String, DroneStatus)>> {
     drones.sort_by(|a, b| b.1.updated.cmp(&a.1.updated));
 
     Ok(drones)
+}
+
+/// Read the PID from a drone's .pid file at a specific project root.
+pub fn read_drone_pid_at(project_root: &Path, drone_name: &str) -> Option<i32> {
+    let pid_path = project_root
+        .join(".hive")
+        .join("drones")
+        .join(drone_name)
+        .join(".pid");
+
+    fs::read_to_string(pid_path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
 }
 
 // ============================================================================

@@ -9,9 +9,9 @@ mod views;
 use anyhow::Result;
 
 /// Run the monitor TUI dashboard, or web-only mode with `--web`.
-pub fn run_monitor(name: Option<String>, web: bool) -> Result<()> {
+pub fn run_monitor(name: Option<String>, web: bool, port: u16) -> Result<()> {
     if web {
-        tui::run_web_only()
+        crate::webui::run_server(port)
     } else {
         tui::run_tui(name)
     }

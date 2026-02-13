@@ -94,10 +94,3 @@ pub(crate) fn run_tui(_name: Option<String>) -> Result<()> {
 
     Ok(())
 }
-
-/// Run web-only mode (no longer supported — WebSocket server removed).
-pub(crate) fn run_web_only() -> Result<()> {
-    anyhow::bail!(
-        "Web-only mode is no longer available. Use 'hive monitor' for the TUI dashboard."
-    );
-}

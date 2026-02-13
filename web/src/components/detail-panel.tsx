@@ -9,6 +9,7 @@ import { CostCard } from "./cost-card";
 import { LogViewer } from "./log-viewer";
 import { fmtCost } from "./constants";
 import { useLogs } from "@/hooks/use-logs";
+import { useState } from "react";
 import { ListChecks, Users, MessageSquare, Terminal } from "lucide-react";
 import beeIcon from "@/assets/bee-icon.png";
 
@@ -83,7 +84,8 @@ function SegmentedProgress({ done, total }: { done: number; total: number }) {
 }
 
 export function DetailPanel({ drone, isMock, projectPath }: DetailPanelProps) {
-  const { logs } = useLogs(drone?.name ?? null, isMock, projectPath);
+  const [rawLogs, setRawLogs] = useState(false);
+  const { logs } = useLogs(drone?.name ?? null, isMock, projectPath, rawLogs);
 
   if (!drone) {
     return (
@@ -192,7 +194,7 @@ export function DetailPanel({ drone, isMock, projectPath }: DetailPanelProps) {
             </CardHeader>
             <Separator />
             <CardContent className="pt-4">
-              <LogViewer logs={logs} />
+              <LogViewer logs={logs} raw={rawLogs} onToggleRaw={() => setRawLogs(r => !r)} />
             </CardContent>
           </Card>
         </div>

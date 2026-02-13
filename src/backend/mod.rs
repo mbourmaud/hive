@@ -26,6 +26,10 @@ pub struct SpawnConfig {
     pub structured_tasks: Vec<StructuredTask>,
     /// Git remote URL (for PR/MR detection)
     pub remote_url: String,
+    /// Execution mode: "agent-team" (multi-agent) or "agent" (solo)
+    pub mode: String,
+    /// Detected project languages (e.g., ["rust", "node"])
+    pub project_languages: Vec<String>,
 }
 
 /// Handle returned by a backend after spawning a drone.

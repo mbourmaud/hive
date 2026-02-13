@@ -7,3 +7,4 @@ pub mod mcp;
 pub mod notification;
 pub mod plan_parser;
 pub mod types;
+pub mod webui;

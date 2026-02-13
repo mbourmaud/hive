@@ -17,6 +17,15 @@ use crate::types::{DroneState, DroneStatus, Plan};
 
 use super::cost::{parse_cost_from_log, CostSummary};
 
+/// Persist a drone's current status to its `status.json` file on disk.
+fn persist_drone_status(name: &str, status: &DroneStatus) {
+    let status_path = PathBuf::from(".hive/drones").join(name).join("status.json");
+    let _ = fs::write(
+        &status_path,
+        serde_json::to_string_pretty(status).unwrap_or_default(),
+    );
+}
+
 /// A record of a completed tool call, for the tools view.
 #[derive(Debug, Clone)]
 pub struct ToolRecord {
@@ -25,9 +34,6 @@ pub struct ToolRecord {
     #[allow(dead_code)]
     pub timestamp: Instant,
 }
-
-/// Max tool records per drone (ring buffer)
-const MAX_TOOL_RECORDS: usize = 50;
 
 /// Check PR state with timeout. Returns true if PR is in expected state.
 /// Uses a cache reference to avoid redundant gh calls (cache entries valid for 60s).
@@ -203,7 +209,8 @@ impl TuiState {
                 .insert(name.clone(), status.status.clone());
         }
 
-        // Read new events from hooks (incremental ndjson tailing)
+        // Read new events from hooks — only for Stop detection and activity tracking.
+        // Task/agent/progress data comes from filesystem polling (snapshot_store).
         for (name, _) in &self.drones {
             let reader = self
                 .event_readers
@@ -220,24 +227,6 @@ impl TuiState {
                     let _ = crate::agent_teams::auto_complete_tasks(name);
                     self.auto_stopped_drones.insert(name.clone());
                     let _ = crate::commands::kill_clean::kill_quiet(name.clone());
-                }
-
-                // Capture ToolDone events into tool_history ring buffer
-                if let HiveEvent::ToolDone {
-                    ref tool,
-                    ref tool_use_id,
-                    ..
-                } = event
-                {
-                    let history = self.tool_history.entry(name.clone()).or_default();
-                    if history.len() >= MAX_TOOL_RECORDS {
-                        history.pop_front();
-                    }
-                    history.push_back(ToolRecord {
-                        tool: tool.clone(),
-                        tool_use_id: tool_use_id.clone().unwrap_or_default(),
-                        timestamp: Instant::now(),
-                    });
                 }
 
                 self.last_event_time.insert(name.clone(), Instant::now());
@@ -292,11 +281,7 @@ impl TuiState {
                             .entry(name.clone())
                             .or_insert_with(Instant::now);
                     }
-                    let status_path = PathBuf::from(".hive/drones").join(name).join("status.json");
-                    let _ = fs::write(
-                        &status_path,
-                        serde_json::to_string_pretty(&*status).unwrap_or_default(),
-                    );
+                    persist_drone_status(name, status);
                 }
             }
         }
@@ -316,18 +301,9 @@ impl TuiState {
             ) {
                 let marker = PathBuf::from(&status.worktree).join(".hive_complete");
                 if marker.exists() {
-                    // Mark as completed
                     status.status = DroneState::Completed;
                     status.updated = Utc::now().to_rfc3339();
-
-                    // Update status.json
-                    let status_path = PathBuf::from(".hive/drones")
-                        .join(&**name)
-                        .join("status.json");
-                    let _ = fs::write(
-                        &status_path,
-                        serde_json::to_string_pretty(&*status).unwrap_or_default(),
-                    );
+                    persist_drone_status(name, status);
 
                     // Kill the process
                     let _ = crate::commands::kill_clean::kill_quiet(name.to_string());
@@ -362,19 +338,11 @@ impl TuiState {
                     let all_tasks_done = total > 0 && completed >= total;
 
                     if all_tasks_done {
-                        // Find and update the drone status
                         if let Some((_, status)) = self.drones.iter_mut().find(|(n, _)| n == &name)
                         {
                             status.status = DroneState::Completed;
                             status.updated = Utc::now().to_rfc3339();
-
-                            let status_path = PathBuf::from(".hive/drones")
-                                .join(&name)
-                                .join("status.json");
-                            let _ = fs::write(
-                                &status_path,
-                                serde_json::to_string_pretty(&*status).unwrap_or_default(),
-                            );
+                            persist_drone_status(&name, status);
                         }
 
                         let _ = crate::commands::kill_clean::kill_quiet(name.to_string());
@@ -453,12 +421,7 @@ impl TuiState {
             if let Some((_, status)) = self.drones.iter_mut().find(|(n, _)| n == name) {
                 status.status = DroneState::Completed;
                 status.updated = Utc::now().to_rfc3339();
-
-                let status_path = PathBuf::from(".hive/drones").join(name).join("status.json");
-                let _ = fs::write(
-                    &status_path,
-                    serde_json::to_string_pretty(&*status).unwrap_or_default(),
-                );
+                persist_drone_status(name, status);
             }
 
             notification::notify(

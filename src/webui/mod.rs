@@ -1,6 +1,6 @@
 use anyhow::Result;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{
         sse::{Event, KeepAlive, Sse},
         Html, IntoResponse,
@@ -8,7 +8,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -203,17 +203,26 @@ async fn api_events_sse(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
+#[derive(Debug, Deserialize)]
+struct LogQuery {
+    #[serde(default)]
+    format: Option<String>,
+}
+
 async fn api_logs_sse(
     Path(name): Path<String>,
+    Query(query): Query<LogQuery>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {
     let log_path = std::path::PathBuf::from(".hive/drones")
         .join(&name)
         .join("activity.log");
-    stream_log_file(log_path)
+    let raw = query.format.as_deref() == Some("raw");
+    stream_log_file(log_path, raw)
 }
 
 async fn api_logs_project_sse(
     Path((project_path, name)): Path<(String, String)>,
+    Query(query): Query<LogQuery>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {
     let decoded =
         urlencoding::decode(&project_path).unwrap_or_else(|_| project_path.clone().into());
@@ -221,11 +230,132 @@ async fn api_logs_project_sse(
         .join(".hive/drones")
         .join(&name)
         .join("activity.log");
-    stream_log_file(log_path)
+    let raw = query.format.as_deref() == Some("raw");
+    stream_log_file(log_path, raw)
+}
+
+/// Format a raw NDJSON activity.log line into a human-readable summary.
+/// Returns None for lines that should be skipped (tool results, unparseable).
+fn format_log_line(raw: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+    let typ = v.get("type")?.as_str()?;
+
+    match typ {
+        "system" => Some("[init] Session started".to_string()),
+        "result" => {
+            let subtype = v
+                .get("subtype")
+                .and_then(|s| s.as_str())
+                .unwrap_or("unknown");
+            let result_text = v
+                .get("result")
+                .and_then(|r| r.as_str())
+                .unwrap_or("")
+                .chars()
+                .take(200)
+                .collect::<String>();
+            if result_text.is_empty() {
+                Some(format!("[done] {subtype}"))
+            } else {
+                Some(format!("[done] {subtype} — {result_text}"))
+            }
+        }
+        "user" => {
+            // Check if this is a tool_result (skip those)
+            let content = v.get("message").and_then(|m| m.get("content"));
+            if let Some(arr) = content.and_then(|c| c.as_array()) {
+                if arr
+                    .iter()
+                    .any(|item| item.get("type").and_then(|t| t.as_str()) == Some("tool_result"))
+                {
+                    return None;
+                }
+            }
+            // Regular user message
+            let text = content
+                .and_then(|c| {
+                    if let Some(s) = c.as_str() {
+                        Some(s.to_string())
+                    } else if let Some(arr) = c.as_array() {
+                        arr.iter()
+                            .filter_map(|item| {
+                                if item.get("type").and_then(|t| t.as_str()) == Some("text") {
+                                    item.get("text").and_then(|t| t.as_str()).map(String::from)
+                                } else {
+                                    None
+                                }
+                            })
+                            .next()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_default();
+            let truncated: String = text.chars().take(200).collect();
+            if truncated.is_empty() {
+                None
+            } else {
+                Some(format!("[user] {truncated}"))
+            }
+        }
+        "assistant" => {
+            let content = v
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())?;
+
+            let mut parts: Vec<String> = Vec::new();
+            for item in content {
+                let item_type = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                match item_type {
+                    "tool_use" => {
+                        let name = item
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("unknown");
+                        // Try to extract a meaningful arg (file_path for Read/Write/Edit, command for Bash)
+                        let input = item.get("input");
+                        let detail = input
+                            .and_then(|i| {
+                                i.get("file_path")
+                                    .or_else(|| i.get("command"))
+                                    .or_else(|| i.get("pattern"))
+                                    .and_then(|v| v.as_str())
+                            })
+                            .map(|s| {
+                                let truncated: String = s.chars().take(80).collect();
+                                truncated
+                            });
+                        if let Some(d) = detail {
+                            parts.push(format!("[tool] {name} {d}"));
+                        } else {
+                            parts.push(format!("[tool] {name}"));
+                        }
+                    }
+                    "text" => {
+                        let text = item.get("text").and_then(|t| t.as_str()).unwrap_or("");
+                        if !text.trim().is_empty() {
+                            let truncated: String = text.chars().take(200).collect();
+                            parts.push(format!("[assistant] {truncated}"));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join("\n"))
+            }
+        }
+        _ => None,
+    }
 }
 
 fn stream_log_file(
     log_path: PathBuf,
+    raw: bool,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {
     let stream = async_stream::stream! {
         let mut offset: u64 = 0;
@@ -235,7 +365,13 @@ fn stream_log_file(
             let lines: Vec<&str> = contents.lines().collect();
             let start = if lines.len() > 50 { lines.len() - 50 } else { 0 };
             for line in &lines[start..] {
-                yield Ok(Event::default().data(line));
+                if raw {
+                    yield Ok(Event::default().data(line));
+                } else if let Some(formatted) = format_log_line(line) {
+                    for sub in formatted.lines() {
+                        yield Ok(Event::default().data(sub));
+                    }
+                }
             }
             offset = contents.len() as u64;
         }
@@ -248,7 +384,13 @@ fn stream_log_file(
                     let new_data = &contents[offset as usize..];
                     for line in new_data.lines() {
                         if !line.is_empty() {
-                            yield Ok(Event::default().data(line));
+                            if raw {
+                                yield Ok(Event::default().data(line));
+                            } else if let Some(formatted) = format_log_line(line) {
+                                for sub in formatted.lines() {
+                                    yield Ok(Event::default().data(sub));
+                                }
+                            }
                         }
                     }
                     offset = len;
@@ -394,6 +536,29 @@ fn poll_all_projects(state: &AppState) -> Vec<ProjectInfo> {
     projects
 }
 
+/// Check if activity.log ends with a successful result event.
+fn has_success_result(activity_log_path: &std::path::Path) -> bool {
+    let contents = match std::fs::read_to_string(activity_log_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    // Find last non-empty line
+    let last_line = contents.lines().rev().find(|l| !l.trim().is_empty());
+    let last_line = match last_line {
+        Some(l) => l,
+        None => return false,
+    };
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(last_line) {
+        let typ = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        if typ == "result" {
+            let subtype = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+            let is_error = v.get("is_error").and_then(|e| e.as_bool()).unwrap_or(true);
+            return subtype == "success" || !is_error;
+        }
+    }
+    false
+}
+
 fn determine_liveness(drone_name: &str, status: &crate::types::DroneState) -> String {
     use crate::types::DroneState;
     match status {
@@ -407,7 +572,14 @@ fn determine_liveness(drone_name: &str, status: &crate::types::DroneState) -> St
             if pid_alive {
                 "working".to_string()
             } else {
-                "dead".to_string()
+                let log_path = PathBuf::from(".hive/drones")
+                    .join(drone_name)
+                    .join("activity.log");
+                if has_success_result(&log_path) {
+                    "completed".to_string()
+                } else {
+                    "dead".to_string()
+                }
             }
         }
         _ => "unknown".to_string(),
@@ -431,7 +603,15 @@ fn determine_liveness_at(
             if pid_alive {
                 "working".to_string()
             } else {
-                "dead".to_string()
+                let log_path = project_root
+                    .join(".hive/drones")
+                    .join(drone_name)
+                    .join("activity.log");
+                if has_success_result(&log_path) {
+                    "completed".to_string()
+                } else {
+                    "dead".to_string()
+                }
             }
         }
         _ => "unknown".to_string(),

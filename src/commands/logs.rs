@@ -7,9 +7,9 @@ use std::time::Duration;
 use crate::agent_teams::task_sync;
 
 pub fn run(name: String, lines: Option<usize>, follow: bool) -> Result<()> {
-    let _drone_dir = PathBuf::from(".hive/drones").join(&name);
+    let drone_dir = PathBuf::from(".hive/drones").join(&name);
 
-    if !_drone_dir.exists() {
+    if !drone_dir.exists() {
         bail!("Drone '{}' not found", name);
     }
 
@@ -55,32 +55,13 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
             _ => {}
         }
 
-        // 2. Show task states with agents (from events.ndjson)
-        let event_tasks = crate::events::reconstruct_tasks(team_name);
-        let tasks_map: std::collections::HashMap<_, _> = event_tasks
+        // 2. Show task states with agents (from filesystem)
+        let fs_tasks = crate::agent_teams::read_task_list_safe(team_name);
+        let tasks: std::collections::HashMap<_, _> = fs_tasks
             .into_iter()
-            .map(|et| {
-                (
-                    et.task_id.clone(),
-                    task_sync::TeamTaskInfo {
-                        id: et.task_id,
-                        subject: et.subject,
-                        description: String::new(),
-                        status: et.status,
-                        owner: et.owner,
-                        active_form: None,
-                        model: None,
-                        is_internal: false,
-                        created_at: None,
-                        updated_at: None,
-                    },
-                )
-            })
-            .collect();
-        // Filter out internal tasks (auto-created for agent spawning)
-        let tasks: std::collections::HashMap<_, _> = tasks_map
-            .into_iter()
-            .filter(|(_, t)| !t.is_internal)
+            .map(crate::agent_teams::snapshot::map_task)
+            .filter(|t| !t.is_internal)
+            .map(|t| (t.id.clone(), t))
             .collect();
         if tasks.is_empty() {
             println!("  {} No tasks found", "○".dimmed());
@@ -187,77 +168,8 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
                     println!();
 
                     for (recipient, msg) in messages_to_show {
-                        // Parse timestamp for display
-                        let time_display = msg
-                            .timestamp
-                            .split('T')
-                            .nth(1)
-                            .and_then(|t| t.split('.').next())
-                            .unwrap_or(&msg.timestamp);
-
-                        // Try to extract meaningful content from the message
-                        // Agent Teams messages are often JSON-encoded
-                        let content = if msg.text.starts_with('{') {
-                            // Try to parse as JSON and extract meaningful fields
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&msg.text) {
-                                if let Some(msg_type) = json.get("type").and_then(|v| v.as_str()) {
-                                    match msg_type {
-                                        "task_assignment" => {
-                                            let subject = json
-                                                .get("subject")
-                                                .and_then(|v| v.as_str())
-                                                .unwrap_or("?");
-                                            let task_id = json
-                                                .get("taskId")
-                                                .and_then(|v| v.as_str())
-                                                .unwrap_or("?");
-                                            format!("Assigned task #{}: {}", task_id, subject)
-                                        }
-                                        "task_completed" => {
-                                            let task_id = json
-                                                .get("taskId")
-                                                .and_then(|v| v.as_str())
-                                                .unwrap_or("?");
-                                            format!("Completed task #{}", task_id)
-                                        }
-                                        "idle_notification" => {
-                                            "Idle - available for work".to_string()
-                                        }
-                                        "shutdown_request" => "Shutdown requested".to_string(),
-                                        "shutdown_approved" => "Shutdown approved".to_string(),
-                                        _ => {
-                                            // Show raw content for unknown types, truncated
-                                            let raw = json
-                                                .get("content")
-                                                .or_else(|| json.get("text"))
-                                                .and_then(|v| v.as_str())
-                                                .unwrap_or(&msg.text);
-                                            if raw.len() > 120 {
-                                                format!("{}...", &raw[..120])
-                                            } else {
-                                                raw.to_string()
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    let raw = &msg.text;
-                                    if raw.len() > 120 {
-                                        format!("{}...", &raw[..120])
-                                    } else {
-                                        raw.to_string()
-                                    }
-                                }
-                            } else {
-                                msg.text.clone()
-                            }
-                        } else {
-                            // Plain text message
-                            if msg.text.len() > 120 {
-                                format!("{}...", &msg.text[..120])
-                            } else {
-                                msg.text.clone()
-                            }
-                        };
+                        let time_display = extract_time_display(&msg.timestamp);
+                        let content = extract_message_content(&msg.text);
 
                         let read_marker = if msg.read { "" } else { " *" };
                         println!(
@@ -285,6 +197,64 @@ fn show_team_conversation(team_name: &str, lines: Option<usize>, follow: bool) -
     }
 
     Ok(())
+}
+
+/// Extract the time portion from an ISO timestamp for compact display.
+fn extract_time_display(timestamp: &str) -> &str {
+    timestamp
+        .split('T')
+        .nth(1)
+        .and_then(|t| t.split('.').next())
+        .unwrap_or(timestamp)
+}
+
+/// Truncate a string to `max_len` characters, appending "..." if truncated.
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
+}
+
+/// Extract human-readable content from a message.
+/// Agent Teams messages are often JSON-encoded with a "type" field.
+fn extract_message_content(text: &str) -> String {
+    if !text.starts_with('{') {
+        return truncate(text, 120);
+    }
+
+    let json = match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(v) => v,
+        Err(_) => return text.to_string(),
+    };
+
+    let Some(msg_type) = json.get("type").and_then(|v| v.as_str()) else {
+        return truncate(text, 120);
+    };
+
+    match msg_type {
+        "task_assignment" => {
+            let subject = json.get("subject").and_then(|v| v.as_str()).unwrap_or("?");
+            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("Assigned task #{}: {}", task_id, subject)
+        }
+        "task_completed" => {
+            let task_id = json.get("taskId").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("Completed task #{}", task_id)
+        }
+        "idle_notification" => "Idle - available for work".to_string(),
+        "shutdown_request" => "Shutdown requested".to_string(),
+        "shutdown_approved" => "Shutdown approved".to_string(),
+        _ => {
+            let raw = json
+                .get("content")
+                .or_else(|| json.get("text"))
+                .and_then(|v| v.as_str())
+                .unwrap_or(text);
+            truncate(raw, 120)
+        }
+    }
 }
 
 /// Extract a meaningful display title and optional agent name from a task.

@@ -14,8 +14,14 @@ pub fn run(
     local: bool,
     model: String,
     max_agents: usize,
+    mode: String,
     dry_run: bool,
 ) -> Result<()> {
+    // Validate mode
+    if mode != "agent-team" && mode != "agent" {
+        bail!("Invalid mode '{}'. Must be 'agent-team' or 'agent'.", mode);
+    }
+
     // 0. Load active profile to get Claude binary and environment
     let active_profile = profile::load_active_profile()?;
 
@@ -71,13 +77,18 @@ pub fn run(
         println!("  {} Base branch: {}", "→".bright_blue(), base);
     }
 
-    // Team lead always uses Opus; show the effective model
-    println!(
-        "  {} Team lead: {} (teammates: {})",
-        "→".bright_blue(),
-        "opus".bright_cyan(),
-        model.bright_cyan()
-    );
+    // Show mode and model info
+    println!("  {} Mode: {}", "→".bright_blue(), mode.bright_cyan());
+    if mode == "agent-team" {
+        println!(
+            "  {} Team lead: {} (teammates: {})",
+            "→".bright_blue(),
+            "opus".bright_cyan(),
+            model.bright_cyan()
+        );
+    } else {
+        println!("  {} Model: {}", "→".bright_blue(), model.bright_cyan());
+    }
 
     // 4. Handle worktree creation
     let worktree_path = if local {
@@ -105,11 +116,11 @@ pub fn run(
         println!("  {} Symlinked .hive", "✓".green());
     }
 
-    // 5b. Write Claude Code hooks config for event streaming
+    // 6. Write Claude Code hooks config for event streaming
     write_hooks_config(&worktree_path, &name)?;
     println!("  {} Configured hooks", "✓".green());
 
-    // 6. Create or update drone status
+    // 7. Create or update drone status
     fs::create_dir_all(&drone_dir)?;
     let status_path = drone_dir.join("status.json");
 
@@ -154,12 +165,10 @@ pub fn run(
     }
 
     // Ensure inbox/outbox directories exist for inter-drone messaging
-    let inbox_dir = drone_dir.join("inbox");
-    let outbox_dir = drone_dir.join("outbox");
-    fs::create_dir_all(&inbox_dir)?;
-    fs::create_dir_all(&outbox_dir)?;
+    fs::create_dir_all(drone_dir.join("inbox"))?;
+    fs::create_dir_all(drone_dir.join("outbox"))?;
 
-    // 7. Verify jq is available (required for event streaming hooks)
+    // 8. Verify jq is available (required for event streaming hooks)
     if !ProcessCommand::new("jq")
         .arg("--version")
         .output()
@@ -169,23 +178,20 @@ pub fn run(
         bail!("'jq' is required for event streaming but not found. Install: brew install jq");
     }
 
-    // 7b. ALWAYS run environment setup — mandatory for Hive to work
+    // 9. Run environment setup (mandatory for Hive to work)
     println!("  {} Running environment setup...", "→".bright_blue());
     crate::commands::setup::run_setup(&worktree_path)?;
     println!("  {} Environment setup complete", "✓".green());
 
-    // 7c. Pre-seed tasks
-    let seeded = crate::agent_teams::preseed_tasks(&name, &prd.structured_tasks, &drone_dir)?;
-    if !seeded.is_empty() {
-        println!("  {} Pre-seeded {} tasks", "✓".green(), seeded.len());
-    }
-
-    // 8. Launch Claude via ExecutionBackend
+    // 10. Launch Claude via ExecutionBackend
     if dry_run {
         println!("  {} Dry run - not launching Claude", "→".yellow());
     } else {
         // Detect git remote URL for PR/MR instructions
         let remote_url = get_git_remote_url(&worktree_path);
+
+        // Detect project languages for verification commands
+        let project_languages = detect_project_languages(&worktree_path);
 
         let backend = backend::resolve_agent_team_backend();
 
@@ -203,6 +209,8 @@ pub fn run(
             environment: active_profile.environment.clone(),
             structured_tasks: prd.structured_tasks.clone(),
             remote_url,
+            project_languages,
+            mode: mode.clone(),
         };
 
         let handle = backend.spawn(&spawn_config)?;
@@ -213,17 +221,22 @@ pub fn run(
             let _ = fs::write(&pid_path, pid.to_string());
         }
 
-        println!(
-            "  {} Launched Agent Teams lead (lead: {}, teammates: {}, max: {})",
-            "✓".green(),
-            "opus".bright_cyan(),
-            model.bright_cyan(),
-            max_agents.to_string().bright_cyan()
-        );
+        if mode == "agent-team" {
+            println!(
+                "  {} Launched Agent Teams lead (lead: {}, teammates: {}, max: {})",
+                "✓".green(),
+                "opus".bright_cyan(),
+                model.bright_cyan(),
+                max_agents.to_string().bright_cyan()
+            );
+        } else {
+            println!(
+                "  {} Launched solo agent (model: {})",
+                "✓".green(),
+                model.bright_cyan()
+            );
+        }
     }
-
-    // 8. Notification (only for completions, not start)
-    // Removed start notification to reduce noise
 
     println!(
         "\n{} Team '{}' is running!",
@@ -551,37 +564,10 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
         .to_string_lossy()
         .to_string();
 
-    // Build hook commands — each appends one line to events.ndjson via jq (lean, no persistence scripts)
-    //
-    // Hooks use PreToolUse (fires before execution) for task/agent/message tracking,
-    // PostToolUse (fires after) for tool completion tracking, and
-    // SubagentStart/SubagentStop for agent lifecycle.
+    // Simplified hooks: only Stop (for graceful exit detection) and SendMessage (audit log).
+    // All other data (tasks, agents, progress) comes from filesystem polling.
     let hooks = serde_json::json!({
         "PreToolUse": [
-            {
-                "matcher": "Task",
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"AgentSpawn",ts:(now|todate),name:(.tool_input.description // .tool_input.name // ""),model:(.tool_input.model // null),subagent_type:(.tool_input.subagent_type // null)}}' >> {}"#,
-                        events_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            },
-            {
-                "matcher": "TodoWrite",
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"TodoSnapshot",ts:(now|todate),todos:[.tool_input.todos[]? | {{content:.content,status:(.status // "pending"),activeForm:(.activeForm // null)}}]}}' >> {}"#,
-                        events_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            },
             {
                 "matcher": "SendMessage",
                 "hooks": [{
@@ -590,69 +576,6 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
                         r#"INPUT=$(cat); echo "$INPUT" | jq -c '{{event:"Message",ts:(now|todate),recipient:(.tool_input.recipient // ""),summary:(.tool_input.summary // (.tool_input.content // "" | .[0:200]))}}' >> {} && \
     echo "$INPUT" | jq -c '{{timestamp:(now|todate),from:"{}",to:(.tool_input.recipient // ""),content:(.tool_input.content // ""),summary:(.tool_input.summary // "")}}' >> {}"#,
                         events_file, drone_name, messages_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            },
-            {
-                "matcher": "TaskCreate",
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"TaskCreate",ts:(now|todate),subject:(.tool_input.subject // ""),description:(.tool_input.description // "")}}' >> {}"#,
-                        events_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            },
-            {
-                "matcher": "TaskUpdate",
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"TaskUpdate",ts:(now|todate),task_id:(.tool_input.taskId // ""),status:(.tool_input.status // null),owner:(.tool_input.owner // null)}}' >> {}"#,
-                        events_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            }
-        ],
-        "PostToolUse": [
-            {
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"ToolDone",ts:(now|todate),tool:.tool_name,tool_use_id:.tool_use_id}}' >> {}"#,
-                        events_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            }
-        ],
-        "SubagentStart": [
-            {
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"SubagentStart",ts:(now|todate),agent_id:.agent_id,agent_type:.agent_type}}' >> {}"#,
-                        events_file
-                    ),
-                    "async": true,
-                    "timeout": 5
-                }]
-            }
-        ],
-        "SubagentStop": [
-            {
-                "hooks": [{
-                    "type": "command",
-                    "command": format!(
-                        r#"cat | jq -c '{{event:"SubagentStop",ts:(now|todate),agent_id:.agent_id,agent_type:.agent_type}}' >> {}"#,
-                        events_file
                     ),
                     "async": true,
                     "timeout": 5
@@ -683,6 +606,22 @@ fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
     fs::write(&settings_path, json)?;
 
     Ok(())
+}
+
+/// Detect project languages from marker files in the worktree.
+fn detect_project_languages(worktree: &Path) -> Vec<String> {
+    const MARKERS: &[(&[&str], &str)] = &[
+        (&["Cargo.toml"], "rust"),
+        (&["package.json"], "node"),
+        (&["go.mod"], "go"),
+        (&["pyproject.toml", "requirements.txt"], "python"),
+    ];
+
+    MARKERS
+        .iter()
+        .filter(|(files, _)| files.iter().any(|f| worktree.join(f).exists()))
+        .map(|(_, lang)| lang.to_string())
+        .collect()
 }
 
 fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
@@ -722,29 +661,27 @@ mod tests {
         assert!(settings.get("hooks").is_some());
         let hooks = settings.get("hooks").unwrap();
         assert!(hooks.get("PreToolUse").is_some());
-        assert!(hooks.get("PostToolUse").is_some());
-        assert!(hooks.get("SubagentStart").is_some());
-        assert!(hooks.get("SubagentStop").is_some());
         assert!(hooks.get("Stop").is_some());
 
-        // Verify PreToolUse has 5 matchers: Task, TodoWrite, SendMessage, TaskCreate, TaskUpdate
+        // Simplified hooks: only SendMessage in PreToolUse
         let pre_tool = hooks.get("PreToolUse").unwrap().as_array().unwrap();
-        assert_eq!(pre_tool.len(), 5);
+        assert_eq!(pre_tool.len(), 1);
 
-        // Verify PostToolUse has 1 entry (no matcher — captures all tools)
-        let post_tool = hooks.get("PostToolUse").unwrap().as_array().unwrap();
-        assert_eq!(post_tool.len(), 1);
-
-        // Verify TodoWrite matcher exists and contains drone name
-        let todo_matcher = &pre_tool[1];
-        assert_eq!(todo_matcher["matcher"].as_str().unwrap(), "TodoWrite");
-        let command = todo_matcher["hooks"][0]
+        // Verify SendMessage matcher exists and contains drone name
+        let send_matcher = &pre_tool[0];
+        assert_eq!(send_matcher["matcher"].as_str().unwrap(), "SendMessage");
+        let command = send_matcher["hooks"][0]
             .get("command")
             .unwrap()
             .as_str()
             .unwrap();
         assert!(command.contains("test-drone"));
         assert!(command.contains("events.ndjson"));
+
+        // PostToolUse and SubagentStart/Stop hooks are removed
+        assert!(hooks.get("PostToolUse").is_none());
+        assert!(hooks.get("SubagentStart").is_none());
+        assert!(hooks.get("SubagentStop").is_none());
     }
 
     #[test]
@@ -796,9 +733,9 @@ mod tests {
             }
         }
 
-        // Check PostToolUse hooks
-        let post_tool = settings["hooks"]["PostToolUse"].as_array().unwrap();
-        for entry in post_tool {
+        // Check Stop hooks
+        let stop_hooks = settings["hooks"]["Stop"].as_array().unwrap();
+        for entry in stop_hooks {
             let hooks = entry["hooks"].as_array().unwrap();
             for hook in hooks {
                 assert!(hook.get("async").unwrap().as_bool().unwrap());

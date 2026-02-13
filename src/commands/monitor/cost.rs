@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // ============================================================================
 // Cost Tracking
@@ -20,14 +20,26 @@ pub(crate) struct CostSummary {
     pub cache_creation_tokens: u64,
 }
 
+/// Parse cost/token info from a drone's activity.log at a specific project root.
+pub(crate) fn parse_cost_from_log_at(project_root: &Path, drone_name: &str) -> CostSummary {
+    let log_path = project_root
+        .join(".hive/drones")
+        .join(drone_name)
+        .join("activity.log");
+    parse_cost_from_log_path(&log_path)
+}
+
 /// Parse cost/token info from a drone's activity.log (stream-json format).
 /// Reads only the last 8KB of the file for efficiency (cost data is cumulative).
 pub(crate) fn parse_cost_from_log(drone_name: &str) -> CostSummary {
     let log_path = PathBuf::from(".hive/drones")
         .join(drone_name)
         .join("activity.log");
+    parse_cost_from_log_path(&log_path)
+}
 
-    let mut file = match fs::File::open(&log_path) {
+fn parse_cost_from_log_path(log_path: &Path) -> CostSummary {
+    let mut file = match fs::File::open(log_path) {
         Ok(f) => f,
         Err(_) => return CostSummary::default(),
     };

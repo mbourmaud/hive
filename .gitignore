@@ -53,3 +53,8 @@ workspaces/
 # Added by cargo
 
 /target
+
+# WebUI build artifacts
+web/node_modules/
+web/dist/*
+!web/dist/index.html

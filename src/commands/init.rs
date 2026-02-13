@@ -101,6 +101,12 @@ pub fn run() -> Result<()> {
         println!("    Run 'hive install --skills-only' manually to retry");
     }
 
+    // Register project in global registry for multi-project WebUI
+    let abs_path = std::env::current_dir().context("Failed to get current directory")?;
+    if let Err(e) = config::register_project(&abs_path, &project_name) {
+        eprintln!("  {} Failed to register project: {}", "⚠".yellow(), e);
+    }
+
     println!(
         "\n{} Hive initialized successfully for project '{}'",
         "✓".green().bold(),

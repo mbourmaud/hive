@@ -158,7 +158,8 @@ const TAB_CONFIG: { key: DetailTab; label: string; icon: typeof ListChecks }[] =
 
 function MobileDetailView({ drone, isMock, projectPath }: { drone: DroneInfo; isMock: boolean; projectPath?: string }) {
   const [tab, setTab] = useState<DetailTab>("tasks");
-  const { logs } = useLogs(drone.name, isMock, projectPath);
+  const [rawLogs, setRawLogs] = useState(false);
+  const { logs } = useLogs(drone.name, isMock, projectPath, rawLogs);
   const [done, total] = drone.progress;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
@@ -195,7 +196,7 @@ function MobileDetailView({ drone, isMock, projectPath }: { drone: DroneInfo; is
           <ChatMessages messages={drone.messages} members={drone.members} leadModel={drone.lead_model} />
         )}
         {tab === "logs" && (
-          <LogViewer logs={logs} />
+          <LogViewer logs={logs} raw={rawLogs} onToggleRaw={() => setRawLogs(r => !r)} />
         )}
       </div>
 
