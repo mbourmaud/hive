@@ -1,4 +1,5 @@
 pub mod common;
+pub mod dev;
 pub mod init;
 pub mod install;
 pub mod kill_clean;

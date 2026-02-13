@@ -102,6 +102,21 @@ enum Commands {
         bin_only: bool,
     },
 
+    /// Start development server with hot reload (Vite HMR + cargo-watch)
+    Dev {
+        /// Port for the Axum API server
+        #[arg(long, default_value = "3333", env = "HIVE_PORT")]
+        port: u16,
+
+        /// Port for Vite dev server
+        #[arg(long, default_value = "5173")]
+        vite_port: u16,
+
+        /// Open browser automatically
+        #[arg(long)]
+        open: bool,
+    },
+
     /// Start MCP server (stdio) for Claude Code integration
     #[command(name = "mcp-server")]
     McpServer,
@@ -219,6 +234,16 @@ fn main() {
             bin_only,
         } => {
             if let Err(e) = commands::install::run(skills_only, bin_only) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Dev {
+            port,
+            vite_port,
+            open,
+        } => {
+            if let Err(e) = commands::dev::run(port, vite_port, open) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
