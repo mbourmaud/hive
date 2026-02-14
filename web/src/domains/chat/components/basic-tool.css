@@ -1,0 +1,190 @@
+.basic-tool {
+  border-radius: 0.5rem;
+  border: 1px solid oklch(var(--border));
+  background: oklch(var(--card));
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.basic-tool.running {
+  border-color: oklch(var(--accent));
+  background: oklch(var(--accent) / 0.05);
+}
+
+.basic-tool.error {
+  border-color: oklch(var(--destructive));
+  background: oklch(var(--destructive) / 0.05);
+}
+
+.basic-tool-trigger {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: oklch(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.basic-tool-trigger:hover:not(:disabled) {
+  background: oklch(var(--muted) / 0.5);
+}
+
+.basic-tool-trigger:disabled {
+  cursor: default;
+}
+
+.basic-tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(var(--muted-foreground));
+}
+
+.basic-tool.running .basic-tool-icon {
+  color: oklch(var(--accent));
+}
+
+.basic-tool.error .basic-tool-icon {
+  color: oklch(var(--destructive));
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.basic-tool-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.basic-tool-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.basic-tool-title-text {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.basic-tool-args {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.basic-tool-arg {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: oklch(var(--muted));
+  color: oklch(var(--muted-foreground));
+}
+
+.basic-tool-subtitle {
+  font-size: 0.75rem;
+  color: oklch(var(--muted-foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.basic-tool-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.basic-tool-actions {
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.basic-tool:hover .basic-tool-actions,
+.basic-tool:focus-within .basic-tool-actions {
+  opacity: 1;
+}
+
+.basic-tool-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: oklch(var(--muted-foreground));
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.15s ease;
+}
+
+.basic-tool-action-btn:hover {
+  background: oklch(var(--muted));
+  color: oklch(var(--foreground));
+}
+
+.basic-tool-chevron {
+  color: oklch(var(--muted-foreground));
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.basic-tool-chevron.open {
+  transform: rotate(180deg);
+}
+
+.basic-tool-collapsible-content {
+  overflow: hidden;
+  content-visibility: auto;
+}
+
+.basic-tool-collapsible-content[data-state="open"] {
+  animation: slideDown 0.2s ease-out;
+}
+
+.basic-tool-collapsible-content[data-state="closed"] {
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+.basic-tool-details {
+  padding: 1rem;
+  border-top: 1px solid oklch(var(--border));
+  background: oklch(var(--surface-inset));
+}

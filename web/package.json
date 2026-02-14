@@ -1,0 +1,41 @@
+{
+  "name": "hive-webui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.3",
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-progress": "^1.1.2",
+    "@radix-ui/react-scroll-area": "^1.2.3",
+    "@radix-ui/react-separator": "^1.1.2",
+    "@types/dompurify": "^3.0.5",
+    "@types/morphdom": "^2.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "diff": "^8.0.3",
+    "dompurify": "^3.3.1",
+    "lucide-react": "^0.475.0",
+    "marked": "^17.0.2",
+    "morphdom": "^2.7.8",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "shiki": "^3.22.0",
+    "tailwind-merge": "^3.0.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "~5.7.0",
+    "vite": "^6.1.0",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}
