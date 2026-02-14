@@ -2,7 +2,7 @@ name: Rust CI
 
 on:
   push:
-    branches: [main, hive/*]
+    branches: [main, hive/*, feat/hive-desktop]
   pull_request:
     branches: [main]
 
