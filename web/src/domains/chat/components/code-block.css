@@ -1,0 +1,98 @@
+.code-block {
+  position: relative;
+  border-radius: 0.5rem;
+  border: 1px solid oklch(var(--border));
+  background: oklch(var(--surface-inset));
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid oklch(var(--border));
+  background: oklch(var(--card));
+}
+
+.code-block-language {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: oklch(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.code-block-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: oklch(var(--muted-foreground));
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.code-block-copy:hover {
+  background: oklch(var(--muted));
+  color: oklch(var(--foreground));
+}
+
+.code-block-content {
+  overflow-x: auto;
+  overflow-y: auto;
+  content-visibility: auto;
+}
+
+.code-block-content pre {
+  margin: 0;
+  padding: 1rem;
+  background: transparent !important;
+}
+
+.code-block-content.with-line-numbers pre {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+}
+
+.code-block-content.with-line-numbers code {
+  display: contents;
+}
+
+.code-block-content.with-line-numbers .line {
+  display: contents;
+}
+
+.code-block-content.with-line-numbers .line::before {
+  content: attr(data-line);
+  grid-column: 1;
+  color: oklch(var(--muted-foreground));
+  text-align: right;
+  user-select: none;
+  padding-right: 1rem;
+  border-right: 1px solid oklch(var(--border));
+}
+
+.code-block-content.with-line-numbers .line > span {
+  grid-column: 2;
+}
+
+@media (max-width: 640px) {
+  .code-block-content.with-line-numbers pre {
+    grid-template-columns: 1fr;
+  }
+
+  .code-block-content.with-line-numbers .line::before {
+    display: none;
+  }
+
+  .code-block-content.with-line-numbers .line > span {
+    grid-column: 1;
+  }
+}

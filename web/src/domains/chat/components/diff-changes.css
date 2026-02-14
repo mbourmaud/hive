@@ -1,0 +1,34 @@
+.diff-changes {
+  display: flex;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.diff-changes-addition {
+  color: oklch(var(--success));
+}
+
+.diff-changes-deletion {
+  color: oklch(var(--destructive));
+}
+
+.diff-changes-bars {
+  display: flex;
+  gap: 0.125rem;
+}
+
+.diff-changes-bar {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.125rem;
+}
+
+.diff-changes-bar.addition {
+  background: oklch(var(--success));
+}
+
+.diff-changes-bar.deletion {
+  background: oklch(var(--destructive));
+}

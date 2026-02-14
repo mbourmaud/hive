@@ -1,0 +1,63 @@
+.diff-viewer {
+  @apply rounded-lg border border-border overflow-hidden bg-card;
+}
+
+.diff-toolbar {
+  @apply flex items-center justify-between px-3 py-2 bg-surface-inset border-b border-border;
+}
+
+.diff-split-view {
+  @apply grid grid-cols-2 gap-0 divide-x divide-border;
+}
+
+.diff-pane {
+  @apply flex flex-col;
+}
+
+.diff-pane-header {
+  @apply flex items-center justify-between px-3 py-1.5 bg-muted/30 border-b border-border;
+}
+
+.diff-code {
+  @apply font-mono text-xs leading-relaxed overflow-x-auto max-h-[500px] overflow-y-auto;
+}
+
+.diff-unified-view .diff-code {
+  @apply bg-surface-inset;
+}
+
+.diff-line {
+  @apply flex hover:bg-muted/20 transition-colors;
+}
+
+.diff-line-num {
+  @apply shrink-0 text-right px-2 py-px text-muted-foreground/40 select-none min-w-[3ch];
+}
+
+.diff-line-content {
+  @apply flex-1 px-3 py-px whitespace-pre font-mono;
+}
+
+.diff-line-add {
+  @apply bg-success/10;
+}
+
+.diff-line-add .diff-line-content {
+  @apply text-success;
+}
+
+.diff-line-remove {
+  @apply bg-destructive/10;
+}
+
+.diff-line-remove .diff-line-content {
+  @apply text-destructive;
+}
+
+.diff-ellipsis {
+  @apply flex items-center py-1 bg-muted/20 text-[11px] cursor-default;
+}
+
+.diff-ellipsis .diff-line-content {
+  @apply italic;
+}
