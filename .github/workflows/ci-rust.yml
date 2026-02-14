@@ -2,7 +2,7 @@ name: Rust CI
 
 on:
   push:
-    branches: [main, hive/*]
+    branches: [main, hive/*, feat/hive-desktop]
   pull_request:
     branches: [main]
 
@@ -97,7 +97,7 @@ jobs:
           BINARY="target/${{ matrix.target }}/release/hive"
           SIZE=$(stat -f%z "$BINARY" 2>/dev/null || stat -c%s "$BINARY")
           echo "Binary size: $SIZE bytes"
-          MAX_SIZE=$((10 * 1024 * 1024))  # 10MB
+          MAX_SIZE=$((20 * 1024 * 1024))  # 20MB (includes embedded web UI)
           if [ $SIZE -gt $MAX_SIZE ]; then
             echo "Error: Binary size ($SIZE bytes) exceeds maximum ($MAX_SIZE bytes)"
             exit 1

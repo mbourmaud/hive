@@ -1,0 +1,223 @@
+/* ── Sessions modal overlay ───────────────────────────────────────────── */
+
+[data-component="sessions-modal-overlay"] {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: oklch(0 0 0 / 40%);
+  animation: sessions-overlay-in 150ms ease-out;
+}
+
+/* ── Sessions modal dialog ───────────────────────────────────────────── */
+
+[data-component="sessions-modal"] {
+  position: fixed;
+  top: 12%;
+  left: 50%;
+  z-index: 201;
+  width: 90vw;
+  max-width: 540px;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg, 8px);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 16px 48px oklch(0 0 0 / 30%);
+  overflow: hidden;
+  animation: sessions-dialog-in 150ms ease-out;
+  transform: translateX(-50%);
+}
+
+[data-component="sessions-modal"]:focus {
+  outline: none;
+}
+
+/* ── Search ──────────────────────────────────────────────────────────── */
+
+[data-slot="sessions-search-wrapper"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-slot="sessions-search-icon"] {
+  color: var(--color-muted-foreground);
+  flex-shrink: 0;
+}
+
+[data-slot="sessions-search-input"] {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--color-foreground);
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+[data-slot="sessions-search-input"]::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+/* ── Session list ────────────────────────────────────────────────────── */
+
+[data-slot="sessions-list"] {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* ── Date group header ───────────────────────────────────────────────── */
+
+[data-slot="sessions-group-header"] {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted-foreground);
+  user-select: none;
+}
+
+/* ── Session item ────────────────────────────────────────────────────── */
+
+[data-slot="sessions-item"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 6px);
+  font-size: 13px;
+  color: var(--color-foreground);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: background-color 100ms ease;
+}
+
+[data-slot="sessions-item"]:hover,
+[data-slot="sessions-item"][data-active] {
+  background: var(--color-muted);
+}
+
+[data-slot="sessions-item"][data-current] {
+  background: oklch(from var(--color-accent) l c h / 10%);
+}
+
+[data-slot="sessions-item-dot"] {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+[data-slot="sessions-item-dot"][data-status="idle"] {
+  background: var(--color-success, oklch(0.72 0.19 145));
+}
+
+[data-slot="sessions-item-dot"][data-status="busy"] {
+  background: var(--color-accent);
+}
+
+[data-slot="sessions-item-dot"][data-status="error"] {
+  background: var(--color-destructive);
+}
+
+[data-slot="sessions-item-dot"][data-status="completed"] {
+  background: var(--color-muted-foreground);
+}
+
+[data-slot="sessions-item-content"] {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+[data-slot="sessions-item-title"] {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-slot="sessions-item-meta"] {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────── */
+
+[data-slot="sessions-empty"] {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+
+[data-slot="sessions-footer"] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="sessions-footer-hint"] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-slot="sessions-kbd"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  font-size: 10px;
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  color: var(--color-muted-foreground);
+  line-height: 1.4;
+}
+
+/* ── Animations (transform + opacity only) ────────────────────────────── */
+
+@keyframes sessions-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sessions-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}

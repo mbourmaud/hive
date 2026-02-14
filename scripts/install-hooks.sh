@@ -23,7 +23,7 @@ set -e
 
 echo "Running pre-commit checks..."
 
-# Check if this is a Rust project
+# ── Rust checks ─────────────────────────────────────────────────
 if [ -f "Cargo.toml" ]; then
     echo "→ Checking Rust formatting..."
     if ! cargo fmt --all -- --check; then
@@ -42,6 +42,27 @@ if [ -f "Cargo.toml" ]; then
     echo "✓ Clippy OK"
 fi
 
+# ── Web frontend checks ────────────────────────────────────────
+if [ -d "web" ] && git diff --cached --name-only | grep -q "^web/src/"; then
+    echo "→ Running Biome on staged web files..."
+    STAGED_WEB=$(git diff --cached --name-only --diff-filter=ACM | grep "^web/src/.*\.\(ts\|tsx\|css\)$" || true)
+    if [ -n "$STAGED_WEB" ]; then
+        if ! (cd web && npx @biomejs/biome check --no-errors-on-unmatched $STAGED_WEB); then
+            echo "❌ Biome check failed!"
+            echo "   Run: cd web && npm run lint:fix"
+            exit 1
+        fi
+        echo "✓ Biome OK"
+    fi
+
+    echo "→ Checking TypeScript..."
+    if ! (cd web && npx tsc --noEmit); then
+        echo "❌ TypeScript check failed!"
+        exit 1
+    fi
+    echo "✓ TypeScript OK"
+fi
+
 echo "✅ All pre-commit checks passed!"
 EOF
 
@@ -50,6 +71,6 @@ chmod +x "$HOOKS_DIR/pre-commit"
 echo "✅ Git hooks installed successfully!"
 echo ""
 echo "The following hooks are now active:"
-echo "  • pre-commit: Checks formatting and runs Clippy"
+echo "  • pre-commit: Rust (fmt + clippy) + Web (biome + tsc)"
 echo ""
 echo "To bypass hooks (not recommended), use: git commit --no-verify"

@@ -1,0 +1,202 @@
+/* ── Status Button ────────────────────────────────────────────────────────── */
+
+[data-component="status-button"] {
+  position: relative;
+}
+
+/* ── Health Dot (shared between button and popover) ──────────────────────── */
+
+[data-slot="status-health-dot"] {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* On the button: positioned as overlay badge */
+[data-component="status-button"] > [data-slot="status-health-dot"] {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+[data-slot="status-health-dot"][data-health="healthy"] {
+  background: oklch(0.72 0.19 142);
+}
+
+[data-slot="status-health-dot"][data-health="warning"] {
+  background: oklch(0.75 0.16 70);
+  animation: health-pulse 2s ease-in-out infinite;
+}
+
+[data-slot="status-health-dot"][data-health="error"] {
+  background: oklch(0.63 0.21 25);
+  animation: health-pulse 1.5s ease-in-out infinite;
+}
+
+[data-slot="status-health-dot"][data-health="unknown"] {
+  background: var(--color-muted-foreground);
+}
+
+@keyframes health-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Popover Container ───────────────────────────────────────────────────── */
+
+[data-component="status-popover"] {
+  width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--color-popover);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 8px 0;
+  box-shadow:
+    0 4px 24px oklch(0 0 0 / 15%),
+    0 1px 4px oklch(0 0 0 / 8%);
+  z-index: 50;
+
+  /* GPU-composited open/close animation */
+  animation: status-popover-in 150ms ease-out;
+}
+
+@keyframes status-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+[data-slot="status-header"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+[data-slot="status-header-title"] {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+[data-slot="status-version"] {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+
+[data-slot="status-section"] {
+  padding: 6px 14px 8px;
+}
+
+[data-slot="status-section"] + [data-slot="status-section"] {
+  border-top: 1px solid var(--color-border);
+}
+
+[data-slot="status-section-title"] {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted-foreground);
+  margin-bottom: 6px;
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
+
+[data-slot="status-row"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+[data-slot="status-row"][data-slot-variant="drone"] {
+  gap: 6px;
+}
+
+[data-slot="status-label"] {
+  color: var(--color-foreground);
+  flex-shrink: 0;
+}
+
+[data-slot="status-value"] {
+  margin-left: auto;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-slot="status-value"][data-slot-detail="mcp-command"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+[data-slot="status-meta"] {
+  color: var(--color-muted-foreground);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+
+[data-slot="status-badge"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: oklch(from var(--color-accent) l c h / 12%);
+  color: var(--color-accent);
+}
+
+[data-slot="status-stuck-badge"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: oklch(0.75 0.16 70 / 15%);
+  color: oklch(0.75 0.16 70);
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+[data-slot="status-empty"] {
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  font-style: italic;
+  padding: 2px 0;
+}
+
+/* ── Loading ─────────────────────────────────────────────────────────────── */
+
+[data-slot="status-loading"] {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}

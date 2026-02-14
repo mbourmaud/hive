@@ -1,0 +1,112 @@
+/* ── Slash command popover ──────────────────────────────────────────────────── */
+
+[data-component="slash-popover"] {
+  position: absolute;
+  bottom: 100%;
+  left: 0.5rem;
+  right: 0.5rem;
+  margin-bottom: 0.5rem;
+  z-index: 60;
+  max-height: 320px;
+  min-height: 40px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  box-shadow: 0 4px 24px oklch(0 0 0 / 12%);
+  padding: 4px;
+}
+
+[data-component="slash-popover"]::-webkit-scrollbar {
+  display: none;
+}
+
+[data-slot="slash-popover-header"] {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+[data-slot="slash-popover-item"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.25rem;
+  color: var(--color-muted-foreground);
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+[data-slot="slash-popover-item"][data-active="true"] {
+  background: var(--color-muted);
+  color: var(--color-foreground);
+}
+
+[data-slot="slash-popover-item-left"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-slot="slash-popover-item-right"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+[data-slot="slash-popover-name"] {
+  font-weight: 500;
+  color: var(--color-foreground);
+  white-space: nowrap;
+  font-family: var(--font-mono, "IBM Plex Mono", "JetBrains Mono", monospace);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+[data-slot="slash-popover-desc"] {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="slash-popover-badge"] {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-inset);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+[data-slot="slash-popover-kbd"] {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  font-size: 12px;
+  line-height: 1;
+  font-family: var(--font-mono, "IBM Plex Mono", "JetBrains Mono", monospace);
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}

@@ -1,0 +1,102 @@
+/* ── Context Usage Indicator ──────────────────────────────────────────────── */
+
+[data-component="context-usage"] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  position: relative;
+}
+
+/* ── Toggle button (bar + label) ─────────────────────────────────────────── */
+
+[data-slot="context-usage-toggle"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+[data-slot="context-usage-toggle"]:hover {
+  color: var(--color-foreground);
+}
+
+/* ── Bar ─────────────────────────────────────────────────────────────────── */
+
+[data-slot="context-usage-bar"] {
+  width: 48px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-muted);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+[data-slot="context-usage-fill"] {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  border-radius: 2px;
+  transition: transform 300ms ease;
+}
+
+/* Color grades based on usage level */
+[data-component="context-usage"][data-level="low"] [data-slot="context-usage-fill"] {
+  background: var(--color-success);
+}
+
+[data-component="context-usage"][data-level="medium"] [data-slot="context-usage-fill"] {
+  background: var(--color-warning);
+}
+
+[data-component="context-usage"][data-level="high"] [data-slot="context-usage-fill"] {
+  background: var(--color-destructive);
+}
+
+[data-slot="context-usage-label"] {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Breakdown panel ─────────────────────────────────────────────────────── */
+
+[data-slot="context-usage-breakdown"] {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  margin-top: 2px;
+  border-radius: 6px;
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-slot="context-usage-row"] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+[data-slot="context-usage-row"] > span:first-child {
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="context-usage-row"] > span:last-child {
+  color: var(--color-foreground);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+}
+
+[data-slot="context-usage-row"][data-highlight] > span:last-child {
+  color: var(--color-accent);
+  font-weight: 600;
+}

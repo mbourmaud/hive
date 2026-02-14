@@ -1,0 +1,199 @@
+/* ── Right Sidebar ────────────────────────────────────────────────────── */
+
+[data-component="right-sidebar"] {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: var(--color-sidebar);
+  border-left: 1px solid var(--color-sidebar-border);
+  overflow: hidden;
+}
+
+/* ── Drag handle ─────────────────────────────────────────────────────── */
+
+[data-slot="sidebar-drag-handle"] {
+  width: 4px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+}
+
+[data-slot="sidebar-drag-handle"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  right: 0;
+  width: 1px;
+  background: var(--color-sidebar-border);
+  transition: background-color 120ms ease;
+}
+
+[data-slot="sidebar-drag-handle"]:hover::after {
+  background: oklch(from var(--color-accent) l c h / 40%);
+}
+
+/* ── Tab list ────────────────────────────────────────────────────────── */
+
+[data-slot="sidebar-tab-list"] {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 8px;
+  gap: 2px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-sidebar-border);
+}
+
+[data-slot="sidebar-tab-trigger"] {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+  position: relative;
+}
+
+[data-slot="sidebar-tab-trigger"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-muted);
+}
+
+[data-slot="sidebar-tab-trigger"][data-state="active"] {
+  color: var(--color-foreground);
+}
+
+[data-slot="sidebar-tab-trigger"][data-state="active"]::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--color-accent);
+  border-radius: 1px;
+}
+
+[data-slot="sidebar-collapse-btn"] {
+  margin-left: auto;
+  height: 28px;
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+[data-slot="sidebar-collapse-btn"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-muted);
+}
+
+/* ── Tab content ─────────────────────────────────────────────────────── */
+
+[data-slot="sidebar-tab-content"] {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+[data-slot="sidebar-tab-content"]::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-slot="sidebar-tab-content"]::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+/* ── Collapsed icon bar ──────────────────────────────────────────────── */
+
+[data-slot="sidebar-collapsed-bar"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 12px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-sidebar-border);
+  background: var(--color-sidebar);
+  width: 40px;
+}
+
+[data-slot="sidebar-collapsed-btn"] {
+  height: 32px;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+[data-slot="sidebar-collapsed-btn"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-muted);
+}
+
+[data-slot="sidebar-collapsed-btn"][data-active] {
+  color: var(--color-accent);
+}
+
+/* ── Drone list item (reused from drone-panel) ───────────────────────── */
+
+[data-slot="drone-panel-item"] {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-foreground);
+  transition: background-color 100ms ease;
+  border-bottom: 1px solid oklch(from var(--color-sidebar-border) l c h / 50%);
+}
+
+[data-slot="drone-panel-item"]:hover {
+  background: var(--color-muted);
+}
+
+[data-slot="drone-panel-item"][data-expanded] {
+  background: oklch(from var(--color-accent) l c h / 6%);
+}
+
+[data-slot="drone-panel-detail"] {
+  padding: 8px 12px 12px;
+  border-bottom: 1px solid var(--color-sidebar-border);
+  background: oklch(from var(--color-accent) l c h / 4%);
+}
+
+[data-slot="drone-panel-footer"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-sidebar-border);
+  flex-shrink: 0;
+}

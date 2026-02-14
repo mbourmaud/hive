@@ -1,0 +1,106 @@
+/* ── Context tab: Stats grid ─────────────────────────────────────────── */
+
+[data-slot="context-panel-stats"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-slot="stat-item"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 4px;
+}
+
+[data-slot="stat-label"] {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="stat-value"] {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+}
+
+/* ── Context tab: Breakdown bar ──────────────────────────────────────── */
+
+[data-slot="context-panel-breakdown"] {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-slot="breakdown-bar"] {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-muted);
+  margin-bottom: 8px;
+}
+
+[data-slot="breakdown-segment"] {
+  transition: width 300ms ease;
+  min-width: 2px;
+}
+
+[data-slot="breakdown-legend"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+[data-slot="legend-item"] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="legend-dot"] {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Context tab: Messages header ────────────────────────────────────── */
+
+[data-slot="context-panel-messages-header"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-slot="context-panel-messages-title"] {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="expand-all-btn"] {
+  font-size: 11px;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 150ms ease;
+}
+
+[data-slot="expand-all-btn"]:hover {
+  background: var(--color-muted);
+}

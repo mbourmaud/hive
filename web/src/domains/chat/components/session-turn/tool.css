@@ -1,0 +1,193 @@
+/* ── Step: tool ──────────────────────────────────────────────────────────── */
+
+[data-slot="step-tool"] {
+  border-radius: 6px;
+}
+
+[data-slot="step-tool-trigger"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-foreground);
+  transition: background-color 100ms ease;
+  min-width: 0;
+}
+
+[data-slot="step-tool-trigger"]:hover {
+  background: var(--color-muted);
+}
+
+[data-slot="step-tool-trigger-left"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+[data-slot="step-tool-title"] {
+  font-weight: 500;
+  color: var(--color-foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+[data-slot="step-tool-subtitle"] {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+[data-slot="step-tool-duration"] {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+[data-slot="step-tool-body"] {
+  padding: 8px 12px;
+  margin: 0 4px 4px;
+  border-radius: 6px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-slot="step-tool-body"]::-webkit-scrollbar {
+  display: none;
+}
+
+[data-slot="step-tool-body"] pre {
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--color-muted-foreground);
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+[data-slot="step-tool-body"] code {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+/* ── Tool body inner slots ───────────────────────────────────────────────── */
+
+[data-slot="tool-body-result"] {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+[data-slot="tool-body-result"][data-error] {
+  color: var(--color-destructive);
+}
+
+[data-slot="tool-body-result"] pre {
+  max-height: 200px;
+}
+
+[data-slot="tool-body-command"] {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-foreground);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
+}
+
+[data-slot="tool-body-command-prefix"] {
+  color: var(--color-accent);
+  font-weight: 600;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+[data-slot="tool-body-command"] code {
+  font-family: inherit;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+[data-slot="tool-body-filepath"] {
+  padding: 4px 0 8px;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
+}
+
+[data-slot="tool-body-filepath"] code {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-foreground);
+  font-size: 11px;
+}
+
+[data-slot="tool-body-filelist"] {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+[data-slot="tool-body-filelist-item"] {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+  padding: 1px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-slot="tool-body-filelist-more"] {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  font-style: italic;
+  padding-top: 4px;
+}
+
+[data-slot="tool-body-task-label"] {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0 8px;
+  font-size: 12px;
+  color: var(--color-foreground);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
+}
+
+[data-slot="tool-body-task-tree"] {
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
+}
