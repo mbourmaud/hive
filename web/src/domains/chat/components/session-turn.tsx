@@ -793,13 +793,23 @@ export function SessionTurn({
   // ── Error text ───────────────────────────────────────────────────────────
 
   const errorText = useMemo(() => {
-    const errorResults = turn.assistantParts.filter(
-      (p): p is ToolResultPart => p.type === "tool_result" && p.isError,
+    // Tool-level errors are already shown inside each tool's collapsible body,
+    // so we only display turn-level errors here (e.g. connection failures,
+    // result events with is_error that don't map to a specific tool).
+    if (turn.status !== "error") return null;
+
+    // Check if there are any error tool results — if so, they're already
+    // rendered inside their tool bodies, no need to duplicate them.
+    const hasToolErrors = turn.assistantParts.some(
+      (p) => p.type === "tool_result" && p.isError,
     );
-    if (errorResults.length > 0) {
-      return errorResults.map((r) => r.content).join("\n\n");
-    }
-    return turn.status === "error" ? "An error occurred during this turn." : null;
+    if (hasToolErrors) return null;
+
+    // Check if the last part is a text containing the error from the result event
+    const lastText = [...turn.assistantParts].reverse().find((p) => p.type === "text");
+    if (lastText && lastText.type === "text" && lastText.text.trim()) return null;
+
+    return "An error occurred during this turn.";
   }, [turn.assistantParts, turn.status]);
 
   // ── Steps content ──────────────────────────────────────────────────────
@@ -909,12 +919,6 @@ export function SessionTurn({
         {/* ── Summary (final assistant text) ────────────────────────── */}
         {summaryText && !isStreaming && (
           <div data-slot="turn-summary-section">
-            <div data-slot="turn-summary-header">
-              <div data-slot="turn-summary-title-row">
-                <span data-slot="turn-summary-title">Response</span>
-                <CopyButton text={summaryText} slot="turn-summary-copy" />
-              </div>
-            </div>
             <div data-slot="turn-summary" data-fade={isLast || undefined}>
               <MarkdownRenderer text={summaryText} />
             </div>

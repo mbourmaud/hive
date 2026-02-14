@@ -9,11 +9,17 @@ use std::path::{Path, PathBuf};
 use crate::types::{StructuredTask, TaskType};
 
 /// An Agent Teams task.
+///
+/// Accepts both Hive's camelCase format (`subject`, `blockedBy`) and
+/// Claude Code's native snake_case format (`title`, `depends_on`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTeamTask {
     pub id: String,
+    /// Task title — accepts both `subject` (Hive) and `title` (Claude Code).
+    #[serde(alias = "title")]
     pub subject: String,
+    #[serde(default)]
     pub description: String,
     #[serde(default)]
     pub status: String,
@@ -21,7 +27,8 @@ pub struct AgentTeamTask {
     pub owner: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_form: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Blocking dependencies — accepts both `blockedBy` and `depends_on`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", alias = "depends_on")]
     pub blocked_by: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<String>,
@@ -31,6 +38,9 @@ pub struct AgentTeamTask {
     pub created_at: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<u64>,
+    /// Extra fields from Claude Code (e.g. `files`) — captured but not used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<String>>,
 }
 
 /// Get the task list directory for a team.
@@ -229,6 +239,7 @@ pub fn preseed_tasks(
                     .as_millis() as u64,
             ),
             updated_at: None,
+            files: None,
         };
 
         // Write task JSON file
@@ -393,6 +404,7 @@ mod tests {
             metadata: None,
             created_at: Some(1000),
             updated_at: Some(1000),
+            files: None,
         };
 
         let json = serde_json::to_string_pretty(&task).unwrap();
@@ -400,5 +412,31 @@ mod tests {
         assert_eq!(parsed.id, "1");
         assert_eq!(parsed.subject, "Create auth middleware");
         assert_eq!(parsed.status, "pending");
+    }
+
+    #[test]
+    fn test_claude_code_native_format_deserialization() {
+        // Claude Code's TaskCreate writes `title` + `depends_on` instead of
+        // Hive's `subject` + `blockedBy`. The serde aliases must handle both.
+        let json = r#"{
+            "id": "5",
+            "title": "Enhanced Edit tool with diff",
+            "status": "pending",
+            "owner": null,
+            "depends_on": ["3", "4"],
+            "files": ["src/edit.tsx", "src/diff.tsx"]
+        }"#;
+
+        let task: AgentTeamTask = serde_json::from_str(json).unwrap();
+        assert_eq!(task.id, "5");
+        assert_eq!(task.subject, "Enhanced Edit tool with diff");
+        assert_eq!(task.status, "pending");
+        assert_eq!(task.blocked_by, vec!["3", "4"]);
+        assert_eq!(
+            task.files,
+            Some(vec!["src/edit.tsx".to_string(), "src/diff.tsx".to_string()])
+        );
+        // description defaults to empty
+        assert!(task.description.is_empty());
     }
 }

@@ -10,6 +10,7 @@ import type {
   SystemEvent,
   ThinkingPart,
   UserEvent,
+  UserTextBlock,
 } from "./types";
 
 // ── Initial state ───────────────────────────────────────────────────────────
@@ -337,11 +338,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case "TURN_ERROR": {
       const isCurrentTurn = state.currentTurnId === action.turnId;
+      const now = Date.now();
       return {
         ...state,
         turns: updateTurn(state.turns, action.turnId, (t) => ({
           ...t,
           status: "error",
+          duration: now - t.startedAt,
+          finishReason: "error" as const,
         })),
         currentTurnId: isCurrentTurn ? null : state.currentTurnId,
         isStreaming: isCurrentTurn ? false : state.isStreaming,
@@ -359,6 +363,23 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         isStreaming: false,
       };
 
+    case "DRONE_LAUNCHED": {
+      const turnId = `drone-${action.droneName}-${Date.now()}`;
+      const droneTurn: ChatTurn = {
+        id: turnId,
+        userMessage: action.prompt,
+        assistantParts: [],
+        status: "completed",
+        duration: null,
+        startedAt: Date.now(),
+        droneName: action.droneName,
+      };
+      return {
+        ...state,
+        turns: [...state.turns, droneTurn],
+      };
+    }
+
     case "REPLAY_HISTORY": {
       let replayed: ChatState = {
         ...initialChatState,
@@ -367,6 +388,33 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       let turnCounter = 0;
 
       for (const event of action.events) {
+        // User text event (not tool_result) → start a new turn
+        if (event.type === "user" && replayed.currentTurnId === null) {
+          const userText = extractUserText(event);
+          if (userText) {
+            const turnId = `replay-${++turnCounter}`;
+            replayed = {
+              ...replayed,
+              turns: [
+                ...replayed.turns,
+                {
+                  id: turnId,
+                  userMessage: userText,
+                  assistantParts: [],
+                  status: "pending",
+                  duration: null,
+                  startedAt: Date.now(),
+                },
+              ],
+              currentTurnId: turnId,
+              isStreaming: true,
+            };
+            continue;
+          }
+        }
+
+        // Assistant event without a current turn → create turn (fallback for
+        // sessions where user event was not persisted)
         if (replayed.currentTurnId === null && event.type === "assistant") {
           const turnId = `replay-${++turnCounter}`;
           replayed = {
@@ -393,7 +441,33 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           replayed = { ...replayed, currentTurnId: null, isStreaming: false };
         }
       }
+
+      // Mark any still-streaming turn as completed (history is done)
+      if (replayed.currentTurnId !== null) {
+        replayed = {
+          ...replayed,
+          turns: updateTurn(replayed.turns, replayed.currentTurnId, (t) => ({
+            ...t,
+            status: "completed",
+            duration: 0,
+          })),
+          currentTurnId: null,
+          isStreaming: false,
+        };
+      }
+
       return replayed;
     }
   }
+}
+
+// ── Replay helpers ─────────────────────────────────────────────────────────
+
+/** Extract user text from a UserEvent (returns null if it only contains tool_results). */
+function extractUserText(event: UserEvent): string | null {
+  const textBlocks = event.message.content.filter(
+    (b): b is UserTextBlock => b.type === "text",
+  );
+  if (textBlocks.length === 0) return null;
+  return textBlocks.map((b) => b.text).join("");
 }

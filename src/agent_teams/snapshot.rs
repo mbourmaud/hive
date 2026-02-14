@@ -506,6 +506,7 @@ mod tests {
             metadata: Some(serde_json::json!({"_internal": true})),
             created_at: Some(1000),
             updated_at: Some(2000),
+            files: None,
         };
 
         let info = map_task(task);
@@ -528,6 +529,7 @@ mod tests {
             metadata: None,
             created_at: None,
             updated_at: None,
+            files: None,
         };
 
         let info = map_task(task);
