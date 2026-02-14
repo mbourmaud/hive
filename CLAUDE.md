@@ -140,6 +140,7 @@ tests/                  # Rust test suite
 - **NEVER use `as` type assertions** — use type guards (`is`), discriminated unions, or proper narrowing. The only acceptable `as` is `as const` and React's `as React.CSSProperties` for CSS custom properties.
 - **Discriminated unions**: Use `type` field for union discrimination (see `StreamEvent`, `AssistantPart`).
 - **JSON parsing**: Always parse to `unknown` first, then narrow with type guards. Never `JSON.parse(x) as Foo`.
+- **Error handling**: Prefer discriminated union results over try/catch for operations with multiple failure modes (network, abort, API errors). Use `safeFetch` (`@/shared/api/safe-fetch`) for fetch operations. Use exhaustive `switch` + `default: never` instead of `instanceof` chains. Reserve try/catch for truly unexpected exceptions only.
 
 **Style (Deno style guide)**:
 - **Naming**: `camelCase` for functions/variables, `PascalCase` for types/classes, `UPPER_SNAKE_CASE` for top-level constants. Acronyms follow standard casing (`HttpObject`, not `HTTPObject`).
@@ -197,6 +198,15 @@ Events from Claude stream at high frequency. We batch them:
 
 ### Tool Registry
 Tools register via side-effect imports. Each tool renderer wraps `BasicTool` (Radix Collapsible). Unknown tools fall back to `GenericTool`.
+
+### Safe Fetch (discriminated union error handling)
+Use `safeFetch()` from `@/shared/api/safe-fetch` instead of raw `fetch()` + try/catch when the caller needs to distinguish failure modes. Returns `FetchResult`:
+- `{ ok: true, response }` — success, read the body as needed
+- `{ ok: false, type: "aborted" }` — user cancelled (AbortController)
+- `{ ok: false, type: "network", message }` — DNS, offline, CORS, etc.
+- `{ ok: false, type: "api", status, message }` — server returned non-2xx
+
+Handle with exhaustive `switch` + `default: never`. This replaces nested try/catch, `instanceof DOMException` checks, and duplicate error dispatch. The throwing `apiClient` is still used for simple CRUD where abort handling doesn't matter.
 
 ### Session Persistence
 - Events: `.hive/sessions/{id}/events.ndjson` (append-only)
