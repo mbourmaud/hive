@@ -3,7 +3,13 @@ import { apiClient } from "@/shared/api/client";
 import { useAppStore } from "@/store";
 import type { ChatSession, ImageAttachment, StreamEvent } from "./types";
 
-const STREAM_EVENT_TYPES: ReadonlySet<string> = new Set(["system", "assistant", "user", "result"]);
+const STREAM_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "system",
+  "assistant",
+  "user",
+  "result",
+  "usage",
+]);
 
 function isStreamEvent(data: unknown): data is StreamEvent {
   if (typeof data !== "object" || data === null) return false;
@@ -201,12 +207,14 @@ export function useChat(baseUrl: string = "") {
       connectToSession(session.id, turnId);
 
       try {
+        const effort = useAppStore.getState().effort;
         const res = await fetch(`${baseUrl}/api/chat/sessions/${session.id}/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: message,
             model,
+            effort,
             images:
               images?.map((img) => ({
                 data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),

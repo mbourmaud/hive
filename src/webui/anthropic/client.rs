@@ -45,8 +45,22 @@ pub async fn stream_messages(
     let is_oauth = matches!(creds, Credentials::OAuth { .. });
     let (auth_header_name, auth_header_value) = credentials::get_auth_header(creds).await?;
 
+    // Determine if thinking is enabled
+    let thinking_enabled = request
+        .thinking
+        .as_ref()
+        .is_some_and(|t| t.thinking_type == "enabled");
+
     // Build the request body — inject metadata for OAuth
     let mut body = serde_json::to_value(request).context("Serializing request")?;
+
+    // When thinking is enabled, the API requires no temperature
+    if thinking_enabled {
+        if let Some(o) = body.as_object_mut() {
+            o.remove("temperature");
+        }
+    }
+
     if is_oauth {
         if let Some((user_id, account_uuid)) = read_claude_metadata() {
             let meta_user_id = if account_uuid.is_empty() {
@@ -75,12 +89,20 @@ pub async fn stream_messages(
         .header("content-type", "application/json")
         .header(auth_header_name, &auth_header_value);
 
+    // Build anthropic-beta header: combine thinking + oauth betas as needed
+    let mut betas: Vec<&str> = Vec::new();
+    if thinking_enabled {
+        betas.push("interleaved-thinking-2025-05-14");
+    }
+    if is_oauth {
+        betas.push("oauth-2025-04-20");
+    }
+    if !betas.is_empty() {
+        req_builder = req_builder.header("anthropic-beta", betas.join(","));
+    }
+
     if is_oauth {
         req_builder = req_builder
-            .header(
-                "anthropic-beta",
-                "oauth-2025-04-20,interleaved-thinking-2025-05-14",
-            )
             .header("user-agent", "claude-cli/2.1.7 (external, cli)")
             .header("anthropic-dangerous-direct-browser-access", "true")
             .header("x-app", "cli")
@@ -126,6 +148,7 @@ pub async fn stream_messages(
     // Parse SSE stream
     let mut accumulated_text = String::new();
     let mut accumulated_thinking = String::new();
+    let mut thinking_signature = String::new();
     let mut usage = UsageStats::default();
     let mut stop_reason = String::from("end_turn");
     let mut buffer = String::new();
@@ -138,22 +161,21 @@ pub async fn stream_messages(
     use futures_util::StreamExt;
     let mut byte_stream = response.bytes_stream();
 
-    while let Some(chunk) = byte_stream.next().await {
-        if abort_flag.load(Ordering::Relaxed) {
-            break;
-        }
-
-        let chunk = chunk.context("Reading SSE chunk")?;
+    loop {
+        let chunk = tokio::select! {
+            biased;
+            _ = abort_notified(abort_flag) => break,
+            next = byte_stream.next() => match next {
+                Some(c) => c.context("Reading SSE chunk")?,
+                None => break,
+            },
+        };
         let chunk_str = String::from_utf8_lossy(&chunk);
         buffer.push_str(&chunk_str);
 
         while let Some(event_end) = buffer.find("\n\n") {
             let event_block = buffer[..event_end].to_string();
             buffer = buffer[event_end + 2..].to_string();
-
-            if abort_flag.load(Ordering::Relaxed) {
-                break;
-            }
 
             let mut event_type = String::new();
             let mut event_data = String::new();
@@ -176,6 +198,17 @@ pub async fn stream_messages(
                         if let Some(u) = val.pointer("/message/usage") {
                             if let Some(n) = u.get("input_tokens").and_then(|v| v.as_u64()) {
                                 usage.input_tokens = n;
+                            }
+                            if let Some(n) = u
+                                .get("cache_creation_input_tokens")
+                                .and_then(|v| v.as_u64())
+                            {
+                                usage.cache_creation_input_tokens = n;
+                            }
+                            if let Some(n) =
+                                u.get("cache_read_input_tokens").and_then(|v| v.as_u64())
+                            {
+                                usage.cache_read_input_tokens = n;
                             }
                         }
                     }
@@ -244,6 +277,11 @@ pub async fn stream_messages(
                                             }
                                         });
                                         let _ = tx.send(thinking_event.to_string());
+                                    }
+                                }
+                                "signature_delta" => {
+                                    if let Some(sig) = d.get("signature").and_then(|v| v.as_str()) {
+                                        thinking_signature.push_str(sig);
                                     }
                                 }
                                 "input_json_delta" => {
@@ -356,6 +394,7 @@ pub async fn stream_messages(
     if !accumulated_thinking.is_empty() {
         content_blocks.push(ContentBlock::Thinking {
             thinking: accumulated_thinking,
+            signature: thinking_signature,
         });
     }
     if !accumulated_text.is_empty() {
@@ -379,4 +418,15 @@ pub async fn stream_messages(
         usage,
         stop_reason,
     ))
+}
+
+/// Poll the abort flag at 50ms intervals, returning when it becomes `true`.
+/// Used with `tokio::select!` to cancel in-flight API streams.
+async fn abort_notified(flag: &AtomicBool) {
+    loop {
+        if flag.load(Ordering::Relaxed) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
 }

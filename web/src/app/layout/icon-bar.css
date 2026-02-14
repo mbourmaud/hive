@@ -37,8 +37,9 @@
 }
 
 [data-slot="icon-bar-item"][data-active] {
-  background: oklch(from var(--color-accent) l c h / 18%);
-  color: var(--color-accent);
+  --_accent: var(--project-accent, var(--color-accent));
+  background: oklch(from var(--_accent) l c h / 18%);
+  color: var(--_accent);
 }
 
 [data-slot="icon-bar-item"][data-active]::before {
@@ -49,7 +50,7 @@
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--color-accent);
+  background: var(--_accent, var(--color-accent));
 }
 
 [data-slot="icon-bar-add"] {

@@ -1,3 +1,5 @@
+pub mod agents;
+pub mod context;
 pub mod dto;
 pub mod handlers;
 pub mod persistence;
@@ -14,6 +16,7 @@ pub fn routes(sessions: SessionStore) -> Router {
     Router::new()
         .route("/api/chat/sessions", post(handlers::create_session))
         .route("/api/chat/sessions", get(handlers::list_sessions))
+        .route("/api/chat/agents", get(handlers::list_agents))
         .route(
             "/api/chat/sessions/{id}/stream",
             get(handlers::stream_session),

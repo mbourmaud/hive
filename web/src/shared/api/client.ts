@@ -49,6 +49,11 @@ class ApiClient {
     return parseJson<T>(res);
   }
 
+  async patch<T>(path: string, body?: unknown): Promise<T> {
+    const res = await request(path, jsonInit("PATCH", body));
+    return parseJson<T>(res);
+  }
+
   async delete(path: string): Promise<void> {
     await request(path, { method: "DELETE" });
   }

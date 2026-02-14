@@ -16,8 +16,9 @@ import {
   Search,
   Terminal,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/shared/lib/utils";
+import { useTurnData } from "../hooks/use-turn-data";
 import type {
   AssistantPart,
   ChatTurn,
@@ -27,7 +28,12 @@ import type {
   ToolUsePart,
 } from "../types";
 import { DiffViewer } from "./diff-viewer";
+import { guessLanguage } from "./lang-utils";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { getToolComponent } from "./tool-registry";
+
+// Trigger side-effect registration of all parts/ renderers
+import "./parts";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -250,90 +256,80 @@ function toolDisplayName(name: string): string {
   }
 }
 
+// Map raw tool names to registry keys (must match registerTool() calls in parts/)
+function registryKeyForTool(name: string): string {
+  const lower = name.toLowerCase();
+  switch (lower) {
+    case "read":
+    case "readfile":
+      return "Read";
+    case "bash":
+    case "execute":
+    case "run":
+      return "Bash";
+    case "edit":
+      return "Edit";
+    case "write":
+    case "writefile":
+      return "Write";
+    case "glob":
+      return "Glob";
+    case "grep":
+      return "Grep";
+    case "search":
+      return "Search";
+    case "task":
+      return "Task";
+    case "sendmessage":
+      return "SendMessage";
+    case "delegate":
+      return "Delegate";
+    case "webfetch":
+      return "WebFetch";
+    case "websearch":
+      return "WebSearch";
+    case "todowrite":
+      return "TodoWrite";
+    default:
+      return name;
+  }
+}
+
+interface SubtitleRule {
+  tools: ReadonlySet<string>;
+  keys: readonly string[];
+  maxLen: number;
+  format?: "filepath";
+}
+
+const SUBTITLE_RULES: SubtitleRule[] = [
+  { tools: new Set(["read", "readfile", "edit", "write", "writefile"]), keys: ["file_path", "path"], maxLen: 0, format: "filepath" },
+  { tools: new Set(["grep", "glob", "search"]), keys: ["pattern", "query"], maxLen: 40 },
+  { tools: new Set(["bash", "execute", "run"]), keys: ["command"], maxLen: 50 },
+  { tools: new Set(["task", "sendmessage", "delegate"]), keys: ["description", "subject", "prompt"], maxLen: 60 },
+  { tools: new Set(["webfetch", "websearch"]), keys: ["url", "query"], maxLen: 50 },
+];
+
+function truncate(text: string, maxLen: number): string {
+  if (maxLen <= 0 || text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen)}\u2026`;
+}
+
 function toolSubtitle(name: string, input: Record<string, unknown>): string {
   const lower = name.toLowerCase();
-
-  if (["read", "readfile", "edit", "write", "writefile"].includes(lower)) {
-    const filePath = input.file_path ?? input.path ?? "";
-    if (typeof filePath === "string" && filePath) {
-      const segments = filePath.split("/");
-      return segments.slice(-2).join("/");
+  for (const rule of SUBTITLE_RULES) {
+    if (!rule.tools.has(lower)) continue;
+    for (const key of rule.keys) {
+      const val = input[key];
+      if (typeof val !== "string" || !val) continue;
+      if (rule.format === "filepath") return val.split("/").slice(-2).join("/");
+      return truncate(val, rule.maxLen);
     }
   }
-
-  if (["grep", "glob", "search"].includes(lower)) {
-    const pattern = input.pattern ?? input.query ?? "";
-    if (typeof pattern === "string" && pattern) {
-      return pattern.length > 40 ? `${pattern.slice(0, 40)}\u2026` : pattern;
-    }
-  }
-
-  if (lower === "bash" || lower === "execute" || lower === "run") {
-    const cmd = input.command ?? "";
-    if (typeof cmd === "string" && cmd) {
-      return cmd.length > 50 ? `${cmd.slice(0, 50)}\u2026` : cmd;
-    }
-  }
-
-  if (lower === "task" || lower === "sendmessage" || lower === "delegate") {
-    const desc = input.description ?? input.subject ?? input.prompt ?? "";
-    if (typeof desc === "string" && desc) {
-      return desc.length > 60 ? `${desc.slice(0, 60)}\u2026` : desc;
-    }
-  }
-
-  if (lower === "webfetch" || lower === "websearch") {
-    const url = input.url ?? input.query ?? "";
-    if (typeof url === "string" && url) {
-      return url.length > 50 ? `${url.slice(0, 50)}\u2026` : url;
-    }
-  }
-
   return "";
 }
 
-// ── File extension → language mapping ───────────────────────────────────────
-
-const EXT_LANG_MAP: Record<string, string> = {
-  ts: "typescript",
-  tsx: "tsx",
-  js: "javascript",
-  jsx: "jsx",
-  rs: "rust",
-  py: "python",
-  rb: "ruby",
-  go: "go",
-  java: "java",
-  kt: "kotlin",
-  swift: "swift",
-  c: "c",
-  cpp: "cpp",
-  h: "c",
-  hpp: "cpp",
-  cs: "csharp",
-  css: "css",
-  scss: "scss",
-  html: "html",
-  json: "json",
-  yaml: "yaml",
-  yml: "yaml",
-  toml: "toml",
-  md: "markdown",
-  sh: "bash",
-  bash: "bash",
-  zsh: "bash",
-  sql: "sql",
-  xml: "xml",
-  vue: "vue",
-  svelte: "svelte",
-  lua: "lua",
-  zig: "zig",
-};
-
-function langFromPath(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_LANG_MAP[ext] ?? "";
-}
+// guessLanguage is imported from ./lang-utils
 
 // ── Tool-specific expanded body renderers ───────────────────────────────────
 
@@ -378,7 +374,7 @@ function ReadToolBody({
       : typeof input.path === "string"
         ? input.path
         : "";
-  const lang = langFromPath(filePath);
+  const lang = guessLanguage(filePath) ?? "";
   const content = result?.content ?? "";
   const truncated = content.length > 2000 ? `${content.slice(0, 2000)}\n... (truncated)` : content;
 
@@ -651,6 +647,29 @@ function ToolPartDisplay({
   part: ToolUsePart;
   result: ToolResultPart | undefined;
 }) {
+  // Check registry for a dedicated renderer using the canonical tool name
+  const RegisteredTool = getToolComponent(registryKeyForTool(part.name));
+
+  // If a registered component exists, delegate rendering entirely to it
+  if (RegisteredTool) {
+    return (
+      <div data-slot="step-tool" data-status={part.status}>
+        <RegisteredTool input={part.input} output={result?.content} status={part.status} />
+      </div>
+    );
+  }
+
+  // Fallback: inline trigger + body for unregistered tools
+  return <InlineToolPartDisplay part={part} result={result} />;
+}
+
+function InlineToolPartDisplay({
+  part,
+  result,
+}: {
+  part: ToolUsePart;
+  result: ToolResultPart | undefined;
+}) {
   const [expanded, setExpanded] = useState(false);
   const title = toolDisplayName(part.name);
   const subtitle = toolSubtitle(part.name, part.input);
@@ -724,6 +743,84 @@ function PartRenderer({ part, result }: PartRendererProps) {
   return null;
 }
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function StepsTrigger({
+  stepsCount,
+  stepsExpanded,
+  isStreaming,
+  statusLabel,
+  displayDuration,
+  onToggle,
+}: {
+  stepsCount: number;
+  stepsExpanded: boolean;
+  isStreaming: boolean;
+  statusLabel: string;
+  displayDuration: string | null;
+  onToggle: () => void;
+}) {
+  if (stepsCount === 0) return null;
+
+  const label = isStreaming
+    ? `${stepsCount} ${stepsCount === 1 ? "step" : "steps"}`
+    : stepsExpanded
+      ? "hide steps"
+      : "show steps";
+
+  return (
+    <button type="button" data-slot="steps-trigger" onClick={onToggle} aria-expanded={stepsExpanded}>
+      <div data-slot="steps-trigger-left">
+        {isStreaming ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
+        ) : (
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 text-muted-foreground transition-transform duration-150",
+              !stepsExpanded && "-rotate-90",
+            )}
+          />
+        )}
+        <span data-slot="steps-trigger-count">{label}</span>
+        {isStreaming && <span data-slot="steps-trigger-status">{statusLabel}</span>}
+      </div>
+      {displayDuration && <span data-slot="steps-trigger-duration">{displayDuration}</span>}
+    </button>
+  );
+}
+
+const FINISH_REASON_LABELS: Record<string, string> = {
+  error: "error",
+  canceled: "canceled",
+};
+
+function TurnFinishInfo({
+  turn,
+  displayDuration,
+}: {
+  turn: ChatTurn;
+  displayDuration: string | null;
+}) {
+  if (turn.status === "streaming" || turn.status === "pending") return null;
+
+  const reasonLabel = turn.finishReason && turn.finishReason !== "end_turn"
+    ? (FINISH_REASON_LABELS[turn.finishReason] ?? "max tokens")
+    : null;
+
+  return (
+    <div data-slot="turn-finish-info">
+      {turn.model && <span data-slot="turn-finish-model">{turn.model}</span>}
+      {turn.model && displayDuration && <span data-slot="turn-finish-sep">&middot;</span>}
+      {displayDuration && <span data-slot="turn-finish-duration">{displayDuration}</span>}
+      {reasonLabel && (
+        <span data-slot="turn-finish-badge" data-reason={turn.finishReason}>
+          {reasonLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── SessionTurn ──────────────────────────────────────────────────────────────
 
 interface SessionTurnProps {
@@ -748,40 +845,8 @@ export function SessionTurn({
   const statusLabel = useDebouncedStatus(turn.assistantParts);
   const [stickyRef, stickyHeight] = useStickyHeight();
 
-  // ── Derived data ─────────────────────────────────────────────────────────
-
   const canExpandUser = turn.userMessage.length > COLLAPSE_CHAR_THRESHOLD;
-
-  const toolUseParts = useMemo(
-    () => turn.assistantParts.filter((p): p is ToolUsePart => p.type === "tool_use"),
-    [turn.assistantParts],
-  );
-
-  const toolResultMap = useMemo(() => {
-    const map = new Map<string, ToolResultPart>();
-    for (const p of turn.assistantParts) {
-      if (p.type === "tool_result") {
-        map.set(p.toolUseId, p);
-      }
-    }
-    return map;
-  }, [turn.assistantParts]);
-
-  const thinkingParts = useMemo(
-    () => turn.assistantParts.filter((p): p is ThinkingPart => p.type === "thinking"),
-    [turn.assistantParts],
-  );
-
-  const stepsCount = toolUseParts.length + thinkingParts.length;
-
-  // Summary = last text part
-  const summaryText = useMemo(() => {
-    const lastTextIdx = findLastTextIndex(turn.assistantParts);
-    if (lastTextIdx === -1) return null;
-    const lastPart = turn.assistantParts[lastTextIdx];
-    if (!lastPart || lastPart.type !== "text") return null;
-    return lastPart.text;
-  }, [turn.assistantParts]);
+  const { toolResultMap, stepsCount, summaryText, errorText, stepsParts } = useTurnData(turn);
 
   let displayDuration: string | null = null;
   if (turn.duration !== null) {
@@ -789,47 +854,6 @@ export function SessionTurn({
   } else if (isStreaming) {
     displayDuration = formatDuration(elapsed);
   }
-
-  // ── Error text ───────────────────────────────────────────────────────────
-
-  const errorText = useMemo(() => {
-    // Tool-level errors are already shown inside each tool's collapsible body,
-    // so we only display turn-level errors here (e.g. connection failures,
-    // result events with is_error that don't map to a specific tool).
-    if (turn.status !== "error") return null;
-
-    // Check if there are any error tool results — if so, they're already
-    // rendered inside their tool bodies, no need to duplicate them.
-    const hasToolErrors = turn.assistantParts.some(
-      (p) => p.type === "tool_result" && p.isError,
-    );
-    if (hasToolErrors) return null;
-
-    // Check if the last part is a text containing the error from the result event
-    const lastText = [...turn.assistantParts].reverse().find((p) => p.type === "text");
-    if (lastText && lastText.type === "text" && lastText.text.trim()) return null;
-
-    return "An error occurred during this turn.";
-  }, [turn.assistantParts, turn.status]);
-
-  // ── Steps content ──────────────────────────────────────────────────────
-
-  const stepsParts = useMemo(() => {
-    const lastTextIdx = findLastTextIndex(turn.assistantParts);
-    const result: AssistantPart[] = [];
-    for (let i = 0; i < turn.assistantParts.length; i++) {
-      const part = turn.assistantParts[i];
-      if (!part) continue;
-      if (part.type === "tool_use" || part.type === "thinking") {
-        result.push(part);
-      } else if (part.type === "text" && i !== lastTextIdx) {
-        result.push(part);
-      }
-    }
-    return result;
-  }, [turn.assistantParts]);
-
-  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -841,16 +865,13 @@ export function SessionTurn({
       style={{ "--session-turn-sticky-height": `${stickyHeight}px` } as React.CSSProperties}
     >
       <div data-slot="turn-content">
-        {/* ── Sticky header: user message + steps toggle ─────────────── */}
         <div data-slot="turn-sticky" ref={stickyRef}>
-          {/* User message card */}
           <div
             data-slot="user-message"
             data-can-expand={canExpandUser || undefined}
             data-expanded={userExpanded || undefined}
           >
             <p>{turn.userMessage}</p>
-
             {canExpandUser && (
               <button
                 type="button"
@@ -866,44 +887,19 @@ export function SessionTurn({
                 />
               </button>
             )}
-
             <CopyButton text={turn.userMessage} slot="user-message-copy" />
           </div>
 
-          {/* Steps trigger */}
-          {stepsCount > 0 && (
-            <button
-              type="button"
-              data-slot="steps-trigger"
-              onClick={onToggleSteps}
-              aria-expanded={stepsExpanded}
-            >
-              <div data-slot="steps-trigger-left">
-                {isStreaming ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
-                ) : (
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 text-muted-foreground transition-transform duration-150",
-                      !stepsExpanded && "-rotate-90",
-                    )}
-                  />
-                )}
-                <span data-slot="steps-trigger-count">
-                  {isStreaming
-                    ? `${stepsCount} ${stepsCount === 1 ? "step" : "steps"}`
-                    : stepsExpanded
-                      ? "hide steps"
-                      : "show steps"}
-                </span>
-                {isStreaming && <span data-slot="steps-trigger-status">{statusLabel}</span>}
-              </div>
-              {displayDuration && <span data-slot="steps-trigger-duration">{displayDuration}</span>}
-            </button>
-          )}
+          <StepsTrigger
+            stepsCount={stepsCount}
+            stepsExpanded={stepsExpanded}
+            isStreaming={isStreaming}
+            statusLabel={statusLabel}
+            displayDuration={displayDuration}
+            onToggle={onToggleSteps}
+          />
         </div>
 
-        {/* ── Steps (collapsible tool call list) ────────────────────── */}
         {stepsCount > 0 && stepsExpanded && (
           <div data-slot="steps-content">
             {stepsParts.map((part) => (
@@ -916,56 +912,30 @@ export function SessionTurn({
           </div>
         )}
 
-        {/* ── Summary (final assistant text) ────────────────────────── */}
-        {summaryText && !isStreaming && (
-          <div data-slot="turn-summary-section">
-            <div data-slot="turn-summary" data-fade={isLast || undefined}>
+        {summaryText && (
+          <div
+            data-slot={isStreaming ? "turn-summary" : "turn-summary-section"}
+            data-streaming={isStreaming ? "true" : undefined}
+          >
+            {isStreaming ? (
               <MarkdownRenderer text={summaryText} />
-            </div>
+            ) : (
+              <div data-slot="turn-summary" data-fade={isLast || undefined}>
+                <MarkdownRenderer text={summaryText} />
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Streaming summary (live) ──────────────────────────────── */}
-        {summaryText && isStreaming && (
-          <div data-slot="turn-summary" data-streaming="true">
-            <MarkdownRenderer text={summaryText} />
-          </div>
-        )}
-
-        {/* ── Error ─────────────────────────────────────────────────── */}
         {errorText && (
           <div data-slot="turn-error">
             <pre>{errorText}</pre>
           </div>
         )}
 
-        {/* ── Finish info: model + duration + finish reason badge ────── */}
-        {!isStreaming && turn.status !== "pending" && (
-          <div data-slot="turn-finish-info">
-            {turn.model && <span data-slot="turn-finish-model">{turn.model}</span>}
-            {turn.model && displayDuration && <span data-slot="turn-finish-sep">&middot;</span>}
-            {displayDuration && <span data-slot="turn-finish-duration">{displayDuration}</span>}
-            {turn.finishReason && turn.finishReason !== "end_turn" && (
-              <span data-slot="turn-finish-badge" data-reason={turn.finishReason}>
-                {turn.finishReason === "error"
-                  ? "error"
-                  : turn.finishReason === "canceled"
-                    ? "canceled"
-                    : "max tokens"}
-              </span>
-            )}
-          </div>
-        )}
+        <TurnFinishInfo turn={turn} displayDuration={displayDuration} />
       </div>
     </div>
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function findLastTextIndex(parts: AssistantPart[]): number {
-  for (let i = parts.length - 1; i >= 0; i--) {
-    if (parts[i]?.type === "text") return i;
-  }
-  return -1;
-}

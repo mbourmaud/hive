@@ -1,6 +1,7 @@
 import { FilePlus } from "lucide-react";
 import { BasicTool } from "../basic-tool";
 import { CodeBlock } from "../code-block";
+import { guessLanguage } from "../lang-utils";
 import type { ToolProps } from "../tool-registry";
 import { registerTool } from "../tool-registry";
 
@@ -13,7 +14,8 @@ function WriteTool({
   forceOpen,
   locked,
 }: ToolProps) {
-  const filePath = input.file_path as string | undefined;
+  const filePath = typeof input.file_path === "string" ? input.file_path : undefined;
+  const lang = guessLanguage(filePath);
 
   return (
     <BasicTool
@@ -28,7 +30,7 @@ function WriteTool({
       forceOpen={forceOpen}
       locked={locked}
     >
-      {output && <CodeBlock code={output} maxHeight={400} />}
+      {output && <CodeBlock code={output} language={lang} maxHeight={400} />}
     </BasicTool>
   );
 }

@@ -1,11 +1,19 @@
 import { ArrowUp, ImageIcon, Square, X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import type { ContextUsage, ImageAttachment, SlashCommand, TurnStatus } from "../types";
 import { ContextUsageIndicator } from "./context-usage";
+import { EffortToggle } from "./effort-toggle";
 import { ModelSelector } from "./model-selector";
+import {
+  type HistoryNavState,
+  handleHistoryDown,
+  handleHistoryUp,
+  handleSlashPopoverKeys,
+} from "./prompt-helpers";
 import { SlashPopover } from "./slash-popover";
 import "./prompt-input.css";
 
@@ -54,6 +62,8 @@ interface PromptInputProps {
   selectedModel?: string;
   onModelChange?: (modelId: string) => void;
   contextUsage?: ContextUsage | null;
+  effort?: EffortLevel;
+  onEffortChange?: (effort: EffortLevel) => void;
 }
 
 // ── History helpers ──────────────────────────────────────────────────────────
@@ -63,7 +73,9 @@ function loadHistory(): string[] {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed as string[];
+    if (Array.isArray(parsed) && parsed.every((item): item is string => typeof item === "string")) {
+      return parsed;
+    }
     return [];
   } catch {
     return [];
@@ -92,9 +104,14 @@ function fileToAttachment(file: File): Promise<ImageAttachment> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error(`Expected data URL string for ${file.name}`));
+        return;
+      }
       resolve({
         id: uniqueId("img"),
-        dataUrl: reader.result as string,
+        dataUrl: result,
         mimeType: file.type,
         name: file.name,
       });
@@ -157,6 +174,8 @@ export function PromptInput({
   selectedModel,
   onModelChange,
   contextUsage,
+  effort,
+  onEffortChange,
 }: PromptInputProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState("");
@@ -285,8 +304,13 @@ export function PromptInput({
         return;
       }
 
-      // For /model, insert the command text and let user type argument
-      if (cmd.name === "model") {
+      // Commands that need arguments: insert text and let user type
+      if (
+        cmd.name === "model" ||
+        cmd.name === "launch" ||
+        cmd.name === "stop" ||
+        cmd.name === "logs"
+      ) {
         setPlainText(el, `/${cmd.name} `);
         setValue(`/${cmd.name} `);
         return;
@@ -302,32 +326,25 @@ export function PromptInput({
 
   // ── Key handler ───────────────────────────────────────────────────────────
 
+  const historyNavState: HistoryNavState = useMemo(
+    () => ({
+      historyRef,
+      historyIndex,
+      setHistoryIndex,
+      value,
+      setValue,
+      draftValue,
+      setDraftValue,
+      setPlainText,
+    }),
+    [historyIndex, value, draftValue],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // IME composition guard
-      if (e.nativeEvent.isComposing || composing || e.keyCode === 229) {
-        return;
-      }
+      if (e.nativeEvent.isComposing || composing || e.keyCode === 229) return;
+      if (handleSlashPopoverKeys(e, slashVisible, setSlashVisible)) return;
 
-      // When slash popover is visible, let it handle navigation keys
-      if (slashVisible) {
-        if (
-          e.key === "ArrowDown" ||
-          e.key === "ArrowUp" ||
-          e.key === "Tab" ||
-          (e.key === "Enter" && !e.shiftKey)
-        ) {
-          // SlashPopover's document-level keydown handler will handle these
-          return;
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setSlashVisible(false);
-          return;
-        }
-      }
-
-      // Escape to abort
       if (e.key === "Escape") {
         if (isStreaming) {
           e.preventDefault();
@@ -336,81 +353,16 @@ export function PromptInput({
         return;
       }
 
-      // Enter to submit (Shift+Enter for newline)
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSubmit();
         return;
       }
 
-      // Arrow Up at start → cycle history backward
-      if (e.key === "ArrowUp") {
-        const sel = window.getSelection();
-        const el = editorRef.current;
-        if (el && sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          // Check if cursor is at position 0 (start of editor)
-          const atStart =
-            range.collapsed &&
-            range.startOffset === 0 &&
-            (range.startContainer === el || range.startContainer === el.firstChild);
-          if (atStart) {
-            e.preventDefault();
-            const history = historyRef.current;
-            if (history.length === 0) return;
-
-            const newIndex =
-              historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1);
-
-            if (historyIndex === -1) {
-              setDraftValue(value);
-            }
-
-            setHistoryIndex(newIndex);
-            const newVal = history[newIndex] ?? "";
-            setValue(newVal);
-            setPlainText(el, newVal);
-          }
-        }
-        return;
-      }
-
-      // Arrow Down at end → cycle history forward
-      if (e.key === "ArrowDown") {
-        const sel = window.getSelection();
-        const el = editorRef.current;
-        if (el && sel && sel.rangeCount > 0 && historyIndex !== -1) {
-          const range = sel.getRangeAt(0);
-          const textLen = getPlainText(el).length;
-          // Check if at end of text
-          const node = range.startContainer;
-          const atEnd =
-            range.collapsed &&
-            ((node === el && range.startOffset === el.childNodes.length) ||
-              (node.nodeType === Node.TEXT_NODE &&
-                range.startOffset === (node.textContent?.length ?? 0) &&
-                !node.nextSibling));
-
-          if (atEnd || textLen === 0) {
-            e.preventDefault();
-            const history = historyRef.current;
-            const newIndex = historyIndex + 1;
-
-            if (newIndex >= history.length) {
-              setHistoryIndex(-1);
-              setValue(draftValue);
-              setPlainText(el, draftValue);
-            } else {
-              setHistoryIndex(newIndex);
-              const newVal = history[newIndex] ?? "";
-              setValue(newVal);
-              setPlainText(el, newVal);
-            }
-          }
-        }
-      }
+      if (handleHistoryUp(e, editorRef.current, historyNavState)) return;
+      handleHistoryDown(e, editorRef.current, historyNavState);
     },
-    [composing, isStreaming, onAbort, handleSubmit, historyIndex, value, draftValue, slashVisible],
+    [composing, isStreaming, onAbort, handleSubmit, historyNavState, slashVisible],
   );
 
   // ── Paste handler (images + plain text) ───────────────────────────────────
@@ -429,9 +381,11 @@ export function PromptInput({
 
     if (imageFiles.length > 0) {
       e.preventDefault();
-      Promise.all(imageFiles.map(fileToAttachment)).then((newAttachments) => {
-        setAttachments((prev) => [...prev, ...newAttachments]);
-      });
+      void Promise.all(imageFiles.map(fileToAttachment))
+        .then((newAttachments) => {
+          setAttachments((prev) => [...prev, ...newAttachments]);
+        })
+        .catch(() => {});
       return;
     }
 
@@ -479,9 +433,11 @@ export function PromptInput({
     );
 
     if (files.length > 0) {
-      Promise.all(files.map(fileToAttachment)).then((newAttachments) => {
-        setAttachments((prev) => [...prev, ...newAttachments]);
-      });
+      void Promise.all(files.map(fileToAttachment))
+        .then((newAttachments) => {
+          setAttachments((prev) => [...prev, ...newAttachments]);
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -628,6 +584,12 @@ export function PromptInput({
                     onChange={onModelChange}
                     disabled={isStreaming}
                   />
+                </>
+              )}
+              {effort && onEffortChange && (
+                <>
+                  <span className="text-border">|</span>
+                  <EffortToggle effort={effort} onChange={onEffortChange} disabled={isStreaming} />
                 </>
               )}
               {contextUsage && (

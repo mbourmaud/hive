@@ -84,16 +84,17 @@ export function useProjectsSSE(): {
     }
 
     // Try /api/projects, fallback to /api/drones, fallback to mock
-    timedFetch<ProjectInfo[]>("/api/projects")
+    timedFetch<ProjectInfo[]>("/api/projects", 5000)
       .then((data) => {
         queryClient.setQueryData(queryKeys.projects.all(), data);
       })
       .catch(() =>
-        timedFetch<DroneInfo[]>("/api/drones")
+        timedFetch<DroneInfo[]>("/api/drones", 5000)
           .then((data) => {
             queryClient.setQueryData(queryKeys.projects.all(), wrapDronesAsProject(data));
           })
-          .catch(() => {
+          .catch((err) => {
+            console.warn("Failed to fetch projects/drones, using mock data:", err);
             queryClient.setQueryData(queryKeys.projects.all(), MOCK_PROJECTS);
           }),
       );

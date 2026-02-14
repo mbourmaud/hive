@@ -2,6 +2,7 @@ import type {
   AssistantEvent,
   AssistantPart,
   ChatAction,
+  ChatSession,
   ChatState,
   ChatTurn,
   FinishReason,
@@ -9,6 +10,7 @@ import type {
   StreamEvent,
   SystemEvent,
   ThinkingPart,
+  UsageEvent,
   UserEvent,
   UserTextBlock,
 } from "./types";
@@ -69,6 +71,8 @@ function processStreamEvent(state: ChatState, event: StreamEvent): ChatState {
       return processUserEvent(base, event);
     case "result":
       return processResultEvent(base, event);
+    case "usage":
+      return processUsageEvent(base, event);
     default:
       return base;
   }
@@ -274,6 +278,19 @@ function processResultEvent(state: ChatState, event: ResultEvent): ChatState {
   };
 }
 
+function processUsageEvent(state: ChatState, event: UsageEvent): ChatState {
+  return {
+    ...state,
+    contextUsage: {
+      inputTokens: event.total_input,
+      outputTokens: event.total_output,
+      cacheReadTokens: event.cache_read_input_tokens ?? state.contextUsage?.cacheReadTokens,
+      cacheWriteTokens: event.cache_creation_input_tokens ?? state.contextUsage?.cacheWriteTokens,
+      totalCost: state.contextUsage?.totalCost,
+    },
+  };
+}
+
 // ── Main reducer (pure function, no React dependency) ────────────────────────
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -380,84 +397,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
 
-    case "REPLAY_HISTORY": {
-      let replayed: ChatState = {
-        ...initialChatState,
-        session: action.session,
-      };
-      let turnCounter = 0;
-
-      for (const event of action.events) {
-        // User text event (not tool_result) → start a new turn
-        if (event.type === "user" && replayed.currentTurnId === null) {
-          const userText = extractUserText(event);
-          if (userText) {
-            const turnId = `replay-${++turnCounter}`;
-            replayed = {
-              ...replayed,
-              turns: [
-                ...replayed.turns,
-                {
-                  id: turnId,
-                  userMessage: userText,
-                  assistantParts: [],
-                  status: "pending",
-                  duration: null,
-                  startedAt: Date.now(),
-                },
-              ],
-              currentTurnId: turnId,
-              isStreaming: true,
-            };
-            continue;
-          }
-        }
-
-        // Assistant event without a current turn → create turn (fallback for
-        // sessions where user event was not persisted)
-        if (replayed.currentTurnId === null && event.type === "assistant") {
-          const turnId = `replay-${++turnCounter}`;
-          replayed = {
-            ...replayed,
-            turns: [
-              ...replayed.turns,
-              {
-                id: turnId,
-                userMessage: "",
-                assistantParts: [],
-                status: "pending",
-                duration: null,
-                startedAt: Date.now(),
-              },
-            ],
-            currentTurnId: turnId,
-            isStreaming: true,
-          };
-        }
-
-        replayed = processStreamEvent(replayed, event);
-
-        if (event.type === "result") {
-          replayed = { ...replayed, currentTurnId: null, isStreaming: false };
-        }
-      }
-
-      // Mark any still-streaming turn as completed (history is done)
-      if (replayed.currentTurnId !== null) {
-        replayed = {
-          ...replayed,
-          turns: updateTurn(replayed.turns, replayed.currentTurnId, (t) => ({
-            ...t,
-            status: "completed",
-            duration: 0,
-          })),
-          currentTurnId: null,
-          isStreaming: false,
-        };
-      }
-
-      return replayed;
-    }
+    case "REPLAY_HISTORY":
+      return replayHistory(action.session, action.events);
   }
 }
 
@@ -465,9 +406,83 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
 /** Extract user text from a UserEvent (returns null if it only contains tool_results). */
 function extractUserText(event: UserEvent): string | null {
-  const textBlocks = event.message.content.filter(
-    (b): b is UserTextBlock => b.type === "text",
-  );
+  const textBlocks = event.message.content.filter((b): b is UserTextBlock => b.type === "text");
   if (textBlocks.length === 0) return null;
   return textBlocks.map((b) => b.text).join("");
+}
+
+/** Create a new replay turn and attach it to the state. */
+function ensureTurnForEvent(
+  state: ChatState,
+  turnCounter: { value: number },
+  userMessage: string,
+): ChatState {
+  const turnId = `replay-${++turnCounter.value}`;
+  return {
+    ...state,
+    turns: [
+      ...state.turns,
+      {
+        id: turnId,
+        userMessage,
+        assistantParts: [],
+        status: "pending",
+        duration: null,
+        startedAt: Date.now(),
+      },
+    ],
+    currentTurnId: turnId,
+    isStreaming: true,
+  };
+}
+
+/** Replay a full history of events into a ChatState, reconstructing turns. */
+function replayHistory(
+  session: ChatSession,
+  events: StreamEvent[],
+): ChatState {
+  let replayed: ChatState = {
+    ...initialChatState,
+    session,
+  };
+  const turnCounter = { value: 0 };
+
+  for (const event of events) {
+    // User text event (not tool_result) → start a new turn
+    if (event.type === "user" && replayed.currentTurnId === null) {
+      const userText = extractUserText(event);
+      if (userText) {
+        replayed = ensureTurnForEvent(replayed, turnCounter, userText);
+        continue;
+      }
+    }
+
+    // Assistant event without a current turn → create turn (fallback for
+    // sessions where user event was not persisted)
+    if (replayed.currentTurnId === null && event.type === "assistant") {
+      replayed = ensureTurnForEvent(replayed, turnCounter, "");
+    }
+
+    replayed = processStreamEvent(replayed, event);
+
+    if (event.type === "result") {
+      replayed = { ...replayed, currentTurnId: null, isStreaming: false };
+    }
+  }
+
+  // Mark any still-streaming turn as completed (history is done)
+  if (replayed.currentTurnId !== null) {
+    replayed = {
+      ...replayed,
+      turns: updateTurn(replayed.turns, replayed.currentTurnId, (t) => ({
+        ...t,
+        status: "completed",
+        duration: 0,
+      })),
+      currentTurnId: null,
+      isStreaming: false,
+    };
+  }
+
+  return replayed;
 }

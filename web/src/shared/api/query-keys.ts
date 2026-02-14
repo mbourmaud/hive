@@ -12,4 +12,8 @@ export const queryKeys = {
   projects: {
     all: () => ["projects"] as const,
   },
+  registry: {
+    all: () => ["registry"] as const,
+    detail: (id: string) => ["registry", "detail", id] as const,
+  },
 } as const;

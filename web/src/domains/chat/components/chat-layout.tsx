@@ -1,8 +1,11 @@
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import beeIcon from "@/assets/bee-icon.png";
+import type { EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
+import { isDialogOpen, isEditingElement, useKeybinds } from "@/shared/hooks/use-keybinds";
 import type { ChatTurn, ContextUsage, ImageAttachment } from "../types";
+import { DroneStatusCard } from "./drone-status-card";
 import { PromptInput } from "./prompt-input";
 import { SessionTurn } from "./session-turn";
 import "./chat-layout.css";
@@ -45,11 +48,13 @@ interface ChatLayoutProps {
   selectedModel?: string;
   onModelChange?: (modelId: string) => void;
   contextUsage?: ContextUsage | null;
+  effort?: EffortLevel;
+  onEffortChange?: (effort: EffortLevel) => void;
 }
 
 // ── Auto-scroll hook ─────────────────────────────────────────────────────────
 
-function useAutoScroll(_turns: ChatTurn[], _isStreaming: boolean) {
+function useAutoScroll(turns: ChatTurn[], isStreaming: boolean) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
   const wasAtBottom = useRef(true);
@@ -100,12 +105,18 @@ function useAutoScroll(_turns: ChatTurn[], _isStreaming: boolean) {
     };
   }, [isAtBottom]);
 
+  // Derive a content fingerprint that changes when new content arrives
+  const lastTurn = turns[turns.length - 1];
+  const contentSignal = lastTurn
+    ? `${turns.length}:${lastTurn.id}:${lastTurn.assistantParts.length}`
+    : "0";
+
   // Auto-scroll on new content if user hasn't scrolled away
   useEffect(() => {
     if (!isUserScrolling.current && wasAtBottom.current) {
       scrollToBottom(false);
     }
-  }, [scrollToBottom]);
+  }, [scrollToBottom, contentSignal, isStreaming]);
 
   return { scrollRef, scrollToBottom };
 }
@@ -209,6 +220,8 @@ export function ChatLayout({
   selectedModel,
   onModelChange,
   contextUsage,
+  effort,
+  onEffortChange,
 }: ChatLayoutProps) {
   // Steps expansion state — track per-turn
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
@@ -248,90 +261,81 @@ export function ChatLayout({
   const currentTurn = turns.find((t) => t.id === currentTurnId);
   const turnStatus = currentTurn?.status ?? null;
 
-  // ── Auto-focus prompt on printable keypress ──────────────────────────────
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      // Only single printable characters without modifiers
-      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
-
-      // Skip if a dialog is open
-      if (document.querySelector('[role="dialog"]')) return;
-
-      // Skip if already focused on an editable element
-      const active = document.activeElement;
-      if (active instanceof HTMLElement) {
-        if (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)
-          return;
-      }
-
-      // Focus the prompt editor and let the browser insert the character
-      const editor = document.querySelector<HTMLElement>('[data-slot="prompt-editor"]');
-      if (editor) {
-        editor.focus();
-        // The keypress will naturally insert the character now that it's focused
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   // ── j/k message navigation ──────────────────────────────────────────────
   const [focusedTurnIndex, setFocusedTurnIndex] = useState<number | null>(null);
 
+  const focusPromptEditor = useCallback(() => {
+    const editor = document.querySelector<HTMLElement>('[data-slot="prompt-editor"]');
+    editor?.focus();
+  }, []);
+
+  useKeybinds(
+    useMemo(
+      () => [
+        {
+          key: "j",
+          handler: () =>
+            setFocusedTurnIndex((prev) => {
+              const max = visibleTurns.length - 1;
+              if (prev === null) return 0;
+              return Math.min(prev + 1, max);
+            }),
+        },
+        {
+          key: "ArrowDown",
+          handler: () =>
+            setFocusedTurnIndex((prev) => {
+              const max = visibleTurns.length - 1;
+              if (prev === null) return 0;
+              return Math.min(prev + 1, max);
+            }),
+        },
+        {
+          key: "k",
+          handler: () =>
+            setFocusedTurnIndex((prev) => {
+              if (prev === null) return visibleTurns.length - 1;
+              return Math.max(prev - 1, 0);
+            }),
+        },
+        {
+          key: "ArrowUp",
+          handler: () =>
+            setFocusedTurnIndex((prev) => {
+              if (prev === null) return visibleTurns.length - 1;
+              return Math.max(prev - 1, 0);
+            }),
+        },
+        {
+          key: "i",
+          handler: () => {
+            setFocusedTurnIndex(null);
+            focusPromptEditor();
+          },
+        },
+        {
+          key: "Escape",
+          handler: () => setFocusedTurnIndex(null),
+          ignoreEditing: false,
+        },
+      ],
+      [visibleTurns.length, focusPromptEditor],
+    ),
+  );
+
+  // Auto-focus prompt on printable keypress (not handled by useKeybinds since
+  // it needs to let the character through without preventDefault)
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      // Only when no modifier keys (let Cmd+K etc. pass through)
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-      // Only when NOT in a contenteditable / input
-      const active = document.activeElement;
-      if (active instanceof HTMLElement) {
-        if (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)
-          return;
-      }
-
-      // Skip if a dialog is open
-      if (document.querySelector('[role="dialog"]')) return;
-
-      if (e.key === "j" || e.key === "ArrowDown") {
-        e.preventDefault();
-        setFocusedTurnIndex((prev) => {
-          const max = visibleTurns.length - 1;
-          if (prev === null) return 0;
-          return Math.min(prev + 1, max);
-        });
-        return;
-      }
-
-      if (e.key === "k" || e.key === "ArrowUp") {
-        e.preventDefault();
-        setFocusedTurnIndex((prev) => {
-          if (prev === null) return visibleTurns.length - 1;
-          return Math.max(prev - 1, 0);
-        });
-        return;
-      }
-
-      // i → focus editor (vim-style insert mode)
-      if (e.key === "i") {
-        e.preventDefault();
-        setFocusedTurnIndex(null);
-        const editor = document.querySelector<HTMLElement>('[data-slot="prompt-editor"]');
-        editor?.focus();
-        return;
-      }
-
-      // Escape → blur editor and clear focused turn
-      if (e.key === "Escape") {
-        setFocusedTurnIndex(null);
-        return;
-      }
+    function handlePrintableKey(e: KeyboardEvent) {
+      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isDialogOpen()) return;
+      if (isEditingElement(document.activeElement)) return;
+      focusPromptEditor();
     }
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [visibleTurns.length]);
+    document.addEventListener("keydown", handlePrintableKey);
+    return () => document.removeEventListener("keydown", handlePrintableKey);
+  }, [focusPromptEditor]);
 
   // Scroll focused turn into view
   useEffect(() => {
@@ -412,6 +416,8 @@ export function ChatLayout({
           selectedModel={selectedModel}
           onModelChange={onModelChange}
           contextUsage={contextUsage}
+          effort={effort}
+          onEffortChange={onEffortChange}
         />
       </div>
     );
@@ -424,17 +430,24 @@ export function ChatLayout({
     >
       {/* Message list */}
       <div ref={scrollRef} data-slot="message-list" className="flex-1 overflow-y-auto">
-        <div className="max-w-[900px] mx-auto px-4 sm:px-6 pb-[calc(var(--prompt-height,8rem)+64px)]">
-          {visibleTurns.map((turn, idx) => (
-            <SessionTurn
-              key={turn.id}
-              turn={turn}
-              isLast={idx === visibleTurns.length - 1}
-              stepsExpanded={expandedSteps.has(turn.id)}
-              onToggleSteps={() => toggleSteps(turn.id)}
-              isFocused={focusedTurnIndex === idx}
-            />
-          ))}
+        <div
+          className="max-w-[900px] mx-auto px-4 sm:px-6 pt-4 pb-[calc(var(--prompt-height,8rem)+64px)]"
+          data-slot="message-list-inner"
+        >
+          {visibleTurns.map((turn, idx) =>
+            turn.droneName ? (
+              <DroneStatusCard key={turn.id} droneName={turn.droneName} prompt={turn.userMessage} />
+            ) : (
+              <SessionTurn
+                key={turn.id}
+                turn={turn}
+                isLast={idx === visibleTurns.length - 1}
+                stepsExpanded={expandedSteps.has(turn.id)}
+                onToggleSteps={() => toggleSteps(turn.id)}
+                isFocused={focusedTurnIndex === idx}
+              />
+            ),
+          )}
         </div>
       </div>
 
@@ -462,6 +475,8 @@ export function ChatLayout({
         selectedModel={selectedModel}
         onModelChange={onModelChange}
         contextUsage={contextUsage}
+        effort={effort}
+        onEffortChange={onEffortChange}
       />
     </div>
   );

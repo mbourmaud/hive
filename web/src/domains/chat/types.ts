@@ -49,10 +49,17 @@ export interface ToolResultBlock {
   is_error: boolean;
 }
 
+export interface UserTextBlock {
+  type: "text";
+  text: string;
+}
+
+export type UserContentBlock = ToolResultBlock | UserTextBlock;
+
 export interface UserEvent {
   type: "user";
   message: {
-    content: ToolResultBlock[];
+    content: UserContentBlock[];
   };
 }
 
@@ -72,7 +79,17 @@ export interface ResultEvent {
   };
 }
 
-export type StreamEvent = SystemEvent | AssistantEvent | UserEvent | ResultEvent;
+export interface UsageEvent {
+  type: "usage";
+  input_tokens: number;
+  output_tokens: number;
+  total_input: number;
+  total_output: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
+export type StreamEvent = SystemEvent | AssistantEvent | UserEvent | ResultEvent | UsageEvent;
 
 // ── Assistant part types (rendered in UI) ───────────────────────────────────
 
@@ -126,6 +143,8 @@ export interface ChatTurn {
   startedAt: number;
   finishReason?: FinishReason;
   model?: string;
+  /** When set, this turn represents a drone launch (not a normal chat exchange). */
+  droneName?: string;
 }
 
 // ── Chat session ────────────────────────────────────────────────────────────
@@ -154,7 +173,7 @@ export interface SlashCommand {
   name: string;
   description: string;
   shortcut?: string;
-  category?: "session" | "config" | "view" | "info";
+  category?: "session" | "config" | "view" | "info" | "drone";
   type?: "builtin" | "custom";
   source?: "project" | "user" | "tools";
 }
@@ -190,4 +209,5 @@ export type ChatAction =
   | { type: "TURN_ERROR"; turnId: string; error: string }
   | { type: "MARK_STALE" }
   | { type: "CONNECTION_ERROR"; error: string }
-  | { type: "REPLAY_HISTORY"; session: ChatSession; events: StreamEvent[] };
+  | { type: "REPLAY_HISTORY"; session: ChatSession; events: StreamEvent[] }
+  | { type: "DRONE_LAUNCHED"; droneName: string; prompt: string };

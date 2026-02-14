@@ -39,7 +39,9 @@ export function ContextUsageIndicator({ usage }: ContextUsageProps) {
 
   if (!usage) return null;
 
-  const totalUsed = usage.inputTokens + usage.outputTokens;
+  // Context window usage = input tokens only (output tokens don't count against the 200k limit)
+  // Cache read tokens are already included in inputTokens, so we don't double-count
+  const totalUsed = usage.inputTokens;
   const ratio = Math.min(totalUsed / MAX_CONTEXT_TOKENS, 1);
   const level = getUsageLevel(ratio);
   const percent = Math.round(ratio * 100);

@@ -13,6 +13,14 @@ pub struct CreateSessionRequest {
     #[serde(default)]
     #[garde(skip)]
     pub system_prompt: Option<String>,
+    /// Agent filename (without .md) to load from .claude/agents/
+    #[serde(default)]
+    #[garde(skip)]
+    pub agent: Option<String>,
+    /// Max agentic tool-use turns (default: 25)
+    #[serde(default)]
+    #[garde(skip)]
+    pub max_turns: Option<usize>,
 }
 
 fn default_model() -> String {
@@ -38,6 +46,10 @@ pub struct SendMessageRequest {
     #[serde(default)]
     #[garde(skip)]
     pub images: Vec<ImageAttachmentPayload>,
+    /// Effort level: "low", "medium", "high" (controls thinking budget)
+    #[serde(default)]
+    #[garde(skip)]
+    pub effort: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

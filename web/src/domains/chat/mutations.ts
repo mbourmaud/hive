@@ -8,6 +8,8 @@ import type { SessionMeta } from "./queries";
 interface CreateSessionParams {
   cwd: string;
   model?: string;
+  agent?: string;
+  max_turns?: number;
 }
 
 interface CreateSessionResponse {
@@ -41,7 +43,7 @@ export function useRenameSession() {
 
   return useMutation({
     mutationFn: ({ id, title }: RenameSessionParams) =>
-      apiClient.post<unknown>(`/api/chat/sessions/${id}`, { title }),
+      apiClient.patch<unknown>(`/api/chat/sessions/${id}`, { title }),
     onMutate: async ({ id, title }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.sessions.list() });
       const previous = queryClient.getQueryData<SessionMeta[]>(queryKeys.sessions.list());

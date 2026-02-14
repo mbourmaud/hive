@@ -1,0 +1,45 @@
+/* ── Context Bar ──────────────────────────────────────────────────────── */
+
+[data-component="context-bar"] {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-sidebar);
+  font-size: 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+[data-slot="context-bar-git"] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-foreground);
+  font-weight: 500;
+}
+
+[data-slot="context-bar-runtimes"] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-slot="context-bar-pr"] {
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+[data-slot="context-bar-pr"]:hover {
+  opacity: 0.8;
+}
+
+[data-slot="context-bar-dirty"] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-muted-foreground);
+  margin-left: auto;
+}

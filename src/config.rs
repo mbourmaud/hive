@@ -2,6 +2,7 @@ use crate::types::HiveConfig;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 // ============================================================================
 // Projects Registry (global, multi-project)
@@ -11,6 +12,12 @@ use std::path::{Path, PathBuf};
 pub struct ProjectEntry {
     pub path: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_theme: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -62,11 +69,81 @@ pub fn register_project(abs_path: &Path, name: &str) -> Result<()> {
         registry.projects.push(ProjectEntry {
             path: path_str,
             name: name.to_string(),
+            id: Some(Uuid::new_v4().to_string()),
+            color_theme: None,
+            image_path: None,
         });
     }
 
     save_projects_registry(&registry)?;
     Ok(())
+}
+
+/// Find a project by its UUID in the global registry.
+pub fn find_project_by_id(id: &str) -> Result<Option<ProjectEntry>> {
+    let registry = load_projects_registry()?;
+    Ok(registry
+        .projects
+        .into_iter()
+        .find(|p| p.id.as_deref() == Some(id)))
+}
+
+/// Update a project in the global registry (matched by id).
+pub fn update_project(entry: &ProjectEntry) -> Result<()> {
+    let id = entry
+        .id
+        .as_deref()
+        .context("Cannot update project without an id")?;
+    let mut registry = load_projects_registry()?;
+    let existing = registry
+        .projects
+        .iter_mut()
+        .find(|p| p.id.as_deref() == Some(id))
+        .context(format!("Project with id '{id}' not found"))?;
+
+    existing.name.clone_from(&entry.name);
+    existing.path.clone_from(&entry.path);
+    existing.color_theme.clone_from(&entry.color_theme);
+    existing.image_path.clone_from(&entry.image_path);
+
+    save_projects_registry(&registry)?;
+    Ok(())
+}
+
+/// Remove a project by its UUID from the global registry.
+pub fn remove_project(id: &str) -> Result<()> {
+    let mut registry = load_projects_registry()?;
+    let original_len = registry.projects.len();
+    registry.projects.retain(|p| p.id.as_deref() != Some(id));
+
+    if registry.projects.len() == original_len {
+        anyhow::bail!("Project with id '{id}' not found");
+    }
+
+    save_projects_registry(&registry)?;
+    Ok(())
+}
+
+/// Migration helper: assign UUIDs to entries that lack an `id`.
+/// Returns `true` if any IDs were assigned.
+pub fn ensure_project_ids(registry: &mut ProjectsRegistry) -> bool {
+    let mut changed = false;
+    for entry in &mut registry.projects {
+        if entry.id.is_none() {
+            entry.id = Some(Uuid::new_v4().to_string());
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// Path to the global images directory: `~/.config/hive/images/`
+pub fn images_dir() -> Result<PathBuf> {
+    let config_dir = dirs::config_dir()
+        .context("Failed to get config directory")?
+        .join("hive")
+        .join("images");
+    Ok(config_dir)
 }
 
 /// Get worktree base directory with priority: ENV > local > global > default

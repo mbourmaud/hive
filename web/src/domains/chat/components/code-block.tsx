@@ -8,6 +8,7 @@ interface CodeBlockProps {
   code: string;
   language?: string;
   lineNumbers?: boolean;
+  startLine?: number;
   maxHeight?: number;
   className?: string;
 }
@@ -16,6 +17,7 @@ export function CodeBlock({
   code,
   language,
   lineNumbers = true,
+  startLine = 1,
   maxHeight = 500,
   className,
 }: CodeBlockProps) {
@@ -123,7 +125,7 @@ export function CodeBlock({
           <div data-slot="code-block-table">
             <div data-slot="code-block-gutter">
               {Array.from({ length: lineCount }, (_, i) => (
-                <div key={`ln-${i + 1}`}>{i + 1}</div>
+                <div key={`ln-${i + startLine}`}>{i + startLine}</div>
               ))}
             </div>
             <div data-slot="code-block-lines" ref={codeRef}>

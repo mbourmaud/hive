@@ -31,6 +31,10 @@ pub enum ContentBlock {
     },
     Thinking {
         thinking: String,
+        /// Opaque signature returned by the API — must be preserved when
+        /// sending thinking blocks back in conversation history.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        signature: String,
     },
     ToolUse {
         id: String,
@@ -67,6 +71,17 @@ pub struct MessagesRequest {
     pub tools: Option<Vec<ToolDefinition>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ThinkingConfig {
+    #[serde(rename = "type")]
+    pub thinking_type: String,
+    pub budget_tokens: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,4 +93,8 @@ pub struct RequestMetadata {
 pub struct UsageStats {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: u64,
 }

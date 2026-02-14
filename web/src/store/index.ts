@@ -2,9 +2,10 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { type ChatSlice, createChatSlice } from "@/domains/chat/store";
 import { createMonitorSlice, type MonitorSlice } from "@/domains/monitor/store";
+import { createProjectsSlice, type ProjectsSlice } from "@/domains/projects/store";
 import { createSettingsSlice, type SettingsSlice } from "@/domains/settings/store";
 
-export type AppStore = ChatSlice & MonitorSlice & SettingsSlice;
+export type AppStore = ChatSlice & MonitorSlice & SettingsSlice & ProjectsSlice;
 
 export const useAppStore = create<AppStore>()(
   devtools(
@@ -13,6 +14,7 @@ export const useAppStore = create<AppStore>()(
         ...createChatSlice(...a),
         ...createMonitorSlice(...a),
         ...createSettingsSlice(...a),
+        ...createProjectsSlice(...a),
       }),
       {
         name: "hive-store",
@@ -22,6 +24,9 @@ export const useAppStore = create<AppStore>()(
           theme: state.theme,
           colorTheme: state.colorTheme,
           dronePanelCollapsed: state.dronePanelCollapsed,
+          activeSessionId: state.activeSessionId,
+          effort: state.effort,
+          onboardingComplete: state.onboardingComplete,
         }),
       },
     ),

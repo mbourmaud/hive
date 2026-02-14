@@ -9,7 +9,14 @@ const BUILTIN_COMMANDS: SlashCommand[] = [
   {
     name: "new",
     description: "Start a new session",
-    shortcut: "Cmd+Shift+S",
+    shortcut: "Cmd+N",
+    category: "session",
+    type: "builtin",
+  },
+  {
+    name: "sessions",
+    description: "Browse and switch sessions",
+    shortcut: "Cmd+E",
     category: "session",
     type: "builtin",
   },
@@ -28,14 +35,12 @@ const BUILTIN_COMMANDS: SlashCommand[] = [
     category: "config",
     type: "builtin",
   },
-  {
-    name: "steps",
-    description: "Toggle steps visibility",
-    shortcut: "Cmd+E",
-    category: "view",
-    type: "builtin",
-  },
+  { name: "steps", description: "Toggle steps visibility", category: "view", type: "builtin" },
   { name: "undo", description: "Undo last message", category: "session", type: "builtin" },
+  { name: "launch", description: "Launch a drone", category: "drone", type: "builtin" },
+  { name: "status", description: "Show active drones", category: "drone", type: "builtin" },
+  { name: "stop", description: "Stop a running drone", category: "drone", type: "builtin" },
+  { name: "logs", description: "View drone activity", category: "drone", type: "builtin" },
   { name: "help", description: "Show available commands", category: "info", type: "builtin" },
 ];
 

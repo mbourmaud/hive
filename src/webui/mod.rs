@@ -6,6 +6,7 @@ pub mod extractors;
 pub mod logs;
 pub mod mcp_client;
 pub mod monitor;
+pub mod projects;
 pub mod tools;
 
 use anyhow::Result;
@@ -43,6 +44,8 @@ pub async fn start_server_async(port: u16) -> Result<()> {
         .merge(logs::routes())
         .merge(auth::routes())
         .merge(chat::routes(chat_sessions))
+        .merge(projects::routes())
+        .fallback(get(serve_index))
         .layer(CorsLayer::permissive());
 
     println!("Hive WebUI running at http://localhost:{}", port);
