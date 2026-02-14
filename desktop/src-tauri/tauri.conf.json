@@ -5,8 +5,8 @@
   "identifier": "com.hive.monitor",
   "build": {
     "frontendDist": "../../web/dist",
-    "beforeBuildCommand": "cd ../../web && npm run build",
-    "beforeDevCommand": "cd ../../web && npm run dev",
+    "beforeBuildCommand": "cd ../web && npm run build",
+    "beforeDevCommand": "cd ../web && npm run dev",
     "devUrl": "http://localhost:5173"
   },
   "app": {
