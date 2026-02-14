@@ -1,11 +1,12 @@
 import { ArrowUp, ImageIcon, Square, X } from "lucide-react";
-import type { EffortLevel } from "@/domains/settings/store";
+import type { ChatMode, EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import type { ContextUsage, ImageAttachment, TurnStatus } from "../../types";
 import { ContextUsageIndicator } from "../context-usage";
 import { EffortToggle } from "../effort-toggle";
+import { ModeToggle } from "../mode-toggle";
 import { ModelSelector } from "../model-selector";
 import { SlashPopover } from "../slash-popover";
 import "../prompt-input.css";
@@ -29,6 +30,8 @@ interface PromptInputProps {
   contextUsage?: ContextUsage | null;
   effort?: EffortLevel;
   onEffortChange?: (effort: EffortLevel) => void;
+  chatMode?: ChatMode;
+  onModeChange?: (mode: ChatMode) => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -47,6 +50,8 @@ export function PromptInput({
   contextUsage,
   effort,
   onEffortChange,
+  chatMode,
+  onModeChange,
 }: PromptInputProps) {
   const {
     editorRef,
@@ -70,8 +75,13 @@ export function PromptInput({
   } = useEditor({ onSend, onAbort, isStreaming, disabled });
 
   const placeholder = usePlaceholder(isStreaming, value);
-  const { text: statusText, variant: statusVariant } = deriveStatusText(isStreaming, turnStatus, error);
-  const canSubmit = (value.trim().length > 0 || attachments.length > 0) && !isStreaming && !disabled;
+  const { text: statusText, variant: statusVariant } = deriveStatusText(
+    isStreaming,
+    turnStatus,
+    error,
+  );
+  const canSubmit =
+    (value.trim().length > 0 || attachments.length > 0) && !isStreaming && !disabled;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: drag-drop container, not interactive
@@ -122,7 +132,10 @@ export function PromptInput({
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onCompositionStart={() => setComposing(true)}
-              onCompositionEnd={() => { setComposing(false); handleInput(); }}
+              onCompositionEnd={() => {
+                setComposing(false);
+                handleInput();
+              }}
               className={cn(
                 "w-full bg-transparent px-4 pt-3 pb-2 text-sm text-foreground",
                 "outline-none",
@@ -130,7 +143,9 @@ export function PromptInput({
               )}
             />
             {value.length === 0 && (
-              <div data-slot="editor-placeholder" aria-hidden="true">{placeholder}</div>
+              <div data-slot="editor-placeholder" aria-hidden="true">
+                {placeholder}
+              </div>
             )}
           </div>
 
@@ -138,7 +153,11 @@ export function PromptInput({
             <div data-slot="attachment-bar">
               {attachments.map((att) => (
                 <div key={att.id} data-slot="attachment-thumb">
-                  <img src={att.dataUrl} alt={att.name} className="h-full w-full object-cover rounded" />
+                  <img
+                    src={att.dataUrl}
+                    alt={att.name}
+                    className="h-full w-full object-cover rounded"
+                  />
                   <button
                     type="button"
                     data-slot="attachment-remove"
@@ -152,69 +171,65 @@ export function PromptInput({
             </div>
           )}
 
-          <div
-            data-slot="prompt-status"
-            data-streaming={isStreaming ? "true" : "false"}
-            className="flex items-center justify-between px-4 pb-2.5"
-          >
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <span
-                  data-slot="status-dot"
-                  className={cn(
-                    "inline-block h-1.5 w-1.5 rounded-full",
-                    statusVariant === "ready" && "bg-success",
-                    statusVariant === "busy" && "bg-accent",
-                    statusVariant === "error" && "bg-destructive",
-                  )}
-                />
-                <span className={cn(statusVariant === "error" && "text-destructive")}>{statusText}</span>
-              </div>
+          <div data-slot="prompt-toolbar" data-streaming={isStreaming ? "true" : "false"}>
+            <div data-slot="toolbar-left">
+              <StatusIndicator text={statusText} variant={statusVariant} />
+              {chatMode && onModeChange && (
+                <ModeToggle mode={chatMode} onChange={onModeChange} disabled={isStreaming} />
+              )}
               {models && models.length > 0 && selectedModel && onModelChange && (
-                <>
-                  <span className="text-border">|</span>
-                  <ModelSelector models={models} selected={selectedModel} onChange={onModelChange} disabled={isStreaming} />
-                </>
+                <ModelSelector
+                  models={models}
+                  selected={selectedModel}
+                  onChange={onModelChange}
+                  disabled={isStreaming}
+                />
               )}
               {effort && onEffortChange && (
-                <>
-                  <span className="text-border">|</span>
-                  <EffortToggle effort={effort} onChange={onEffortChange} disabled={isStreaming} />
-                </>
-              )}
-              {contextUsage && (
-                <>
-                  <span className="text-border">|</span>
-                  <ContextUsageIndicator usage={contextUsage} />
-                </>
+                <EffortToggle effort={effort} onChange={onEffortChange} disabled={isStreaming} />
               )}
             </div>
 
-            {isStreaming ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onAbort}
-                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                aria-label="Stop response"
-              >
-                <Square className="h-3.5 w-3.5 fill-current" />
-              </Button>
-            ) : (
-              <Button
-                variant="default"
-                size="icon"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="h-7 w-7"
-                aria-label="Send message"
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </Button>
-            )}
+            <div data-slot="toolbar-right">
+              {contextUsage && <ContextUsageIndicator usage={contextUsage} />}
+
+              {isStreaming ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onAbort}
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  aria-label="Stop response"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  size="icon"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="h-7 w-7"
+                  aria-label="Send message"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Status indicator (extracted for clarity) ─────────────────────────────────
+
+function StatusIndicator({ text, variant }: { text: string; variant: "ready" | "busy" | "error" }) {
+  return (
+    <div data-slot="status-indicator" data-variant={variant}>
+      <span data-slot="status-dot" />
+      <span className={cn(variant === "error" && "text-destructive")}>{text}</span>
     </div>
   );
 }

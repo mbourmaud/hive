@@ -1,3 +1,4 @@
+import type { RightSidebarTab } from "@/domains/monitor/store";
 import type { DroneInfo } from "@/domains/monitor/types";
 import type { ChatAction } from "./types";
 
@@ -12,8 +13,10 @@ export interface SlashCommandContext {
   handleNewSession: () => void;
   resetSession: () => void;
   drones: DroneInfo[];
-  dronePanelCollapsed: boolean;
-  toggleDronePanel: () => void;
+  rightSidebarCollapsed: boolean;
+  openRightSidebar: (tab: RightSidebarTab) => void;
+  activeSessionId: string | null;
+  reloadSession: (id: string) => void;
 }
 
 // ── Command definition ──────────────────────────────────────────────────────
@@ -35,8 +38,27 @@ function handleClear(_args: string[], ctx: SlashCommandContext): void {
   ctx.toast("Conversation cleared", "info");
 }
 
-function handleCompact(_args: string[], ctx: SlashCommandContext): void {
-  ctx.toast("Compact is not yet implemented", "info");
+async function handleCompact(_args: string[], ctx: SlashCommandContext): Promise<void> {
+  if (!ctx.activeSessionId) {
+    ctx.toast("No active session", "error");
+    return;
+  }
+  ctx.toast("Compacting conversation...", "info");
+  try {
+    const res = await fetch(`/api/chat/sessions/${ctx.activeSessionId}/compact`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      ctx.toast("Conversation compacted", "success");
+      ctx.reloadSession(ctx.activeSessionId);
+    } else {
+      const text = await res.text();
+      ctx.toast(`Compact failed: ${text}`, "error");
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    ctx.toast(`Compact failed: ${msg}`, "error");
+  }
 }
 
 function handleModel(args: string[], ctx: SlashCommandContext): void {
@@ -90,7 +112,7 @@ async function handleLaunch(args: string[], ctx: SlashCommandContext): Promise<v
     if (res.ok) {
       ctx.toast(`Drone '${droneName}' launched`, "success");
       ctx.dispatchChat({ type: "DRONE_LAUNCHED", droneName, prompt });
-      if (ctx.dronePanelCollapsed) ctx.toggleDronePanel();
+      if (ctx.rightSidebarCollapsed) ctx.openRightSidebar("drones");
     } else {
       const text = await res.text();
       ctx.toast(`Failed to launch: ${text}`, "error");
@@ -113,7 +135,7 @@ function handleStatus(_args: string[], ctx: SlashCommandContext): void {
   ctx.toast(`Drones: ${summary}`, "info");
 
   const activeDrones = drones.filter((d) => d.liveness === "working");
-  if (ctx.dronePanelCollapsed && activeDrones.length > 0) ctx.toggleDronePanel();
+  if (ctx.rightSidebarCollapsed && activeDrones.length > 0) ctx.openRightSidebar("drones");
 }
 
 async function handleStop(args: string[], ctx: SlashCommandContext): Promise<void> {
@@ -169,7 +191,7 @@ function handleLogs(args: string[], ctx: SlashCommandContext): void {
     .filter(Boolean)
     .join("\n");
   ctx.toast(info, "info");
-  if (ctx.dronePanelCollapsed) ctx.toggleDronePanel();
+  if (ctx.rightSidebarCollapsed) ctx.openRightSidebar("drones");
 }
 
 // ── Registry ────────────────────────────────────────────────────────────────

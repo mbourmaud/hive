@@ -138,13 +138,19 @@ export function useSessionManager({
     };
 
     apiClient
-      .get<{ events: unknown[] }>(`/api/chat/sessions/${activeSessionId}/history`)
+      .get<{ events: unknown[]; total_input_tokens?: number; total_output_tokens?: number }>(
+        `/api/chat/sessions/${activeSessionId}/history`,
+      )
       .then((res) => {
         const events = (res.events ?? []).filter(
           (e): e is StreamEvent =>
             typeof e === "object" && e !== null && "type" in e && typeof e.type === "string",
         );
-        dispatchChat({ type: "REPLAY_HISTORY", session, events });
+        const tokenCounts =
+          res.total_input_tokens || res.total_output_tokens
+            ? { inputTokens: res.total_input_tokens ?? 0, outputTokens: res.total_output_tokens ?? 0 }
+            : undefined;
+        dispatchChat({ type: "REPLAY_HISTORY", session, events, tokenCounts });
       })
       .catch(() => {
         dispatchChat({ type: "SESSION_CREATED", session });

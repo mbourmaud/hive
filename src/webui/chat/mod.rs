@@ -37,5 +37,9 @@ pub fn routes(sessions: SessionStore) -> Router {
             "/api/chat/sessions/{id}/history",
             get(handlers::session_history),
         )
+        .route(
+            "/api/chat/sessions/{id}/compact",
+            post(handlers::compact_session),
+        )
         .with_state(sessions)
 }

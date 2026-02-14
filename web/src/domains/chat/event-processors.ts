@@ -1,7 +1,9 @@
+import { extractThinkingTopic, findCurrentTurn, nextPartId, updateTurn } from "./reducer-utils";
 import type {
   AssistantEvent,
   AssistantPart,
   ChatState,
+  CompactEvent,
   FinishReason,
   ResultEvent,
   StreamEvent,
@@ -10,12 +12,6 @@ import type {
   UsageEvent,
   UserEvent,
 } from "./types";
-import {
-  extractThinkingTopic,
-  findCurrentTurn,
-  nextPartId,
-  updateTurn,
-} from "./reducer-utils";
 
 // ── Process a single stream event into state ────────────────────────────────
 
@@ -34,6 +30,8 @@ export function processStreamEvent(state: ChatState, event: StreamEvent): ChatSt
       return processResultEvent(base, event);
     case "usage":
       return processUsageEvent(base, event);
+    case "compact.completed":
+      return processCompactEvent(base, event);
     default:
       return base;
   }
@@ -249,6 +247,38 @@ function processUsageEvent(state: ChatState, event: UsageEvent): ChatState {
       outputTokens: event.total_output,
       cacheReadTokens: event.cache_read_input_tokens ?? state.contextUsage?.cacheReadTokens,
       cacheWriteTokens: event.cache_creation_input_tokens ?? state.contextUsage?.cacheWriteTokens,
+      totalCost: state.contextUsage?.totalCost,
+    },
+  };
+}
+
+function processCompactEvent(state: ChatState, event: CompactEvent): ChatState {
+  const compactedTurn = {
+    id: `compact-${Date.now()}`,
+    userMessage: "[conversation compacted]",
+    assistantParts: [
+      {
+        type: "text" as const,
+        id: nextPartId(),
+        text: event.summary,
+      },
+    ],
+    status: "completed" as const,
+    duration: null,
+    startedAt: Date.now(),
+    finishReason: "end_turn" as const,
+  };
+
+  return {
+    ...state,
+    turns: [compactedTurn],
+    currentTurnId: null,
+    isStreaming: false,
+    contextUsage: {
+      inputTokens: event.total_input,
+      outputTokens: event.total_output,
+      cacheReadTokens: undefined,
+      cacheWriteTokens: undefined,
       totalCost: state.contextUsage?.totalCost,
     },
   };

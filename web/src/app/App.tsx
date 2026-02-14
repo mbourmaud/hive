@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { DronePanel } from "@/app/layout/drone-panel";
 import { IconBar } from "@/app/layout/icon-bar";
 import { MobileNav } from "@/app/layout/mobile-nav";
+import { RightSidebar } from "@/app/layout/right-sidebar/right-sidebar";
 import { ChatLayout } from "@/domains/chat/components/chat-layout";
 import { SessionsModal } from "@/domains/chat/components/sessions-modal";
-import { type SlashCommandContext, executeSlashCommand } from "@/domains/chat/slash-commands";
+import { executeSlashCommand, type SlashCommandContext } from "@/domains/chat/slash-commands";
 import type { ImageAttachment } from "@/domains/chat/types";
 
 import { useProjectsSSE } from "@/domains/monitor/queries";
@@ -33,13 +33,15 @@ export default function App() {
 }
 
 function AppInner() {
-  // ── Zustand store ─────────────────────────────────────────────────────────
   const selectedProject = useAppStore((s) => s.selectedProject);
   const setSelectedProject = useAppStore((s) => s.setSelectedProject);
   const selectedModel = useAppStore((s) => s.selectedModel);
   const setSelectedModel = useAppStore((s) => s.setSelectedModel);
-  const dronePanelCollapsed = useAppStore((s) => s.dronePanelCollapsed);
-  const toggleDronePanel = useAppStore((s) => s.toggleDronePanel);
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab);
+  const rightSidebarCollapsed = useAppStore((s) => s.rightSidebarCollapsed);
+  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab);
+  const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar);
+  const openRightSidebar = useAppStore((s) => s.openRightSidebar);
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
   const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
@@ -50,34 +52,26 @@ function AppInner() {
   const setStatusPopoverOpen = useAppStore((s) => s.setStatusPopoverOpen);
   const effort = useAppStore((s) => s.effort);
   const setEffort = useAppStore((s) => s.setEffort);
+  const chatMode = useAppStore((s) => s.chatMode);
+  const setChatMode = useAppStore((s) => s.setChatMode);
 
-  // ── Project detection (registry sync, auto-detect, caching, onboarding) ──
   const { registryProjects, activeProjectContext, onboardingComplete, handleOnboardingComplete } =
     useProjectDetection();
 
-  // Local UI state — explicit "add project" mode (not persisted)
   const [isAddingProject, setIsAddingProject] = useState(false);
-
-  // Chat state from Zustand (populated by useChat's dispatchChat)
   const turns = useAppStore((s) => s.turns);
   const isStreaming = useAppStore((s) => s.isStreaming);
   const chatError = useAppStore((s) => s.error);
   const currentTurnId = useAppStore((s) => s.currentTurnId);
   const chatSession = useAppStore((s) => s.session);
   const contextUsage = useAppStore((s) => s.contextUsage);
-
-  // ── TanStack Query ────────────────────────────────────────────────────────
   const { data: projects = [], connectionStatus } = useProjectsSSE();
   useUrlState(projects);
   const { data: authStatus, isLoading: authLoading } = useAuthStatusQuery();
   const { data: models = [] } = useModelsQuery();
-
-  // ── Other hooks ───────────────────────────────────────────────────────────
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const { toggleTheme } = useTheme();
-
-  // ── Session manager (extracted hook) ────────────────────────────────────
   const {
     sessions,
     activeSessionId,
@@ -98,13 +92,21 @@ function AppInner() {
     toast,
   });
 
-  // ── Add project handler (from icon bar) ─────────────────────────────────────
   const handleAddProject = useCallback(() => setIsAddingProject(true), []);
   useDefaultModel(models);
-
-  // ── Drones & slash commands ─────────────────────────────────────────────────
   const activeProject = projects.find((p) => p.path === selectedProject) ?? null;
   const drones = activeProject?.drones ?? [];
+
+  const setActiveSessionId = useAppStore((s) => s.setActiveSession);
+  const reloadSession = useCallback(
+    (id: string) => {
+      dispatchChat({ type: "SESSION_RESET" });
+      setActiveSessionId(null);
+      // Defer so the effect sees the null → id transition
+      queueMicrotask(() => setActiveSessionId(id));
+    },
+    [dispatchChat, setActiveSessionId],
+  );
 
   const commandCtx: SlashCommandContext = useMemo(
     () => ({
@@ -116,8 +118,10 @@ function AppInner() {
       handleNewSession,
       resetSession,
       drones,
-      dronePanelCollapsed,
-      toggleDronePanel,
+      rightSidebarCollapsed,
+      openRightSidebar,
+      activeSessionId,
+      reloadSession,
     }),
     [
       toast,
@@ -128,8 +132,10 @@ function AppInner() {
       handleNewSession,
       resetSession,
       drones,
-      dronePanelCollapsed,
-      toggleDronePanel,
+      rightSidebarCollapsed,
+      openRightSidebar,
+      activeSessionId,
+      reloadSession,
     ],
   );
 
@@ -157,10 +163,19 @@ function AppInner() {
 
       await sendMessage(message, session, selectedModel ?? undefined, images);
     },
-    [commandCtx, chatSession, turns.length, activeSessionId, addSession, sessions.length, sendMessage, selectedModel, renameSessionMutation],
+    [
+      commandCtx,
+      chatSession,
+      turns.length,
+      activeSessionId,
+      addSession,
+      sessions.length,
+      sendMessage,
+      selectedModel,
+      renameSessionMutation,
+    ],
   );
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
   const handleClearConversation = useCallback(() => {
     if (!activeSessionId) return;
     if (window.confirm("Clear this conversation?")) {
@@ -170,10 +185,8 @@ function AppInner() {
   }, [activeSessionId, resetSession, toast]);
 
   const handleDeleteCurrentSession = useCallback(() => {
-    if (!activeSessionId) return;
-    if (window.confirm("Delete this session? This cannot be undone.")) {
-      handleDeleteSession(activeSessionId);
-    }
+    if (!activeSessionId || !window.confirm("Delete this session? This cannot be undone.")) return;
+    handleDeleteSession(activeSessionId);
   }, [activeSessionId, handleDeleteSession]);
 
   useKeyboardShortcuts({
@@ -183,23 +196,22 @@ function AppInner() {
     onOpenSessions: () => setSessionsModalOpen(true),
     onDeleteSession: handleDeleteCurrentSession,
     onAbort: abort,
-    onToggleDronePanel: toggleDronePanel,
+    onToggleRightSidebar: toggleRightSidebar,
     onToggleStatus: () => setStatusPopoverOpen(!statusPopoverOpen),
+    onOpenContextPanel: () => openRightSidebar("context"),
     isStreaming,
   });
 
-  // ── Main content resolution (avoids nested ternaries) ───────────────────
   function renderMainContent() {
-    if (!authLoading && authStatus && !authStatus.configured) {
-      return <AuthSetup />;
-    }
-    // Show wizard: first-time (no projects + not completed) OR user clicked "+"
-    const showWizard =
-      isAddingProject || (registryProjects.length === 0 && !onboardingComplete);
+    if (!authLoading && authStatus && !authStatus.configured) return <AuthSetup />;
+    const showWizard = isAddingProject || (registryProjects.length === 0 && !onboardingComplete);
     if (showWizard) {
       return (
         <OnboardingWizard
-          onComplete={(p) => { handleOnboardingComplete(p); setIsAddingProject(false); }}
+          onComplete={(p) => {
+            handleOnboardingComplete(p);
+            setIsAddingProject(false);
+          }}
           onCancel={registryProjects.length > 0 ? () => setIsAddingProject(false) : undefined}
         />
       );
@@ -221,12 +233,13 @@ function AppInner() {
           contextUsage={contextUsage}
           effort={effort}
           onEffortChange={setEffort}
+          chatMode={chatMode}
+          onModeChange={setChatMode}
         />
       </>
     );
   }
 
-  // ── Mobile ────────────────────────────────────────────────────────────────
   if (isMobile) {
     return (
       <MobileNav
@@ -241,7 +254,6 @@ function AppInner() {
     );
   }
 
-  // ── Desktop ───────────────────────────────────────────────────────────────
   return (
     <div data-component="app-root" className="flex h-screen overflow-hidden">
       <IconBar
@@ -289,11 +301,18 @@ function AppInner() {
         {renderMainContent()}
       </main>
 
-      <DronePanel
+      <RightSidebar
         drones={drones}
         connectionStatus={connectionStatus}
-        collapsed={dronePanelCollapsed}
-        onToggleCollapse={toggleDronePanel}
+        turns={turns}
+        contextUsage={contextUsage ?? null}
+        session={chatSession}
+        selectedModel={selectedModel ?? undefined}
+        activeTab={rightSidebarTab}
+        collapsed={rightSidebarCollapsed}
+        onTabChange={setRightSidebarTab}
+        onToggleCollapse={toggleRightSidebar}
+        onOpen={openRightSidebar}
       />
     </div>
   );

@@ -11,6 +11,7 @@ use crate::webui::mcp_client::pool::McpPool;
 use crate::webui::tools;
 
 use super::super::context;
+use super::super::persistence;
 use super::super::session::{Effort, SessionStore};
 
 /// Parameters for the agentic loop, grouped to avoid too-many-arguments.
@@ -144,16 +145,23 @@ async fn broadcast_usage(
 
     let sessions = store.lock().await;
     if let Some(s) = sessions.get(session_id) {
+        let total_in = s.total_input_tokens;
+        let total_out = s.total_output_tokens;
+
         let usage_event = serde_json::json!({
             "type": "usage",
             "input_tokens": usage.input_tokens,
             "output_tokens": usage.output_tokens,
-            "total_input": s.total_input_tokens,
-            "total_output": s.total_output_tokens,
+            "total_input": total_in,
+            "total_output": total_out,
             "cache_creation_input_tokens": usage.cache_creation_input_tokens,
             "cache_read_input_tokens": usage.cache_read_input_tokens
         });
         let _ = tx.send(usage_event.to_string());
+        drop(sessions);
+
+        // Persist cumulative token counts to meta.json
+        persistence::update_meta_tokens(session_id, total_in, total_out);
     }
 }
 

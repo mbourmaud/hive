@@ -15,10 +15,6 @@ pub fn routes() -> Router {
         .route("/api/auth/oauth/authorize", get(handlers::oauth_authorize))
         .route("/api/auth/oauth/callback", post(handlers::oauth_callback))
         .route("/api/auth/logout", delete(handlers::logout))
-        .route(
-            "/api/auth/import",
-            post(handlers::import_claude_code_credentials),
-        )
         .route("/api/models", get(handlers::list_models))
         .route("/api/commands", get(handlers::list_commands))
 }

@@ -113,6 +113,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 
     case "REPLAY_HISTORY":
-      return replayHistory(action.session, action.events);
+      return replayHistory(action.session, action.events, action.tokenCounts);
   }
 }

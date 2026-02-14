@@ -1,0 +1,93 @@
+/* ── Message list ─────────────────────────────────────────────────────────── */
+
+[data-slot="context-panel-messages"] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Message row ─────────────────────────────────────────────────────────── */
+
+[data-slot="message-row"] {
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-slot="message-row-header"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-foreground);
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: background 100ms ease;
+}
+
+[data-slot="message-row-header"]:hover {
+  background: var(--color-muted);
+}
+
+[data-slot="message-role-badge"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+[data-slot="message-role-badge"][data-role="user"] {
+  background: oklch(from var(--color-accent) l c h / 0.15);
+  color: var(--color-accent);
+}
+
+[data-slot="message-role-badge"][data-role="assistant"] {
+  background: oklch(from var(--color-success) l c h / 0.15);
+  color: var(--color-success);
+}
+
+[data-slot="message-role-badge"][data-role="tool"] {
+  background: oklch(from var(--color-warning) l c h / 0.15);
+  color: var(--color-warning);
+}
+
+[data-slot="message-summary"] {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted-foreground);
+  font-size: 11px;
+}
+
+[data-slot="message-chevron"] {
+  flex-shrink: 0;
+  color: var(--color-muted-foreground);
+  transition: transform 150ms ease;
+}
+
+[data-slot="message-chevron"][data-expanded] {
+  transform: rotate(90deg);
+}
+
+/* ── Expanded JSON block ─────────────────────────────────────────────────── */
+
+[data-slot="message-json-wrapper"] {
+  padding: 0 16px 8px;
+  max-height: 400px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+[data-slot="message-json-wrapper"] [data-component="code-block"] {
+  margin: 0;
+  border-radius: 6px;
+}

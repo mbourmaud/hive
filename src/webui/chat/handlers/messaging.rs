@@ -22,7 +22,7 @@ use super::super::dto::SendMessageRequest;
 use super::super::persistence::{
     append_event, extract_title, read_meta, update_meta_status, write_meta,
 };
-use super::super::session::{Effort, SessionStatus, SessionStore};
+use super::super::session::{ChatMode, Effort, SessionStatus, SessionStore};
 use super::sessions::restore_session_from_disk;
 use super::spawner::{spawn_agentic_task, AgenticTaskParams};
 use super::system_prompt::{build_default_system_prompt, resolve_slash_command};
@@ -141,6 +141,13 @@ pub async fn send_message(
         }
     }
 
+    // Update chat mode if provided
+    if let Some(ref mode_str) = body.mode {
+        if let Some(mode) = ChatMode::from_str_opt(mode_str) {
+            session.chat_mode = mode;
+        }
+    }
+
     session.status = SessionStatus::Busy;
     session.abort_flag.store(false, Ordering::Relaxed);
 
@@ -193,6 +200,7 @@ pub async fn send_message(
     };
 
     let effort = session.effort;
+    let chat_mode = session.chat_mode;
     let max_turns = session.max_turns;
     let mcp_pool = session.mcp_pool.clone();
     let messages_snapshot = session.messages.clone();
@@ -225,6 +233,7 @@ pub async fn send_message(
         session_id,
         store_bg,
         effort,
+        chat_mode,
         max_turns,
         mcp_pool,
     });
@@ -237,12 +246,13 @@ pub async fn abort_session(
     State(store): State<SessionStore>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let sessions = store.lock().await;
+    let mut sessions = store.lock().await;
     let session = sessions
-        .get(&id)
+        .get_mut(&id)
         .ok_or_else(|| ApiError::NotFound(format!("Session '{id}' not found")))?;
 
     session.abort_flag.store(true, Ordering::Relaxed);
+    session.status = SessionStatus::Idle;
 
     Ok(Json(serde_json::json!({"ok": true})))
 }

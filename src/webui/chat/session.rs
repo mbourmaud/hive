@@ -50,6 +50,34 @@ impl Effort {
     }
 }
 
+/// Chat mode controlling tool availability and output format.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatMode {
+    /// Regular coding assistant — all tools available
+    Code,
+    /// Hive structured plan — no tools, outputs drone-parseable markdown
+    HivePlan,
+    /// Claude freeform plan — no tools, outputs freeform markdown
+    Plan,
+}
+
+impl ChatMode {
+    pub fn from_str_opt(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "code" => Some(Self::Code),
+            "hive-plan" => Some(Self::HivePlan),
+            "plan" => Some(Self::Plan),
+            _ => None,
+        }
+    }
+
+    /// Whether tools should be disabled in this mode.
+    pub fn tools_disabled(self) -> bool {
+        matches!(self, Self::HivePlan | Self::Plan)
+    }
+}
+
 /// A chat session backed by the Anthropic Messages API.
 pub struct ChatSession {
     pub id: String,
@@ -70,6 +98,8 @@ pub struct ChatSession {
     pub tools: Vec<ToolDefinition>,
     /// Current effort level (controls thinking budget)
     pub effort: Effort,
+    /// Current chat mode (controls tool availability and output format)
+    pub chat_mode: ChatMode,
     /// Cumulative token usage for this session
     pub total_input_tokens: u64,
     pub total_output_tokens: u64,

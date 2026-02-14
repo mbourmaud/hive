@@ -1,8 +1,9 @@
 import type { StateCreator } from "zustand";
-import type { ThemeName } from "@/shared/theme/use-theme";
 import type { StoredCustomTheme } from "@/shared/theme/custom-theme";
+import type { ThemeName } from "@/shared/theme/use-theme";
 
 export type EffortLevel = "low" | "medium" | "high";
+export type ChatMode = "code" | "hive-plan" | "plan";
 
 export interface SettingsSlice {
   selectedModel: string | null;
@@ -15,6 +16,7 @@ export interface SettingsSlice {
   sessionsModalOpen: boolean;
   statusPopoverOpen: boolean;
   effort: EffortLevel;
+  chatMode: ChatMode;
 
   setSelectedModel: (model: string | null) => void;
   toggleTheme: () => void;
@@ -27,6 +29,7 @@ export interface SettingsSlice {
   setSessionsModalOpen: (open: boolean) => void;
   setStatusPopoverOpen: (open: boolean) => void;
   setEffort: (effort: EffortLevel) => void;
+  setChatMode: (mode: ChatMode) => void;
 }
 
 export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSlice> = (set) => ({
@@ -40,6 +43,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
   sessionsModalOpen: false,
   statusPopoverOpen: false,
   effort: "medium",
+  chatMode: "code",
 
   setSelectedModel: (model) => set({ selectedModel: model }),
   toggleTheme: () => set((s) => ({ theme: s.theme === "light" ? "dark" : "light" })),
@@ -60,4 +64,5 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
   setSessionsModalOpen: (open) => set({ sessionsModalOpen: open }),
   setStatusPopoverOpen: (open) => set({ statusPopoverOpen: open }),
   setEffort: (effort) => set({ effort }),
+  setChatMode: (chatMode) => set({ chatMode }),
 });

@@ -50,6 +50,10 @@ pub struct SendMessageRequest {
     #[serde(default)]
     #[garde(skip)]
     pub effort: Option<String>,
+    /// Chat mode: "code", "hive-plan", "plan" (controls tool availability and output format)
+    #[serde(default)]
+    #[garde(skip)]
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

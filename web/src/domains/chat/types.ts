@@ -89,7 +89,20 @@ export interface UsageEvent {
   cache_read_input_tokens?: number;
 }
 
-export type StreamEvent = SystemEvent | AssistantEvent | UserEvent | ResultEvent | UsageEvent;
+export interface CompactEvent {
+  type: "compact.completed";
+  summary: string;
+  total_input: number;
+  total_output: number;
+}
+
+export type StreamEvent =
+  | SystemEvent
+  | AssistantEvent
+  | UserEvent
+  | ResultEvent
+  | UsageEvent
+  | CompactEvent;
 
 // ── Assistant part types (rendered in UI) ───────────────────────────────────
 
@@ -209,5 +222,10 @@ export type ChatAction =
   | { type: "TURN_ERROR"; turnId: string; error: string }
   | { type: "MARK_STALE" }
   | { type: "CONNECTION_ERROR"; error: string }
-  | { type: "REPLAY_HISTORY"; session: ChatSession; events: StreamEvent[] }
+  | {
+      type: "REPLAY_HISTORY";
+      session: ChatSession;
+      events: StreamEvent[];
+      tokenCounts?: { inputTokens: number; outputTokens: number };
+    }
   | { type: "DRONE_LAUNCHED"; droneName: string; prompt: string };

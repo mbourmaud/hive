@@ -157,6 +157,7 @@ export function useChat(baseUrl: string = "") {
       connectToSession(session.id, turnId);
 
       const effort = useAppStore.getState().effort;
+      const chatMode = useAppStore.getState().chatMode;
       const result = await safeFetch(`${baseUrl}/api/chat/sessions/${session.id}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,6 +165,7 @@ export function useChat(baseUrl: string = "") {
           text: message,
           model,
           effort,
+          mode: chatMode,
           images:
             images?.map((img) => ({
               data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),

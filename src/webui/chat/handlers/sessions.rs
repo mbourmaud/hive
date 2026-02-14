@@ -19,7 +19,7 @@ use super::super::dto::{
 use super::super::persistence::{
     list_persisted_sessions, load_messages, read_meta, session_dir, write_meta, SessionMeta,
 };
-use super::super::session::{ChatSession, Effort, SessionStatus, SessionStore};
+use super::super::session::{ChatMode, ChatSession, Effort, SessionStatus, SessionStore};
 
 /// POST /api/chat/sessions
 pub async fn create_session(
@@ -68,6 +68,8 @@ pub async fn create_session(
         title: "New session".to_string(),
         model: model.clone(),
         system_prompt: system_prompt.clone(),
+        total_input_tokens: 0,
+        total_output_tokens: 0,
     };
     write_meta(&meta);
 
@@ -102,6 +104,7 @@ pub async fn create_session(
         abort_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         tools: all_tools,
         effort: Effort::Medium,
+        chat_mode: ChatMode::Code,
         total_input_tokens: 0,
         total_output_tokens: 0,
         allowed_tools,
@@ -157,8 +160,9 @@ pub(super) async fn restore_session_from_disk(store: &SessionStore, id: &str) ->
         abort_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         tools: all_tools,
         effort: Effort::Medium,
-        total_input_tokens: 0,
-        total_output_tokens: 0,
+        chat_mode: ChatMode::Code,
+        total_input_tokens: meta.total_input_tokens,
+        total_output_tokens: meta.total_output_tokens,
         allowed_tools: None,
         disallowed_tools: None,
         max_turns: None,
@@ -230,16 +234,23 @@ pub async fn session_history(Path(id): Path<String>) -> ApiResult<impl IntoRespo
     };
 
     let messages = load_messages(&id);
+    let meta = read_meta(&id);
 
-    if events.is_empty() && messages.is_empty() {
+    if events.is_empty() && messages.is_empty() && meta.is_none() {
         return Err(ApiError::NotFound(format!(
             "No history found for session '{id}'"
         )));
     }
 
+    let (total_input, total_output) = meta
+        .map(|m| (m.total_input_tokens, m.total_output_tokens))
+        .unwrap_or((0, 0));
+
     Ok(Json(serde_json::json!({
         "events": events,
-        "messages": messages
+        "messages": messages,
+        "total_input_tokens": total_input,
+        "total_output_tokens": total_output
     })))
 }
 

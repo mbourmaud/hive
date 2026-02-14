@@ -131,15 +131,69 @@
   pointer-events: none;
 }
 
-/* ── Status bar ────────────────────────────────────────────────────────────── */
+/* ── Toolbar (below editor) ──────────────────────────────────────────────── */
 
-[data-slot="prompt-status"] {
-  font-size: 0.75rem;
+[data-slot="prompt-toolbar"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0.75rem 0.5rem;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
   line-height: 1rem;
   user-select: none;
+  min-height: 2.25rem;
 }
 
-/* ── Streaming pulse on status indicator ───────────────────────────────────── */
+[data-slot="toolbar-left"] {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+[data-slot="toolbar-right"] {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+/* ── Status indicator ────────────────────────────────────────────────────── */
+
+[data-slot="status-indicator"] {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  padding-right: 0.25rem;
+  white-space: nowrap;
+}
+
+[data-slot="status-indicator"] [data-slot="status-dot"] {
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+[data-slot="status-indicator"][data-variant="ready"] [data-slot="status-dot"] {
+  background: var(--success);
+}
+
+[data-slot="status-indicator"][data-variant="busy"] [data-slot="status-dot"] {
+  background: var(--accent);
+  animation: status-pulse 1.5s ease-in-out infinite;
+}
+
+[data-slot="status-indicator"][data-variant="error"] [data-slot="status-dot"] {
+  background: var(--destructive);
+}
+
+/* ── Streaming pulse ─────────────────────────────────────────────────────── */
 
 @keyframes status-pulse {
   0%,
@@ -147,10 +201,56 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.4;
   }
 }
 
-[data-streaming="true"] [data-slot="status-dot"] {
-  animation: status-pulse 1.5s ease-in-out infinite;
+/* ── Cycle pill ──────────────────────────────────────────────────────────── */
+
+[data-component="cycle-pill-wrapper"] {
+  position: relative;
+}
+
+[data-component="cycle-pill"] {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+[data-component="cycle-pill"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* ── Pill tooltip ────────────────────────────────────────────────────────── */
+
+[data-slot="pill-tooltip"] {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  color: var(--popover-foreground);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 60;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.15);
+  animation: tooltip-in 0.15s ease-out;
+}
+
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }

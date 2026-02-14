@@ -6,7 +6,7 @@ use crate::webui::auth::credentials;
 use crate::webui::mcp_client::pool::McpPool;
 
 use super::super::persistence::{append_event, save_messages, update_meta_status};
-use super::super::session::{Effort, SessionStatus, SessionStore};
+use super::super::session::{ChatMode, Effort, SessionStatus, SessionStore};
 use super::agentic::{run_agentic_loop, AgenticLoopParams};
 
 use anthropic::types::Message;
@@ -23,6 +23,7 @@ pub(super) struct AgenticTaskParams {
     pub session_id: String,
     pub store_bg: SessionStore,
     pub effort: Effort,
+    pub chat_mode: ChatMode,
     pub max_turns: Option<usize>,
     pub mcp_pool: Option<Arc<tokio::sync::Mutex<McpPool>>>,
 }
@@ -40,9 +41,17 @@ pub(super) fn spawn_agentic_task(params: AgenticTaskParams) {
         session_id,
         store_bg,
         effort,
+        chat_mode,
         max_turns,
         mcp_pool,
     } = params;
+
+    // Strip tools when in plan modes (Hive Plan / Plan)
+    let tools_opt = if chat_mode.tools_disabled() {
+        None
+    } else {
+        tools_opt
+    };
 
     tokio::spawn(async move {
         let mut rx = tx.subscribe();

@@ -1,12 +1,6 @@
-import type {
-  ChatSession,
-  ChatState,
-  StreamEvent,
-  UserEvent,
-  UserTextBlock,
-} from "./types";
-import { initialChatState, updateTurn } from "./reducer-utils";
 import { processStreamEvent } from "./event-processors";
+import { initialChatState, updateTurn } from "./reducer-utils";
+import type { ChatSession, ChatState, StreamEvent, UserEvent, UserTextBlock } from "./types";
 
 // ── Replay helpers ─────────────────────────────────────────────────────────
 
@@ -46,6 +40,7 @@ function ensureTurnForEvent(
 export function replayHistory(
   session: ChatSession,
   events: StreamEvent[],
+  tokenCounts?: { inputTokens: number; outputTokens: number },
 ): ChatState {
   let replayed: ChatState = {
     ...initialChatState,
@@ -71,7 +66,7 @@ export function replayHistory(
 
     replayed = processStreamEvent(replayed, event);
 
-    if (event.type === "result") {
+    if (event.type === "result" || event.type === "compact.completed") {
       replayed = { ...replayed, currentTurnId: null, isStreaming: false };
     }
   }
@@ -87,6 +82,22 @@ export function replayHistory(
       })),
       currentTurnId: null,
       isStreaming: false,
+    };
+  }
+
+  // Apply persisted token counts from meta.json (authoritative source).
+  // The events.ndjson may miss the final usage events if persist_handle
+  // was aborted before they were written, so prefer the meta values.
+  if (tokenCounts && tokenCounts.inputTokens > 0) {
+    replayed = {
+      ...replayed,
+      contextUsage: {
+        inputTokens: tokenCounts.inputTokens,
+        outputTokens: tokenCounts.outputTokens,
+        cacheReadTokens: replayed.contextUsage?.cacheReadTokens,
+        cacheWriteTokens: replayed.contextUsage?.cacheWriteTokens,
+        totalCost: replayed.contextUsage?.totalCost,
+      },
     };
   }
 

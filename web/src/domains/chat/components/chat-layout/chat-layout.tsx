@@ -1,17 +1,22 @@
 import { ArrowDown } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import beeIcon from "@/assets/bee-icon.png";
-import type { EffortLevel } from "@/domains/settings/store";
+import type { ChatMode, EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
-import { isDialogOpen, isEditingElement, useKeybinds } from "@/shared/hooks/use-keybinds";
 import type { ChatTurn, ContextUsage, ImageAttachment } from "../../types";
 import { DroneStatusCard } from "../drone-status-card";
 import { PromptInput } from "../prompt-input";
 import { SessionTurn } from "../session-turn";
 import "../chat-layout.css";
 
+import { useAutoCompact } from "../../use-auto-compact";
 import { SUGGESTION_PROMPTS } from "./constants";
-import { useAutoScroll, useProgressiveRender, useScrollButtonVisibility } from "./hooks";
+import {
+  useAutoScroll,
+  useMessageNavigation,
+  useProgressiveRender,
+  useScrollButtonVisibility,
+} from "./hooks";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +34,8 @@ interface ChatLayoutProps {
   contextUsage?: ContextUsage | null;
   effort?: EffortLevel;
   onEffortChange?: (effort: EffortLevel) => void;
+  chatMode?: ChatMode;
+  onModeChange?: (mode: ChatMode) => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -47,7 +54,12 @@ export function ChatLayout({
   contextUsage,
   effort,
   onEffortChange,
+  chatMode,
+  onModeChange,
 }: ChatLayoutProps) {
+  // Auto-compact when context usage exceeds 80% threshold
+  useAutoCompact();
+
   // Steps expansion state — track per-turn
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
 
@@ -86,92 +98,8 @@ export function ChatLayout({
   const currentTurn = turns.find((t) => t.id === currentTurnId);
   const turnStatus = currentTurn?.status ?? null;
 
-  // ── j/k message navigation ──────────────────────────────────────────────
-  const [focusedTurnIndex, setFocusedTurnIndex] = useState<number | null>(null);
-
-  const focusPromptEditor = useCallback(() => {
-    const editor = document.querySelector<HTMLElement>('[data-slot="prompt-editor"]');
-    editor?.focus();
-  }, []);
-
-  useKeybinds(
-    useMemo(
-      () => [
-        {
-          key: "j",
-          handler: () =>
-            setFocusedTurnIndex((prev) => {
-              const max = visibleTurns.length - 1;
-              if (prev === null) return 0;
-              return Math.min(prev + 1, max);
-            }),
-        },
-        {
-          key: "ArrowDown",
-          handler: () =>
-            setFocusedTurnIndex((prev) => {
-              const max = visibleTurns.length - 1;
-              if (prev === null) return 0;
-              return Math.min(prev + 1, max);
-            }),
-        },
-        {
-          key: "k",
-          handler: () =>
-            setFocusedTurnIndex((prev) => {
-              if (prev === null) return visibleTurns.length - 1;
-              return Math.max(prev - 1, 0);
-            }),
-        },
-        {
-          key: "ArrowUp",
-          handler: () =>
-            setFocusedTurnIndex((prev) => {
-              if (prev === null) return visibleTurns.length - 1;
-              return Math.max(prev - 1, 0);
-            }),
-        },
-        {
-          key: "i",
-          handler: () => {
-            setFocusedTurnIndex(null);
-            focusPromptEditor();
-          },
-        },
-        {
-          key: "Escape",
-          handler: () => setFocusedTurnIndex(null),
-          ignoreEditing: false,
-        },
-      ],
-      [visibleTurns.length, focusPromptEditor],
-    ),
-  );
-
-  // Auto-focus prompt on printable keypress
-  useEffect(() => {
-    function handlePrintableKey(e: KeyboardEvent) {
-      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (isDialogOpen()) return;
-      if (isEditingElement(document.activeElement)) return;
-      focusPromptEditor();
-    }
-    document.addEventListener("keydown", handlePrintableKey);
-    return () => document.removeEventListener("keydown", handlePrintableKey);
-  }, [focusPromptEditor]);
-
-  // Scroll focused turn into view
-  useEffect(() => {
-    if (focusedTurnIndex === null) return;
-    const turn = visibleTurns[focusedTurnIndex];
-    if (!turn) return;
-    const el = document.querySelector<HTMLElement>(
-      `[data-component="session-turn"][data-turn-id="${turn.id}"]`,
-    );
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [focusedTurnIndex, visibleTurns]);
+  // j/k message navigation (extracted hook)
+  const { focusedTurnIndex } = useMessageNavigation(visibleTurns);
 
   if (!hasSession && turns.length === 0) {
     return (
@@ -233,6 +161,8 @@ export function ChatLayout({
           contextUsage={contextUsage}
           effort={effort}
           onEffortChange={onEffortChange}
+          chatMode={chatMode}
+          onModeChange={onModeChange}
         />
       </div>
     );
@@ -289,6 +219,8 @@ export function ChatLayout({
         contextUsage={contextUsage}
         effort={effort}
         onEffortChange={onEffortChange}
+        chatMode={chatMode}
+        onModeChange={onModeChange}
       />
     </div>
   );

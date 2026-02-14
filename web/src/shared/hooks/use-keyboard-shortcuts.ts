@@ -10,8 +10,9 @@ interface KeyboardShortcutHandlers {
   onOpenSessions: () => void;
   onDeleteSession: () => void;
   onAbort: () => void;
-  onToggleDronePanel?: () => void;
+  onToggleRightSidebar?: () => void;
   onToggleStatus?: () => void;
+  onOpenContextPanel?: () => void;
   isStreaming: boolean;
 }
 
@@ -24,8 +25,9 @@ export function useKeyboardShortcuts({
   onOpenSessions,
   onDeleteSession,
   onAbort,
-  onToggleDronePanel,
+  onToggleRightSidebar,
   onToggleStatus,
+  onOpenContextPanel,
   isStreaming,
 }: KeyboardShortcutHandlers): void {
   const bindings: KeyBinding[] = useMemo(
@@ -48,9 +50,10 @@ export function useKeyboardShortcuts({
       { key: ",", mod: true, handler: onOpenSettings },
       { key: "k", mod: true, handler: onOpenCommandPalette },
       { key: "e", mod: true, handler: onOpenSessions },
-      { key: "b", mod: true, handler: () => onToggleDronePanel?.() },
+      { key: "b", mod: true, handler: () => onToggleRightSidebar?.() },
       { key: ".", mod: true, handler: () => onToggleStatus?.() },
       { key: "Backspace", mod: true, shift: true, handler: onDeleteSession },
+      { key: "i", mod: true, handler: () => onOpenContextPanel?.() },
     ],
     [
       onNewSession,
@@ -59,8 +62,9 @@ export function useKeyboardShortcuts({
       onOpenSessions,
       onDeleteSession,
       onAbort,
-      onToggleDronePanel,
+      onToggleRightSidebar,
       onToggleStatus,
+      onOpenContextPanel,
       isStreaming,
     ],
   );

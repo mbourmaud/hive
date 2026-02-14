@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  isDialogOpen,
+  isEditingElement,
+  type KeyBinding,
+  useKeybinds,
+} from "@/shared/hooks/use-keybinds";
 import type { ChatTurn } from "../../types";
 import { INITIAL_RENDER_COUNT, SCROLL_THRESHOLD } from "./constants";
 
@@ -154,4 +160,92 @@ export function useScrollButtonVisibility(
   }, [visible, turnCount]);
 
   return { visible, newCount };
+}
+
+// ── j/k message navigation hook ──────────────────────────────────────────────
+
+export function useMessageNavigation(visibleTurns: ChatTurn[]) {
+  const [focusedTurnIndex, setFocusedTurnIndex] = useState<number | null>(null);
+
+  const focusPromptEditor = useCallback(() => {
+    const editor = document.querySelector<HTMLElement>('[data-slot="prompt-editor"]');
+    editor?.focus();
+  }, []);
+
+  const bindings: KeyBinding[] = useMemo(
+    () => [
+      {
+        key: "j",
+        handler: () =>
+          setFocusedTurnIndex((prev) => {
+            const max = visibleTurns.length - 1;
+            if (prev === null) return 0;
+            return Math.min(prev + 1, max);
+          }),
+      },
+      {
+        key: "ArrowDown",
+        handler: () =>
+          setFocusedTurnIndex((prev) => {
+            const max = visibleTurns.length - 1;
+            if (prev === null) return 0;
+            return Math.min(prev + 1, max);
+          }),
+      },
+      {
+        key: "k",
+        handler: () =>
+          setFocusedTurnIndex((prev) => {
+            if (prev === null) return visibleTurns.length - 1;
+            return Math.max(prev - 1, 0);
+          }),
+      },
+      {
+        key: "ArrowUp",
+        handler: () =>
+          setFocusedTurnIndex((prev) => {
+            if (prev === null) return visibleTurns.length - 1;
+            return Math.max(prev - 1, 0);
+          }),
+      },
+      {
+        key: "i",
+        handler: () => {
+          setFocusedTurnIndex(null);
+          focusPromptEditor();
+        },
+      },
+      { key: "Escape", handler: () => setFocusedTurnIndex(null), ignoreEditing: false },
+    ],
+    [visibleTurns.length, focusPromptEditor],
+  );
+
+  useKeybinds(bindings);
+
+  // Auto-focus prompt on printable keypress
+  useEffect(() => {
+    function handlePrintableKey(e: KeyboardEvent) {
+      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isDialogOpen()) return;
+      if (isEditingElement(document.activeElement)) return;
+      focusPromptEditor();
+    }
+    document.addEventListener("keydown", handlePrintableKey);
+    return () => document.removeEventListener("keydown", handlePrintableKey);
+  }, [focusPromptEditor]);
+
+  // Scroll focused turn into view
+  useEffect(() => {
+    if (focusedTurnIndex === null) return;
+    const turn = visibleTurns[focusedTurnIndex];
+    if (!turn) return;
+    const el = document.querySelector<HTMLElement>(
+      `[data-component="session-turn"][data-turn-id="${turn.id}"]`,
+    );
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusedTurnIndex, visibleTurns]);
+
+  return { focusedTurnIndex };
 }

@@ -15,6 +15,12 @@ pub struct SessionMeta {
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+    /// Cumulative input tokens (persisted for context usage display)
+    #[serde(default)]
+    pub total_input_tokens: u64,
+    /// Cumulative output tokens (persisted for context usage display)
+    #[serde(default)]
+    pub total_output_tokens: u64,
 }
 
 fn sessions_dir() -> PathBuf {
@@ -98,6 +104,14 @@ pub fn update_meta_status(id: &str, status: &str) {
     if let Some(mut meta) = read_meta(id) {
         meta.status = status.to_string();
         meta.updated_at = chrono::Utc::now().to_rfc3339();
+        write_meta(&meta);
+    }
+}
+
+pub fn update_meta_tokens(id: &str, input_tokens: u64, output_tokens: u64) {
+    if let Some(mut meta) = read_meta(id) {
+        meta.total_input_tokens = input_tokens;
+        meta.total_output_tokens = output_tokens;
         write_meta(&meta);
     }
 }
