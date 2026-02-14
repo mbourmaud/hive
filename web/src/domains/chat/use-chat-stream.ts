@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { apiClient } from "@/shared/api/client";
+import { safeFetch } from "@/shared/api/safe-fetch";
 import { useAppStore } from "@/store";
-import type { ChatSession, ImageAttachment, StreamEvent } from "./types";
 import { coalesceEvents, isStreamEvent } from "./event-coalescing";
+import type { ChatSession, ImageAttachment, StreamEvent } from "./types";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -155,34 +156,36 @@ export function useChat(baseUrl: string = "") {
 
       connectToSession(session.id, turnId);
 
-      try {
-        const effort = useAppStore.getState().effort;
-        const res = await fetch(`${baseUrl}/api/chat/sessions/${session.id}/message`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: message,
-            model,
-            effort,
-            images:
-              images?.map((img) => ({
-                data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),
-                media_type: img.mimeType,
-              })) ?? [],
-          }),
-          signal: controller.signal,
-        });
+      const effort = useAppStore.getState().effort;
+      const result = await safeFetch(`${baseUrl}/api/chat/sessions/${session.id}/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: message,
+          model,
+          effort,
+          images:
+            images?.map((img) => ({
+              data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+              media_type: img.mimeType,
+            })) ?? [],
+        }),
+        signal: controller.signal,
+      });
 
-        if (!res.ok) {
-          const text = await res.text();
-          dispatchChat({ type: "TURN_ERROR", turnId, error: text });
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
+      if (result.ok) return;
+
+      switch (result.type) {
+        case "aborted":
           return;
+        case "network":
+        case "api":
+          dispatchChat({ type: "TURN_ERROR", turnId, error: result.message });
+          return;
+        default: {
+          const _exhaustive: never = result;
+          return _exhaustive;
         }
-        const errorMsg = err instanceof Error ? err.message : "Unknown error";
-        dispatchChat({ type: "TURN_ERROR", turnId, error: errorMsg });
       }
     },
     [baseUrl, dispatchChat, connectToSession],
