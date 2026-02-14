@@ -84,7 +84,7 @@ jobs:
         working-directory: desktop
 
       - name: Build desktop app
-        run: npx tauri build --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":""}}'
         working-directory: desktop
 
       - name: Upload build artifacts
