@@ -4,7 +4,7 @@
   height: 32px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 0 16px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-sidebar);
@@ -13,22 +13,87 @@
   overflow: hidden;
 }
 
+/* ── Git branch ──────────────────────────────────────────────────────── */
+
 [data-slot="context-bar-git"] {
   display: flex;
   align-items: center;
-  gap: 4px;
-  color: var(--color-foreground);
+  gap: 5px;
+  color: oklch(0.7 0.15 30);
   font-weight: 500;
 }
 
-[data-slot="context-bar-runtimes"] {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+[data-slot="context-bar-branch"] {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Ahead / behind sync badges */
+[data-slot="context-bar-sync"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+[data-slot="context-bar-sync"][data-variant="ahead"] {
+  background: oklch(0.72 0.19 142 / 12%);
+  color: oklch(0.72 0.19 142);
+}
+
+[data-slot="context-bar-sync"][data-variant="behind"] {
+  background: oklch(0.75 0.16 70 / 12%);
+  color: oklch(0.75 0.16 70);
+}
+
+/* ── Runtime pills ───────────────────────────────────────────────────── */
+
+[data-slot="context-bar-runtime"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--rt-color);
+  background: var(--rt-bg);
+}
+
+[data-slot="context-bar-runtime-fallback"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+}
+
+/* ── PR / MR pill ────────────────────────────────────────────────────── */
+
 [data-slot="context-bar-pr"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
   cursor: pointer;
+  border: none;
   transition: opacity 120ms ease;
 }
 
@@ -36,10 +101,26 @@
   opacity: 0.8;
 }
 
+/* Platform color via CSS custom properties */
+[data-slot="context-bar-pr"] {
+  color: var(--pr-color, var(--color-foreground));
+  background: var(--pr-bg, var(--color-muted));
+}
+
+/* Draft label */
+[data-slot="context-bar-draft"] {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* ── Dirty indicator ─────────────────────────────────────────────────── */
+
 [data-slot="context-bar-dirty"] {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--color-muted-foreground);
+  color: oklch(0.75 0.16 70);
   margin-left: auto;
 }

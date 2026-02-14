@@ -7,6 +7,7 @@ pub mod logs;
 pub mod mcp_client;
 pub mod monitor;
 pub mod projects;
+pub mod status;
 pub mod tools;
 
 use anyhow::Result;
@@ -40,10 +41,11 @@ pub async fn start_server_async(port: u16) -> Result<()> {
 
     let app = Router::new()
         .route("/", get(serve_index))
-        .merge(monitor::routes(monitor_state))
+        .merge(monitor::routes(monitor_state.clone()))
         .merge(logs::routes())
         .merge(auth::routes())
-        .merge(chat::routes(chat_sessions))
+        .merge(chat::routes(chat_sessions.clone()))
+        .merge(status::routes(chat_sessions, monitor_state))
         .merge(projects::routes())
         .fallback(get(serve_index))
         .layer(CorsLayer::permissive());

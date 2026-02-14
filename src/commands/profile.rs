@@ -7,10 +7,13 @@ use std::path::PathBuf;
 
 /// Claude wrapper profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct Profile {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub claude_wrapper: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<Vec<(String, String)>>,
     pub created: String,
     pub updated: String,

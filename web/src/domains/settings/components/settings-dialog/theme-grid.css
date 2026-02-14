@@ -1,0 +1,113 @@
+/* ── Theme grid ────────────────────────────────────────────────────────── */
+
+[data-slot="settings-theme-grid"] {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+[data-slot="settings-theme-card"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+[data-slot="settings-theme-card"]:hover {
+  border-color: var(--color-foreground);
+}
+
+[data-slot="settings-theme-card"][data-active] {
+  border-color: var(--color-accent);
+  background: oklch(from var(--color-accent) l c h / 6%);
+}
+
+[data-slot="settings-theme-swatch"] {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-sm, 4px);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-slot="settings-theme-accent"] {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+[data-slot="settings-theme-label"] {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="settings-theme-card"][data-active] [data-slot="settings-theme-label"] {
+  color: var(--color-accent);
+}
+
+/* ── Theme import/export actions ───────────────────────────────────────── */
+
+[data-slot="settings-theme-action"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+[data-slot="settings-theme-action"]:hover {
+  color: var(--color-foreground);
+  border-color: var(--color-foreground);
+}
+
+/* ── Custom theme delete button ───────────────────────────────────────── */
+
+[data-slot="settings-theme-card"][data-custom] {
+  position: relative;
+}
+
+[data-slot="settings-theme-delete"] {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  opacity: 0;
+  transition:
+    opacity 150ms ease,
+    color 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-slot="settings-theme-card"][data-custom]:hover [data-slot="settings-theme-delete"] {
+  opacity: 1;
+}
+
+[data-slot="settings-theme-delete"]:hover {
+  color: var(--color-destructive);
+  border-color: var(--color-destructive);
+}

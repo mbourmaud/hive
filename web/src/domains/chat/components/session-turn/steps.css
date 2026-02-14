@@ -1,0 +1,110 @@
+/* ── Steps trigger ───────────────────────────────────────────────────────── */
+
+[data-slot="steps-trigger"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  margin-top: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  border-top: 1px solid var(--color-border);
+  transition: opacity 100ms ease;
+}
+
+[data-slot="steps-trigger"]:hover {
+  opacity: 0.8;
+}
+
+[data-slot="steps-trigger-left"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-slot="steps-trigger-count"] {
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+
+[data-slot="steps-trigger-status"] {
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="steps-trigger-duration"] {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted-foreground);
+}
+
+/* ── Steps content ───────────────────────────────────────────────────────── */
+
+[data-slot="steps-content"] {
+  margin-left: 12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 12px;
+  padding-top: 4px;
+  padding-bottom: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-slot="steps-content"] > :first-child [data-slot="step-text-body"] {
+  margin-top: 0;
+}
+
+/* ── Step: text ──────────────────────────────────────────────────────────── */
+
+[data-slot="step-text"] {
+  position: relative;
+  width: 100%;
+}
+
+[data-slot="step-text-body"] {
+  position: relative;
+  margin-top: 16px;
+}
+
+[data-slot="step-text-body"] > :first-child {
+  margin-top: 0;
+}
+
+[data-slot="step-text-copy"] {
+  position: absolute;
+  top: -28px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted-foreground);
+  z-index: 1;
+}
+
+[data-slot="step-text-body"]:hover [data-slot="step-text-copy"] {
+  opacity: 1;
+}
+
+[data-slot="step-text-copy"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-secondary);
+}
+
+[data-slot="step-text-copy"]:focus-visible {
+  opacity: 1;
+}

@@ -79,6 +79,47 @@ tests/                  # Rust test suite
 
 ---
 
+## Design Principles
+
+### File size limit — 300 lines max
+
+**No file may exceed 300 lines of code.** This is a hard limit for both Rust (`.rs`) and TypeScript/React (`.ts`, `.tsx`). If a file approaches this limit, split it before it grows further. Strategies:
+- **Extract hooks**: Reusable stateful logic → `use-<name>.ts` (e.g., `use-session-manager.ts`)
+- **Extract sub-components**: Visual sections → named component files (e.g., `ThemePanel`, `KeybindsPanel`)
+- **Extract pure logic**: Reducers, validators, parsers → standalone modules
+- **Extract types**: Large type definitions → `types.ts` co-located with the domain
+
+### SOLID
+
+- **Single Responsibility**: Each file, function, and component does one thing. A component renders UI *or* manages state — not both. A hook manages one concern (sessions, detection, streaming), not the entire app.
+- **Open/Closed**: Extend behavior through composition (tool registry, theme system, slash commands) rather than modifying existing code. New tools plug in via side-effect imports, not by editing a switch statement.
+- **Liskov Substitution**: Subtypes must be substitutable. Use discriminated unions (`StreamEvent`, `AssistantPart`) so consumers handle all variants through exhaustive checks, not `instanceof`.
+- **Interface Segregation**: Keep interfaces focused. A hook returns only what callers need — don't return the entire store. Props should be minimal: pass specific callbacks, not whole objects.
+- **Dependency Inversion**: Depend on abstractions. Components receive data + callbacks via props, not direct store access. Hooks like `useSessionManager` accept an options object, not global singletons.
+
+### DRY — Don't Repeat Yourself
+
+- **Shared UI**: Reuse existing `data-slot` CSS selectors across components (e.g., theme cards in both settings and onboarding wizard share `settings-dialog.css`).
+- **Shared logic**: Extract repeated patterns into hooks or utility functions. If the same 5+ lines appear in 2+ places, extract.
+- **Shared types**: Define types once in the domain's `types.ts`, import everywhere. Never redeclare the same shape.
+- **But avoid premature abstraction**: Three similar lines are better than a premature helper. DRY applies when the duplication is *exact and intentional*, not when code merely looks similar.
+
+### KISS — Keep It Simple
+
+- **No over-engineering**: Don't add abstractions, wrappers, or indirection layers for hypothetical future needs. Solve today's problem.
+- **Flat over nested**: Prefer early returns over deeply nested conditionals. Prefer composition over inheritance.
+- **Explicit over clever**: No meta-programming, Proxy objects, or dynamically generated code. Readable > concise.
+- **Minimal state**: Derive values from existing state instead of storing redundant copies. Use `useMemo` for derived computations, not extra state variables.
+- **Delete dead code**: Unused exports, commented-out blocks, and backwards-compatibility shims should be removed, not left "just in case."
+
+### Composition over configuration
+
+- **Hooks compose**: Small, focused hooks combine in components (`useSessionManager` + `useDetection` + `useTheme` in `App.tsx`).
+- **Components compose**: `<ChatLayout>` renders `<SessionTurn>` renders `<BasicTool>` renders tool-specific parts.
+- **CSS composes**: `data-slot` selectors are reusable building blocks. Atomic Tailwind classes compose for one-off layouts.
+
+---
+
 ## Code Standards
 
 ### Rust
@@ -88,6 +129,7 @@ tests/                  # Rust test suite
 - **Locking**: Use `tokio::sync::Mutex` for state shared across `.await` points. Use `std::sync::Mutex` only for synchronous-only access. Prefer `RwLock` when reads outnumber writes.
 - **Process management**: Always handle `Child` process cleanup. Use `tokio::select!` for timeout + process wait patterns. Send SIGTERM before SIGKILL.
 - **Serde**: Derive `Serialize`/`Deserialize` with `#[serde(rename_all = "snake_case")]`. Use `#[serde(skip_serializing_if = "Option::is_none")]` for optional fields.
+- **File size**: Keep modules under 300 lines (see Design Principles). Split into submodules with `mod.rs` re-exports when approaching the limit.
 - **Clippy**: Run `cargo clippy -- -W clippy::all` before committing. Fix all warnings.
 - **Tests**: Use `#[tokio::test]` for async tests. Avoid `set_current_dir` in tests (causes race conditions).
 
@@ -111,7 +153,7 @@ tests/                  # Rust test suite
 
 **React patterns**:
 - **Hooks**: Follow rules of hooks strictly. Only wrap in `useCallback`/`useMemo` when there's a measurable perf benefit or a dependency requires stable references.
-- **Components**: Use `data-component` and `data-slot` CSS selectors (not className-based styling) for component structure. Keep components focused — extract when >200 lines.
+- **Components**: Use `data-component` and `data-slot` CSS selectors (not className-based styling) for component structure. Keep components focused — extract when approaching 300 lines (see Design Principles).
 - **Events**: Always clean up event listeners, timers, observers in `useEffect` return functions.
 - **Keys**: Use stable, unique IDs for list keys — never array indices.
 

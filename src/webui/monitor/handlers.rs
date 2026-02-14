@@ -107,16 +107,9 @@ pub async fn launch_drone(
     let name = body.name.clone();
     let prompt = body.prompt.clone();
     let model = body.model.clone();
-    let mode = body.mode.clone();
 
     if name.is_empty() {
         return Err(ApiError::BadRequest("Drone name is required".to_string()));
-    }
-
-    if mode != "agent-team" && mode != "agent" {
-        return Err(ApiError::BadRequest(
-            "Mode must be 'agent-team' or 'agent'".to_string(),
-        ));
     }
 
     // Create a plan file from the prompt
@@ -138,7 +131,7 @@ pub async fn launch_drone(
 
     // Spawn `hive start` in a blocking task (reuses all existing CLI logic)
     let result = tokio::task::spawn_blocking(move || {
-        crate::commands::start::run(name.clone(), false, model, 3, mode, false)
+        crate::commands::start::run(name.clone(), false, model, 3, false)
     })
     .await
     .map_err(|e| ApiError::Internal(anyhow::anyhow!("Spawn failed: {e}")))?;

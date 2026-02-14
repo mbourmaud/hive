@@ -1,7 +1,7 @@
 /* Markdown renderer styles — mirrors OpenCode's markdown.css */
 
 [data-component="markdown"] {
-  font-size: 14px;
+  font-size: var(--font-size-base, 14px);
   line-height: 1.8;
   color: var(--color-foreground);
   word-wrap: break-word;
@@ -58,7 +58,7 @@
 /* Code blocks (pre > code) */
 [data-component="markdown"] pre {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-size-code, 13px);
   line-height: 1.5;
   padding: 8px 12px;
   border-radius: 4px;
@@ -156,7 +156,7 @@
   width: 100%;
   border-collapse: collapse;
   margin: 0.5em 0;
-  font-size: 13px;
+  font-size: var(--font-size-code, 13px);
 }
 
 [data-component="markdown"] th {

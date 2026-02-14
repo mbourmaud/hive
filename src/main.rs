@@ -30,9 +30,6 @@ enum Commands {
         /// Maximum concurrent agents in the team (default: 3)
         #[arg(long, default_value = "3")]
         max_agents: usize,
-        /// Execution mode: agent-team (multi-agent) or agent (solo)
-        #[arg(long, default_value = "agent-team")]
-        mode: String,
         /// Dry run - don't launch Claude
         #[arg(long)]
         dry_run: bool,
@@ -164,10 +161,9 @@ fn main() {
             local,
             model,
             max_agents,
-            mode,
             dry_run,
         } => {
-            if let Err(e) = commands::start::run(name, local, model, max_agents, mode, dry_run) {
+            if let Err(e) = commands::start::run(name, local, model, max_agents, dry_run) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -1,3 +1,4 @@
+mod message_parsing;
 pub(crate) mod messages;
 pub(crate) mod tools;
 

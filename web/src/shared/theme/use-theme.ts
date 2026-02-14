@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useAppStore } from "@/store";
+import { applyCustomThemeColors, clearCustomThemeColors } from "./custom-theme";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ export const THEMES: ThemeInfo[] = [
 export function useTheme() {
   const theme = useAppStore((s) => s.theme);
   const colorTheme = useAppStore((s) => s.colorTheme);
+  const activeCustomThemeId = useAppStore((s) => s.activeCustomThemeId);
+  const customThemes = useAppStore((s) => s.customThemes);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const setColorTheme = useAppStore((s) => s.setColorTheme);
 
@@ -67,12 +70,25 @@ export function useTheme() {
     const root = document.documentElement;
     root.setAttribute("data-theme", theme);
 
+    // If a custom theme is active, apply its colors directly as CSS vars
+    if (activeCustomThemeId) {
+      const custom = customThemes.find((t) => t.id === activeCustomThemeId);
+      if (custom) {
+        root.removeAttribute("data-color-theme");
+        const colors = theme === "dark" ? custom.dark : custom.light;
+        applyCustomThemeColors(colors);
+        return;
+      }
+    }
+
+    // Built-in theme — clear any custom CSS vars and use data-color-theme
+    clearCustomThemeColors();
     if (colorTheme === "hive") {
       root.removeAttribute("data-color-theme");
     } else {
       root.setAttribute("data-color-theme", colorTheme);
     }
-  }, [theme, colorTheme]);
+  }, [theme, colorTheme, activeCustomThemeId, customThemes]);
 
   return { theme, toggleTheme, themeName: colorTheme, setThemeName: setColorTheme };
 }

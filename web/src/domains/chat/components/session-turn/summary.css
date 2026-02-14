@@ -1,0 +1,245 @@
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+
+[data-slot="turn-summary-section"] {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 12px;
+}
+
+[data-slot="turn-summary-header"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  align-self: stretch;
+}
+
+[data-slot="turn-summary-title-row"] {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-slot="turn-summary-title"] {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="turn-summary-copy"] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="turn-summary-header"]:hover [data-slot="turn-summary-copy"],
+[data-slot="turn-summary-header"]:focus-within [data-slot="turn-summary-copy"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-slot="turn-summary-copy"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-secondary);
+}
+
+[data-slot="turn-summary"] {
+  position: relative;
+  width: 100%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+[data-slot="turn-summary"][data-streaming] {
+  animation: none;
+  margin-top: 12px;
+}
+
+/* ── Error card ──────────────────────────────────────────────────────────── */
+
+[data-slot="turn-error"] {
+  margin-top: 8px;
+  padding: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: 6px;
+  border: 1px solid var(--color-destructive);
+  background: oklch(from var(--color-destructive) l c h / 8%);
+  color: var(--color-destructive);
+}
+
+[data-slot="turn-error"] pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Drone status card ────────────────────────────────────────────────────── */
+
+[data-component="drone-status-card"] {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--color-surface-inset);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-component="drone-status-card"][data-active] {
+  border-color: var(--color-accent);
+  border-left-width: 3px;
+}
+
+[data-slot="drone-card-header"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+[data-slot="drone-card-header-left"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-slot="drone-card-name"] {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-foreground);
+}
+
+[data-slot="drone-card-liveness"] {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="drone-card-liveness"][data-liveness="working"] {
+  background: oklch(0.55 0.15 145 / 15%);
+  color: oklch(0.55 0.15 145);
+}
+
+[data-slot="drone-card-liveness"][data-liveness="done"] {
+  background: oklch(0.55 0.15 145 / 15%);
+  color: oklch(0.55 0.15 145);
+}
+
+[data-slot="drone-card-liveness"][data-liveness="stalled"],
+[data-slot="drone-card-liveness"][data-liveness="error"] {
+  background: oklch(0.55 0.15 25 / 15%);
+  color: var(--color-destructive);
+}
+
+[data-slot="drone-card-elapsed"] {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="drone-card-prompt"] {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+  margin: 0;
+}
+
+[data-slot="drone-card-progress"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-slot="drone-card-progress-bar"] {
+  flex: 1;
+  height: 4px;
+  background: var(--color-muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+[data-slot="drone-card-progress-fill"] {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transition: width 300ms ease;
+}
+
+[data-slot="drone-card-progress-label"] {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+[data-slot="drone-card-tasks"] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-slot="drone-card-task"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-foreground);
+}
+
+[data-slot="drone-card-task"][data-status="pending"] {
+  opacity: 0.5;
+}
+
+[data-slot="drone-card-task-owner"] {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  margin-left: auto;
+}
+
+[data-slot="drone-card-agents"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+[data-slot="drone-card-cost"] {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-slot="drone-card-error"] {
+  font-size: 12px;
+  color: var(--color-destructive);
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: oklch(from var(--color-destructive) l c h / 8%);
+}

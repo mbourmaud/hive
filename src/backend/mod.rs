@@ -1,4 +1,5 @@
 pub mod agent_team;
+pub mod native_team;
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -6,6 +7,7 @@ use std::path::PathBuf;
 use crate::types::StructuredTask;
 
 /// Configuration for spawning a drone process.
+#[derive(Clone)]
 pub struct SpawnConfig {
     pub drone_name: String,
     pub prd_path: PathBuf,
@@ -26,7 +28,7 @@ pub struct SpawnConfig {
     pub structured_tasks: Vec<StructuredTask>,
     /// Git remote URL (for PR/MR detection)
     pub remote_url: String,
-    /// Execution mode: "agent-team" (multi-agent) or "agent" (solo)
+    /// Execution mode (kept for backwards compat, native team ignores this)
     pub mode: String,
     /// Detected project languages (e.g., ["rust", "node"])
     pub project_languages: Vec<String>,
@@ -60,7 +62,20 @@ pub trait ExecutionBackend {
     fn is_available(&self) -> bool;
 }
 
-/// Resolve the Agent Teams backend.
+/// Resolve the execution backend.
+///
+/// Returns the native team backend if API credentials are available,
+/// falls back to the Claude CLI agent team backend otherwise.
+pub fn resolve_backend() -> Box<dyn ExecutionBackend> {
+    let native = native_team::NativeTeamBackend;
+    if native.is_available() {
+        Box::new(native)
+    } else {
+        Box::new(agent_team::AgentTeamBackend)
+    }
+}
+
+/// Resolve the Agent Teams backend (legacy alias).
 pub fn resolve_agent_team_backend() -> Box<dyn ExecutionBackend> {
-    Box::new(agent_team::AgentTeamBackend)
+    resolve_backend()
 }

@@ -1,3 +1,5 @@
+/* Exempt from 300-line rule: pure theme data (8 themes x ~60 lines each) */
+
 /* ── Theme Presets ─────────────────────────────────────────────────────────────
    Each theme overrides CSS custom properties on [data-color-theme].
    The "hive" theme is the default and uses the variables from globals.css.

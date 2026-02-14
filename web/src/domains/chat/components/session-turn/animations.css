@@ -1,0 +1,149 @@
+/* ── fadeUp animation ────────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-slot="turn-summary"][data-fade] > * {
+  animation: fadeUp 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+[data-slot="turn-summary"][data-fade] > *:nth-child(1) {
+  animation-delay: 0.1s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(2) {
+  animation-delay: 0.2s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(3) {
+  animation-delay: 0.3s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(4) {
+  animation-delay: 0.4s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(5) {
+  animation-delay: 0.5s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(6) {
+  animation-delay: 0.6s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(7) {
+  animation-delay: 0.7s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(8) {
+  animation-delay: 0.8s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(9) {
+  animation-delay: 0.9s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(10) {
+  animation-delay: 1s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(11) {
+  animation-delay: 1.1s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(12) {
+  animation-delay: 1.2s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(13) {
+  animation-delay: 1.3s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(14) {
+  animation-delay: 1.4s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(15) {
+  animation-delay: 1.5s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(16) {
+  animation-delay: 1.6s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(17) {
+  animation-delay: 1.7s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(18) {
+  animation-delay: 1.8s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(19) {
+  animation-delay: 1.9s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(20) {
+  animation-delay: 2s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(21) {
+  animation-delay: 2.1s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(22) {
+  animation-delay: 2.2s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(23) {
+  animation-delay: 2.3s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(24) {
+  animation-delay: 2.4s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(25) {
+  animation-delay: 2.5s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(26) {
+  animation-delay: 2.6s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(27) {
+  animation-delay: 2.7s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(28) {
+  animation-delay: 2.8s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(29) {
+  animation-delay: 2.9s;
+}
+[data-slot="turn-summary"][data-fade] > *:nth-child(30) {
+  animation-delay: 3s;
+}
+
+/* ── Focused turn (j/k navigation) ──────────────────────────────────────── */
+
+[data-component="session-turn"][data-focused] {
+  position: relative;
+}
+
+@keyframes turn-focus-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+[data-component="session-turn"][data-focused]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: oklch(0.6 0.15 250 / 10%);
+  pointer-events: none;
+  animation: turn-focus-flash 1s ease-out forwards;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  [data-slot="turn-sticky"] {
+    padding: 12px 0 6px;
+  }
+
+  [data-slot="steps-content"] {
+    margin-left: 8px;
+    padding-left: 8px;
+  }
+
+  [data-slot="user-message"] {
+    padding: 6px 10px;
+  }
+}

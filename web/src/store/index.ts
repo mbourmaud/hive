@@ -23,6 +23,8 @@ export const useAppStore = create<AppStore>()(
           selectedModel: state.selectedModel,
           theme: state.theme,
           colorTheme: state.colorTheme,
+          customThemes: state.customThemes,
+          activeCustomThemeId: state.activeCustomThemeId,
           dronePanelCollapsed: state.dronePanelCollapsed,
           activeSessionId: state.activeSessionId,
           effort: state.effort,

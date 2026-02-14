@@ -3,6 +3,8 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 :root {
+  --font-size-base: 14px;
+  --font-size-code: 13px;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
   /* Light mode = default (convention shadcn) */
   --background: oklch(0.97 0.001 106.424);

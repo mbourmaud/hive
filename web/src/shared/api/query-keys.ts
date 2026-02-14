@@ -16,4 +16,7 @@ export const queryKeys = {
     all: () => ["registry"] as const,
     detail: (id: string) => ["registry", "detail", id] as const,
   },
+  status: {
+    all: () => ["status"] as const,
+  },
 } as const;

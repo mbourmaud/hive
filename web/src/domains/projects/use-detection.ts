@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DetectionEvent, DetectionStep, ProjectContext } from "./types";
 
 const INITIAL_STEPS: DetectionStep[] = [
@@ -9,9 +9,9 @@ const INITIAL_STEPS: DetectionStep[] = [
 ];
 
 function isDetectionEvent(data: unknown): data is DetectionEvent {
-  if (typeof data !== "object" || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return typeof obj.type === "string";
+  return (
+    typeof data === "object" && data !== null && "type" in data && typeof data.type === "string"
+  );
 }
 
 export function useDetection() {
@@ -26,7 +26,7 @@ export function useDetection() {
       eventSourceRef.current.close();
     }
 
-    setSteps(INITIAL_STEPS.map((s) => ({ ...s, status: "pending" })));
+    setSteps(INITIAL_STEPS);
     setIsDetecting(true);
     setContext(null);
 
@@ -72,6 +72,13 @@ export function useDetection() {
     es.onerror = () => {
       setIsDetecting(false);
       es.close();
+    };
+  }, []);
+
+  // Clean up EventSource on unmount
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
     };
   }, []);
 

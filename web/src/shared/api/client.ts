@@ -14,8 +14,13 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-/** Type-safe JSON parse — `fetch().json()` returns `unknown` by default in strict mode */
+/**
+ * JSON parse at the API boundary — the only place `as T` is acceptable.
+ * Callers trust the server to return the expected shape. Runtime validation
+ * happens at the domain layer (type guards, discriminated unions).
+ */
 async function parseJson<T>(res: Response): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- API boundary
   const data: unknown = await res.json();
   return data as T;
 }

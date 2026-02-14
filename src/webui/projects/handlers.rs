@@ -43,7 +43,16 @@ pub async fn list_projects() -> ApiResult<Json<Vec<ProjectProfile>>> {
     let mut registry = config::load_projects_registry()
         .map_err(|e| ApiError::Internal(e.context("Failed to load registry")))?;
 
-    if config::ensure_project_ids(&mut registry) {
+    let mut changed = config::ensure_project_ids(&mut registry);
+
+    // Prune entries whose path no longer exists (e.g. temp test directories)
+    let before = registry.projects.len();
+    registry.projects.retain(|p| Path::new(&p.path).exists());
+    if registry.projects.len() != before {
+        changed = true;
+    }
+
+    if changed {
         let _ = config::save_projects_registry(&registry);
     }
 
@@ -67,9 +76,10 @@ pub async fn create_project(
         .map_err(|e| ApiError::Internal(anyhow::anyhow!("Failed to resolve path: {e}")))?;
     let abs_path_str = abs_path.to_string_lossy().to_string();
 
-    // Check for duplicate path
-    let registry = config::load_projects_registry()
+    let mut registry = config::load_projects_registry()
         .map_err(|e| ApiError::Internal(e.context("Failed to load registry")))?;
+
+    // Check for duplicate path
     if registry.projects.iter().any(|p| p.path == abs_path_str) {
         return Err(ApiError::Conflict(format!(
             "Project at '{}' is already registered",
@@ -86,8 +96,6 @@ pub async fn create_project(
         image_path: None,
     };
 
-    let mut registry = config::load_projects_registry()
-        .map_err(|e| ApiError::Internal(e.context("Failed to load registry")))?;
     registry.projects.push(entry.clone());
     config::save_projects_registry(&registry)
         .map_err(|e| ApiError::Internal(e.context("Failed to save registry")))?;

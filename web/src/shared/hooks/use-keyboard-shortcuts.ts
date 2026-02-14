@@ -11,6 +11,7 @@ interface KeyboardShortcutHandlers {
   onDeleteSession: () => void;
   onAbort: () => void;
   onToggleDronePanel?: () => void;
+  onToggleStatus?: () => void;
   isStreaming: boolean;
 }
 
@@ -24,6 +25,7 @@ export function useKeyboardShortcuts({
   onDeleteSession,
   onAbort,
   onToggleDronePanel,
+  onToggleStatus,
   isStreaming,
 }: KeyboardShortcutHandlers): void {
   const bindings: KeyBinding[] = useMemo(
@@ -47,6 +49,7 @@ export function useKeyboardShortcuts({
       { key: "k", mod: true, handler: onOpenCommandPalette },
       { key: "e", mod: true, handler: onOpenSessions },
       { key: "b", mod: true, handler: () => onToggleDronePanel?.() },
+      { key: ".", mod: true, handler: () => onToggleStatus?.() },
       { key: "Backspace", mod: true, shift: true, handler: onDeleteSession },
     ],
     [
@@ -57,6 +60,7 @@ export function useKeyboardShortcuts({
       onDeleteSession,
       onAbort,
       onToggleDronePanel,
+      onToggleStatus,
       isStreaming,
     ],
   );

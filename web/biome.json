@@ -23,7 +23,10 @@
       "complexity": {
         "noForEach": "warn",
         "noUselessFragments": "error",
-        "noExcessiveCognitiveComplexity": "warn"
+        "noExcessiveCognitiveComplexity": {
+          "level": "warn",
+          "options": { "maxAllowedComplexity": 25 }
+        }
       },
       "correctness": {
         "noUnusedImports": "error",

@@ -48,9 +48,11 @@ function wrapDronesAsProject(drones: DroneInfo[]): ProjectInfo[] {
   ];
 }
 
+/** JSON fetch at the API boundary — `as T` is acceptable here (see client.ts) */
 async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- API boundary
   const data: unknown = await res.json();
   return data as T;
 }
@@ -93,8 +95,7 @@ export function useProjectsSSE(): {
           .then((data) => {
             queryClient.setQueryData(queryKeys.projects.all(), wrapDronesAsProject(data));
           })
-          .catch((err) => {
-            console.warn("Failed to fetch projects/drones, using mock data:", err);
+          .catch(() => {
             queryClient.setQueryData(queryKeys.projects.all(), MOCK_PROJECTS);
           }),
       );

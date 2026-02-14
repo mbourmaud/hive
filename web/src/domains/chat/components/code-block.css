@@ -4,7 +4,7 @@
   border-radius: var(--radius-md, 6px);
   border: 1px solid var(--border, oklch(0.9 0 0));
   font-family: var(--font-mono, "SF Mono", "Fira Code", "JetBrains Mono", monospace);
-  font-size: 13px;
+  font-size: var(--font-size-code, 13px);
   line-height: 24px;
   position: relative;
   background: var(--surface-inset, oklch(0.985 0.001 106.423));

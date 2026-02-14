@@ -154,13 +154,15 @@ export function SlashPopover({ query, visible, onSelect, onClose, anchorRef }: S
   useEffect(() => {
     if (!visible) return;
     const handler = (e: MouseEvent) => {
+      const target = e.target;
+      if (!(target instanceof Node)) return;
       const popoverEl = listRef.current;
       const anchorEl = anchorRef.current;
       if (
         popoverEl &&
-        !popoverEl.contains(e.target as Node) &&
+        !popoverEl.contains(target) &&
         anchorEl &&
-        !anchorEl.contains(e.target as Node)
+        !anchorEl.contains(target)
       ) {
         onClose();
       }

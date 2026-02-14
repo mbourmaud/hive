@@ -16,7 +16,7 @@
   padding: 8px 12px;
   background: transparent;
   border: none;
-  font-size: 13px;
+  font-size: var(--font-size-code, 13px);
   line-height: 1.4;
   color: var(--color-foreground);
   text-align: left;
@@ -110,33 +110,21 @@
   margin: 0 -12px -10px;
 }
 
-/* Radix collapsible animation */
+/* Radix collapsible animation — uses grid-template-rows for GPU compositing */
+[data-slot="basic-tool-content"] {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 150ms ease,
+    opacity 150ms ease;
+}
+
 [data-slot="basic-tool-content"][data-state="open"] {
-  animation: basicToolSlideDown 150ms ease;
+  grid-template-rows: 1fr;
+  opacity: 1;
 }
 
-[data-slot="basic-tool-content"][data-state="closed"] {
-  animation: basicToolSlideUp 150ms ease;
-}
-
-@keyframes basicToolSlideDown {
-  from {
-    height: 0;
-    opacity: 0;
-  }
-  to {
-    height: var(--radix-collapsible-content-height);
-    opacity: 1;
-  }
-}
-
-@keyframes basicToolSlideUp {
-  from {
-    height: var(--radix-collapsible-content-height);
-    opacity: 1;
-  }
-  to {
-    height: 0;
-    opacity: 0;
-  }
+[data-slot="basic-tool-content"] > * {
+  overflow: hidden;
 }

@@ -1,3 +1,4 @@
+// Exempt from 300-line rule: pure fixture data
 import type { DroneInfo, ProjectInfo } from "@/domains/monitor/types";
 
 export const MOCK_DRONES: DroneInfo[] = [

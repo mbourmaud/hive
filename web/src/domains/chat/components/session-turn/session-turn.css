@@ -1,0 +1,190 @@
+/* ── Session Turn ─────────────────────────────────────────────────────────── */
+
+[data-slot="message-list-inner"] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-component="session-turn"] {
+  --session-turn-sticky-height: 0px;
+  position: relative;
+  padding: 0;
+}
+
+[data-slot="turn-content"] {
+  position: relative;
+}
+
+/* ── Sticky header ───────────────────────────────────────────────────────── */
+
+[data-slot="turn-sticky"] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-background);
+  padding: 12px 0 6px;
+}
+
+[data-slot="turn-sticky"]::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: linear-gradient(to bottom, var(--color-background), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── User message card ───────────────────────────────────────────────────── */
+
+[data-slot="user-message"] {
+  position: relative;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: var(--font-size-base, 14px);
+  line-height: 1.65;
+  color: var(--color-foreground);
+  font-weight: 500;
+}
+
+[data-slot="user-message"][data-can-expand] {
+  padding-right: 36px;
+  padding-bottom: 28px;
+}
+
+[data-slot="user-message"] p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+[data-slot="user-message"][data-can-expand]:not([data-expanded]) {
+  max-height: 64px;
+  overflow: hidden;
+}
+
+[data-slot="user-message"][data-can-expand]:not([data-expanded])::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(to bottom, transparent, var(--color-surface-inset));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Expand button — chevron icon (bottom-right like OpenCode) */
+[data-slot="user-message-expand"] {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  transition:
+    color 100ms ease,
+    background 100ms ease;
+}
+
+[data-slot="user-message-expand"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-secondary);
+}
+
+/* Copy button on user message — hover reveal */
+[data-slot="user-message-copy"] {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted-foreground);
+  z-index: 2;
+}
+
+[data-slot="user-message"]:hover [data-slot="user-message-copy"] {
+  opacity: 1;
+}
+
+[data-slot="user-message-copy"]:hover {
+  color: var(--color-foreground);
+  background: var(--color-secondary);
+}
+
+[data-slot="user-message-copy"]:focus-visible {
+  opacity: 1;
+}
+
+/* ── Finish info ─────────────────────────────────────────────────────────── */
+
+[data-slot="turn-finish-info"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-muted-foreground);
+}
+
+[data-slot="turn-finish-model"] {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+[data-slot="turn-finish-sep"] {
+  opacity: 0.5;
+}
+
+[data-slot="turn-finish-duration"] {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-slot="turn-finish-badge"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-slot="turn-finish-badge"][data-reason="error"] {
+  background: oklch(0.55 0.15 25 / 15%);
+  color: var(--color-destructive);
+}
+
+[data-slot="turn-finish-badge"][data-reason="canceled"] {
+  background: oklch(0.75 0.15 85 / 15%);
+  color: oklch(0.65 0.15 85);
+}
+
+[data-slot="turn-finish-badge"][data-reason="max_tokens"] {
+  background: oklch(0.65 0.15 55 / 15%);
+  color: oklch(0.6 0.15 55);
+}
