@@ -58,7 +58,9 @@ export function handleSlashPopoverKeys(
     e.key === "Tab" ||
     (e.key === "Enter" && !e.shiftKey)
   ) {
-    // SlashPopover's document-level handler will handle these
+    // Prevent default (Tab moves focus, Enter submits) — SlashPopover's
+    // document-level capture handler will select/navigate the command.
+    e.preventDefault();
     return true;
   }
 
