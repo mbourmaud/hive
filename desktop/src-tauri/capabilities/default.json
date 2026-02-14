@@ -2,6 +2,9 @@
   "identifier": "default",
   "description": "Default capabilities",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:*"]
+  },
   "permissions": [
     "core:default",
     "shell:default",

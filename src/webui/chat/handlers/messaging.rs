@@ -112,6 +112,13 @@ pub async fn send_message(
         ));
     }
 
+    // Reject empty messages before they reach the API
+    if body.text.trim().is_empty() && body.images.is_empty() {
+        return Err(ApiError::BadRequest(
+            "Message text cannot be empty".to_string(),
+        ));
+    }
+
     // Resolve slash commands
     let resolved_text = resolve_slash_command(&body.text, &session.cwd);
 
