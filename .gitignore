@@ -53,6 +53,8 @@ workspaces/
 # Added by cargo
 
 /target
+desktop/src-tauri/target/
+desktop/node_modules/
 
 # WebUI build artifacts
 web/node_modules/
