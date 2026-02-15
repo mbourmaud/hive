@@ -35,16 +35,45 @@ Write plans to `.hive/plans/<descriptive-slug>.md` with this structure:
 <Why this change is needed, what problem it solves>
 
 ## Tasks
-### 1. <Task Title>
+
+### 1. Environment Setup
+- type: setup
+
+Create and checkout a feature branch from origin/main (or origin/master).
+Install dependencies (npm install, pnpm install, cargo fetch, pip install, etc.).
+Set up any required .env files, config, or local environment.
+Verify the project builds and tests pass BEFORE any code changes.
+
+### 2. <First Work Task>
 - type: work
 - model: <sonnet|opus|haiku>
 - files: <comma-separated file paths>
-- depends_on: <comma-separated task numbers>
+- depends_on: 1
+- parallel: false  (optional — tasks are parallel by default, set false for tasks that must run alone)
 
 <Detailed description of what to do, including code examples, patterns to follow, edge cases>
 
-### 2. <Next Task>
+### 3. <Next Work Task>
+- depends_on: 1
 ...
+
+### N. Verify & Create PR
+- type: pr
+- depends_on: <all work task numbers>
+
+Run the full verification suite: build, lint, type-check, tests.
+Fix any issues found. Ensure CI pipeline passes.
+Create a PR/MR with a clear title and description.
+```
+
+## MANDATORY Plan Structure
+Every plan MUST follow this structure — no exceptions:
+
+1. **First task is ALWAYS Environment Setup** (type: setup): branch checkout, dependency install, env config, verify clean build before any changes.
+2. **Middle tasks are Work** (type: work): the actual implementation, parallelized where possible.
+3. **Last task is ALWAYS Verify & PR** (type: pr): build + test + lint + pipeline green + PR/MR created. ALL work tasks must be listed in its depends_on.
+
+All work tasks MUST depend on the setup task (depends_on: 1). The PR task MUST depend on ALL work tasks.
 
 ## Verification
 <How to test the changes end-to-end>

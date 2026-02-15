@@ -137,7 +137,7 @@ pub fn auto_complete_tasks(team_name: &str) -> Result<()> {
             continue;
         };
 
-        if task.status == "in_progress" {
+        if task.status == "in_progress" || task.status == "pending" {
             task.status = "completed".to_string();
             task.updated_at = Some(
                 std::time::SystemTime::now()
@@ -195,6 +195,17 @@ pub fn preseed_tasks(
 
     for (idx, task) in work_tasks.iter().enumerate() {
         let id = (idx + 1).to_string();
+        let task_path = tasks_dir.join(format!("{id}.json"));
+
+        // Resume support: if task file already exists and is completed, preserve it
+        if let Ok(existing) = fs::read_to_string(&task_path) {
+            if let Ok(existing_task) = serde_json::from_str::<AgentTeamTask>(&existing) {
+                if existing_task.status == "completed" {
+                    seeded.push(existing_task);
+                    continue;
+                }
+            }
+        }
 
         // Map depends_on plan numbers to pre-seeded task IDs
         let blocked_by: Vec<String> = task
@@ -243,7 +254,6 @@ pub fn preseed_tasks(
         };
 
         // Write task JSON file
-        let task_path = tasks_dir.join(format!("{}.json", id));
         let json = serde_json::to_string_pretty(&agent_task)?;
         fs::write(&task_path, json)?;
 

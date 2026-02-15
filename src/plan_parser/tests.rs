@@ -138,7 +138,7 @@ Also straightforward.
     assert_eq!(tasks.len(), 2);
     assert_eq!(tasks[0].task_type, TaskType::Work);
     assert!(tasks[0].model.is_none());
-    assert!(!tasks[0].parallel);
+    assert!(tasks[0].parallel); // default is true (parallel by default)
     assert!(tasks[0].depends_on.is_empty());
     assert!(tasks[0].body.contains("Just do it"));
 }
