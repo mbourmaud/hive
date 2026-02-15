@@ -15,7 +15,9 @@ use crate::types::{DroneState, DroneStatus, ExecutionMode};
 
 // Re-export submodule items (used by run() and tests via `use super::*`)
 #[allow(unused_imports)]
-pub(crate) use hooks::{detect_project_languages, get_git_remote_url, write_hooks_config};
+pub(crate) use hooks::{
+    detect_project_languages, get_git_remote_url, write_hooks_config, write_hooks_config_at,
+};
 #[allow(unused_imports)]
 pub(crate) use plan_loading::{find_plan, load_plan, parse_frontmatter};
 #[allow(unused_imports)]

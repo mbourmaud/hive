@@ -1,0 +1,19 @@
+{
+  "name": "analysis-team",
+  "description": "Analyze Claude Code agent teams internals - tasks, messages, config, lifecycle",
+  "createdAt": 1770649635547,
+  "leadAgentId": "team-lead@analysis-team",
+  "leadSessionId": "3b22f6a2-8179-4ae8-b430-861f97e74884",
+  "members": [
+    {
+      "agentId": "team-lead@analysis-team",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-opus-4-6",
+      "joinedAt": 1770649635547,
+      "tmuxPaneId": "",
+      "cwd": "/Users/fr162241/Projects/hive",
+      "subscriptions": []
+    }
+  ]
+}

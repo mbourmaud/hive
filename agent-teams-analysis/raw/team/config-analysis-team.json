@@ -1,0 +1,75 @@
+{
+  "name": "analysis-team",
+  "description": "Analyze Claude Code agent teams internals - tasks, messages, config, lifecycle",
+  "createdAt": 1770649635547,
+  "leadAgentId": "team-lead@analysis-team",
+  "leadSessionId": "3b22f6a2-8179-4ae8-b430-861f97e74884",
+  "members": [
+    {
+      "agentId": "team-lead@analysis-team",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-opus-4-6",
+      "joinedAt": 1770649635547,
+      "tmuxPaneId": "",
+      "cwd": "/Users/fr162241/Projects/hive",
+      "subscriptions": []
+    },
+    {
+      "agentId": "task-analyst@analysis-team",
+      "name": "task-analyst",
+      "agentType": "general-purpose",
+      "model": "claude-opus-4-6",
+      "prompt": "You are part of the analysis-team. Your task is to analyze how Claude Code agent teams manage tasks internally.\n\nDo the following:\n\n1. Read all task files from ~/.claude/tasks/demo-smoke-test/ (1.json, 2.json, 3.json, and tasks.json if it exists)\n2. Read the Hive source code that parses these: src/agent_teams/mod.rs (AgentTeamTask struct, read_task_list function) and src/agent_teams/task_sync.rs (TeamTaskInfo struct, read_team_task_states function)\n3. Also check ~/.claude/tasks/analysis-team/ to see our OWN team's task files as a second example\n\nThen:\n4. Copy all files from ~/.claude/tasks/demo-smoke-test/ to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/tasks/ (create dirs as needed)\n5. Write a detailed analysis to /Users/fr162241/Projects/hive/agent-teams-analysis/01-task-system.md covering:\n   - Directory structure and file naming\n   - Task JSON schema (all fields, types, optional vs required)\n   - Internal vs user tasks (the _internal metadata flag)\n   - tasks.json consolidated file format\n   - Task lifecycle (status transitions)\n   - How Hive reads and interprets these files\n   - Key observations and gotchas",
+      "color": "blue",
+      "planModeRequired": false,
+      "joinedAt": 1770649672906,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/Projects/hive",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "config-analyst@analysis-team",
+      "name": "config-analyst",
+      "agentType": "general-purpose",
+      "model": "claude-opus-4-6",
+      "prompt": "You are part of the analysis-team. Your task is to analyze how Claude Code manages team configuration and members.\n\nDo the following:\n\n1. Read ~/.claude/teams/demo-smoke-test/config.json\n2. Read ~/.claude/teams/analysis-team/config.json (our own team)\n3. Read the Hive source: src/agent_teams/task_sync.rs (TeamMember, TeamConfig structs, read_team_members function) and src/agent_teams/mod.rs (team_dir function)\n\nThen:\n4. Copy ~/.claude/teams/demo-smoke-test/config.json to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/team/config-demo-smoke-test.json (create dirs as needed)\n5. Copy ~/.claude/teams/analysis-team/config.json to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/team/config-analysis-team.json\n6. Write a detailed analysis to /Users/fr162241/Projects/hive/agent-teams-analysis/02-team-config.md covering:\n   - Directory structure (~/.claude/teams/<name>/)\n   - config.json schema (all fields, types)\n   - Member object schema (all fields explained)\n   - Agent types: coordinator/team-lead vs general-purpose\n   - How backendType works (in-process vs other)\n   - The leadAgentId and leadSessionId fields\n   - How Hive filters out the team lead when reading members\n   - Differences between the two team configs you examined",
+      "color": "green",
+      "planModeRequired": false,
+      "joinedAt": 1770649679317,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/Projects/hive",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "message-analyst@analysis-team",
+      "name": "message-analyst",
+      "agentType": "general-purpose",
+      "model": "claude-opus-4-6",
+      "prompt": "You are part of the analysis-team. Your task is to analyze how Claude Code manages inter-agent messaging.\n\nDo the following:\n\n1. List and read all files in ~/.claude/teams/demo-smoke-test/inboxes/\n2. List and read all files in ~/.claude/teams/analysis-team/inboxes/ (our own team)\n3. Read the Hive source: src/agent_teams/task_sync.rs (InboxMessage struct, read_team_inboxes function, read_persisted_messages_fallback function)\n4. Read src/commands/monitor/views/messages.rs (parse_message_text function, render_messages_view function) to see how messages are displayed\n\nThen:\n5. Copy all files from ~/.claude/teams/demo-smoke-test/inboxes/ to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/inboxes/ (create dirs as needed)\n6. Write a detailed analysis to /Users/fr162241/Projects/hive/agent-teams-analysis/03-message-system.md covering:\n   - Directory structure (~/.claude/teams/<name>/inboxes/)\n   - Inbox file naming (one JSON file per recipient agent)\n   - Message JSON schema (all fields)\n   - Message types discovered (regular text, idle_notification, shutdown_request, etc.)\n   - JSON-encoded messages vs plain text messages\n   - How Hive reads and renders messages\n   - The fallback system (messages.ndjson in .hive/drones/)\n   - Example messages from the actual data",
+      "color": "yellow",
+      "planModeRequired": false,
+      "joinedAt": 1770649685150,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/Projects/hive",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "lifecycle-analyst@analysis-team",
+      "name": "lifecycle-analyst",
+      "agentType": "general-purpose",
+      "model": "claude-opus-4-6",
+      "prompt": "You are part of the analysis-team. Your task is to analyze the full lifecycle of a Claude Code agent team.\n\nDo the following:\n\n1. Read .hive/drones/demo-smoke-test/status.json\n2. Read .hive/drones/demo-smoke-test/events.ndjson (if exists)\n3. Read .hive/drones/demo-smoke-test/activity.log (if exists)\n4. Read the Hive source for events: src/events/mod.rs or similar files in src/events/\n5. Read src/commands/start.rs to see how Hive launches a drone/team\n6. Read src/agent_teams/mod.rs for cleanup_team function\n7. Read src/commands/monitor/state.rs for the tick() function that manages lifecycle\n\nThen:\n8. Copy .hive/drones/demo-smoke-test/status.json, events.ndjson, activity.log to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/drone/ (create dirs as needed)\n9. Write a detailed analysis to /Users/fr162241/Projects/hive/agent-teams-analysis/04-lifecycle.md covering:\n   - Team creation flow (hive start → worktree → claude CLI → TeamCreate → TaskCreate → Task spawning)\n   - DroneStatus schema and state machine (Starting → InProgress → Completed/Error/Stopped/Zombie)\n   - Event system: how hooks capture events into events.ndjson\n   - Event types: TaskCreate, TaskUpdate, TaskDone, Message, Idle, Stop, Start\n   - How Hive monitors progress (tick loop, task state reading, event reading)\n   - Shutdown and cleanup flow\n   - What gets deleted vs persisted after shutdown\n   - The zombie detection mechanism",
+      "color": "purple",
+      "planModeRequired": false,
+      "joinedAt": 1770649693154,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/Projects/hive",
+      "subscriptions": [],
+      "backendType": "in-process"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ pub mod auth;
 pub mod chat;
 pub mod error;
 pub mod extractors;
+pub mod git;
 pub mod logs;
 pub mod mcp_client;
 pub mod monitor;
@@ -47,6 +48,7 @@ pub async fn start_server_async(port: u16) -> Result<()> {
         .merge(chat::routes(chat_sessions.clone()))
         .merge(status::routes(chat_sessions, monitor_state))
         .merge(projects::routes())
+        .merge(git::routes())
         .fallback(get(serve_index))
         .layer(CorsLayer::permissive());
 

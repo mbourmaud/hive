@@ -1,0 +1,8 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1770477661492@docs-events\",\"from\":\"team-lead\",\"reason\":\"Work is complete. Shutting down the team. Thank you!\",\"timestamp\":\"2026-02-07T15:21:01.492Z\"}",
+    "timestamp": "2026-02-07T15:21:01.492Z",
+    "read": true
+  }
+]

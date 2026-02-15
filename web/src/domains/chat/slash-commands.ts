@@ -85,7 +85,7 @@ function handleSessions(_args: string[], ctx: SlashCommandContext): void {
 
 function handleHelp(_args: string[], ctx: SlashCommandContext): void {
   ctx.toast(
-    "Commands: /new, /clear, /sessions, /model <name>, /dispatch <plan-id>, /plans, /status, /stop <name>, /logs <name>, /help",
+    "Commands: /new, /clear, /sessions, /model <name>, /dispatch <plan-id>, /plans, /status, /stop <name>, /logs <name>, /git, /help",
     "info",
   );
 }
@@ -194,6 +194,10 @@ function handleLogs(args: string[], ctx: SlashCommandContext): void {
   if (ctx.rightSidebarCollapsed) ctx.openRightSidebar("drones");
 }
 
+function handleGit(_args: string[], ctx: SlashCommandContext): void {
+  ctx.openRightSidebar("git");
+}
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 const COMMANDS: SlashCommandDef[] = [
@@ -210,6 +214,7 @@ const COMMANDS: SlashCommandDef[] = [
   { name: "status", execute: handleStatus },
   { name: "stop", execute: handleStop },
   { name: "logs", aliases: ["log"], execute: handleLogs },
+  { name: "git", aliases: ["g"], execute: handleGit },
 ];
 
 /**

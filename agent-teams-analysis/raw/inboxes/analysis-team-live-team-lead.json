@@ -1,0 +1,16 @@
+[
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:09:23.571Z\",\"idleReason\":\"interrupted\"}",
+    "timestamp": "2026-02-09T15:09:23.571Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:09:24.708Z\",\"idleReason\":\"interrupted\"}",
+    "timestamp": "2026-02-09T15:09:24.708Z",
+    "color": "green",
+    "read": true
+  }
+]

@@ -28,7 +28,7 @@
 [data-slot="sidebar-tab-list"] {
   display: flex;
   align-items: center;
-  height: 48px;
+  height: 56px;
   padding: 0 8px;
   gap: 2px;
   flex-shrink: 0;

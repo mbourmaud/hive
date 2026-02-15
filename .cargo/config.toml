@@ -1,0 +1,3 @@
+# Faster builds on macOS ARM64
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-dead_strip"]

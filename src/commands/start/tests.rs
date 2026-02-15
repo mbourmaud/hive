@@ -4,7 +4,8 @@ use tempfile::TempDir;
 #[test]
 fn test_write_hooks_config_creates_settings() {
     let dir = TempDir::new().unwrap();
-    write_hooks_config(dir.path(), "test-drone").unwrap();
+    let project_root = TempDir::new().unwrap();
+    write_hooks_config_at(dir.path(), "test-drone", project_root.path()).unwrap();
 
     let settings_path = dir.path().join(".claude").join("settings.json");
     assert!(settings_path.exists());
@@ -51,6 +52,7 @@ fn test_write_hooks_config_creates_settings() {
 #[test]
 fn test_write_hooks_config_merges_existing() {
     let dir = TempDir::new().unwrap();
+    let project_root = TempDir::new().unwrap();
     let claude_dir = dir.path().join(".claude");
     fs::create_dir_all(&claude_dir).unwrap();
 
@@ -65,7 +67,7 @@ fn test_write_hooks_config_merges_existing() {
     )
     .unwrap();
 
-    write_hooks_config(dir.path(), "merge-test").unwrap();
+    write_hooks_config_at(dir.path(), "merge-test", project_root.path()).unwrap();
 
     let contents = fs::read_to_string(claude_dir.join("settings.json")).unwrap();
     let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();
@@ -81,7 +83,8 @@ fn test_write_hooks_config_merges_existing() {
 #[test]
 fn test_write_hooks_config_async_and_timeout() {
     let dir = TempDir::new().unwrap();
-    write_hooks_config(dir.path(), "timeout-test").unwrap();
+    let project_root = TempDir::new().unwrap();
+    write_hooks_config_at(dir.path(), "timeout-test", project_root.path()).unwrap();
 
     let contents = fs::read_to_string(dir.path().join(".claude").join("settings.json")).unwrap();
     let settings: serde_json::Value = serde_json::from_str(&contents).unwrap();

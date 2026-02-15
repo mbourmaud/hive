@@ -1,0 +1,96 @@
+From 56c2be2bf986fce738349376d0ab79ecb7762da4 Mon Sep 17 00:00:00 2001
+From: Hive Drone <drone@hive.local>
+Date: Mon, 9 Feb 2026 19:16:59 +0100
+Subject: [PATCH 1/2] fix: auto-complete in_progress tasks when drone shuts
+ down (#56)
+
+When a drone's process dies or a Stop event is detected, automatically
+mark all in_progress tasks as completed by writing to the task JSON
+files. Prevents tasks from being stuck in in_progress forever when
+the team-lead forgets to call TaskUpdate before shutdown.
+---
+ src/agent_teams/mod.rs        | 44 +++++++++++++++++++++++++++++++++++
+ src/commands/monitor/state.rs |  5 ++++
+ 2 files changed, 49 insertions(+)
+
+diff --git a/src/agent_teams/mod.rs b/src/agent_teams/mod.rs
+index 9be87ca7..5b21daa4 100644
+--- a/src/agent_teams/mod.rs
++++ b/src/agent_teams/mod.rs
+@@ -107,6 +107,50 @@ pub fn read_task_list_safe(team_name: &str) -> Vec<AgentTeamTask> {
+     read_task_list(team_name).unwrap_or_default()
+ }
+ 
++/// Auto-complete all in_progress tasks for a team.
++/// Called when the drone's process shuts down to avoid tasks stuck in in_progress forever.
++pub fn auto_complete_tasks(team_name: &str) -> Result<()> {
++    let tasks_dir = team_tasks_dir(team_name);
++    if !tasks_dir.exists() {
++        return Ok(());
++    }
++
++    for entry in fs::read_dir(&tasks_dir)? {
++        let entry = entry?;
++        let path = entry.path();
++        if path.extension().and_then(|e| e.to_str()) != Some("json") {
++            continue;
++        }
++        if path.file_name().and_then(|n| n.to_str()) == Some("tasks.json") {
++            continue;
++        }
++
++        let contents = match fs::read_to_string(&path) {
++            Ok(c) => c,
++            Err(_) => continue,
++        };
++        let mut task: AgentTeamTask = match serde_json::from_str(&contents) {
++            Ok(t) => t,
++            Err(_) => continue,
++        };
++
++        if task.status == "in_progress" {
++            task.status = "completed".to_string();
++            task.updated_at = Some(
++                std::time::SystemTime::now()
++                    .duration_since(std::time::UNIX_EPOCH)
++                    .unwrap_or_default()
++                    .as_millis() as u64,
++            );
++            if let Ok(json) = serde_json::to_string_pretty(&task) {
++                let _ = fs::write(&path, json);
++            }
++        }
++    }
++
++    Ok(())
++}
++
+ /// Clean up Agent Teams directories for a team.
+ pub fn cleanup_team(team_name: &str) -> Result<()> {
+     let tasks_dir = team_tasks_dir(team_name);
+diff --git a/src/commands/monitor/state.rs b/src/commands/monitor/state.rs
+index ad80a2e4..b03f0e3f 100644
+--- a/src/commands/monitor/state.rs
++++ b/src/commands/monitor/state.rs
+@@ -177,6 +177,8 @@ impl TuiState {
+                 if matches!(event, HiveEvent::Stop { .. })
+                     && !self.auto_stopped_drones.contains(name)
+                 {
++                    // Auto-complete in_progress tasks before stopping (#56)
++                    let _ = crate::agent_teams::auto_complete_tasks(name);
+                     self.auto_stopped_drones.insert(name.clone());
+                     let _ = crate::commands::kill_clean::kill_quiet(name.clone());
+                 }
+@@ -206,6 +208,9 @@ impl TuiState {
+                     .map(is_process_running)
+                     .unwrap_or(false);
+                 if !pid_alive {
++                    // Auto-complete in_progress tasks when process dies (#56)
++                    let _ = crate::agent_teams::auto_complete_tasks(name);
++
+                     // Check if there's a Stop event — if so, the drone exited gracefully
+                     if crate::events::has_stop_event(name) {
+                         // Graceful exit — mark as Completed or Stopped, not Zombie
+-- 
+2.50.1 (Apple Git-155)
+

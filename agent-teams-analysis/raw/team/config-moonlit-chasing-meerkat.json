@@ -1,0 +1,61 @@
+{
+  "name": "moonlit-chasing-meerkat",
+  "description": "Add module-level documentation to all Hive modules",
+  "createdAt": 1770478465137,
+  "leadAgentId": "team-lead@moonlit-chasing-meerkat",
+  "leadSessionId": "bff9d83d-b855-4345-a44c-cbcc6837d3be",
+  "members": [
+    {
+      "agentId": "team-lead@moonlit-chasing-meerkat",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-sonnet-4-5-20250929",
+      "joinedAt": 1770478465137,
+      "tmuxPaneId": "",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-slow",
+      "subscriptions": []
+    },
+    {
+      "agentId": "doc-writer-1@moonlit-chasing-meerkat",
+      "name": "doc-writer-1",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "Add module-level doc comments to the following files:\n\n1. **src/types.rs** — Add a 3-5 line `//!` module-level doc comment describing the core types (Prd, DroneStatus, DroneState, HiveConfig) and their purpose\n2. **src/events.rs** — Add a 3-5 line `//!` module-level doc comment describing the HiveEvent enum and EventReader for TUI monitoring\n\nRead each file first to understand its purpose, then add a concise, informative module-level doc comment at the top. The comment should describe what the module does, key types/functions, and how it fits in the architecture.\n\nAfter adding the comments, mark tasks 1 and 2 as completed and let me know.",
+      "color": "blue",
+      "planModeRequired": false,
+      "joinedAt": 1770478503518,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-slow",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "doc-writer-2@moonlit-chasing-meerkat",
+      "name": "doc-writer-2",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "Add module-level doc comments to the following files:\n\n1. **src/config.rs** — Add a 3-5 line `//!` module-level doc comment describing configuration loading and model resolution\n2. **src/notification.rs** — Add a 3-5 line `//!` module-level doc comment describing the unified notification system\n\nRead each file first to understand its purpose, then add a concise, informative module-level doc comment at the top. The comment should describe what the module does, key types/functions, and how it fits in the architecture.\n\nAfter adding the comments, mark tasks 3 and 4 as completed and let me know.",
+      "color": "green",
+      "planModeRequired": false,
+      "joinedAt": 1770478505242,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-slow",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "doc-writer-3@moonlit-chasing-meerkat",
+      "name": "doc-writer-3",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "Add module-level doc comments to the following files:\n\n1. **src/commands/common.rs** — Add a 3-5 line `//!` module-level doc comment describing shared utility functions used across commands\n2. **src/commands/start.rs** — Add a 3-5 line `//!` module-level doc comment describing drone/team launching logic\n3. **src/commands/kill_clean.rs** — Add a 3-5 line `//!` module-level doc comment describing stop and cleanup operations\n4. **src/agent_teams/mod.rs** — Add a 3-5 line `//!` module-level doc comment describing Agent Teams integration\n\nRead each file first to understand its purpose, then add a concise, informative module-level doc comment at the top. The comment should describe what the module does, key types/functions, and how it fits in the architecture.\n\nAfter adding the comments, mark tasks 5, 6, 7, and 8 as completed and let me know.",
+      "color": "yellow",
+      "planModeRequired": false,
+      "joinedAt": 1770478508774,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-slow",
+      "subscriptions": [],
+      "backendType": "in-process"
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+[
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:09:23.571Z\",\"idleReason\":\"interrupted\"}",
+    "timestamp": "2026-02-09T15:09:23.571Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:09:24.708Z\",\"idleReason\":\"interrupted\"}",
+    "timestamp": "2026-02-09T15:09:24.708Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "task-analyst",
+    "text": "Task #1 complete. I've written the analysis to `/Users/fr162241/Projects/hive/agent-teams-analysis/01-task-system.md`.\n\nNote: There is no `demo-smoke-test` directory in `~/.claude/tasks/`. I used the available data instead:\n- `analysis-team/` (our own team -- 4 user tasks + 4 internal tasks, great example)\n- `humble-chasing-goose/` (2 internal tasks only)\n- `moonlit-chasing-meerkat/` (3 internal tasks only)\n- Several UUID-based solo session directories\n\nI copied all available task JSON files to `/Users/fr162241/Projects/hive/agent-teams-analysis/raw/tasks/` organized by team name.\n\nKey findings:\n1. Individual task files (N.json) with camelCase JSON fields\n2. Internal tasks (`_internal: true` in metadata) track agent existence -- subject = agent name\n3. User tasks and internal tasks share the same incrementing ID counter\n4. `tasks.json` consolidated format is fully supported in Hive parser but not found in any live data\n5. Owner resolution maps `teammate-N` generic names to real agent names via internal tasks\n6. `.highwatermark` only in UUID dirs, `.lock` always present\n7. No filesystem cleanup of deleted tasks -- status field only\n\nThe analysis covers: directory structure, JSON schema, internal vs user tasks, tasks.json format, lifecycle/status transitions, Hive parsing code, and 10 gotchas/observations.",
+    "summary": "Task #1 done: task system analysis written",
+    "timestamp": "2026-02-09T15:10:23.755Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "task-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"task-analyst\",\"timestamp\":\"2026-02-09T15:10:29.774Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-02-09T15:10:29.774Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "task-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"task-analyst\",\"timestamp\":\"2026-02-09T15:10:33.720Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-02-09T15:10:33.720Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "message-analyst",
+    "text": "Message system analysis complete. Written to `/Users/fr162241/Projects/hive/agent-teams-analysis/03-message-system.md`.\n\nKey findings:\n\n**Directory structure**: `~/.claude/teams/<team-name>/inboxes/<recipient>.json` -- one JSON array file per recipient agent.\n\n**Message schema**: Fields are `from`, `text`, `summary` (optional), `timestamp`, `color` (optional), `read`. Hive only deserializes `from`, `text`, `timestamp`, `read`.\n\n**5 message types discovered**:\n1. Plain text (regular communication) -- `text` is human-readable\n2. `idle_notification` -- JSON-encoded in `text`, signals agent is available\n3. `shutdown_request` -- JSON-encoded, with `requestId` format `shutdown-<epoch>@<agent>`\n4. `shutdown_response` / `shutdown_approved` -- handled by Hive renderer\n5. `task_assignment` -- JSON-encoded, carries taskId/subject/description\n\n**Double-encoding pattern**: Protocol messages embed JSON inside the `text` string field. Hive's `parse_message_text()` detects this by checking if `text` starts with `{`.\n\n**Fallback system**: `.hive/drones/<name>/messages.ndjson` (NDJSON format with explicit `to` field, uses `content` instead of `text`). Used when live Claude inbox directories are gone after cleanup.\n\n**Note**: No `demo-smoke-test` team directory exists. The actual teams with inbox data were `humble-chasing-goose`, `moonlit-chasing-meerkat`, and `analysis-team`. I copied all inbox files from all three teams.\n\nRaw data copied to `agent-teams-analysis/raw/inboxes/{humble-chasing-goose,moonlit-chasing-meerkat,analysis-team}/`.",
+    "summary": "Message system analysis complete with findings",
+    "timestamp": "2026-02-09T15:10:35.480Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "task-analyst",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1770649831648@task-analyst\",\"from\":\"task-analyst\",\"timestamp\":\"2026-02-09T15:10:37.113Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-02-09T15:10:37.113Z",
+    "color": "blue",
+    "read": true
+  },
+  {
+    "from": "message-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"message-analyst\",\"timestamp\":\"2026-02-09T15:10:41.526Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-02-09T15:10:41.526Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "message-analyst",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1770649832843@message-analyst\",\"from\":\"message-analyst\",\"timestamp\":\"2026-02-09T15:10:44.520Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-02-09T15:10:44.520Z",
+    "color": "yellow",
+    "read": true
+  },
+  {
+    "from": "config-analyst",
+    "text": "Task #2 (team config analysis) and Task #6 (config-analyst) are complete.\n\n**Written:** `/Users/fr162241/Projects/hive/agent-teams-analysis/02-team-config.md`\n\n**Key findings:**\n\n1. **Directory structure:** `~/.claude/teams/<team-name>/config.json` + `inboxes/` subdirectory.\n\n2. **config.json schema:** Top-level has `name`, `description`, `createdAt`, `leadAgentId`, `leadSessionId`, and `members` array.\n\n3. **Member schema:** 12 fields total. Workers have extra fields vs lead: `prompt`, `color`, `planModeRequired`, `backendType`.\n\n4. **Agent type rename:** The older team (humble-chasing-goose) uses `\"coordinator\"` while newer teams use `\"team-lead\"`. Hive handles both in its filter.\n\n5. **All workers are `backendType: \"in-process\"`** with `tmuxPaneId: \"in-process\"`. The lead has empty tmuxPaneId and no backendType.\n\n6. **Hive's TeamMember struct only captures 4 of 12 fields** (name, agent_type, model, cwd) -- deliberately minimal.\n\n7. **Lead filtering:** `read_team_members()` filters out both `\"team-lead\"` and `\"coordinator\"` agent types so only workers appear in the TUI.\n\n**Note:** `demo-smoke-test` does not exist on this system. I used the three available teams (humble-chasing-goose, moonlit-chasing-meerkat, analysis-team) instead.\n\nRaw configs copied to `agent-teams-analysis/raw/team/`.\n\nI'm available for additional tasks.",
+    "summary": "Team config analysis complete with findings",
+    "timestamp": "2026-02-09T15:10:47.820Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:10:53.471Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-02-09T15:10:53.471Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "lifecycle-analyst",
+    "text": "Completed lifecycle analysis. Written to `/Users/fr162241/Projects/hive/agent-teams-analysis/04-lifecycle.md`.\n\nKey findings covered:\n\n1. **Team Creation Flow** (10-step sequence from `hive start` through plan loading, worktree creation, hooks config, to Claude CLI spawn)\n2. **DroneStatus Schema** - all 14 fields documented with types\n3. **DroneState State Machine** - 8 states (Starting, Resuming, InProgress, Completed, Error, Stopped, Cleaning, Zombie) with full transition diagram\n4. **Event System** - hooks write to events.ndjson via jq (PostToolUse: TaskCreate/TaskUpdate/SendMessage + Stop hook). EventReader does incremental byte-offset tailing.\n5. **7 HiveEvent types** defined: TaskCreate, TaskUpdate, Message, TaskDone, Idle, Stop, Start (only 4 currently captured by hooks)\n6. **tick() loop** - 12 operations per tick including progress reconciliation, zombie detection, 3 completion mechanisms, PR merge auto-clean\n7. **Shutdown flows** - manual stop (SIGTERM→wait→SIGKILL), graceful completion (.hive_complete marker), auto-stop on Stop event, PR-based completion, PR merge auto-clean\n8. **Cleanup** - what gets deleted (drone dir, worktree, branch, ~/.claude/tasks and teams) vs persisted (plan files, remote branches, merged PRs)\n9. **Zombie detection** - PID liveness check via kill(pid,0), distinguishes graceful exit (Stop event → Stopped) from crash (no Stop → Zombie)\n10. **Multi-source progress** - tasks from ~/.claude/tasks/ with fallback to events.ndjson reconstruction\n\nNote: No demo-smoke-test drone data existed in .hive/drones/ (empty directory), so no raw data was copied.",
+    "summary": "Lifecycle analysis complete at 04-lifecycle.md",
+    "timestamp": "2026-02-09T15:10:57.849Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:11:00.759Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-02-09T15:11:00.759Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "lifecycle-analyst",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"lifecycle-analyst\",\"timestamp\":\"2026-02-09T15:11:01.685Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-02-09T15:11:01.685Z",
+    "color": "purple",
+    "read": true
+  },
+  {
+    "from": "config-analyst",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1770649832458@config-analyst\",\"from\":\"config-analyst\",\"timestamp\":\"2026-02-09T15:11:04.462Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-02-09T15:11:04.462Z",
+    "color": "green",
+    "read": true
+  },
+  {
+    "from": "lifecycle-analyst",
+    "text": "{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1770649833592@lifecycle-analyst\",\"from\":\"lifecycle-analyst\",\"timestamp\":\"2026-02-09T15:11:04.965Z\",\"paneId\":\"in-process\",\"backendType\":\"in-process\"}",
+    "timestamp": "2026-02-09T15:11:04.965Z",
+    "color": "purple",
+    "read": true
+  }
+]

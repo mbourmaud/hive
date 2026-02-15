@@ -1,0 +1,14 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"3\",\"subject\":\"Analyze message/inbox system\",\"description\":\"Research how Claude Code manages inter-agent messaging. Examine:\\n1. The ~/.claude/teams/<team>/inboxes/ directory structure\\n2. Individual inbox JSON files (<agent-name>.json) - format and content\\n3. Message fields: from, text/content, timestamp, read\\n4. Message types: regular messages, idle_notification, shutdown_request, shutdown_response, shutdown_approved, plan_approval_request, plan_approval_response, broadcast\\n5. How SendMessage tool works - DM vs broadcast\\n6. Message routing: sender → recipient inbox file\\n7. How messages are parsed (JSON-encoded content vs plain text)\\n\\nLook at live data in ~/.claude/teams/demo-smoke-test/inboxes/ and the Hive source in src/agent_teams/task_sync.rs (read_team_inboxes function).\\n\\nWrite your findings to /Users/fr162241/Projects/hive/agent-teams-analysis/03-message-system.md\\n\\nAlso copy all inbox files from ~/.claude/teams/demo-smoke-test/inboxes/ to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/inboxes/\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-02-09T15:08:18.038Z\"}",
+    "timestamp": "2026-02-09T15:08:18.038Z",
+    "read": false
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1770649832843@message-analyst\",\"from\":\"team-lead\",\"reason\":\"Work complete, shutting down team\",\"timestamp\":\"2026-02-09T15:10:32.843Z\"}",
+    "timestamp": "2026-02-09T15:10:32.843Z",
+    "read": true
+  }
+]

@@ -1,0 +1,47 @@
+{
+  "name": "humble-chasing-goose",
+  "description": "Add documentation comments to types.rs and events.rs",
+  "createdAt": 1770477615385,
+  "leadAgentId": "team-lead@humble-chasing-goose",
+  "leadSessionId": "e515c65f-bc9c-4dec-b8ca-3b8d75e127b7",
+  "members": [
+    {
+      "agentId": "team-lead@humble-chasing-goose",
+      "name": "team-lead",
+      "agentType": "coordinator",
+      "model": "claude-sonnet-4-5-20250929",
+      "joinedAt": 1770477615385,
+      "tmuxPaneId": "",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-plan",
+      "subscriptions": []
+    },
+    {
+      "agentId": "docs-types@humble-chasing-goose",
+      "name": "docs-types",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "Add a module-level doc comment to src/types.rs:\n\n1. Read src/types.rs to understand its contents\n2. Add a brief `//!` doc comment (2-3 lines max) at the top describing that this module contains PRD, Story, DroneStatus and other shared types for Hive\n3. Run `cargo build` to verify it compiles\n4. Run `cargo clippy` to verify linting passes\n\nWhen done, notify the team-lead that the task is complete.",
+      "color": "blue",
+      "planModeRequired": false,
+      "joinedAt": 1770477624977,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-plan",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "docs-events@humble-chasing-goose",
+      "name": "docs-events",
+      "agentType": "general-purpose",
+      "model": "haiku",
+      "prompt": "Add a module-level doc comment to src/events.rs:\n\n1. Read src/events.rs to understand its contents\n2. Add a brief `//!` doc comment (2-3 lines max) at the top describing that this module handles HiveEvent and EventReader for TUI monitoring\n3. Run `cargo build` to verify it compiles\n4. Run `cargo clippy` to verify linting passes\n\nWhen done, notify the team-lead that the task is complete.",
+      "color": "green",
+      "planModeRequired": false,
+      "joinedAt": 1770477626656,
+      "tmuxPaneId": "in-process",
+      "cwd": "/Users/fr162241/.hive/worktrees/hive/test-plan",
+      "subscriptions": [],
+      "backendType": "in-process"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"4\",\"subject\":\"Analyze team lifecycle and shutdown\",\"description\":\"Research the full lifecycle of an agent team from creation to shutdown. Examine:\\n1. Team creation: TeamCreate tool → creates team dir + task dir\\n2. Task creation and assignment: TaskCreate → TaskUpdate with owner\\n3. Agent spawning: Task tool with team_name parameter\\n4. Agent work cycle: claim task → work → mark completed → go idle → get new task\\n5. Idle notifications: automatic when agent turn ends\\n6. Shutdown flow: SendMessage shutdown_request → agent responds with shutdown_response → process terminates\\n7. Team cleanup: TeamDelete removes both ~/.claude/teams/<team>/ and ~/.claude/tasks/<team>/\\n8. What Hive does differently: hooks for event capture, persisted messages in messages.ndjson\\n\\nAlso look at Hive's event system in src/events/ to understand how it captures agent team events via hooks.\\n\\nLook at .hive/drones/demo-smoke-test/ for the Hive-side artifacts (status.json, activity.log, events.ndjson).\\n\\nWrite your findings to /Users/fr162241/Projects/hive/agent-teams-analysis/04-lifecycle.md\\n\\nAlso copy .hive/drones/demo-smoke-test/status.json, events.ndjson, and activity.log to /Users/fr162241/Projects/hive/agent-teams-analysis/raw/drone/\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-02-09T15:08:18.567Z\"}",
+    "timestamp": "2026-02-09T15:08:18.567Z",
+    "read": false
+  }
+]
