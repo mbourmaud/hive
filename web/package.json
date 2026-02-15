@@ -36,6 +36,7 @@
     "immer": "^11.1.4",
     "lucide-react": "^0.475.0",
     "marked": "^17.0.2",
+    "mermaid": "^11.12.2",
     "morphdom": "^2.7.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

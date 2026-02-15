@@ -1,0 +1,279 @@
+/* ── Reading-optimized markdown typography for plan viewer ─────────────── */
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] {
+  font-family: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--color-foreground);
+  max-width: 100%;
+}
+
+/* Headings — proper hierarchy with serif */
+[data-slot="plan-viewer-body"] [data-component="markdown"] h1 {
+  font-family: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid oklch(from var(--color-accent) l c h / 20%);
+  color: var(--color-foreground);
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] h2 {
+  font-family: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-top: 2em;
+  margin-bottom: 0.6em;
+  color: var(--color-foreground);
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] h3 {
+  font-family: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 1.8em;
+  margin-bottom: 0.5em;
+  color: var(--color-foreground);
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] h4 {
+  font-family: 'Charter', 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.4em;
+  color: var(--color-foreground);
+}
+
+/* Paragraphs */
+[data-slot="plan-viewer-body"] [data-component="markdown"] p {
+  margin: 0.8em 0;
+}
+
+/* Strong */
+[data-slot="plan-viewer-body"] [data-component="markdown"] strong {
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+/* Lists */
+[data-slot="plan-viewer-body"] [data-component="markdown"] ul,
+[data-slot="plan-viewer-body"] [data-component="markdown"] ol {
+  padding-left: 1.5em;
+  margin: 0.8em 0;
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] li {
+  margin: 0.35em 0;
+  line-height: 1.7;
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] li::marker {
+  color: var(--color-accent);
+}
+
+/* Blockquotes */
+[data-slot="plan-viewer-body"] [data-component="markdown"] blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding: 4px 0 4px 20px;
+  margin: 1.2em 0;
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+/* Inline code */
+[data-slot="plan-viewer-body"] [data-component="markdown"] code:not(pre code) {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--color-accent);
+  background: oklch(from var(--color-accent) l c h / 8%);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+/* Code blocks */
+[data-slot="plan-viewer-body"] [data-component="markdown"] pre {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  padding: 16px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-inset);
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+
+/* Shiki-highlighted blocks */
+[data-slot="plan-viewer-body"] [data-component="markdown"] pre.shiki {
+  background: var(--shiki-bg, var(--color-surface-inset)) !important;
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] pre.shiki code {
+  font-family: var(--font-mono);
+  background: none;
+  padding: 0;
+}
+
+/* Tables */
+[data-slot="plan-viewer-body"] [data-component="markdown"] table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] th {
+  padding: 10px 16px;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-foreground);
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] td {
+  padding: 8px 16px;
+  border-bottom: 1px solid oklch(from var(--color-border) l c h / 50%);
+}
+
+/* Horizontal rules */
+[data-slot="plan-viewer-body"] [data-component="markdown"] hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-border),
+    transparent
+  );
+  margin: 2em 0;
+}
+
+/* ── Task metadata pills ──────────────────────────────────────────────── */
+
+[data-slot="plan-viewer-body"] .plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 12px;
+  align-items: center;
+}
+
+/* Base pill */
+[data-slot="plan-viewer-body"] .plan-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 100px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* type — accent gold */
+[data-slot="plan-viewer-body"] .plan-meta-pill-type {
+  background: oklch(from var(--color-accent) l c h / 15%);
+  color: var(--color-accent);
+  border: 1px solid oklch(from var(--color-accent) l c h / 25%);
+}
+
+/* model variants */
+[data-slot="plan-viewer-body"] .plan-meta-pill-model {
+  border: 1px solid;
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-pill-model-opus {
+  background: oklch(from var(--model-opus) l c h / 15%);
+  color: var(--model-opus);
+  border-color: oklch(from var(--model-opus) l c h / 25%);
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-pill-model-sonnet {
+  background: oklch(from var(--model-sonnet) l c h / 15%);
+  color: var(--model-sonnet);
+  border-color: oklch(from var(--model-sonnet) l c h / 25%);
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-pill-model-haiku {
+  background: oklch(from var(--model-haiku) l c h / 15%);
+  color: var(--model-haiku);
+  border-color: oklch(from var(--model-haiku) l c h / 25%);
+}
+
+/* depends_on — amber/warning */
+[data-slot="plan-viewer-body"] .plan-meta-pill-depends {
+  background: oklch(from var(--color-warning) l c h / 12%);
+  color: var(--color-warning);
+  border: 1px solid oklch(from var(--color-warning) l c h / 22%);
+}
+
+/* ── Files vertical list ───────────────────────────────────────────────── */
+
+[data-slot="plan-viewer-body"] .plan-meta-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 16px;
+  padding-left: 2px;
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-file-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  transition: background 100ms ease;
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-file-item:hover {
+  background: oklch(from var(--color-muted) l c h / 60%);
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-file-item code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+  border-radius: 0;
+}
+
+[data-slot="plan-viewer-body"] .plan-meta-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+/* ── Mermaid diagrams in plan viewer ──────────────────────────────────── */
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] [data-slot="mermaid-diagram"] {
+  display: flex;
+  justify-content: center;
+  margin: 1.5em 0;
+  padding: 20px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-inset);
+  overflow-x: auto;
+}
+
+[data-slot="plan-viewer-body"] [data-component="markdown"] [data-slot="mermaid-diagram"] svg {
+  max-width: 100%;
+  height: auto;
+}

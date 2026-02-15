@@ -1,6 +1,85 @@
 use axum::{extract::Query, Json};
 
 use super::super::agents;
+use super::super::session::ChatMode;
+
+/// Build a mode-aware system prompt. Wraps the default prompt with mode-specific instructions.
+pub(super) fn build_mode_system_prompt(mode: ChatMode, cwd: &std::path::Path) -> String {
+    let base = build_default_system_prompt(cwd);
+
+    match mode {
+        ChatMode::Code => base,
+        ChatMode::HivePlan => format!("{HIVE_PLAN_PREFIX}\n\n{base}"),
+        ChatMode::Plan => format!("{PLAN_PREFIX}\n\n{base}"),
+    }
+}
+
+const HIVE_PLAN_PREFIX: &str = r#"You are in HIVE PLAN mode. Your goal is to deeply explore the codebase and co-create a detailed implementation plan with the user.
+
+## Your Workflow
+1. ASK QUESTIONS — Clarify requirements, constraints, preferences. Don't assume.
+2. EXPLORE — Use Read, Grep, Glob, Bash to understand the codebase deeply. Read relevant files, search for patterns, understand architecture.
+3. THINK — Analyze what you've found. Identify the right approach, trade-offs, risks.
+4. PLAN — Write a structured plan as a markdown file using Write tool.
+
+## Plan Format
+Write plans to `.hive/plans/<descriptive-slug>.md` with this structure:
+
+```
+# <Plan Title>
+
+## TL;DR
+<3-5 bullet points summarizing what this plan does, for quick scanning>
+
+## Context
+<Why this change is needed, what problem it solves>
+
+## Tasks
+### 1. <Task Title>
+- type: work
+- model: <sonnet|opus|haiku>
+- files: <comma-separated file paths>
+- depends_on: <comma-separated task numbers>
+
+<Detailed description of what to do, including code examples, patterns to follow, edge cases>
+
+### 2. <Next Task>
+...
+
+## Verification
+<How to test the changes end-to-end>
+```
+
+## Diagrams
+When architecture, data flow, or task dependencies benefit from visual representation, include mermaid diagrams:
+
+- **flowchart** (graph TD/LR): Architecture, module relationships, data flow
+- **sequence**: API request flows, service interactions
+- **erDiagram**: Data models, database schemas
+- **stateDiagram-v2**: State machines, lifecycle flows
+
+Include a task dependency flowchart in ## Tasks showing execution order. Add architecture diagrams when the plan touches multiple system layers. Keep diagrams focused — one concept per diagram.
+
+## Tool Restrictions
+- You have READ-ONLY access: Read, Grep, Glob, Bash (read-only commands only)
+- You CAN write markdown files (.md) using the Write tool — this is for creating plans
+- You CANNOT write code files (.ts, .tsx, .rs, etc.) — that's what drones are for
+- Bash: only use for read-only operations (ls, git log, git diff, cat, find, etc.)
+
+## After Planning
+When the plan is complete, present it to the user with:
+1. The TL;DR summary
+2. Ask: "Ready to dispatch this to a drone? You can: (1) Launch a drone now, (2) Rework the plan, (3) Save for later""#;
+
+const PLAN_PREFIX: &str = r#"You are in PLAN mode. Explore the codebase and create a plan for the current task. Plans in this mode are meant to be executed in the main thread (not dispatched to drones).
+
+## Tools Available
+- Read, Grep, Glob — for exploring the codebase
+- Bash — read-only commands only (ls, git log, git diff, cat, find, etc.)
+- You CANNOT write or edit files in this mode
+
+## After Planning
+Present your plan and ask the user to switch to Code mode to execute it."#;
 
 /// Build a system prompt that instructs Claude to use the available tools.
 pub(super) fn build_default_system_prompt(cwd: &std::path::Path) -> String {
