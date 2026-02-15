@@ -1,4 +1,7 @@
-use axum::{extract::Path, Json};
+use axum::{
+    extract::{Path, Query},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::webui::error::{ApiError, ApiResult};
@@ -48,8 +51,32 @@ fn default_model() -> String {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn plans_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(".hive/plans")
+fn plans_dir_for(project_path: Option<&str>) -> std::path::PathBuf {
+    match project_path {
+        Some(root) => std::path::PathBuf::from(root).join(".hive/plans"),
+        None => std::path::PathBuf::from(".hive/plans"),
+    }
+}
+
+fn archived_dir_for(project_path: Option<&str>) -> std::path::PathBuf {
+    plans_dir_for(project_path).join("archived")
+}
+
+/// Shared query param for project-scoped plan endpoints.
+#[derive(Deserialize, Default)]
+pub struct ProjectQuery {
+    /// Project root path — scopes plans to `{project_path}/.hive/plans/`.
+    /// Falls back to CWD-relative `.hive/plans/` when absent.
+    #[serde(default)]
+    pub project_path: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ListPlansQuery {
+    #[serde(default)]
+    pub archived: Option<bool>,
+    #[serde(default)]
+    pub project_path: Option<String>,
 }
 
 fn extract_title(content: &str) -> String {
@@ -105,9 +132,16 @@ fn file_timestamps(path: &std::path::Path) -> (String, String) {
 
 // ── Handlers ───────────────────────────────────────────────────────────────
 
-/// GET /api/plans — list all plans
-pub async fn list_plans() -> ApiResult<Json<Vec<PlanSummary>>> {
-    let dir = plans_dir();
+/// GET /api/plans — list all plans (or archived plans with ?archived=true)
+///
+/// Accepts optional `project_path` query param to scope to a specific project.
+pub async fn list_plans(Query(query): Query<ListPlansQuery>) -> ApiResult<Json<Vec<PlanSummary>>> {
+    let pp = query.project_path.as_deref();
+    let dir = if query.archived.unwrap_or(false) {
+        archived_dir_for(pp)
+    } else {
+        plans_dir_for(pp)
+    };
     if !dir.is_dir() {
         return Ok(Json(vec![]));
     }
@@ -126,6 +160,12 @@ pub async fn list_plans() -> ApiResult<Json<Vec<PlanSummary>>> {
                 .to_string();
             let content = std::fs::read_to_string(&path).unwrap_or_default();
             let tasks = crate::plan_parser::parse_tasks(&content);
+
+            // Skip non-plan markdown files (no parseable tasks = not dispatchable)
+            if tasks.is_empty() {
+                continue;
+            }
+
             let (created_at, updated_at) = file_timestamps(&path);
 
             plans.push(PlanSummary {
@@ -144,12 +184,21 @@ pub async fn list_plans() -> ApiResult<Json<Vec<PlanSummary>>> {
     Ok(Json(plans))
 }
 
-/// GET /api/plans/{id} — read a specific plan
-pub async fn get_plan(Path(id): Path<String>) -> ApiResult<Json<PlanDetail>> {
-    let path = plans_dir().join(format!("{id}.md"));
-    if !path.is_file() {
+/// GET /api/plans/{id} — read a specific plan (checks both active and archived)
+pub async fn get_plan(
+    Path(id): Path<String>,
+    Query(q): Query<ProjectQuery>,
+) -> ApiResult<Json<PlanDetail>> {
+    let pp = q.project_path.as_deref();
+    let active_path = plans_dir_for(pp).join(format!("{id}.md"));
+    let archived_path = archived_dir_for(pp).join(format!("{id}.md"));
+    let path = if active_path.is_file() {
+        active_path
+    } else if archived_path.is_file() {
+        archived_path
+    } else {
         return Err(ApiError::NotFound(format!("Plan '{id}' not found")));
-    }
+    };
 
     let content = std::fs::read_to_string(&path)
         .map_err(|e| ApiError::Internal(anyhow::anyhow!("Cannot read plan: {e}")))?;
@@ -176,15 +225,67 @@ pub async fn get_plan(Path(id): Path<String>) -> ApiResult<Json<PlanDetail>> {
     }))
 }
 
-/// DELETE /api/plans/{id} — delete a plan
-pub async fn delete_plan(Path(id): Path<String>) -> ApiResult<Json<serde_json::Value>> {
-    let path = plans_dir().join(format!("{id}.md"));
-    if !path.is_file() {
+/// DELETE /api/plans/{id} — delete a plan (checks both active and archived)
+pub async fn delete_plan(
+    Path(id): Path<String>,
+    Query(q): Query<ProjectQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let pp = q.project_path.as_deref();
+    let active_path = plans_dir_for(pp).join(format!("{id}.md"));
+    let archived_path = archived_dir_for(pp).join(format!("{id}.md"));
+
+    let path = if active_path.is_file() {
+        active_path
+    } else if archived_path.is_file() {
+        archived_path
+    } else {
         return Err(ApiError::NotFound(format!("Plan '{id}' not found")));
-    }
+    };
 
     std::fs::remove_file(&path)
         .map_err(|e| ApiError::Internal(anyhow::anyhow!("Cannot delete plan: {e}")))?;
+
+    Ok(Json(serde_json::json!({"ok": true})))
+}
+
+/// POST /api/plans/{id}/archive — move plan to archived/
+pub async fn archive_plan(
+    Path(id): Path<String>,
+    Query(q): Query<ProjectQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let pp = q.project_path.as_deref();
+    let src = plans_dir_for(pp).join(format!("{id}.md"));
+    if !src.is_file() {
+        return Err(ApiError::NotFound(format!("Plan '{id}' not found")));
+    }
+
+    let dest_dir = archived_dir_for(pp);
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| ApiError::Internal(anyhow::anyhow!("Cannot create archived dir: {e}")))?;
+
+    let dest = dest_dir.join(format!("{id}.md"));
+    std::fs::rename(&src, &dest)
+        .map_err(|e| ApiError::Internal(anyhow::anyhow!("Cannot archive plan: {e}")))?;
+
+    Ok(Json(serde_json::json!({"ok": true})))
+}
+
+/// POST /api/plans/{id}/unarchive — move plan back from archived/
+pub async fn unarchive_plan(
+    Path(id): Path<String>,
+    Query(q): Query<ProjectQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let pp = q.project_path.as_deref();
+    let src = archived_dir_for(pp).join(format!("{id}.md"));
+    if !src.is_file() {
+        return Err(ApiError::NotFound(format!(
+            "Archived plan '{id}' not found"
+        )));
+    }
+
+    let dest = plans_dir_for(pp).join(format!("{id}.md"));
+    std::fs::rename(&src, &dest)
+        .map_err(|e| ApiError::Internal(anyhow::anyhow!("Cannot unarchive plan: {e}")))?;
 
     Ok(Json(serde_json::json!({"ok": true})))
 }
@@ -197,9 +298,11 @@ pub async fn delete_plan(Path(id): Path<String>) -> ApiResult<Json<serde_json::V
 /// block the HTTP response indefinitely.
 pub async fn dispatch_plan(
     Path(id): Path<String>,
+    Query(q): Query<ProjectQuery>,
     Json(body): Json<DispatchRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let path = plans_dir().join(format!("{id}.md"));
+    let pp = q.project_path.as_deref();
+    let path = plans_dir_for(pp).join(format!("{id}.md"));
     if !path.is_file() {
         return Err(ApiError::NotFound(format!("Plan '{id}' not found")));
     }

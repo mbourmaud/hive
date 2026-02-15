@@ -11,23 +11,15 @@
 /* ── Drag handle ─────────────────────────────────────────────────────── */
 
 [data-slot="sidebar-drag-handle"] {
-  width: 4px;
+  width: 1px;
   cursor: col-resize;
   flex-shrink: 0;
   position: relative;
-}
-
-[data-slot="sidebar-drag-handle"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  right: 0;
-  width: 1px;
   background: var(--color-sidebar-border);
   transition: background-color 120ms ease;
 }
 
-[data-slot="sidebar-drag-handle"]:hover::after {
+[data-slot="sidebar-drag-handle"]:hover {
   background: oklch(from var(--color-accent) l c h / 40%);
 }
 
@@ -183,7 +175,7 @@
 }
 
 [data-slot="drone-panel-detail"] {
-  padding: 8px 12px 12px;
+  padding: 6px 12px 10px;
   border-bottom: 1px solid var(--color-sidebar-border);
   background: oklch(from var(--color-accent) l c h / 4%);
 }
@@ -195,6 +187,51 @@
   padding: 8px 12px;
   border-top: 1px solid var(--color-sidebar-border);
   flex-shrink: 0;
+}
+
+/* ── Archived plans ─────────────────────────────────────────────────── */
+
+[data-slot="archived-section-trigger"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--color-sidebar-border);
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+[data-slot="archived-section-trigger"]:hover {
+  background: var(--color-muted);
+}
+
+[data-slot="archived-plan-item"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 20px;
+  border-bottom: 1px solid oklch(from var(--color-sidebar-border) l c h / 30%);
+}
+
+[data-slot="archived-plan-item"] .archived-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: none;
+  background: none;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 100ms ease, color 100ms ease;
+}
+
+[data-slot="archived-plan-item"] .archived-action:hover {
+  opacity: 1;
 }
 
 /* ── Plan TL;DR compact markdown ─────────────────────────────────────── */

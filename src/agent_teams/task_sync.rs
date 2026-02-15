@@ -19,6 +19,8 @@ pub struct TeamTaskInfo {
     pub created_at: Option<u64>,
     /// Epoch millis when task was last updated
     pub updated_at: Option<u64>,
+    /// Blocking task IDs (pending dependencies)
+    pub blocked_by: Vec<String>,
 }
 
 /// Team member info from config

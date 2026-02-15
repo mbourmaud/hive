@@ -32,52 +32,55 @@ export function IconBar({
   statusPopoverOpen,
   onStatusPopoverChange,
 }: IconBarProps) {
-  // Only show registry projects — monitor projects are used elsewhere (drone panel)
   const displayProjects = registryProjects;
 
   return (
     <nav data-component="icon-bar">
-      {/* Bee logo */}
-      <div className="mb-2">
-        <img src={beeIcon} alt="Hive" className="w-7 h-7" />
+      {/* Logo header — 48px, aligned with context-bar & sidebar tabs */}
+      <div data-slot="icon-bar-header">
+        <div data-slot="icon-bar-logo">
+          <img src={beeIcon} alt="Hive" className="w-8 h-8" />
+        </div>
       </div>
 
       {/* Project icons */}
-      {displayProjects.map((project) => {
-        const initial = project.name.charAt(0).toUpperCase();
-        const isActive = activeProject === project.path;
-        const accent = getAccentForTheme(project.color_theme);
+      <div data-slot="icon-bar-projects">
+        {displayProjects.map((project) => {
+          const initial = project.name.charAt(0).toUpperCase();
+          const isActive = activeProject === project.path;
+          const accent = getAccentForTheme(project.color_theme);
 
-        return (
-          <button
-            key={project.path}
-            type="button"
-            data-slot="icon-bar-item"
-            data-active={isActive || undefined}
-            onClick={() => onSelectProject(project.path)}
-            title={project.name}
-            style={
-              isActive && accent
-                ? ({ "--project-accent": accent } as React.CSSProperties)
-                : undefined
-            }
-          >
-            <Avatar className="h-[28px] w-[28px] rounded-lg">
-              {project.image_url && <AvatarImage src={project.image_url} alt={project.name} />}
-              <AvatarFallback className="rounded-lg bg-transparent text-inherit text-[13px] font-bold">
-                {initial}
-              </AvatarFallback>
-            </Avatar>
+          return (
+            <button
+              key={project.path}
+              type="button"
+              data-slot="icon-bar-item"
+              data-active={isActive || undefined}
+              onClick={() => onSelectProject(project.path)}
+              title={project.name}
+              style={
+                isActive && accent
+                  ? ({ "--project-accent": accent } as React.CSSProperties)
+                  : undefined
+              }
+            >
+              <Avatar className="h-[34px] w-[34px] rounded-lg">
+                {project.image_url && <AvatarImage src={project.image_url} alt={project.name} />}
+                <AvatarFallback className="rounded-lg bg-transparent text-inherit text-[15px] font-bold">
+                  {initial}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          );
+        })}
+
+        {/* Add project button */}
+        {onAddProject && (
+          <button type="button" data-slot="icon-bar-add" onClick={onAddProject} title="Add project">
+            <Plus className="h-4 w-4" />
           </button>
-        );
-      })}
-
-      {/* Add project button */}
-      {onAddProject && (
-        <button type="button" data-slot="icon-bar-add" onClick={onAddProject} title="Add project">
-          <Plus className="h-4 w-4" />
-        </button>
-      )}
+        )}
+      </div>
 
       {/* Footer */}
       <div data-slot="icon-bar-footer">

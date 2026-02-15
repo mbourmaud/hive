@@ -85,42 +85,42 @@ function handleSessions(_args: string[], ctx: SlashCommandContext): void {
 
 function handleHelp(_args: string[], ctx: SlashCommandContext): void {
   ctx.toast(
-    "Commands: /new, /clear, /sessions, /model <name>, /launch <name> <prompt>, /status, /stop <name>, /logs <name>, /help",
+    "Commands: /new, /clear, /sessions, /model <name>, /dispatch <plan-id>, /plans, /status, /stop <name>, /logs <name>, /help",
     "info",
   );
 }
 
-async function handleLaunch(args: string[], ctx: SlashCommandContext): Promise<void> {
-  const droneName = args[0];
-  const prompt = args.slice(1).join(" ");
-  if (!droneName || !prompt) {
-    ctx.toast("Usage: /launch <name> <prompt>", "info");
+async function handleDispatch(args: string[], ctx: SlashCommandContext): Promise<void> {
+  const planId = args[0];
+  if (!planId) {
+    ctx.toast("Usage: /dispatch <plan-id> [drone-name]", "info");
     return;
   }
-  ctx.toast(`Launching drone '${droneName}'...`, "info");
+  const droneName = args[1] || planId;
+  const model = ctx.selectedModel ?? "sonnet";
+  ctx.toast(`Dispatching plan '${planId}'...`, "info");
   try {
-    const res = await fetch("/api/drones/launch", {
+    const res = await fetch(`/api/plans/${planId}/dispatch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: droneName,
-        prompt,
-        model: ctx.selectedModel ?? "sonnet",
-        mode: "agent-team",
-      }),
+      body: JSON.stringify({ droneName, model }),
     });
     if (res.ok) {
-      ctx.toast(`Drone '${droneName}' launched`, "success");
-      ctx.dispatchChat({ type: "DRONE_LAUNCHED", droneName, prompt });
+      ctx.toast(`Drone '${droneName}' launched from plan '${planId}'`, "success");
+      ctx.dispatchChat({ type: "DRONE_LAUNCHED", droneName, prompt: `Plan: ${planId}` });
       if (ctx.rightSidebarCollapsed) ctx.openRightSidebar("drones");
     } else {
       const text = await res.text();
-      ctx.toast(`Failed to launch: ${text}`, "error");
+      ctx.toast(`Failed to dispatch: ${text}`, "error");
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    ctx.toast(`Launch failed: ${msg}`, "error");
+    ctx.toast(`Dispatch failed: ${msg}`, "error");
   }
+}
+
+function handlePlans(_args: string[], ctx: SlashCommandContext): void {
+  ctx.openRightSidebar("plans");
 }
 
 function handleStatus(_args: string[], ctx: SlashCommandContext): void {
@@ -205,7 +205,8 @@ const COMMANDS: SlashCommandDef[] = [
   { name: "undo", execute: handleUndo },
   { name: "sessions", execute: handleSessions },
   { name: "help", execute: handleHelp },
-  { name: "launch", execute: handleLaunch },
+  { name: "dispatch", aliases: ["launch"], execute: handleDispatch },
+  { name: "plans", execute: handlePlans },
   { name: "status", execute: handleStatus },
   { name: "stop", execute: handleStop },
   { name: "logs", aliases: ["log"], execute: handleLogs },

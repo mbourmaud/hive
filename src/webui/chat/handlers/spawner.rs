@@ -6,7 +6,7 @@ use crate::webui::auth::credentials;
 use crate::webui::mcp_client::pool::McpPool;
 
 use super::super::persistence::{append_event, save_messages, update_meta_status};
-use super::super::session::{ChatMode, Effort, SessionStatus, SessionStore};
+use super::super::session::{ChatMode, Effort, SessionStatus, SessionStore, ToolPolicy};
 use super::agentic::{run_agentic_loop, AgenticLoopParams};
 
 use anthropic::types::Message;
@@ -46,11 +46,21 @@ pub(super) fn spawn_agentic_task(params: AgenticTaskParams) {
         mcp_pool,
     } = params;
 
-    // Strip tools when in plan modes (Hive Plan / Plan)
-    let tools_opt = if chat_mode.tools_disabled() {
-        None
-    } else {
-        tools_opt
+    // Filter tools based on chat mode policy
+    let tools_opt = match chat_mode.tool_policy() {
+        ToolPolicy::AllTools => tools_opt,
+        ToolPolicy::ReadOnly => tools_opt.map(|tools| {
+            tools
+                .into_iter()
+                .filter(|t| matches!(t.name.as_str(), "Read" | "Grep" | "Glob" | "Bash"))
+                .collect()
+        }),
+        ToolPolicy::PlanReadOnly => tools_opt.map(|tools| {
+            tools
+                .into_iter()
+                .filter(|t| matches!(t.name.as_str(), "Read" | "Write" | "Grep" | "Glob" | "Bash"))
+                .collect()
+        }),
     };
 
     tokio::spawn(async move {

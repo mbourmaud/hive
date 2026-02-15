@@ -12,6 +12,7 @@ fn make_task(id: &str, status: &str) -> TeamTaskInfo {
         is_internal: false,
         created_at: None,
         updated_at: None,
+        blocked_by: Vec::new(),
     }
 }
 
@@ -138,6 +139,7 @@ fn test_persist_and_load_snapshot() {
             is_internal: false,
             created_at: Some(1000),
             updated_at: Some(2000),
+            blocked_by: Vec::new(),
         },
         TeamTaskInfo {
             id: "2".to_string(),
@@ -150,6 +152,7 @@ fn test_persist_and_load_snapshot() {
             is_internal: true,
             created_at: None,
             updated_at: None,
+            blocked_by: Vec::new(),
         },
     ];
     let members = vec![TeamMember {

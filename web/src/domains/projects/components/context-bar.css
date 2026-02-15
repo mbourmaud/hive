@@ -1,7 +1,7 @@
 /* ── Context Bar ──────────────────────────────────────────────────────── */
 
 [data-component="context-bar"] {
-  height: 32px;
+  height: 48px;
   display: flex;
   align-items: center;
   gap: 10px;

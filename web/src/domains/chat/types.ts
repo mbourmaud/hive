@@ -96,13 +96,18 @@ export interface CompactEvent {
   total_output: number;
 }
 
+export interface SessionCompletedEvent {
+  type: "session.completed";
+}
+
 export type StreamEvent =
   | SystemEvent
   | AssistantEvent
   | UserEvent
   | ResultEvent
   | UsageEvent
-  | CompactEvent;
+  | CompactEvent
+  | SessionCompletedEvent;
 
 // ── Assistant part types (rendered in UI) ───────────────────────────────────
 

@@ -12,6 +12,8 @@ pub struct ProjectInfo {
 #[derive(Debug, Clone, Serialize)]
 pub struct DroneInfo {
     pub name: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
     pub status: String,
     pub branch: String,
     pub worktree: String,
@@ -45,6 +47,8 @@ pub struct TaskInfo {
     pub active_form: Option<String>,
     pub is_internal: bool,
     pub duration: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocked_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

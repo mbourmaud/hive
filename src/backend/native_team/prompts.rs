@@ -14,7 +14,7 @@ pub fn build_worker_prompt(
 ) -> String {
     let plan_content = std::fs::read_to_string(&config.prd_path).unwrap_or_default();
 
-    let worker_name = format!("worker-{}", task.number);
+    let worker_name = task.worker_name();
     format!(
         r#"You are worker "{worker_name}" on team "{team_name}".
 

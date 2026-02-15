@@ -25,7 +25,7 @@ use super::super::persistence::{
 use super::super::session::{ChatMode, Effort, SessionStatus, SessionStore};
 use super::sessions::restore_session_from_disk;
 use super::spawner::{spawn_agentic_task, AgenticTaskParams};
-use super::system_prompt::{build_default_system_prompt, resolve_slash_command};
+use super::system_prompt::{build_mode_system_prompt, resolve_slash_command};
 
 /// GET /api/chat/sessions/{id}/stream
 pub async fn stream_session(
@@ -187,7 +187,7 @@ pub async fn send_message(
     let system_prompt = session
         .system_prompt
         .clone()
-        .or_else(|| Some(build_default_system_prompt(&session.cwd)));
+        .or_else(|| Some(build_mode_system_prompt(session.chat_mode, &session.cwd)));
 
     let model_resolved = anthropic::model::resolve_model(&session.model).to_string();
     let mut session_tools: Vec<anthropic::types::ToolDefinition> = session.tools.clone();

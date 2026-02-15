@@ -50,15 +50,26 @@ impl Effort {
     }
 }
 
+/// Tool availability policy for each chat mode.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ToolPolicy {
+    /// All tools available (Code mode)
+    AllTools,
+    /// Read-only tools: Read, Grep, Glob, Bash (read-only commands only)
+    ReadOnly,
+    /// Plan read-only: Read, Grep, Glob, Bash (read-only) + Write (markdown only)
+    PlanReadOnly,
+}
+
 /// Chat mode controlling tool availability and output format.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChatMode {
     /// Regular coding assistant — all tools available
     Code,
-    /// Hive structured plan — no tools, outputs drone-parseable markdown
+    /// Hive structured plan — read-only + Write(.md), outputs drone-parseable markdown
     HivePlan,
-    /// Claude freeform plan — no tools, outputs freeform markdown
+    /// Claude freeform plan — read-only only, outputs freeform markdown
     Plan,
 }
 
@@ -72,9 +83,13 @@ impl ChatMode {
         }
     }
 
-    /// Whether tools should be disabled in this mode.
-    pub fn tools_disabled(self) -> bool {
-        matches!(self, Self::HivePlan | Self::Plan)
+    /// Get the tool policy for this chat mode.
+    pub fn tool_policy(self) -> ToolPolicy {
+        match self {
+            Self::Code => ToolPolicy::AllTools,
+            Self::Plan => ToolPolicy::ReadOnly,
+            Self::HivePlan => ToolPolicy::PlanReadOnly,
+        }
     }
 }
 

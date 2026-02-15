@@ -1,11 +1,12 @@
 import * as Tabs from "@radix-ui/react-tabs";
-import { Bot, GripVertical, Info, PanelRightClose } from "lucide-react";
+import { Bot, FileText, Info, PanelRightClose } from "lucide-react";
 import type { ChatSession, ChatTurn, ContextUsage } from "@/domains/chat/types";
 import type { RightSidebarTab } from "@/domains/monitor/store";
 import type { DroneInfo } from "@/domains/monitor/types";
 import { useResizablePanel } from "@/shared/hooks/use-resizable-panel";
 import { ContextContent } from "./context-content";
 import { DroneContent } from "./drone-content";
+import { PlansContent } from "./plans-content";
 import "./right-sidebar.css";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ interface RightSidebarProps {
 
 const TAB_CONFIG: { value: RightSidebarTab; label: string; icon: typeof Bot }[] = [
   { value: "drones", label: "Drones", icon: Bot },
+  { value: "plans", label: "Plans", icon: FileText },
   { value: "context", label: "Context", icon: Info },
 ];
 
@@ -90,11 +92,7 @@ export function RightSidebar({
     <>
       {/* Drag handle */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: resize drag handle */}
-      <div data-slot="sidebar-drag-handle" onMouseDown={onMouseDown}>
-        <div className="absolute inset-y-0 -left-0.5 -right-0.5 flex items-center justify-center group">
-          <GripVertical className="h-4 w-4 text-border opacity-0 group-hover:opacity-60 transition-opacity" />
-        </div>
-      </div>
+      <div data-slot="sidebar-drag-handle" onMouseDown={onMouseDown} />
 
       <Tabs.Root
         data-component="right-sidebar"
@@ -128,6 +126,11 @@ export function RightSidebar({
         {/* Drones tab */}
         <Tabs.Content value="drones" data-slot="sidebar-tab-content" className="flex flex-col">
           <DroneContent drones={drones} connectionStatus={connectionStatus} />
+        </Tabs.Content>
+
+        {/* Plans tab */}
+        <Tabs.Content value="plans" data-slot="sidebar-tab-content" className="flex flex-col">
+          <PlansContent onDispatch={() => onTabChange("drones")} />
         </Tabs.Content>
 
         {/* Context tab */}

@@ -1,5 +1,6 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { TaskList } from "@/domains/monitor/components/task-list";
 import { TeamBar } from "@/domains/monitor/components/team-bar";
 import type { DroneInfo } from "@/domains/monitor/types";
@@ -57,8 +58,26 @@ function livenessColor(liveness: string) {
 
 // ── Drone Content ───────────────────────────────────────────────────────────
 
+const NON_CLEANABLE_STATES = new Set(["working", "cleaning"]);
+
 export function DroneContent({ drones, connectionStatus }: DroneContentProps) {
   const [expandedDrone, setExpandedDrone] = useState<string | null>(null);
+  const [cleaning, setCleaning] = useState<string | null>(null);
+
+  // Clear cleaning state once the drone disappears from the list or transitions to "cleaning"
+  useEffect(() => {
+    if (cleaning && !drones.some((d) => d.name === cleaning)) {
+      setCleaning(null);
+    }
+  }, [cleaning, drones]);
+
+  const handleClean = useCallback(async (name: string) => {
+    setCleaning(name);
+    try {
+      await fetch(`/api/drones/${encodeURIComponent(name)}/clean`, { method: "POST" });
+    } catch { /* drone disappears on next SSE poll */ }
+    // Don't clear cleaning here — wait for drone to disappear from SSE
+  }, []);
 
   return (
     <>
@@ -75,6 +94,9 @@ export function DroneContent({ drones, connectionStatus }: DroneContentProps) {
                 drone={drone}
                 isExpanded={isExpanded}
                 onToggle={() => setExpandedDrone(isExpanded ? null : drone.name)}
+                canClean={!NON_CLEANABLE_STATES.has(drone.liveness)}
+                isCleaning={cleaning === drone.name}
+                onClean={() => handleClean(drone.name)}
               />
             );
           })
@@ -100,10 +122,16 @@ function DroneListItem({
   drone,
   isExpanded,
   onToggle,
+  canClean,
+  isCleaning,
+  onClean,
 }: {
   drone: DroneInfo;
   isExpanded: boolean;
   onToggle: () => void;
+  canClean: boolean;
+  isCleaning: boolean;
+  onClean: () => void;
 }) {
   const [done, total] = drone.progress;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -119,20 +147,27 @@ function DroneListItem({
                 <div className="absolute inset-0 rounded-full bg-honey animate-[pulse-ring_2s_ease-out_infinite]" />
               )}
             </div>
-            <span className="text-sm font-semibold truncate flex-1">{drone.name}</span>
+            <span className="text-sm font-semibold truncate flex-1">
+              {drone.title ?? drone.name}
+            </span>
             <span className="text-xs text-muted-foreground shrink-0">
               {done}/{total}
             </span>
             <span className="text-[11px] text-muted-foreground shrink-0">{drone.elapsed}</span>
           </div>
-          <Progress value={pct} className="h-1 mt-2" />
+          {drone.description && (
+            <p className="text-[11px] text-muted-foreground leading-snug mt-1 line-clamp-2">
+              {drone.description}
+            </p>
+          )}
+          <Progress value={pct} className="h-1 mt-1.5" />
         </button>
       </Collapsible.Trigger>
 
       <Collapsible.Content>
         <div data-slot="drone-panel-detail">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
               Cost
             </span>
             <span className="text-xs font-semibold text-accent">
@@ -141,8 +176,8 @@ function DroneListItem({
           </div>
 
           {drone.tasks.length > 0 && (
-            <div className="mb-3">
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+            <div className="mb-2">
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
                 Tasks
               </div>
               <TaskList tasks={drone.tasks} members={drone.members} />
@@ -151,7 +186,7 @@ function DroneListItem({
 
           {drone.members.length > 0 && (
             <div>
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">
                 Team
               </div>
               <TeamBar
@@ -159,6 +194,20 @@ function DroneListItem({
                 leadModel={drone.lead_model}
                 droneLiveness={drone.liveness}
               />
+            </div>
+          )}
+
+          {canClean && (
+            <div className="flex justify-end pt-3 mt-3 border-t border-sidebar-border">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                onClick={(e) => { e.stopPropagation(); onClean(); }}
+                disabled={isCleaning}
+              >
+                <Trash2 className="h-3 w-3" />
+                {isCleaning ? "Cleaning..." : "Clean"}
+              </button>
             </div>
           )}
         </div>

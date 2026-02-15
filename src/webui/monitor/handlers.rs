@@ -149,6 +149,30 @@ pub async fn launch_drone(
     }
 }
 
+/// POST /api/drones/{name}/clean — clean a drone and archive its plan.
+pub async fn clean_drone(
+    State(_state): State<Arc<MonitorState>>,
+    Path(name): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let name_for_archive = name.clone();
+    tokio::task::spawn_blocking(move || {
+        // Read status to get the plan filename
+        let status_path = std::path::PathBuf::from(".hive/drones")
+            .join(&name_for_archive)
+            .join("status.json");
+        if let Ok(contents) = std::fs::read_to_string(&status_path) {
+            if let Ok(status) = serde_json::from_str::<crate::types::DroneStatus>(&contents) {
+                let _ = crate::commands::kill_clean::archive_plan_file(&status.prd);
+            }
+        }
+        crate::commands::kill_clean::clean_background(name_for_archive);
+    })
+    .await
+    .map_err(|e| ApiError::Internal(anyhow::anyhow!("Clean failed: {e}")))?;
+
+    Ok(Json(serde_json::json!({"ok": true})))
+}
+
 /// POST /api/drones/{name}/stop — stop a running drone.
 pub async fn stop_drone(
     State(_state): State<Arc<MonitorState>>,

@@ -55,7 +55,7 @@ pub struct WorkerConfig {
 /// worker completes (or fails) its task.
 pub fn spawn_worker(config: WorkerConfig) -> WorkerHandle {
     let task_number = config.task.number;
-    let worker_name = format!("worker-{}", task_number);
+    let worker_name = config.task.worker_name();
     let abort_flag = Arc::new(AtomicBool::new(false));
     let abort_clone = abort_flag.clone();
 
@@ -76,7 +76,7 @@ pub fn spawn_worker(config: WorkerConfig) -> WorkerHandle {
 async fn run_worker(config: WorkerConfig, abort_flag: Arc<AtomicBool>) -> Result<WorkerResult> {
     let task_number = config.task.number;
     let model_id = resolve_model(&config.model).to_string();
-    let worker_name = format!("worker-{task_number}");
+    let worker_name = config.task.worker_name();
 
     // Build initial system prompt with file ownership constraints
     let ownership_hint = ownership_prompt_for_files(&config.task.files);
@@ -118,6 +118,9 @@ async fn run_worker(config: WorkerConfig, abort_flag: Arc<AtomicBool>) -> Result
         };
 
         let result_messages = run_agentic_loop(params).await?;
+
+        // Emit cost from session store
+        emit_cost_from_store(&config.session_store, &worker_name, &config.emitter).await;
 
         // Emit ToolDone events for TUI tool history
         emit_tool_events(&config.emitter, &result_messages);
@@ -250,6 +253,24 @@ fn extract_progress_summary(messages: &[Message]) -> String {
         summary.truncate(2000);
     }
     summary
+}
+
+/// Emit accumulated cost from the session store to cost.ndjson.
+async fn emit_cost_from_store(
+    store: &crate::webui::chat::session::SessionStore,
+    session_id: &str,
+    emitter: &EventEmitter,
+) {
+    let sessions = store.lock().await;
+    if let Some(s) = sessions.get(session_id) {
+        let usage = crate::webui::anthropic::types::UsageStats {
+            input_tokens: s.total_input_tokens,
+            output_tokens: s.total_output_tokens,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+        };
+        emitter.emit_cost(&usage);
+    }
 }
 
 /// Emit ToolDone events for each tool_use in the messages.

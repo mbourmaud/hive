@@ -55,18 +55,7 @@ pub async fn start_server_async(port: u16) -> Result<()> {
         println!("  Network: http://{}:{}", ip, port);
     }
 
-    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
-        Ok(l) => l,
-        Err(e) => {
-            if e.kind() == std::io::ErrorKind::AddrInUse {
-                anyhow::bail!(
-                    "Port {} is already in use. Try a different port with --port <PORT>",
-                    port
-                );
-            }
-            return Err(e.into());
-        }
-    };
+    let listener = bind_with_reuse(port).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -74,6 +63,22 @@ pub async fn start_server_async(port: u16) -> Result<()> {
 
 async fn serve_index() -> Html<&'static str> {
     Html(EMBEDDED_HTML)
+}
+
+/// Bind a TCP listener with SO_REUSEADDR so `cargo-watch` restarts reclaim the port instantly.
+async fn bind_with_reuse(port: u16) -> Result<tokio::net::TcpListener> {
+    let addr: std::net::SocketAddr = format!("0.0.0.0:{port}").parse()?;
+    let socket = socket2::Socket::new(
+        socket2::Domain::IPV4,
+        socket2::Type::STREAM,
+        Some(socket2::Protocol::TCP),
+    )?;
+    socket.set_reuse_address(true)?;
+    socket.set_nonblocking(true)?;
+    socket.bind(&addr.into())?;
+    socket.listen(1024)?;
+    let std_listener: std::net::TcpListener = socket.into();
+    Ok(tokio::net::TcpListener::from_std(std_listener)?)
 }
 
 /// Detect the machine's LAN IP address by opening a UDP socket to a public address.

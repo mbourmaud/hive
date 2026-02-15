@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 
-export type RightSidebarTab = "drones" | "context";
+export type RightSidebarTab = "drones" | "plans" | "context";
 
 export interface MonitorSlice {
   selectedProject: string | null;

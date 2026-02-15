@@ -49,6 +49,8 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         error_count: 0,
         last_error: None,
         lead_model: None,
+        title: None,
+        description: None,
         active_agents: HashMap::new(),
     };
 
@@ -273,6 +275,8 @@ fn test_drone_state_transitions() {
             error_count: 0,
             last_error: None,
             lead_model: None,
+            title: None,
+            description: None,
             active_agents: HashMap::new(),
         };
 

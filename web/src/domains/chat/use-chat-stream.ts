@@ -43,6 +43,15 @@ export function useChat(baseUrl: string = "") {
     queue.rafId = null;
 
     dispatchChat({ type: "STREAM_EVENT_BATCH", events: coalesced });
+
+    // Auto-open Plans tab when HivePlan session completes
+    const hasSessionCompleted = coalesced.some((e) => e.type === "session.completed");
+    if (hasSessionCompleted) {
+      const { chatMode, openRightSidebar } = useAppStore.getState();
+      if (chatMode === "hive-plan") {
+        openRightSidebar("plans");
+      }
+    }
   }, [dispatchChat]);
 
   const enqueueEvent = useCallback(

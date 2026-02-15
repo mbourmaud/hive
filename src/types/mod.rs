@@ -44,6 +44,82 @@ pub struct StructuredTask {
     pub depends_on: Vec<usize>,
 }
 
+impl StructuredTask {
+    /// Generate a short, meaningful worker name from the task title.
+    ///
+    /// Examples:
+    /// - "Add JWT authentication middleware" → "jwt-auth"
+    /// - "Migrate database schema to v2" → "db-schema"
+    /// - "Write integration tests for API" → "api-tests"
+    pub fn worker_name(&self) -> String {
+        // Stop words to filter out
+        const STOP: &[&str] = &[
+            "add",
+            "create",
+            "implement",
+            "write",
+            "build",
+            "set",
+            "up",
+            "update",
+            "fix",
+            "the",
+            "a",
+            "an",
+            "for",
+            "to",
+            "and",
+            "with",
+            "from",
+            "in",
+            "on",
+            "of",
+            "new",
+            "all",
+            "support",
+            "refactor",
+            "migrate",
+            "configure",
+            "enable",
+            "setup",
+        ];
+
+        let words: Vec<&str> = self
+            .title
+            .split_whitespace()
+            .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
+            .filter(|w| !w.is_empty())
+            .filter(|w| !STOP.contains(&w.to_lowercase().as_str()))
+            .take(3)
+            .collect();
+
+        if words.is_empty() {
+            return format!("worker-{}", self.number);
+        }
+
+        // Build name, staying within 20 chars
+        let mut name = String::new();
+        for w in &words {
+            let lower = w.to_lowercase();
+            let candidate = if name.is_empty() {
+                lower.clone()
+            } else {
+                format!("{name}-{lower}")
+            };
+            if candidate.len() > 20 {
+                break;
+            }
+            name = candidate;
+        }
+
+        if name.is_empty() {
+            format!("worker-{}", self.number)
+        } else {
+            name
+        }
+    }
+}
+
 /// Plan — a markdown file with metadata extracted from content/filename.
 #[derive(Debug, Clone)]
 pub struct Plan {
@@ -65,6 +141,31 @@ impl Plan {
             .find(|line| line.starts_with("# "))
             .map(|line| line.trim_start_matches("# ").trim())
             .unwrap_or(&self.id)
+    }
+
+    /// Extract a one-line description from the `## Context` section.
+    /// Takes the first non-empty line of text after the heading.
+    pub fn description(&self) -> Option<String> {
+        let lines: Vec<&str> = self.content.lines().collect();
+        let start = lines.iter().position(|l| {
+            let t = l.trim().to_lowercase();
+            t == "## context"
+        })?;
+
+        lines[start + 1..]
+            .iter()
+            .find(|l| {
+                let trimmed = l.trim();
+                !trimmed.is_empty() && !trimmed.starts_with('#')
+            })
+            .map(|l| {
+                let s = l.trim().to_string();
+                if s.len() > 150 {
+                    format!("{}...", &s[..147])
+                } else {
+                    s
+                }
+            })
     }
 }
 
@@ -126,6 +227,12 @@ pub struct DroneStatus {
     pub error_count: usize,
     #[serde(default, alias = "last_error_story")]
     pub last_error: Option<String>,
+    /// Human-readable title (from plan's `# ...` heading)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Short description (from plan's `## TL;DR` section)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Model used for the team lead (e.g. "opus", "sonnet")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lead_model: Option<String>,

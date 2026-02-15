@@ -44,7 +44,7 @@ fn test_preseed_tasks_filters_work_only() {
 
     // Only Work tasks should be seeded
     assert_eq!(seeded.len(), 1);
-    assert_eq!(seeded[0].subject, "Implement feature");
+    assert_eq!(seeded[0].subject, "US-001: Implement feature");
     assert_eq!(seeded[0].status, "pending");
     assert_eq!(seeded[0].id, "1");
 

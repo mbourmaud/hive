@@ -21,21 +21,29 @@ pub(crate) struct CostSummary {
 }
 
 /// Parse cost/token info from a drone's activity.log at a specific project root.
+/// Falls back to cost.ndjson (native team mode) if activity.log doesn't exist.
 pub(crate) fn parse_cost_from_log_at(project_root: &Path, drone_name: &str) -> CostSummary {
-    let log_path = project_root
-        .join(".hive/drones")
-        .join(drone_name)
-        .join("activity.log");
-    parse_cost_from_log_path(&log_path)
+    let drone_dir = project_root.join(".hive/drones").join(drone_name);
+    let log_path = drone_dir.join("activity.log");
+    let summary = parse_cost_from_log_path(&log_path);
+    if summary.total_cost_usd > 0.0 || summary.input_tokens > 0 {
+        return summary;
+    }
+    // Fallback: native team cost.ndjson
+    parse_cost_from_ndjson(&drone_dir.join("cost.ndjson"))
 }
 
 /// Parse cost/token info from a drone's activity.log (stream-json format).
-/// Reads only the last 8KB of the file for efficiency (cost data is cumulative).
+/// Falls back to cost.ndjson (native team mode) if activity.log doesn't exist.
 pub(crate) fn parse_cost_from_log(drone_name: &str) -> CostSummary {
-    let log_path = PathBuf::from(".hive/drones")
-        .join(drone_name)
-        .join("activity.log");
-    parse_cost_from_log_path(&log_path)
+    let drone_dir = PathBuf::from(".hive/drones").join(drone_name);
+    let log_path = drone_dir.join("activity.log");
+    let summary = parse_cost_from_log_path(&log_path);
+    if summary.total_cost_usd > 0.0 || summary.input_tokens > 0 {
+        return summary;
+    }
+    // Fallback: native team cost.ndjson
+    parse_cost_from_ndjson(&drone_dir.join("cost.ndjson"))
 }
 
 fn parse_cost_from_log_path(log_path: &Path) -> CostSummary {
@@ -107,6 +115,62 @@ fn parse_cost_from_log_path(log_path: &Path) -> CostSummary {
     }
 
     summary
+}
+
+/// Pricing constants (per million tokens, Sonnet 4.5 as default).
+const INPUT_PRICE_PER_M: f64 = 3.0;
+const OUTPUT_PRICE_PER_M: f64 = 15.0;
+const CACHE_READ_PRICE_PER_M: f64 = 0.30;
+const CACHE_CREATE_PRICE_PER_M: f64 = 3.75;
+
+/// Parse cost from native team cost.ndjson.
+/// Each line has incremental usage from one agentic loop call.
+/// We take the latest line (most recent cumulative snapshot from worker).
+fn parse_cost_from_ndjson(path: &Path) -> CostSummary {
+    let contents = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return CostSummary::default(),
+    };
+
+    let mut total_input: u64 = 0;
+    let mut total_output: u64 = 0;
+    let mut total_cache_read: u64 = 0;
+    let mut total_cache_create: u64 = 0;
+
+    for line in contents.lines() {
+        let parsed: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        // Each line is a snapshot of one worker's session at that point.
+        // Sum across all workers (each worker writes its cumulative totals).
+        if let Some(v) = parsed.get("input_tokens").and_then(|v| v.as_u64()) {
+            total_input += v;
+        }
+        if let Some(v) = parsed.get("output_tokens").and_then(|v| v.as_u64()) {
+            total_output += v;
+        }
+        if let Some(v) = parsed.get("cache_read").and_then(|v| v.as_u64()) {
+            total_cache_read += v;
+        }
+        if let Some(v) = parsed.get("cache_create").and_then(|v| v.as_u64()) {
+            total_cache_create += v;
+        }
+    }
+
+    let cost = (total_input as f64 * INPUT_PRICE_PER_M
+        + total_output as f64 * OUTPUT_PRICE_PER_M
+        + total_cache_read as f64 * CACHE_READ_PRICE_PER_M
+        + total_cache_create as f64 * CACHE_CREATE_PRICE_PER_M)
+        / 1_000_000.0;
+
+    CostSummary {
+        total_cost_usd: cost,
+        input_tokens: total_input,
+        output_tokens: total_output,
+        cache_read_tokens: total_cache_read,
+        cache_creation_tokens: total_cache_create,
+    }
 }
 
 /// Format a token count as human-readable (e.g., "12.3k", "1.2M").

@@ -56,6 +56,40 @@ fn test_structured_task_defaults() {
 }
 
 #[test]
+fn test_worker_name_generation() {
+    let make = |title: &str| StructuredTask {
+        number: 1,
+        title: title.to_string(),
+        body: String::new(),
+        task_type: TaskType::Work,
+        model: None,
+        parallel: false,
+        files: Vec::new(),
+        depends_on: Vec::new(),
+    };
+
+    // Stops at word boundary when would exceed 20 chars
+    assert_eq!(
+        make("Add JWT authentication middleware").worker_name(),
+        "jwt-authentication"
+    );
+    assert_eq!(
+        make("Implement user registration flow").worker_name(),
+        "user-registration"
+    );
+    assert_eq!(
+        make("Write integration tests for API").worker_name(),
+        "integration-tests"
+    );
+    assert_eq!(
+        make("Create database schema").worker_name(),
+        "database-schema"
+    );
+    // Fallback to worker-N when all words are stop words
+    assert_eq!(make("Set up and configure").worker_name(), "worker-1");
+}
+
+#[test]
 fn test_legacy_json_plan_conversion() {
     let json = r###"{
         "id": "my-feature",

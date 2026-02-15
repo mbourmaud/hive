@@ -41,5 +41,14 @@ pub fn routes(sessions: SessionStore) -> Router {
             "/api/chat/sessions/{id}/compact",
             post(handlers::compact_session),
         )
+        // Plan management
+        .route("/api/plans", get(handlers::list_plans))
+        .route(
+            "/api/plans/{id}",
+            get(handlers::get_plan).delete(handlers::delete_plan),
+        )
+        .route("/api/plans/{id}/dispatch", post(handlers::dispatch_plan))
+        .route("/api/plans/{id}/archive", post(handlers::archive_plan))
+        .route("/api/plans/{id}/unarchive", post(handlers::unarchive_plan))
         .with_state(sessions)
 }

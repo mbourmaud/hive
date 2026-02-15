@@ -185,6 +185,35 @@ pub struct WorkerInfo {
     pub model: String,
 }
 
+impl EventEmitter {
+    /// Append a cost record to cost.ndjson in the drone directory.
+    /// Each line: `{"input_tokens":N,"output_tokens":N,"cache_read":N,"cache_create":N}`
+    /// The polling code sums all lines to get the total.
+    pub fn emit_cost(&self, usage: &crate::webui::anthropic::types::UsageStats) {
+        let cost_path = self
+            .events_path
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .join("cost.ndjson");
+        let Ok(line) = serde_json::to_string(&serde_json::json!({
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cache_read": usage.cache_read_input_tokens,
+            "cache_create": usage.cache_creation_input_tokens,
+        })) else {
+            return;
+        };
+        let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&cost_path)
+        else {
+            return;
+        };
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }

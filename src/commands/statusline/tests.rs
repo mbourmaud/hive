@@ -107,6 +107,8 @@ fn make_test_status(state: DroneState) -> DroneStatus {
         error_count: 0,
         last_error: None,
         lead_model: None,
+        title: None,
+        description: None,
         active_agents: Default::default(),
     }
 }

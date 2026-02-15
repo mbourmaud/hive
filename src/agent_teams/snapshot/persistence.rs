@@ -27,6 +27,8 @@ pub(super) struct PersistedTask {
     pub created_at: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_by: Vec<String>,
 }
 
 pub fn snapshot_path(drone_name: &str) -> PathBuf {
@@ -78,6 +80,7 @@ fn build_persisted_snapshot(tasks: &[TeamTaskInfo], members: &[TeamMember]) -> P
                 is_internal: t.is_internal,
                 created_at: t.created_at,
                 updated_at: t.updated_at,
+                blocked_by: t.blocked_by.clone(),
             })
             .collect(),
         members: members.to_vec(),
@@ -117,6 +120,7 @@ pub fn load_persisted_snapshot_from_path(
             is_internal: t.is_internal,
             created_at: t.created_at,
             updated_at: t.updated_at,
+            blocked_by: t.blocked_by,
         })
         .collect();
 

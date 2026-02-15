@@ -31,6 +31,8 @@ pub struct TeamCoordinator {
     config: SpawnConfig,
     scheduler: TaskScheduler,
     workers: HashMap<usize, WorkerHandle>,
+    /// All workers that have ever been part of the team (accumulated).
+    all_members: Vec<WorkerInfo>,
     emitter: Arc<EventEmitter>,
     abort_flag: Arc<AtomicBool>,
     creds: Credentials,
@@ -53,6 +55,7 @@ impl TeamCoordinator {
             config,
             scheduler,
             workers: HashMap::new(),
+            all_members: Vec::new(),
             emitter,
             abort_flag,
             creds,
@@ -172,8 +175,8 @@ impl TeamCoordinator {
                 continue;
             }
 
-            let result = self.wait_any_worker().await;
-            self.handle_worker_result(result);
+            let (result, worker_name) = self.wait_any_worker().await;
+            self.handle_worker_result(result, worker_name);
         }
 
         Ok(())
@@ -183,7 +186,7 @@ impl TeamCoordinator {
     async fn spawn_worker_for_task(&mut self, task: StructuredTask) {
         let task_number = task.number;
         let task_id = self.task_number_to_id(task_number);
-        let worker_name = format!("worker-{task_number}");
+        let worker_name = task.worker_name();
         let model = task
             .model
             .clone()
@@ -215,8 +218,8 @@ impl TeamCoordinator {
         self.workers.insert(task_number, handle);
     }
 
-    /// Wait for any running worker to complete.
-    async fn wait_any_worker(&mut self) -> WorkerResult {
+    /// Wait for any running worker to complete. Returns (WorkerResult, worker_name).
+    async fn wait_any_worker(&mut self) -> (WorkerResult, String) {
         loop {
             let finished = self
                 .workers
@@ -226,7 +229,8 @@ impl TeamCoordinator {
 
             if let Some(key) = finished {
                 let handle = self.workers.remove(&key).unwrap();
-                return match handle.join_handle.await {
+                let worker_name = handle.worker_name.clone();
+                let result = match handle.join_handle.await {
                     Ok(Ok(result)) => result,
                     Ok(Err(e)) => WorkerResult {
                         task_number: key,
@@ -239,15 +243,15 @@ impl TeamCoordinator {
                         error: Some(format!("Worker panicked: {e}")),
                     },
                 };
+                return (result, worker_name);
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
 
-    fn handle_worker_result(&mut self, result: WorkerResult) {
+    fn handle_worker_result(&mut self, result: WorkerResult, worker_name: String) {
         let task_id = self.task_number_to_id(result.task_number);
-        let worker_name = format!("worker-{}", result.task_number);
 
         if result.success {
             self.scheduler.mark_completed(result.task_number);
@@ -320,19 +324,14 @@ impl TeamCoordinator {
             .unwrap_or_else(|| task_number.to_string())
     }
 
-    fn update_team_config(&self, new_worker: &str, model: &str) {
-        let mut members: Vec<WorkerInfo> = self
-            .workers
-            .values()
-            .map(|h| WorkerInfo {
-                name: h.worker_name.clone(),
-                model: self.config.model.clone(),
-            })
-            .collect();
-        members.push(WorkerInfo {
-            name: new_worker.to_string(),
-            model: model.to_string(),
-        });
-        let _ = self.emitter.write_team_config(&members);
+    fn update_team_config(&mut self, new_worker: &str, model: &str) {
+        // Accumulate: only add if not already tracked
+        if !self.all_members.iter().any(|m| m.name == new_worker) {
+            self.all_members.push(WorkerInfo {
+                name: new_worker.to_string(),
+                model: model.to_string(),
+            });
+        }
+        let _ = self.emitter.write_team_config(&self.all_members);
     }
 }

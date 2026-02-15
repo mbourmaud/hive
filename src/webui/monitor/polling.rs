@@ -78,6 +78,12 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
                 .iter()
                 .map(|t| {
                     let duration = compute_task_duration(t.created_at, t.updated_at, &t.status);
+                    // Only show blocked_by for pending tasks with unresolved dependencies
+                    let blocked_by = if !t.blocked_by.is_empty() && t.status != "completed" {
+                        Some(t.blocked_by.join(", "))
+                    } else {
+                        None
+                    };
                     TaskInfo {
                         id: t.id.clone(),
                         subject: t.subject.clone(),
@@ -87,9 +93,14 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
                         active_form: t.active_form.clone(),
                         is_internal: t.is_internal,
                         duration,
+                        blocked_by,
                     }
                 })
                 .collect();
+
+            // Sort tasks by numeric ID so they display in plan order
+            let mut tasks = tasks;
+            tasks.sort_by_key(|t| t.id.parse::<usize>().unwrap_or(usize::MAX));
 
             let members: Vec<MemberInfo> = snapshot
                 .members
@@ -110,6 +121,8 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
 
             drone_infos.push(DroneInfo {
                 name: name.clone(),
+                title: status.title.clone(),
+                description: status.description.clone(),
                 status: format!("{:?}", status.status).to_lowercase(),
                 branch: status.branch.clone(),
                 worktree: status.worktree.clone(),

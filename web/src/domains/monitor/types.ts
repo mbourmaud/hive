@@ -8,6 +8,8 @@ export interface ProjectInfo {
 
 export interface DroneInfo {
   name: string;
+  title: string | null;
+  description: string | null;
   status: string;
   branch: string;
   worktree: string;
@@ -32,6 +34,7 @@ export interface TaskInfo {
   active_form: string | null;
   is_internal: boolean;
   duration: string | null;
+  blocked_by: string | null;
 }
 
 export interface MemberInfo {

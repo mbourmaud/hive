@@ -7,6 +7,7 @@ const STREAM_EVENT_TYPES: ReadonlySet<string> = new Set([
   "result",
   "usage",
   "compact.completed",
+  "session.completed",
 ]);
 
 export function isStreamEvent(data: unknown): data is StreamEvent {

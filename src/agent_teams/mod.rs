@@ -233,9 +233,11 @@ pub fn preseed_tasks(
             task.body.clone()
         };
 
+        let subject = format!("US-{:03}: {}", idx + 1, task.title);
+
         let agent_task = AgentTeamTask {
             id: id.clone(),
-            subject: task.title.clone(),
+            subject,
             description: description.clone(),
             status: "pending".to_string(),
             owner: None,

@@ -125,8 +125,27 @@ pub fn clean_background(name: String) {
     }
 
     std::thread::spawn(move || {
-        let _ = clean_impl(name, true, true);
+        if let Err(e) = clean_impl(name.clone(), true, true) {
+            eprintln!("[hive] clean_background failed for '{}': {:#}", name, e);
+        }
     });
+}
+
+/// Archive a plan file by moving it from `.hive/plans/` to `.hive/plans/archived/`.
+/// Returns Ok(true) if archived, Ok(false) if plan was already missing/archived.
+pub fn archive_plan_file(prd: &str) -> Result<bool> {
+    let plans_dir = PathBuf::from(".hive/plans");
+    let src = plans_dir.join(prd);
+    if !src.is_file() {
+        return Ok(false);
+    }
+
+    let archived_dir = plans_dir.join("archived");
+    fs::create_dir_all(&archived_dir).context("Failed to create archived plans directory")?;
+
+    let dest = archived_dir.join(prd);
+    fs::rename(&src, &dest).context("Failed to archive plan file")?;
+    Ok(true)
 }
 
 fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
@@ -138,12 +157,38 @@ fn clean_impl(name: String, force: bool, quiet: bool) -> Result<()> {
 
     // Load status to get worktree path and branch
     let status_path = drone_dir.join("status.json");
-    let status: DroneStatus = if status_path.exists() {
+    let status: Option<DroneStatus> = if status_path.exists() {
         let contents = fs::read_to_string(&status_path)?;
-        serde_json::from_str(&contents)?
+        Some(serde_json::from_str(&contents)?)
     } else {
-        bail!("No status file found for drone '{}'", name);
+        None
     };
+
+    // No status file — orphaned directory, just remove it
+    if status.is_none() {
+        fs::remove_dir_all(&drone_dir).context("Failed to remove drone directory")?;
+        if !quiet {
+            println!(
+                "{} Removed orphaned drone directory '{}'",
+                "✓".green().bold(),
+                name.bright_cyan()
+            );
+        }
+        return Ok(());
+    }
+    let status = status.expect("checked above");
+
+    // Archive the plan file before cleanup
+    match archive_plan_file(&status.prd) {
+        Ok(true) if !quiet => {
+            println!("  {} Archived plan", "✓".green());
+        }
+        Ok(_) => {}
+        Err(e) if !quiet => {
+            println!("  {} Could not archive plan: {}", "⚠".yellow(), e);
+        }
+        Err(_) => {}
+    }
 
     // Check if drone is stopped
     let ps_output = ProcessCommand::new("ps")

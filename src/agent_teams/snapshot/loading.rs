@@ -43,6 +43,7 @@ pub fn load_todos(path: &std::path::Path) -> Vec<TeamTaskInfo> {
             is_internal: false,
             created_at: None,
             updated_at: None,
+            blocked_by: Vec::new(),
         })
         .collect()
 }
@@ -67,5 +68,6 @@ pub fn map_task(t: AgentTeamTask) -> TeamTaskInfo {
         is_internal,
         created_at: t.created_at,
         updated_at: t.updated_at,
+        blocked_by: t.blocked_by,
     }
 }

@@ -61,17 +61,26 @@ export function useAutoScroll(turns: ChatTurn[], isStreaming: boolean) {
     };
   }, [isAtBottom]);
 
-  // Derive a content fingerprint that changes when new content arrives
+  // Derive a content fingerprint that changes when new content arrives.
+  // Include the last part's text length so streaming text triggers scroll.
   const lastTurn = turns[turns.length - 1];
+  const lastPart = lastTurn?.assistantParts[lastTurn.assistantParts.length - 1];
+  const lastPartSize = lastPart && "text" in lastPart ? lastPart.text.length : 0;
   const contentSignal = lastTurn
-    ? `${turns.length}:${lastTurn.id}:${lastTurn.assistantParts.length}`
+    ? `${turns.length}:${lastTurn.id}:${lastTurn.assistantParts.length}:${lastPartSize}`
     : "0";
 
-  // Auto-scroll on new content if user hasn't scrolled away
+  // Auto-scroll on new content — RAF-debounced to avoid excessive calls
+  const scrollRafId = useRef(0);
   useEffect(() => {
-    if (!isUserScrolling.current && wasAtBottom.current) {
+    if (isUserScrolling.current || !wasAtBottom.current) return;
+
+    cancelAnimationFrame(scrollRafId.current);
+    scrollRafId.current = requestAnimationFrame(() => {
       scrollToBottom(false);
-    }
+    });
+
+    return () => cancelAnimationFrame(scrollRafId.current);
   }, [scrollToBottom, contentSignal, isStreaming]);
 
   return { scrollRef, scrollToBottom };

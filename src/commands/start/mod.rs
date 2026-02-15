@@ -136,6 +136,7 @@ pub fn run(
             &worktree_path,
             local,
             &status_path,
+            &prd,
         )?;
         println!("  {} Created status.json", "✓".green());
     }
@@ -227,6 +228,7 @@ fn create_drone_status(
     worktree_path: &std::path::Path,
     local: bool,
     status_path: &std::path::Path,
+    plan: &crate::types::Plan,
 ) -> Result<()> {
     let status = DroneStatus {
         drone: name.to_string(),
@@ -245,6 +247,8 @@ fn create_drone_status(
         updated: chrono::Utc::now().to_rfc3339(),
         error_count: 0,
         last_error: None,
+        title: Some(plan.title().to_string()),
+        description: plan.description(),
         lead_model: Some("opus".to_string()),
         active_agents: Default::default(),
     };

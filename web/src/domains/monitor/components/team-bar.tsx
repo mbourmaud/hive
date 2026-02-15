@@ -37,11 +37,11 @@ export function TeamBar({ members, leadModel, droneLiveness }: TeamBarProps) {
     <div className="flex items-center gap-2 flex-wrap">
       {/* Lead */}
       <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-semibold text-white ${livenessRing(droneLiveness)}`}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white ${livenessRing(droneLiveness)}`}
         style={{ backgroundColor: agentColor(0) }}
       >
-        @lead
-        <span className="text-[11px] font-normal text-white/70">
+        lead
+        <span className="text-[10px] font-normal text-white/60">
           {shortModel(leadModel || "?")}
         </span>
         <PulseDot isWorking={droneLiveness === "working"} />
@@ -51,11 +51,11 @@ export function TeamBar({ members, leadModel, droneLiveness }: TeamBarProps) {
       {members.map((member, i) => (
         <span
           key={member.name}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-semibold text-white ${livenessRing(member.liveness)}`}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white ${livenessRing(member.liveness)}`}
           style={{ backgroundColor: agentColor(i + 1) }}
         >
-          @{member.name}
-          <span className="text-[11px] font-normal text-white/70">{shortModel(member.model)}</span>
+          {member.name}
+          <span className="text-[10px] font-normal text-white/60">{shortModel(member.model)}</span>
           <PulseDot isWorking={member.liveness === "working"} />
         </span>
       ))}

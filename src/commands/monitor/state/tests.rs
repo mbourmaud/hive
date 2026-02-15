@@ -24,6 +24,8 @@ fn test_drone_elapsed_with_running_drone() {
         error_count: 0,
         last_error: None,
         lead_model: None,
+        title: None,
+        description: None,
         active_agents: HashMap::new(),
     };
 
@@ -61,6 +63,8 @@ fn test_drone_elapsed_with_completed_drone() {
         error_count: 0,
         last_error: None,
         lead_model: None,
+        title: None,
+        description: None,
         active_agents: HashMap::new(),
     };
 
@@ -95,6 +99,8 @@ fn test_drone_elapsed_with_invalid_timestamp() {
         error_count: 0,
         last_error: None,
         lead_model: None,
+        title: None,
+        description: None,
         active_agents: HashMap::new(),
     };
 
@@ -124,6 +130,8 @@ fn test_drone_elapsed_with_empty_timestamp() {
         error_count: 0,
         last_error: None,
         lead_model: None,
+        title: None,
+        description: None,
         active_agents: HashMap::new(),
     };
 
