@@ -1,0 +1,34 @@
+/* ── Skeleton loading primitives ──────────────────────────────────────── */
+
+@keyframes skeleton-pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+[data-component="skeleton"] {
+  display: block;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-muted);
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+[data-component="skeleton"][data-variant="text"] {
+  height: 12px;
+  border-radius: 3px;
+}
+
+[data-component="skeleton"][data-variant="circle"] {
+  border-radius: 50%;
+}
+
+[data-component="skeleton"][data-variant="pill"] {
+  height: 20px;
+  border-radius: 4px;
+}
