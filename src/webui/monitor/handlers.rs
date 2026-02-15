@@ -59,11 +59,11 @@ pub async fn api_events_sse(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-/// Spawn the background poller that pushes SSE updates every 2 seconds.
+/// Spawn the background poller that pushes SSE updates every second.
 pub fn spawn_poller(state: Arc<MonitorState>) {
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let projects = poll_all_projects(&state.snapshot_stores);
             if let Ok(json) = serde_json::to_string(&projects) {
                 let _ = state.tx.send(json);
