@@ -1,11 +1,12 @@
 import * as Tabs from "@radix-ui/react-tabs";
-import { Bot, FileText, Info, PanelRightClose } from "lucide-react";
+import { Bot, FileText, GitBranch, Info, PanelRightClose } from "lucide-react";
 import type { ChatSession, ChatTurn, ContextUsage } from "@/domains/chat/types";
 import type { RightSidebarTab } from "@/domains/monitor/store";
 import type { DroneInfo } from "@/domains/monitor/types";
 import { useResizablePanel } from "@/shared/hooks/use-resizable-panel";
 import { ContextContent } from "./context-content";
 import { DroneContent } from "./drone-content";
+import { GitContent } from "./git-content";
 import { PlansContent } from "./plans-content";
 import "./right-sidebar.css";
 
@@ -37,6 +38,7 @@ interface RightSidebarProps {
 const TAB_CONFIG: { value: RightSidebarTab; label: string; icon: typeof Bot }[] = [
   { value: "drones", label: "Drones", icon: Bot },
   { value: "plans", label: "Plans", icon: FileText },
+  { value: "git", label: "Git", icon: GitBranch },
   { value: "context", label: "Context", icon: Info },
 ];
 
@@ -131,6 +133,11 @@ export function RightSidebar({
         {/* Plans tab */}
         <Tabs.Content value="plans" data-slot="sidebar-tab-content" className="flex flex-col">
           <PlansContent onDispatch={() => onTabChange("drones")} />
+        </Tabs.Content>
+
+        {/* Git tab */}
+        <Tabs.Content value="git" data-slot="sidebar-tab-content" className="flex flex-col">
+          <GitContent />
         </Tabs.Content>
 
         {/* Context tab */}

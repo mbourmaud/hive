@@ -65,7 +65,7 @@
 [data-slot="sidebar-tab-trigger"][data-state="active"]::after {
   content: "";
   position: absolute;
-  bottom: -7px;
+  bottom: -14px;
   left: 8px;
   right: 8px;
   height: 2px;
