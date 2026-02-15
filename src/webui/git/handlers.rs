@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use axum::extract::Query;
@@ -9,6 +7,10 @@ use serde::Deserialize;
 use crate::webui::error::{ApiError, ApiResult};
 use crate::webui::projects::detection::{detect_open_pr, detect_platform, run_cmd};
 
+use super::helpers::{
+    char_to_file_status, get_diff_stats, parse_status_line, validate_file_path,
+    validate_project_path,
+};
 use super::types::{ChangedFile, FileDiff, FileStatus, GitStatus, PrSummary};
 
 // ── Query Parameters ────────────────────────────────────────────────────────
@@ -24,86 +26,6 @@ pub struct DiffQuery {
     file: String,
     #[serde(default)]
     staged: bool,
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-/// Validate that the project path exists and is a directory
-fn validate_project_path(path_str: &str) -> ApiResult<PathBuf> {
-    let path = PathBuf::from(path_str);
-
-    if !path.exists() {
-        return Err(ApiError::BadRequest(format!(
-            "Project path does not exist: {}",
-            path_str
-        )));
-    }
-
-    if !path.is_dir() {
-        return Err(ApiError::BadRequest(format!(
-            "Project path is not a directory: {}",
-            path_str
-        )));
-    }
-
-    Ok(path)
-}
-
-/// Parse git status --porcelain=v1 output to determine file status
-fn parse_status_line(line: &str) -> Option<(String, char, char)> {
-    if line.len() < 4 {
-        return None;
-    }
-
-    let staged_char = line.chars().next()?;
-    let unstaged_char = line.chars().nth(1)?;
-    let path = line[3..].to_string();
-
-    Some((path, staged_char, unstaged_char))
-}
-
-/// Convert status character to FileStatus enum
-fn char_to_file_status(c: char) -> FileStatus {
-    match c {
-        'M' => FileStatus::Modified,
-        'A' => FileStatus::Added,
-        'D' => FileStatus::Deleted,
-        'R' => FileStatus::Renamed,
-        'C' => FileStatus::Copied,
-        '?' => FileStatus::Untracked,
-        _ => FileStatus::Modified, // Default fallback
-    }
-}
-
-/// Parse git diff --numstat output to get additions/deletions for each file
-async fn get_diff_stats(
-    path: &Path,
-    staged: bool,
-    timeout: Duration,
-) -> HashMap<String, (u32, u32)> {
-    let args = if staged {
-        vec!["diff", "--cached", "--numstat"]
-    } else {
-        vec!["diff", "--numstat"]
-    };
-
-    let output = match run_cmd("git", &args, path, timeout).await {
-        Some(o) => o,
-        None => return HashMap::new(),
-    };
-
-    let mut stats = HashMap::new();
-    for line in output.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 3 {
-            let additions = parts[0].parse::<u32>().unwrap_or(0);
-            let deletions = parts[1].parse::<u32>().unwrap_or(0);
-            let filepath = parts[2].to_string();
-            stats.insert(filepath, (additions, deletions));
-        }
-    }
-
-    stats
 }
 
 // ── Handlers ────────────────────────────────────────────────────────────────
@@ -187,7 +109,6 @@ pub async fn git_status(Query(query): Query<StatusQuery>) -> ApiResult<Json<GitS
 
     for line in status_output.lines() {
         if let Some((filepath, staged_char, unstaged_char)) = parse_status_line(line) {
-            // Handle untracked files (??   )
             if staged_char == '?' && unstaged_char == '?' {
                 untracked.push(ChangedFile {
                     path: filepath.clone(),
@@ -198,7 +119,6 @@ pub async fn git_status(Query(query): Query<StatusQuery>) -> ApiResult<Json<GitS
                 continue;
             }
 
-            // Handle staged changes (first char != ' ' and != '?')
             if staged_char != ' ' && staged_char != '?' {
                 let (additions, deletions) = staged_stats.get(&filepath).copied().unwrap_or((0, 0));
                 staged.push(ChangedFile {
@@ -209,7 +129,6 @@ pub async fn git_status(Query(query): Query<StatusQuery>) -> ApiResult<Json<GitS
                 });
             }
 
-            // Handle unstaged changes (second char != ' ')
             if unstaged_char != ' ' {
                 let (additions, deletions) =
                     unstaged_stats.get(&filepath).copied().unwrap_or((0, 0));
@@ -253,11 +172,14 @@ pub async fn git_diff(Query(query): Query<DiffQuery>) -> ApiResult<Json<FileDiff
     let path = validate_project_path(&query.project_path)?;
     let timeout = Duration::from_secs(3);
 
-    // Get the diff
+    // Validate the file path stays within the repo (prevents path traversal)
+    let file_path = validate_file_path(&path, &query.file)?;
+
+    // `--` separates flags from paths, preventing flag injection via query.file
     let diff_args = if query.staged {
-        vec!["diff", "--cached", &query.file]
+        vec!["diff", "--cached", "--", &query.file]
     } else {
-        vec!["diff", &query.file]
+        vec!["diff", "--", &query.file]
     };
 
     let diff = run_cmd("git", &diff_args, &path, timeout)
@@ -265,17 +187,12 @@ pub async fn git_diff(Query(query): Query<DiffQuery>) -> ApiResult<Json<FileDiff
         .unwrap_or_default();
 
     // Get old content (from HEAD)
-    let old_content = run_cmd(
-        "git",
-        &["show", &format!("HEAD:{}", query.file)],
-        &path,
-        timeout,
-    )
-    .await
-    .unwrap_or_default();
+    let head_ref = format!("HEAD:{}", query.file);
+    let old_content = run_cmd("git", &["show", &head_ref], &path, timeout)
+        .await
+        .unwrap_or_default();
 
-    // Get new content (from working copy)
-    let file_path = path.join(&query.file);
+    // Get new content (from working copy) — file_path already validated above
     let new_content = tokio::fs::read_to_string(&file_path)
         .await
         .unwrap_or_default();

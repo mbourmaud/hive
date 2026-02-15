@@ -138,6 +138,7 @@ tests/                  # Rust test suite
 **Type safety (zero tolerance)**:
 - **NEVER use `any`** — use `unknown`, proper types, or `Record<string, unknown>`.
 - **NEVER use `as` type assertions** — use type guards (`is`), discriminated unions, or proper narrowing. The only acceptable `as` is `as const` and React's `as React.CSSProperties` for CSS custom properties.
+- **NEVER use non-null assertions (`!`)** — use type guards, early returns, or conditional narrowing instead. Even when a value is guaranteed non-null by surrounding logic (e.g., `enabled` guards in react-query), write a defensive guard in the callback body.
 - **Discriminated unions**: Use `type` field for union discrimination (see `StreamEvent`, `AssistantPart`).
 - **JSON parsing**: Always parse to `unknown` first, then narrow with type guards. Never `JSON.parse(x) as Foo`.
 - **Error handling**: Prefer discriminated union results over try/catch for operations with multiple failure modes (network, abort, API errors). Use `safeFetch` (`@/shared/api/safe-fetch`) for fetch operations. Use exhaustive `switch` + `default: never` instead of `instanceof` chains. Reserve try/catch for truly unexpected exceptions only.
@@ -154,9 +155,10 @@ tests/                  # Rust test suite
 
 **React patterns**:
 - **Hooks**: Follow rules of hooks strictly. Only wrap in `useCallback`/`useMemo` when there's a measurable perf benefit or a dependency requires stable references.
+- **useMemo/useCallback deps**: Depend on the **primitive value that drives the computation**, not the parent object. E.g., `useMemo(() => parse(plan.content), [plan?.content])` not `[plan]`. Object references change on every render.
 - **Components**: Use `data-component` and `data-slot` CSS selectors (not className-based styling) for component structure. Keep components focused — extract when approaching 300 lines (see Design Principles).
 - **Events**: Always clean up event listeners, timers, observers in `useEffect` return functions.
-- **Keys**: Use stable, unique IDs for list keys — never array indices.
+- **Keys**: Use stable, unique IDs for list keys — never array indices. For derived lists without natural IDs, generate a key from content (e.g., hash or content prefix).
 
 **Linting**: Biome enforces these rules via `web/biome.json`. Run `npm run lint` in `web/` before committing.
 
@@ -167,6 +169,25 @@ tests/                  # Rust test suite
 - **Animations**: Only animate `transform` and `opacity` for GPU compositing. Use CSS transitions for simple state changes, `@keyframes` for complex sequences.
 - **Responsive**: Mobile-first. Use `sm:` breakpoint (640px) for desktop overrides.
 - **Font stack**: Mono: `'IBM Plex Mono', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace`. Sans: `'Inter', system-ui, sans-serif`.
+
+### Security
+
+**Path handling (CRITICAL)**:
+- **Always canonicalize** user-supplied paths before using them. Use `.canonicalize()` in Rust and verify the result stays within the expected directory (`resolved.starts_with(root)`).
+- **Reject path traversal**: Check for `..`, leading `/`, and leading `\` in user-supplied relative paths.
+- **Validate git repos**: When an API endpoint accepts a `project_path`, verify it's actually a git repository (check `.git` exists or run `git rev-parse --git-dir`) — don't allow arbitrary directory access.
+
+**Shell / process arguments (CRITICAL)**:
+- **Always use `--`** to separate flags from file paths in git commands (e.g., `git diff -- <file>`). This prevents flag injection when a filename starts with `-`.
+- **Never interpolate** user input into shell commands. Use argument arrays, never format strings.
+- **Avoid `std::env::current_dir()`** in library/helper functions — accept the working directory as an explicit parameter. `current_dir()` causes race conditions in parallel tests and is unreliable in worktree contexts.
+
+**Git hygiene**:
+- **Never commit `.hive/`** — it's in `.gitignore` but symlinks can bypass this. Always check `git status` before committing.
+- **Never commit secrets, credentials, or local machine paths** to the repository.
+
+**Polling and resource usage**:
+- **API polling intervals**: Use 5s+ for status-style endpoints, not 1s. Each poll may spawn multiple subprocesses (e.g., 5+ git commands). Consider the server-side cost per poll.
 
 ### Tauri v2
 

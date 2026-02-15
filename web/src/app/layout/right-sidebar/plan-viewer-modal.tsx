@@ -31,8 +31,8 @@ interface TaskMeta {
 
 /** A contiguous markdown block or a metadata block between task headings */
 type PlanSegment =
-  | { kind: "markdown"; content: string }
-  | { kind: "meta"; meta: TaskMeta };
+  | { kind: "markdown"; key: string; content: string }
+  | { kind: "meta"; key: string; meta: TaskMeta };
 
 const METADATA_KEYS = new Set(["type", "model", "files", "depends_on"]);
 const METADATA_LINE_RE = /^- (\w+):\s*(.+)$/;
@@ -43,11 +43,17 @@ function parsePlanSegments(markdown: string): PlanSegment[] {
   const segments: PlanSegment[] = [];
   let mdLines: string[] = [];
   let i = 0;
+  let mdCount = 0;
+  let metaCount = 0;
 
   function flushMarkdown() {
     if (mdLines.length > 0) {
-      segments.push({ kind: "markdown", content: mdLines.join("\n") });
+      const content = mdLines.join("\n");
+      // Use first 40 chars of content as a stable key prefix
+      const prefix = content.slice(0, 40).replace(/\W+/g, "-");
+      segments.push({ kind: "markdown", key: `md-${mdCount}-${prefix}`, content });
       mdLines = [];
+      mdCount++;
     }
   }
 
@@ -80,7 +86,9 @@ function parsePlanSegments(markdown: string): PlanSegment[] {
 
       if (foundMeta) {
         flushMarkdown();
-        segments.push({ kind: "meta", meta });
+        const metaKey = `meta-${metaCount}-${meta.type ?? "task"}`;
+        segments.push({ kind: "meta", key: metaKey, meta });
+        metaCount++;
       }
       continue;
     }
@@ -136,7 +144,7 @@ export function PlanViewerModal({
   const segments = useMemo(() => {
     if (!plan) return [];
     return parsePlanSegments(plan.content);
-  }, [plan]);
+  }, [plan?.content]);
 
   return (
     <Dialog.Root open={plan !== null} onOpenChange={(open) => !open && onClose()}>
@@ -161,15 +169,15 @@ export function PlanViewerModal({
 
           {/* Body */}
           <div data-slot="plan-viewer-body">
-            {plan && segments.map((seg, idx) =>
+            {plan && segments.map((seg) =>
               seg.kind === "markdown" ? (
                 <MarkdownRenderer
-                  key={`md-${idx}`}
+                  key={seg.key}
                   text={seg.content}
-                  cacheKey={`plan-${plan.id}-${idx}`}
+                  cacheKey={`plan-${plan.id}-${seg.key}`}
                 />
               ) : (
-                <MetaPills key={`meta-${idx}`} meta={seg.meta} />
+                <MetaPills key={seg.key} meta={seg.meta} />
               ),
             )}
           </div>
