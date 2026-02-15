@@ -206,17 +206,15 @@ function processResultEvent(state: ChatState, event: ResultEvent): ChatState {
     }
   }
 
-  const contextUsage = event.usage
-    ? {
-        inputTokens: (state.contextUsage?.inputTokens ?? 0) + event.usage.input_tokens,
-        outputTokens: (state.contextUsage?.outputTokens ?? 0) + event.usage.output_tokens,
-        cacheReadTokens: state.contextUsage?.cacheReadTokens,
-        cacheWriteTokens: state.contextUsage?.cacheWriteTokens,
-        totalCost: event.cost
-          ? (state.contextUsage?.totalCost ?? 0) + event.cost.total_usd
-          : state.contextUsage?.totalCost,
-      }
-    : state.contextUsage;
+  // Only update cost here — token counts come from the authoritative `usage` event
+  // that follows each `result` event (with correct running totals from the backend).
+  const contextUsage =
+    event.cost && state.contextUsage
+      ? {
+          ...state.contextUsage,
+          totalCost: (state.contextUsage.totalCost ?? 0) + event.cost.total_usd,
+        }
+      : state.contextUsage;
 
   return {
     ...state,

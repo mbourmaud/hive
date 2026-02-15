@@ -3,6 +3,7 @@ import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import beeIcon from "@/assets/bee-icon.png";
 import { useResizablePanel } from "@/shared/hooks/use-resizable-panel";
+import { SessionListSkeleton } from "./session-panel-skeleton";
 import "./session-panel.css";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ export interface SessionEntry {
 interface SessionPanelProps {
   sessions: SessionEntry[];
   activeSessionId: string | null;
+  loading?: boolean;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
   onRenameSession?: (id: string, title: string) => void;
@@ -200,6 +202,7 @@ function SessionItem({
 export function SessionPanel({
   sessions,
   activeSessionId,
+  loading,
   onSelectSession,
   onNewSession,
   onRenameSession,
@@ -240,7 +243,9 @@ export function SessionPanel({
             New session
           </button>
 
-          {sessions.length === 0 ? (
+          {loading ? (
+            <SessionListSkeleton />
+          ) : sessions.length === 0 ? (
             <div className="px-3 py-4 text-xs text-muted-foreground">
               No sessions yet. Start a new one.
             </div>

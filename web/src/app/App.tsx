@@ -9,6 +9,7 @@ import type { ImageAttachment } from "@/domains/chat/types";
 
 import { useProjectsSSE } from "@/domains/monitor/queries";
 import { ContextBar } from "@/domains/projects/components/context-bar";
+import { ContextBarSkeleton } from "@/domains/projects/components/context-bar-skeleton";
 import { OnboardingWizard } from "@/domains/projects/components/onboarding-wizard";
 import { AuthSetup } from "@/domains/settings/components/auth-setup";
 import { CommandPalette } from "@/domains/settings/components/command-palette";
@@ -55,7 +56,7 @@ function AppInner() {
   const chatMode = useAppStore((s) => s.chatMode);
   const setChatMode = useAppStore((s) => s.setChatMode);
 
-  const { registryProjects, activeProjectContext, onboardingComplete, handleOnboardingComplete } =
+  const { registryProjects, activeProjectContext, isDetecting, handleOnboardingComplete } =
     useProjectDetection();
 
   const [isAddingProject, setIsAddingProject] = useState(false);
@@ -204,7 +205,7 @@ function AppInner() {
 
   function renderMainContent() {
     if (!authLoading && authStatus && !authStatus.configured) return <AuthSetup />;
-    const showWizard = isAddingProject || (registryProjects.length === 0 && !onboardingComplete);
+    const showWizard = isAddingProject || registryProjects.length === 0;
     if (showWizard) {
       return (
         <OnboardingWizard
@@ -218,7 +219,11 @@ function AppInner() {
     }
     return (
       <>
-        {activeProjectContext && <ContextBar context={activeProjectContext} />}
+        {isDetecting && !activeProjectContext ? (
+          <ContextBarSkeleton />
+        ) : activeProjectContext ? (
+          <ContextBar context={activeProjectContext} />
+        ) : null}
         <ChatLayout
           turns={turns}
           isStreaming={isStreaming}

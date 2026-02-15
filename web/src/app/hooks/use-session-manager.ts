@@ -9,7 +9,12 @@ import { useAppStore } from "@/store";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-const SESSION_STATUSES: ReadonlySet<string> = new Set<SessionStatus>(["idle", "busy", "completed", "error"]);
+const SESSION_STATUSES: ReadonlySet<string> = new Set<SessionStatus>([
+  "idle",
+  "busy",
+  "completed",
+  "error",
+]);
 
 function isSessionStatus(value: string | undefined): value is SessionStatus {
   return value !== undefined && SESSION_STATUSES.has(value);
@@ -52,7 +57,7 @@ export function useSessionManager({
   const setActiveSessionId = useAppStore((s) => s.setActiveSession);
   const dispatchChat = useAppStore((s) => s.dispatchChat);
 
-  const { data: allSessions = [] } = useSessionsQuery();
+  const { data: allSessions = [], isLoading: sessionsLoading } = useSessionsQuery();
   const renameSessionMutation = useRenameSession();
   const deleteSessionMutation = useDeleteSession();
   const { sendMessage, abort, createSession, resetSession } = useChat();
@@ -83,7 +88,14 @@ export function useSessionManager({
         return null;
       }
     },
-    [selectedProject, monitorProjects, createSession, selectedModel, setActiveSessionId, renameSessionMutation],
+    [
+      selectedProject,
+      monitorProjects,
+      createSession,
+      selectedModel,
+      setActiveSessionId,
+      renameSessionMutation,
+    ],
   );
 
   const handleNewSession = useCallback(() => {
@@ -138,9 +150,11 @@ export function useSessionManager({
     };
 
     apiClient
-      .get<{ events: unknown[]; total_input_tokens?: number; total_output_tokens?: number }>(
-        `/api/chat/sessions/${activeSessionId}/history`,
-      )
+      .get<{
+        events: unknown[];
+        total_input_tokens?: number;
+        total_output_tokens?: number;
+      }>(`/api/chat/sessions/${activeSessionId}/history`)
       .then((res) => {
         const events = (res.events ?? []).filter(
           (e): e is StreamEvent =>
@@ -148,7 +162,10 @@ export function useSessionManager({
         );
         const tokenCounts =
           res.total_input_tokens || res.total_output_tokens
-            ? { inputTokens: res.total_input_tokens ?? 0, outputTokens: res.total_output_tokens ?? 0 }
+            ? {
+                inputTokens: res.total_input_tokens ?? 0,
+                outputTokens: res.total_output_tokens ?? 0,
+              }
             : undefined;
         dispatchChat({ type: "REPLAY_HISTORY", session, events, tokenCounts });
       })
@@ -157,37 +174,57 @@ export function useSessionManager({
       });
   }, [activeSessionId, allSessions, selectedProject, dispatchChat]);
 
-  // ── Auto-resume most recent session ───────────────────────────────────
-  const autoResumedRef = useRef(false);
+  // ── Auto-resume session ────────────────────────────────────────────────
+  // Picks the most recent session for the current project when none is active.
+  // Fires on mount AND on project switch (when activeSessionId becomes null).
+  const prevProjectRef = useRef(selectedProject);
 
   useEffect(() => {
-    if (autoResumedRef.current) return;
-    if (allSessions.length === 0) return;
-    autoResumedRef.current = true;
+    // Reset when project changes so auto-resume can fire for new project
+    if (selectedProject !== prevProjectRef.current) {
+      prevProjectRef.current = selectedProject;
+    }
+  }, [selectedProject]);
 
+  useEffect(() => {
+    // Wait for sessions to load
+    if (sessionsLoading) return;
+    // Already have an active session
     if (activeSessionId) return;
-
+    // No sessions for this project
+    if (sessions.length === 0) return;
+    // URL-based session selection takes priority
     const segments = window.location.pathname.split("/").filter(Boolean);
     if (segments.length >= 2) return;
 
-    const mostRecent = allSessions[0];
+    const mostRecent = sessions[0];
     if (mostRecent) {
       setActiveSessionId(mostRecent.id);
     }
-  }, [allSessions, activeSessionId, setActiveSessionId]);
+  }, [sessionsLoading, activeSessionId, sessions, setActiveSessionId]);
 
   // ── Reset session when switching projects ─────────────────────────────
+  // Guard: don't reset until sessions have loaded (prevents race on reload)
   useEffect(() => {
+    if (sessionsLoading) return;
     if (!activeSessionId || !selectedProject) return;
     const sessionBelongs = sessions.some((s) => s.id === activeSessionId);
     if (!sessionBelongs) {
       setActiveSessionId(null);
       resetSession();
     }
-  }, [selectedProject, activeSessionId, sessions, resetSession, setActiveSessionId]);
+  }, [
+    sessionsLoading,
+    selectedProject,
+    activeSessionId,
+    sessions,
+    resetSession,
+    setActiveSessionId,
+  ]);
 
   return {
     sessions,
+    sessionsLoading,
     activeSessionId,
     allSessions,
     addSession,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useProjectRegistryQuery } from "@/domains/projects/queries";
 import type { ProjectProfile } from "@/domains/projects/types";
 import { useDetection } from "@/domains/projects/use-detection";
-import { useProjectRegistryQuery } from "@/domains/projects/queries";
 import { THEMES, useTheme } from "@/shared/theme/use-theme";
 import { useAppStore } from "@/store";
 
@@ -24,7 +24,7 @@ export function useProjectDetection() {
   const setOnboardingComplete = useAppStore((s) => s.setOnboardingComplete);
 
   const { setThemeName } = useTheme();
-  const { context: detectedContext, startDetection } = useDetection();
+  const { context: detectedContext, isDetecting, startDetection } = useDetection();
   const { data: registryData } = useProjectRegistryQuery();
 
   // ── Sync registry data to store ────────────────────────────────────────
@@ -33,6 +33,22 @@ export function useProjectDetection() {
       setRegistryProjects(registryData);
     }
   }, [registryData, setRegistryProjects]);
+
+  // ── Auto-select project when none is selected ─────────────────────────
+  useEffect(() => {
+    const first = registryProjects[0];
+    if (!first) return;
+    // No project selected → pick first
+    if (!selectedProject) {
+      setSelectedProject(first.path);
+      return;
+    }
+    // Selected project no longer exists in registry → pick first
+    const stillExists = registryProjects.some((p) => p.path === selectedProject);
+    if (!stillExists) {
+      setSelectedProject(first.path);
+    }
+  }, [registryProjects, selectedProject, setSelectedProject]);
 
   // ── Auto-detect context on project switch ──────────────────────────────
   const prevDetectProjectRef = useRef<string | null>(null);
@@ -52,8 +68,16 @@ export function useProjectDetection() {
     if (!regProject) return;
 
     prevDetectProjectRef.current = selectedProject;
+    setActiveProjectContext(null);
     startDetection(regProject.id);
-  }, [selectedProject, registryProjects, activeProjectContext, contextCacheTime, startDetection]);
+  }, [
+    selectedProject,
+    registryProjects,
+    activeProjectContext,
+    contextCacheTime,
+    startDetection,
+    setActiveProjectContext,
+  ]);
 
   // ── Cache detection results ────────────────────────────────────────────
   useEffect(() => {
@@ -81,6 +105,7 @@ export function useProjectDetection() {
   return {
     registryProjects,
     activeProjectContext,
+    isDetecting,
     onboardingComplete,
     handleOnboardingComplete,
   };

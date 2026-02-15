@@ -134,11 +134,13 @@ async fn broadcast_usage(
     usage: &anthropic::types::UsageStats,
     store: &SessionStore,
 ) {
-    // Update messages and token counters in the store
+    // Update token counters in the store.
+    // input_tokens = full context window for this request (replace, not accumulate).
+    // output_tokens = tokens generated in this response (accumulate across turns).
     {
         let mut sessions = store.lock().await;
         if let Some(s) = sessions.get_mut(session_id) {
-            s.total_input_tokens += usage.input_tokens;
+            s.total_input_tokens = usage.input_tokens;
             s.total_output_tokens += usage.output_tokens;
         }
     }

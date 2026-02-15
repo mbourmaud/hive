@@ -56,33 +56,26 @@ test.describe("Chat UI", () => {
     expect(textbox).toBeTruthy();
   });
 
-  test("effort selector toggles between Lo/Med/Hi", async ({ page }) => {
-    // Default should have one pressed
-    const loBtn = page.getByRole("button", { name: "Set effort to low" });
-    const medBtn = page.getByRole("button", {
-      name: "Set effort to medium",
-    });
-    const hiBtn = page.getByRole("button", { name: "Set effort to high" });
+  test("effort cycle pill cycles through levels", async ({ page }) => {
+    // Effort is a cycle pill — clicking advances to the next level
+    const effortPill = page.getByRole("button", { name: /Effort:.*Click to cycle/ });
+    await expect(effortPill).toBeVisible();
 
-    // Click Lo
-    await loBtn.click({ force: true });
-    await expect(loBtn).toHaveAttribute("aria-pressed", "true");
+    const labelBefore = await effortPill.textContent();
+    await effortPill.click({ force: true });
+    await page.waitForTimeout(200);
+    const labelAfter = await effortPill.textContent();
 
-    // Click Hi
-    await hiBtn.click({ force: true });
-    await expect(hiBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(loBtn).not.toHaveAttribute("aria-pressed", "true");
-
-    // Click Med
-    await medBtn.click({ force: true });
-    await expect(medBtn).toHaveAttribute("aria-pressed", "true");
+    // Label should have changed (cycled to next)
+    expect(labelAfter).not.toBe(labelBefore);
   });
 
-  test("model selector shows current model", async ({ page }) => {
-    const modelBtn = page.getByRole("button", { name: /Claude/ });
-    await expect(modelBtn.first()).toBeVisible();
-    const text = await modelBtn.first().textContent();
-    expect(text).toMatch(/Claude (Opus|Sonnet|Haiku)/);
+  test("model cycle pill shows current model", async ({ page }) => {
+    const modelPill = page.getByRole("button", { name: /Model:.*Click to cycle/ });
+    await expect(modelPill).toBeVisible();
+    const text = await modelPill.textContent();
+    // Should show short model name (e.g. "Opus 4.6", "Sonnet 4.5")
+    expect(text).toMatch(/opus|sonnet|haiku/i);
   });
 
   test("send button is disabled when input is empty", async ({ page }) => {

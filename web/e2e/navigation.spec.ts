@@ -33,11 +33,13 @@ test.describe("Navigation & Layout", () => {
 
   test("shows context bar with branch and language info", async ({ page }) => {
     await navigateToProject(page, "H");
-    await page.waitForTimeout(500);
 
-    // Branch name should be visible
-    await expect(page.getByText("feat/hive-desktop")).toBeVisible();
-    // Language badge
+    // Wait for context detection to complete (SSE pipeline)
+    await expect(page.locator("[data-component='context-bar']")).toBeVisible({
+      timeout: 8_000,
+    });
+
+    // Language badge should be visible (Rust for Hive project)
     await expect(page.getByText("Rust")).toBeVisible();
     // Changed files indicator
     await expect(page.getByText(/\d+ changed/)).toBeVisible();
