@@ -5,7 +5,6 @@
   flex-direction: column;
   flex-shrink: 0;
   background: var(--color-sidebar);
-  border-left: 1px solid var(--color-sidebar-border);
   overflow: hidden;
 }
 
@@ -196,4 +195,36 @@
   padding: 8px 12px;
   border-top: 1px solid var(--color-sidebar-border);
   flex-shrink: 0;
+}
+
+/* ── Plan TL;DR compact markdown ─────────────────────────────────────── */
+
+.plan-tldr [data-component="markdown"] {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--color-muted-foreground);
+}
+
+.plan-tldr [data-component="markdown"] p {
+  margin: 0.2em 0;
+}
+
+.plan-tldr [data-component="markdown"] strong {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.plan-tldr [data-component="markdown"] ul,
+.plan-tldr [data-component="markdown"] ol {
+  padding-left: 1.2em;
+  margin: 0.2em 0;
+}
+
+.plan-tldr [data-component="markdown"] li {
+  margin: 0.1em 0;
+}
+
+.plan-tldr [data-component="markdown"] code:not(pre code) {
+  font-size: 0.9em;
+  padding: 0.1em 0.25em;
 }

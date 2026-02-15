@@ -86,6 +86,18 @@
   color: inherit;
 }
 
+/* Shiki-highlighted code blocks */
+[data-component="markdown"] pre.shiki {
+  background: var(--shiki-bg, var(--color-surface-inset)) !important;
+}
+
+[data-component="markdown"] pre.shiki code {
+  font-family: var(--font-mono);
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
 /* Code block wrapper with copy button */
 [data-component="markdown-code"] {
   position: relative;
@@ -208,4 +220,21 @@
 [data-component="markdown"] img {
   max-width: 100%;
   border-radius: 4px;
+}
+
+/* Mermaid diagrams */
+[data-component="markdown"] [data-slot="mermaid-diagram"] {
+  display: flex;
+  justify-content: center;
+  margin: 0.75em 0;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-inset);
+  overflow-x: auto;
+}
+
+[data-component="markdown"] [data-slot="mermaid-diagram"] svg {
+  max-width: 100%;
+  height: auto;
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -47,7 +47,8 @@ impl TeamCoordinator {
         abort_flag: Arc<AtomicBool>,
         session_store: SessionStore,
     ) -> Self {
-        let scheduler = TaskScheduler::new(tasks, config.max_agents);
+        // Scheduler is created lazily in run() after preseeding
+        let scheduler = TaskScheduler::new(tasks, config.max_agents, &HashSet::new());
         Self {
             config,
             scheduler,
@@ -65,12 +66,40 @@ impl TeamCoordinator {
         self.emitter.emit_start(&self.config.model);
         self.emitter.set_drone_state(DroneState::InProgress);
 
-        // Pre-seed tasks to filesystem so TUI sees them immediately
+        // Pre-seed tasks to filesystem so TUI sees them immediately.
+        // Returns seeded tasks — completed ones are preserved from previous runs.
         let drone_dir = std::path::PathBuf::from(".hive/drones").join(&self.config.drone_name);
-        let _ = preseed_tasks(
+        let seeded = preseed_tasks(
             &self.config.team_name,
             &self.config.structured_tasks,
             &drone_dir,
+        )
+        .unwrap_or_default();
+
+        // Collect already-completed task numbers for resume support
+        let completed_numbers: HashSet<usize> = seeded
+            .iter()
+            .filter(|t| t.status == "completed")
+            .filter_map(|t| {
+                t.metadata
+                    .as_ref()
+                    .and_then(|m| m["plan_number"].as_u64())
+                    .map(|n| n as usize)
+            })
+            .collect();
+
+        if !completed_numbers.is_empty() {
+            eprintln!(
+                "[hive] Resuming: {} tasks already completed, skipping",
+                completed_numbers.len()
+            );
+        }
+
+        // Rebuild scheduler with completed state from previous run
+        self.scheduler = TaskScheduler::new(
+            self.config.structured_tasks.clone(),
+            self.config.max_agents,
+            &completed_numbers,
         );
 
         // Write initial team config (empty, updated as workers spawn)
@@ -80,6 +109,9 @@ impl TeamCoordinator {
         self.phase = Phase::Monitor;
         if let Err(e) = self.run_monitor_loop().await {
             eprintln!("[hive] Monitor loop error: {e:#}");
+            self.phase = Phase::Failed;
+        } else if self.scheduler.has_failures() {
+            eprintln!("[hive] Some tasks failed permanently, skipping verify/PR");
             self.phase = Phase::Failed;
         }
 
@@ -232,9 +264,22 @@ impl TeamCoordinator {
             let error_msg = result.error.unwrap_or_else(|| "Unknown error".to_string());
             eprintln!("[hive] Worker {worker_name} failed: {error_msg}");
             self.scheduler.mark_failed(result.task_number);
-            self.emitter
-                .update_task_file(&task_id, "pending", None, None);
-            self.scheduler.requeue(result.task_number);
+
+            if self.scheduler.requeue(result.task_number) {
+                eprintln!(
+                    "[hive] Retrying task {} (worker-{})",
+                    task_id, result.task_number
+                );
+                self.emitter
+                    .update_task_file(&task_id, "pending", None, None);
+            } else {
+                eprintln!(
+                    "[hive] Task {} (worker-{}) exceeded max retries, marking as failed",
+                    task_id, result.task_number
+                );
+                self.emitter
+                    .update_task_file(&task_id, "completed", None, None);
+            }
         }
     }
 

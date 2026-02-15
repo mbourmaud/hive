@@ -85,7 +85,7 @@ fn parse_task_heading(line: &str) -> Option<(usize, String)> {
 fn parse_single_task(number: usize, title: String, lines: &[&str]) -> StructuredTask {
     let mut task_type = TaskType::Work;
     let mut model = None;
-    let mut parallel = false;
+    let mut parallel = true;
     let mut files = Vec::new();
     let mut depends_on = Vec::new();
     let mut body_lines = Vec::new();

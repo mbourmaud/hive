@@ -4,6 +4,8 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import morphdom from "morphdom";
 import { useEffect, useRef } from "react";
+import { renderMermaidBlocks } from "@/shared/lib/mermaid-renderer";
+import { getHighlighter, getThemeName, resolveLanguage } from "@/shared/lib/shiki-highlighter";
 
 // ---------------------------------------------------------------------------
 // LRU cache — max 200 entries, simple Map eviction (oldest first)
@@ -85,6 +87,47 @@ function wrapCodeBlocks(container: HTMLElement): void {
 }
 
 // ---------------------------------------------------------------------------
+// Async syntax highlighting via Shiki (progressive enhancement)
+// ---------------------------------------------------------------------------
+async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
+  const codeEls = container.querySelectorAll("pre > code[class*='language-']");
+  if (codeEls.length === 0) return;
+
+  try {
+    const hl = await getHighlighter();
+    const theme = getThemeName();
+
+    for (const codeEl of codeEls) {
+      const pre = codeEl.parentElement;
+      if (!pre || pre.getAttribute("data-highlighted") === "true") continue;
+
+      const langClass = codeEl.className
+        .split(/\s+/)
+        .find((c) => c.startsWith("language-"));
+      if (!langClass) continue;
+
+      const lang = resolveLanguage(langClass.replace("language-", ""));
+      if (lang === "text") continue;
+
+      const rawCode = codeEl.textContent ?? "";
+      const html = hl.codeToHtml(rawCode, { lang, theme });
+      // Shiki outputs <pre class="shiki ..."><code>...</code></pre>
+      // Replace the inner <code> content with the highlighted version
+      const temp = document.createElement("div");
+      temp.innerHTML = html;
+      const shikiPre = temp.querySelector("pre");
+      if (shikiPre) {
+        pre.innerHTML = shikiPre.innerHTML;
+        pre.className = shikiPre.className;
+        pre.setAttribute("data-highlighted", "true");
+      }
+    }
+  } catch {
+    // Highlighting is progressive enhancement — fail silently
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 interface MarkdownRendererProps {
@@ -119,6 +162,10 @@ export function MarkdownRenderer({ text, cacheKey, className }: MarkdownRenderer
           if (fromEl.getAttribute("data-component") === "markdown-code") {
             return false;
           }
+          // Preserve rendered mermaid diagrams
+          if (fromEl.getAttribute("data-slot") === "mermaid-diagram") {
+            return false;
+          }
           return true;
         },
         onBeforeNodeDiscarded(node) {
@@ -131,8 +178,11 @@ export function MarkdownRenderer({ text, cacheKey, className }: MarkdownRenderer
       });
     }
 
-    // Post-pass: wrap bare <pre> elements and add copy buttons
-    wrapCodeBlocks(el);
+    // Post-pass: render mermaid blocks → wrap remaining <pre> → Shiki highlight
+    renderMermaidBlocks(el).then(() => {
+      wrapCodeBlocks(el);
+      highlightCodeBlocks(el);
+    });
   }, [text, cacheKey]);
 
   return <div ref={containerRef} className={className} />;

@@ -74,10 +74,17 @@ pub async fn call_messages(
     Ok((message, usage))
 }
 
+/// Maximum retries for transient API errors (429, 500, 529).
+const MAX_API_RETRIES: usize = 3;
+/// Base delay between retries (exponential backoff: 2s, 4s, 8s).
+const RETRY_BASE_DELAY_MS: u64 = 2000;
+
 /// Stream a Messages API request, translating Anthropic SSE events to the
 /// frontend event format and broadcasting them via `tx`. Returns the full
 /// assistant message, usage statistics, and the stop reason ("end_turn",
 /// "tool_use", or "max_tokens").
+///
+/// Retries transient API errors (429, 500, 529) with exponential backoff.
 pub async fn stream_messages(
     creds: &Credentials,
     request: &MessagesRequest,
@@ -85,28 +92,73 @@ pub async fn stream_messages(
     session_id: &str,
     abort_flag: &Arc<AtomicBool>,
 ) -> Result<(Message, UsageStats, String)> {
-    let response = build_request(creds, request).await?;
+    let mut last_error = String::new();
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        let error_event = serde_json::json!({
-            "type": "result",
-            "subtype": "error",
-            "result": format!("Anthropic API error ({status}): {body}"),
-            "is_error": true
+    for attempt in 0..=MAX_API_RETRIES {
+        if abort_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            anyhow::bail!("Aborted");
+        }
+
+        let response = match build_request(creds, request).await {
+            Ok(r) => r,
+            Err(e) => {
+                // Network-level error (DNS, connection refused, timeout)
+                if attempt < MAX_API_RETRIES {
+                    let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
+                    eprintln!(
+                        "[hive] API request failed (attempt {}/{}): {e:#}, retrying in {delay}ms",
+                        attempt + 1,
+                        MAX_API_RETRIES + 1
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    continue;
+                }
+                return Err(e);
+            }
+        };
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            last_error = format!("Anthropic API error ({status}): {body}");
+
+            // Retry on transient errors
+            let is_retryable = status.as_u16() == 429
+                || status.as_u16() == 500
+                || status.as_u16() == 529
+                || status.as_u16() == 503;
+
+            if is_retryable && attempt < MAX_API_RETRIES {
+                let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
+                eprintln!(
+                    "[hive] API error {status} (attempt {}/{}), retrying in {delay}ms",
+                    attempt + 1,
+                    MAX_API_RETRIES + 1
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                continue;
+            }
+
+            let error_event = serde_json::json!({
+                "type": "result",
+                "subtype": "error",
+                "result": &last_error,
+                "is_error": true
+            });
+            let _ = tx.send(error_event.to_string());
+            anyhow::bail!("{last_error}");
+        }
+
+        // Success — send init event and parse SSE stream
+        let init_event = serde_json::json!({
+            "type": "system",
+            "subtype": "init",
+            "session_id": session_id
         });
-        let _ = tx.send(error_event.to_string());
-        anyhow::bail!("Anthropic API error ({status}): {body}");
+        let _ = tx.send(init_event.to_string());
+
+        return parse_sse_stream(response, tx, abort_flag).await;
     }
 
-    // Send init event
-    let init_event = serde_json::json!({
-        "type": "system",
-        "subtype": "init",
-        "session_id": session_id
-    });
-    let _ = tx.send(init_event.to_string());
-
-    parse_sse_stream(response, tx, abort_flag).await
+    anyhow::bail!("{last_error}")
 }

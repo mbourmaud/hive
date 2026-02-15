@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::types::{StructuredTask, TaskType};
 
 /// Status of a task in the scheduler.
@@ -9,11 +11,15 @@ pub enum TaskState {
     Failed,
 }
 
+/// Maximum number of retries before a task is permanently failed.
+const MAX_RETRIES: usize = 2;
+
 /// A task wrapped with scheduling metadata.
 #[derive(Debug)]
 struct ScheduledTask {
     task: StructuredTask,
     state: TaskState,
+    retries: usize,
 }
 
 /// DAG-based task scheduler with dependency resolution.
@@ -27,13 +33,29 @@ pub struct TaskScheduler {
 
 impl TaskScheduler {
     /// Create a new scheduler from structured tasks (Work tasks only).
-    pub fn new(tasks: Vec<StructuredTask>, max_concurrent: usize) -> Self {
+    ///
+    /// `completed_numbers` contains plan task numbers that were already
+    /// completed in a previous run — these are initialized as `Completed`
+    /// so the scheduler skips them (resume support).
+    pub fn new(
+        tasks: Vec<StructuredTask>,
+        max_concurrent: usize,
+        completed_numbers: &HashSet<usize>,
+    ) -> Self {
         let scheduled = tasks
             .into_iter()
             .filter(|t| t.task_type == TaskType::Work)
-            .map(|task| ScheduledTask {
-                task,
-                state: TaskState::Pending,
+            .map(|task| {
+                let state = if completed_numbers.contains(&task.number) {
+                    TaskState::Completed
+                } else {
+                    TaskState::Pending
+                };
+                ScheduledTask {
+                    task,
+                    state,
+                    retries: 0,
+                }
             })
             .collect();
         Self {
@@ -96,10 +118,17 @@ impl TaskScheduler {
     }
 
     /// Re-queue a failed task as pending for retry.
-    pub fn requeue(&mut self, task_number: usize) {
+    /// Returns `false` if the task has exceeded its retry limit.
+    pub fn requeue(&mut self, task_number: usize) -> bool {
         if let Some(st) = self.find_mut(task_number) {
+            if st.retries >= MAX_RETRIES {
+                return false;
+            }
+            st.retries += 1;
             st.state = TaskState::Pending;
+            return true;
         }
+        false
     }
 
     pub fn all_completed(&self) -> bool {
@@ -160,7 +189,7 @@ mod tests {
     #[test]
     fn test_ready_tasks_no_deps() {
         let tasks = vec![make_task(1, vec![], true), make_task(2, vec![], true)];
-        let scheduler = TaskScheduler::new(tasks, 3);
+        let scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
         let ready = scheduler.ready_tasks();
         assert_eq!(ready.len(), 2);
     }
@@ -172,7 +201,7 @@ mod tests {
             make_task(2, vec![1], true),
             make_task(3, vec![], true),
         ];
-        let scheduler = TaskScheduler::new(tasks, 3);
+        let scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
         let ready = scheduler.ready_tasks();
         // Task 2 is blocked by task 1
         assert_eq!(ready.len(), 2);
@@ -183,7 +212,7 @@ mod tests {
     #[test]
     fn test_mark_completed_unblocks_deps() {
         let tasks = vec![make_task(1, vec![], true), make_task(2, vec![1], true)];
-        let mut scheduler = TaskScheduler::new(tasks, 3);
+        let mut scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
 
         scheduler.mark_running(1);
         assert!(scheduler.ready_tasks().is_empty());
@@ -201,7 +230,7 @@ mod tests {
             make_task(2, vec![], true),
             make_task(3, vec![], true),
         ];
-        let scheduler = TaskScheduler::new(tasks, 2);
+        let scheduler = TaskScheduler::new(tasks, 2, &HashSet::new());
         let ready = scheduler.ready_tasks();
         assert_eq!(ready.len(), 2);
     }
@@ -212,7 +241,7 @@ mod tests {
             make_task(1, vec![], true),
             make_task(2, vec![], false), // Non-parallel
         ];
-        let mut scheduler = TaskScheduler::new(tasks, 3);
+        let mut scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
 
         // With nothing running, non-parallel can start (but only alone)
         let ready = scheduler.ready_tasks();
@@ -231,7 +260,7 @@ mod tests {
     #[test]
     fn test_all_completed() {
         let tasks = vec![make_task(1, vec![], true), make_task(2, vec![], true)];
-        let mut scheduler = TaskScheduler::new(tasks, 3);
+        let mut scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
         assert!(!scheduler.all_completed());
 
         scheduler.mark_running(1);
@@ -249,21 +278,68 @@ mod tests {
         setup.task_type = TaskType::Setup;
         let work = make_task(2, vec![], true);
 
-        let scheduler = TaskScheduler::new(vec![setup, work], 3);
+        let scheduler = TaskScheduler::new(vec![setup, work], 3, &HashSet::new());
         assert_eq!(scheduler.task_count(), 1);
     }
 
     #[test]
     fn test_requeue_failed_task() {
         let tasks = vec![make_task(1, vec![], true)];
-        let mut scheduler = TaskScheduler::new(tasks, 3);
+        let mut scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
 
         scheduler.mark_running(1);
         scheduler.mark_failed(1);
         assert!(scheduler.has_failures());
 
-        scheduler.requeue(1);
+        assert!(scheduler.requeue(1));
         let ready = scheduler.ready_tasks();
         assert_eq!(ready.len(), 1);
+    }
+
+    #[test]
+    fn test_requeue_respects_max_retries() {
+        let tasks = vec![make_task(1, vec![], true)];
+        let mut scheduler = TaskScheduler::new(tasks, 3, &HashSet::new());
+
+        // First attempt + 2 retries = 3 total attempts
+        for _ in 0..MAX_RETRIES {
+            scheduler.mark_running(1);
+            scheduler.mark_failed(1);
+            assert!(scheduler.requeue(1));
+        }
+
+        // Third failure should NOT requeue
+        scheduler.mark_running(1);
+        scheduler.mark_failed(1);
+        assert!(!scheduler.requeue(1));
+        assert!(scheduler.has_failures());
+        assert!(scheduler.ready_tasks().is_empty());
+    }
+
+    #[test]
+    fn test_resume_skips_completed_tasks() {
+        let tasks = vec![
+            make_task(1, vec![], true),
+            make_task(2, vec![1], true),
+            make_task(3, vec![1], true),
+        ];
+        // Task 1 was completed in a previous run
+        let completed = HashSet::from([1]);
+        let scheduler = TaskScheduler::new(tasks, 3, &completed);
+
+        // Task 1 is already completed, tasks 2 and 3 are immediately ready
+        assert!(!scheduler.all_completed());
+        let ready = scheduler.ready_tasks();
+        assert_eq!(ready.len(), 2);
+        assert!(ready.iter().any(|t| t.number == 2));
+        assert!(ready.iter().any(|t| t.number == 3));
+    }
+
+    #[test]
+    fn test_resume_all_completed() {
+        let tasks = vec![make_task(1, vec![], true), make_task(2, vec![], true)];
+        let completed = HashSet::from([1, 2]);
+        let scheduler = TaskScheduler::new(tasks, 3, &completed);
+        assert!(scheduler.all_completed());
     }
 }
