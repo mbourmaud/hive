@@ -15,9 +15,7 @@ use crate::types::{DroneState, DroneStatus, ExecutionMode};
 
 // Re-export submodule items (used by run() and tests via `use super::*`)
 #[allow(unused_imports)]
-pub(crate) use hooks::{
-    detect_project_languages, get_git_remote_url, write_hooks_config, write_hooks_config_at,
-};
+pub(crate) use hooks::{detect_project_languages, get_git_remote_url, write_hooks_config_at};
 #[allow(unused_imports)]
 pub(crate) use plan_loading::{find_plan, load_plan, parse_frontmatter};
 #[allow(unused_imports)]
@@ -29,12 +27,19 @@ pub fn run(
     model: String,
     max_agents: usize,
     dry_run: bool,
+    project_root: Option<PathBuf>,
 ) -> Result<()> {
-    // 0. Load active profile to get Claude binary and environment
+    // 0. Resolve project root — explicit parameter or current directory
+    let project_root = match project_root {
+        Some(p) => p,
+        None => std::env::current_dir()?,
+    };
+
+    // 0b. Load active profile to get Claude binary and environment
     let active_profile = profile::load_active_profile()?;
 
     // 1. Auto-resume logic: if drone exists, check if process is alive
-    let drone_dir = PathBuf::from(".hive/drones").join(&name);
+    let drone_dir = project_root.join(".hive/drones").join(&name);
     let is_resume = if drone_dir.exists() {
         let pid_alive = crate::commands::common::read_drone_pid(&name)
             .map(crate::commands::common::is_process_running)
@@ -71,7 +76,7 @@ pub fn run(
     }
 
     // 2. Find plan
-    let prd_path = find_plan(&name)?;
+    let prd_path = find_plan(&name, &project_root)?;
     let prd = load_plan(&prd_path)?;
     println!("  {} Found plan: {}", "✓".green(), prd.title());
 
@@ -95,10 +100,10 @@ pub fn run(
 
     // 4. Handle worktree creation
     let worktree_path = if local {
-        std::env::current_dir()?
+        project_root.clone()
     } else {
         let worktree_base = config::get_worktree_base()?;
-        let project_name = get_project_name()?;
+        let project_name = get_project_name(&project_root)?;
         let new_path = worktree_base.join(&project_name).join(&name);
 
         if !new_path.exists() {
@@ -115,12 +120,12 @@ pub fn run(
 
     // 5. Create .hive symlink in worktree
     if !local {
-        create_hive_symlink(&worktree_path)?;
+        create_hive_symlink(&worktree_path, &project_root)?;
         println!("  {} Symlinked .hive", "✓".green());
     }
 
     // 6. Write Claude Code hooks config for event streaming
-    write_hooks_config(&worktree_path, &name)?;
+    write_hooks_config_at(&worktree_path, &name, &project_root)?;
     println!("  {} Configured hooks", "✓".green());
 
     // 7. Create or update drone status

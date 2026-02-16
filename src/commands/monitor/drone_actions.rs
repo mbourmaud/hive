@@ -59,7 +59,7 @@ pub(crate) fn handle_new_drone<B: ratatui::backend::Backend>(
         let model = models[model_idx].to_string();
 
         // Launch drone using start command
-        crate::commands::start::run(drone_name.clone(), false, model, 3, false)?;
+        crate::commands::start::run(drone_name.clone(), false, model, 3, false, None)?;
 
         Ok(Some(format!("\u{1f41d} Launched drone: {}", drone_name)))
     })();
@@ -213,6 +213,7 @@ pub(crate) fn handle_resume_drone(drone_name: &str) -> Result<String> {
         "sonnet".to_string(),
         3,
         false,
+        None,
     )?;
     Ok(format!("\u{1f504} Resumed drone: {}", drone_name))
 }

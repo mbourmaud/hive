@@ -3,8 +3,8 @@ use colored::Colorize;
 use std::fs;
 use std::process::Command as ProcessCommand;
 
-pub fn get_project_name() -> Result<String> {
-    std::env::current_dir()?
+pub fn get_project_name(project_root: &std::path::Path) -> Result<String> {
+    project_root
         .file_name()
         .and_then(|n| n.to_str())
         .map(|s| s.to_string())
@@ -142,8 +142,11 @@ fn get_worktree_base_ref(branch: &str) -> Result<String> {
     Ok("HEAD".to_string())
 }
 
-pub fn create_hive_symlink(worktree: &std::path::Path) -> Result<()> {
-    let hive_dir = std::env::current_dir()?.join(".hive");
+pub fn create_hive_symlink(
+    worktree: &std::path::Path,
+    project_root: &std::path::Path,
+) -> Result<()> {
+    let hive_dir = project_root.join(".hive");
     let symlink_path = worktree.join(".hive");
 
     if symlink_path.exists() || symlink_path.is_symlink() {

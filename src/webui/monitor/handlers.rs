@@ -131,7 +131,7 @@ pub async fn launch_drone(
 
     // Spawn `hive start` in a blocking task (reuses all existing CLI logic)
     let result = tokio::task::spawn_blocking(move || {
-        crate::commands::start::run(name.clone(), false, model, 3, false)
+        crate::commands::start::run(name.clone(), false, model, 3, false, None)
     })
     .await
     .map_err(|e| ApiError::Internal(anyhow::anyhow!("Spawn failed: {e}")))?;

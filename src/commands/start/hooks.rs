@@ -4,12 +4,6 @@ use std::path::Path;
 
 /// Write `.claude/settings.json` in the worktree with hooks that stream events
 /// to `.hive/drones/{name}/events.ndjson`.
-pub fn write_hooks_config(worktree: &Path, drone_name: &str) -> Result<()> {
-    let project_root = std::env::current_dir()?;
-    write_hooks_config_at(worktree, drone_name, &project_root)
-}
-
-/// Inner implementation that accepts an explicit project root (testable without current_dir).
 pub fn write_hooks_config_at(worktree: &Path, drone_name: &str, project_root: &Path) -> Result<()> {
     let claude_dir = worktree.join(".claude");
     fs::create_dir_all(&claude_dir)?;

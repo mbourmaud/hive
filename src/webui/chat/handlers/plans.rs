@@ -309,15 +309,21 @@ pub async fn dispatch_plan(
 
     let drone_name = body.drone_name;
     let model = body.model;
+    let project_root = q.project_path.map(std::path::PathBuf::from);
 
     // Spawn on a dedicated OS thread — `start::run` creates its own tokio
     // runtime internally, which cannot nest inside the Axum runtime.
     let name_for_thread = drone_name.clone();
     let model_for_thread = model.clone();
     std::thread::spawn(move || {
-        if let Err(e) =
-            crate::commands::start::run(name_for_thread.clone(), false, model_for_thread, 3, false)
-        {
+        if let Err(e) = crate::commands::start::run(
+            name_for_thread.clone(),
+            false,
+            model_for_thread,
+            3,
+            false,
+            project_root,
+        ) {
             eprintln!("[hive] Dispatch failed for '{}': {:#}", name_for_thread, e);
         }
     });

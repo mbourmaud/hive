@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 
 use crate::types::{LegacyJsonPlan, Plan};
 
-pub fn find_plan(name: &str) -> Result<PathBuf> {
+pub fn find_plan(name: &str, project_root: &Path) -> Result<PathBuf> {
     // Search in .hive/plans/ first, fall back to .hive/prds/ for backwards compat
     // Note: prds/ is often a symlink to plans/, so only search one directory
-    let plans_dir = PathBuf::from(".hive/plans");
-    let prds_dir = PathBuf::from(".hive/prds");
+    let plans_dir = project_root.join(".hive/plans");
+    let prds_dir = project_root.join(".hive/prds");
 
     let search_dir = if plans_dir.exists() {
         plans_dir
