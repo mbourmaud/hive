@@ -85,13 +85,13 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
     };
   }, [value, setPromptDraft]);
 
-  // Auto-resize contenteditable
+  // Auto-resize contenteditable on every value change
   useLayoutEffect(() => {
     const el = editorRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, []);
+  }, [value]);
 
   // Focus on mount and when streaming ends
   useEffect(() => {
