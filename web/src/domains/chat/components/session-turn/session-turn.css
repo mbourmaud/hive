@@ -64,7 +64,7 @@
 }
 
 [data-slot="user-message"][data-can-expand]:not([data-expanded]) {
-  max-height: 64px;
+  max-height: 120px;
   overflow: hidden;
 }
 

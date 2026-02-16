@@ -12,13 +12,13 @@ import { MarkdownRenderer } from "../markdown-renderer";
 // Trigger side-effect registration of all parts/ renderers
 import "../parts";
 
-import { useElapsed, useDebouncedStatus, useStickyHeight } from "./hooks";
+import { useDebouncedStatus, useElapsed, useStickyHeight } from "./hooks";
 import { CopyButton, PartRenderer } from "./step-renderers";
 import { formatDuration } from "./tool-utils";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const COLLAPSE_CHAR_THRESHOLD = 200;
+const COLLAPSE_CHAR_THRESHOLD = 400;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -46,7 +46,12 @@ function StepsTrigger({
       : "show steps";
 
   return (
-    <button type="button" data-slot="steps-trigger" onClick={onToggle} aria-expanded={stepsExpanded}>
+    <button
+      type="button"
+      data-slot="steps-trigger"
+      onClick={onToggle}
+      aria-expanded={stepsExpanded}
+    >
       <div data-slot="steps-trigger-left">
         {isStreaming ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
@@ -80,9 +85,10 @@ function TurnFinishInfo({
 }) {
   if (turn.status === "streaming" || turn.status === "pending") return null;
 
-  const reasonLabel = turn.finishReason && turn.finishReason !== "end_turn"
-    ? (FINISH_REASON_LABELS[turn.finishReason] ?? "max tokens")
-    : null;
+  const reasonLabel =
+    turn.finishReason && turn.finishReason !== "end_turn"
+      ? (FINISH_REASON_LABELS[turn.finishReason] ?? "max tokens")
+      : null;
 
   return (
     <div data-slot="turn-finish-info">
