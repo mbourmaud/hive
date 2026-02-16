@@ -208,6 +208,9 @@ export function useChat(baseUrl: string = "") {
   // ── Abort current request ───────────────────────────────────────────────
 
   const abort = useCallback(() => {
+    // Bump generation so in-flight SSE callbacks are ignored
+    generationRef.current++;
+
     const session = useAppStore.getState().session;
     if (session) {
       fetch(`${baseUrl}/api/chat/sessions/${session.id}/abort`, {
@@ -229,6 +232,14 @@ export function useChat(baseUrl: string = "") {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = undefined;
     }
+
+    // Flush pending RAF queue to prevent stale events dispatching after abort
+    const queue = queueRef.current;
+    if (queue.rafId !== null) {
+      cancelAnimationFrame(queue.rafId);
+      queue.rafId = null;
+    }
+    queue.events = [];
 
     stopHeartbeatCheck();
 
