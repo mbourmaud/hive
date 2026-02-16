@@ -160,7 +160,7 @@ export function useChat(baseUrl: string = "") {
       }
 
       const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      dispatchChat({ type: "TURN_STARTED", turnId, userMessage: message, model });
+      dispatchChat({ type: "TURN_STARTED", turnId, userMessage: message, model, images });
 
       abortControllerRef.current?.abort();
       const controller = new AbortController();

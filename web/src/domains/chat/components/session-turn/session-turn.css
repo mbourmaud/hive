@@ -63,6 +63,21 @@
   word-wrap: break-word;
 }
 
+[data-slot="user-message-images"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+[data-slot="user-message-image"] {
+  max-height: 120px;
+  max-width: 200px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+}
+
 [data-slot="user-message"][data-can-expand]:not([data-expanded]) {
   max-height: 120px;
   overflow: hidden;

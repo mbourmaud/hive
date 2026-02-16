@@ -155,6 +155,7 @@ export type FinishReason = "end_turn" | "canceled" | "error" | "max_tokens";
 export interface ChatTurn {
   id: string;
   userMessage: string;
+  images?: ImageAttachment[];
   assistantParts: AssistantPart[];
   status: TurnStatus;
   duration: number | null;
@@ -230,7 +231,7 @@ export interface ChatState {
 export type ChatAction =
   | { type: "SESSION_CREATED"; session: ChatSession }
   | { type: "SESSION_RESET" }
-  | { type: "TURN_STARTED"; turnId: string; userMessage: string; model?: string }
+  | { type: "TURN_STARTED"; turnId: string; userMessage: string; model?: string; images?: ImageAttachment[] }
   | { type: "STREAM_EVENT"; event: StreamEvent }
   | { type: "STREAM_EVENT_BATCH"; events: StreamEvent[] }
   | { type: "TURN_COMPLETED"; turnId: string }

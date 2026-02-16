@@ -155,6 +155,18 @@ export function SessionTurn({
             data-expanded={userExpanded || undefined}
           >
             <p>{turn.userMessage}</p>
+            {turn.images && turn.images.length > 0 && (
+              <div data-slot="user-message-images">
+                {turn.images.map((img) => (
+                  <img
+                    key={img.id}
+                    src={img.dataUrl}
+                    alt={img.name}
+                    data-slot="user-message-image"
+                  />
+                ))}
+              </div>
+            )}
             {canExpandUser && (
               <button
                 type="button"

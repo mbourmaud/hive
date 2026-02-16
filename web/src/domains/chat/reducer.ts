@@ -28,6 +28,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const newTurn: ChatTurn = {
         id: action.turnId,
         userMessage: action.userMessage,
+        images: action.images,
         assistantParts: [],
         status: "pending",
         duration: null,
