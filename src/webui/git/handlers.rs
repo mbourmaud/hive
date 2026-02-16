@@ -4,7 +4,7 @@ use axum::extract::Query;
 use axum::Json;
 use serde::Deserialize;
 
-use crate::webui::error::{ApiError, ApiResult};
+use crate::webui::error::ApiResult;
 use crate::webui::projects::detection::{detect_open_pr, detect_platform, run_cmd};
 
 use super::helpers::{
@@ -34,10 +34,14 @@ pub async fn git_status(Query(query): Query<StatusQuery>) -> ApiResult<Json<GitS
     let path = validate_project_path(&query.project_path)?;
     let timeout = Duration::from_secs(3);
 
-    // Get current branch
-    let branch = run_cmd("git", &["branch", "--show-current"], &path, timeout)
-        .await
-        .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("Failed to get current branch")))?;
+    // Get current branch (falls back to short SHA in detached HEAD state)
+    let branch = match run_cmd("git", &["branch", "--show-current"], &path, timeout).await {
+        Some(name) => name,
+        None => run_cmd("git", &["rev-parse", "--short", "HEAD"], &path, timeout)
+            .await
+            .map(|sha| format!("({sha})"))
+            .unwrap_or_else(|| "HEAD".to_string()),
+    };
 
     // Get remote URL
     let remote_url = run_cmd("git", &["remote", "get-url", "origin"], &path, timeout)
