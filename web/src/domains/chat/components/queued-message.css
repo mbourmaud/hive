@@ -1,0 +1,101 @@
+/* ── Queued message card ────────────────────────────────────────────────── */
+
+[data-component="queued-message"] {
+  position: relative;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid oklch(0.65 0.15 180);
+  border-radius: 0.5rem;
+  background: oklch(0.65 0.15 180 / 0.06);
+  animation: queued-slide-in 0.2s ease-out;
+}
+
+[data-component="queued-message"]:hover [data-slot="queued-message-cancel"] {
+  opacity: 1;
+}
+
+/* ── Header row ────────────────────────────────────────────────────────── */
+
+[data-slot="queued-message-header"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+
+[data-slot="queued-message-badge"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: oklch(0.65 0.15 180 / 0.15);
+  color: oklch(0.65 0.15 180);
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+[data-slot="queued-message-cancel"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: none;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+[data-slot="queued-message-cancel"]:hover {
+  color: var(--destructive);
+}
+
+/* ── Message text ──────────────────────────────────────────────────────── */
+
+[data-slot="queued-message-text"] {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* ── Image thumbnails ──────────────────────────────────────────────────── */
+
+[data-slot="queued-message-images"] {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+[data-slot="queued-message-thumb"] {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+/* ── Slide-in animation ────────────────────────────────────────────────── */
+
+@keyframes queued-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

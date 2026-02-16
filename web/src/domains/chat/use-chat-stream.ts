@@ -28,6 +28,7 @@ export function useChat(baseUrl: string = "") {
   const queueRef = useRef<EventQueue>({ events: [], rafId: null });
   const lastEventTimeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const generationRef = useRef(0);
 
   // ── Flush queued events via requestAnimationFrame ───────────────────────
 
@@ -100,7 +101,9 @@ export function useChat(baseUrl: string = "") {
       eventSourceRef.current = es;
       lastEventTimeRef.current = Date.now();
 
+      const gen = ++generationRef.current;
       es.onmessage = (msg) => {
+        if (generationRef.current !== gen) return;
         try {
           const parsed: unknown = JSON.parse(msg.data);
           if (isStreamEvent(parsed)) {
@@ -239,6 +242,25 @@ export function useChat(baseUrl: string = "") {
     }
   }, [baseUrl, dispatchChat, stopHeartbeatCheck]);
 
+  // ── Disconnect SSE (no abort POST, no TURN_ERROR) ────────────────────
+
+  const disconnect = useCallback(() => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = undefined;
+    }
+    stopHeartbeatCheck();
+    generationRef.current++;
+    const queue = queueRef.current;
+    if (queue.rafId !== null) {
+      cancelAnimationFrame(queue.rafId);
+      queue.rafId = null;
+    }
+    queue.events = [];
+  }, [stopHeartbeatCheck]);
+
   // ── Reset ─────────────────────────────────────────────────────────────
 
   const resetSession = useCallback(() => {
@@ -262,5 +284,7 @@ export function useChat(baseUrl: string = "") {
     abort,
     createSession,
     resetSession,
+    disconnect,
+    connectToSession,
   };
 }

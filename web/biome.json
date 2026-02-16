@@ -50,6 +50,9 @@
       },
       "performance": {
         "noBarrelFile": "warn"
+      },
+      "a11y": {
+        "useSemanticElements": "off"
       }
     }
   },

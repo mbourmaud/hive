@@ -1,4 +1,4 @@
-import { ArrowUp, ImageIcon, Square, X } from "lucide-react";
+import { ArrowUp, ImageIcon, ListPlus, Square, X } from "lucide-react";
 import type { ChatMode, EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
 import { cn } from "@/shared/lib/utils";
@@ -32,6 +32,7 @@ interface PromptInputProps {
   onEffortChange?: (effort: EffortLevel) => void;
   chatMode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  queueCount?: number;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ export function PromptInput({
   onEffortChange,
   chatMode,
   onModeChange,
+  queueCount = 0,
 }: PromptInputProps) {
   const {
     editorRef,
@@ -74,20 +76,20 @@ export function PromptInput({
     removeAttachment,
   } = useEditor({ onSend, onAbort, isStreaming, disabled });
 
-  const placeholder = usePlaceholder(isStreaming, value);
+  const placeholder = usePlaceholder(isStreaming, value, queueCount);
   const { text: statusText, variant: statusVariant } = deriveStatusText(
     isStreaming,
     turnStatus,
     error,
   );
-  const canSubmit =
-    (value.trim().length > 0 || attachments.length > 0) && !isStreaming && !disabled;
+  const canSubmit = (value.trim().length > 0 || attachments.length > 0) && !disabled;
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: drag-drop container, not interactive
     <div
       data-component="prompt-dock"
       className={className}
+      role="region"
+      aria-label="Message input"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -118,7 +120,6 @@ export function PromptInput({
           )}
         >
           <div data-slot="editor-wrapper" className="relative">
-            {/* biome-ignore lint/a11y/useSemanticElements: contentEditable div requires role="textbox" */}
             <div
               ref={editorRef}
               data-slot="prompt-editor"
@@ -193,7 +194,7 @@ export function PromptInput({
             <div data-slot="toolbar-right">
               {contextUsage && <ContextUsageIndicator usage={contextUsage} />}
 
-              {isStreaming ? (
+              {isStreaming && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -203,18 +204,24 @@ export function PromptInput({
                 >
                   <Square className="h-3.5 w-3.5 fill-current" />
                 </Button>
-              ) : (
+              )}
+              <div className="relative">
                 <Button
-                  variant="default"
+                  variant={isStreaming ? "ghost" : "default"}
                   size="icon"
                   onClick={handleSubmit}
                   disabled={!canSubmit}
                   className="h-7 w-7"
-                  aria-label="Send message"
+                  aria-label={isStreaming ? "Queue message" : "Send message"}
                 >
-                  <ArrowUp className="h-3.5 w-3.5" />
+                  {isStreaming ? (
+                    <ListPlus className="h-3.5 w-3.5" />
+                  ) : (
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  )}
                 </Button>
-              )}
+                {queueCount > 0 && <span data-slot="queue-badge">{queueCount}</span>}
+              </div>
             </div>
           </div>
         </div>

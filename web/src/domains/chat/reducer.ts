@@ -1,7 +1,7 @@
-import type { ChatAction, ChatState, ChatTurn } from "./types";
-import { initialChatState, updateTurn } from "./reducer-utils";
 import { processStreamEvent } from "./event-processors";
+import { initialChatState, updateTurn } from "./reducer-utils";
 import { replayHistory } from "./replay-history";
+import type { ChatAction, ChatState, ChatTurn } from "./types";
 
 // Re-export so existing consumers don't need import changes
 export { initialChatState } from "./reducer-utils";
@@ -18,6 +18,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentTurnId: null,
         isStreaming: false,
         error: null,
+        messageQueue: [],
       };
 
     case "SESSION_RESET":
@@ -114,5 +115,20 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case "REPLAY_HISTORY":
       return replayHistory(action.session, action.events, action.tokenCounts);
+
+    case "ENQUEUE_MESSAGE":
+      return { ...state, messageQueue: [...state.messageQueue, action.message] };
+
+    case "DEQUEUE_MESSAGE":
+      return { ...state, messageQueue: state.messageQueue.slice(1) };
+
+    case "CANCEL_QUEUED_MESSAGE":
+      return {
+        ...state,
+        messageQueue: state.messageQueue.filter((m) => m.id !== action.messageId),
+      };
+
+    case "CLEAR_QUEUE":
+      return { ...state, messageQueue: [] };
   }
 }

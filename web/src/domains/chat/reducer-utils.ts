@@ -11,6 +11,7 @@ export const initialChatState: ChatState = {
   isStale: false,
   error: null,
   contextUsage: null,
+  messageQueue: [],
 };
 
 // ── Part ID counter ─────────────────────────────────────────────────────────

@@ -1,12 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { IconBar } from "@/app/layout/icon-bar";
 import { MobileNav } from "@/app/layout/mobile-nav";
 import { RightSidebar } from "@/app/layout/right-sidebar/right-sidebar";
 import { ChatLayout } from "@/domains/chat/components/chat-layout";
 import { SessionsModal } from "@/domains/chat/components/sessions-modal";
-import { executeSlashCommand, type SlashCommandContext } from "@/domains/chat/slash-commands";
-import type { ImageAttachment } from "@/domains/chat/types";
-
+import { useMessageDequeue } from "@/domains/chat/hooks/use-message-dequeue";
 import { useProjectsSSE } from "@/domains/monitor/queries";
 import { ContextBar } from "@/domains/projects/components/context-bar";
 import { ContextBarSkeleton } from "@/domains/projects/components/context-bar-skeleton";
@@ -23,6 +21,8 @@ import { ToastProvider, useToast } from "@/shared/ui/toast";
 import { useAppStore } from "@/store";
 import { useDefaultModel } from "./hooks/use-default-model";
 import { useProjectDetection } from "./hooks/use-project-detection";
+import { useProjectSwitch } from "./hooks/use-project-switch";
+import { useSendHandler } from "./hooks/use-send-handler";
 import { useSessionManager } from "./hooks/use-session-manager";
 
 export default function App() {
@@ -84,6 +84,8 @@ function AppInner() {
     sendMessage,
     abort,
     resetSession,
+    disconnect,
+    connectToSession,
     renameSessionMutation,
     dispatchChat,
   } = useSessionManager({
@@ -93,107 +95,34 @@ function AppInner() {
     toast,
   });
 
+  useProjectSwitch(disconnect, connectToSession);
+
   const handleAddProject = useCallback(() => setIsAddingProject(true), []);
   useDefaultModel(models);
   const activeProject = projects.find((p) => p.path === selectedProject) ?? null;
   const drones = activeProject?.drones ?? [];
 
-  const setActiveSessionId = useAppStore((s) => s.setActiveSession);
-  const reloadSession = useCallback(
-    (id: string) => {
-      dispatchChat({ type: "SESSION_RESET" });
-      setActiveSessionId(null);
-      // Defer so the effect sees the null → id transition
-      queueMicrotask(() => setActiveSessionId(id));
-    },
-    [dispatchChat, setActiveSessionId],
-  );
+  const messageQueue = useAppStore((s) => s.messageQueue);
+  const cancelQueuedMessage = useAppStore((s) => s.cancelQueuedMessage);
 
-  const commandCtx: SlashCommandContext = useMemo(
-    () => ({
-      toast,
-      dispatchChat,
-      selectedModel,
-      setSelectedModel,
-      setSessionsModalOpen,
-      handleNewSession,
-      resetSession,
-      drones,
-      rightSidebarCollapsed,
-      openRightSidebar,
-      activeSessionId,
-      reloadSession,
-    }),
-    [
-      toast,
-      dispatchChat,
-      selectedModel,
-      setSelectedModel,
-      setSessionsModalOpen,
-      handleNewSession,
-      resetSession,
-      drones,
-      rightSidebarCollapsed,
-      openRightSidebar,
-      activeSessionId,
-      reloadSession,
-    ],
-  );
+  const { handleSend, handleClearConversation, handleDeleteCurrentSession } = useSendHandler({
+    sessions,
+    activeSessionId,
+    chatSession,
+    turns,
+    selectedModel,
+    drones,
+    addSession,
+    sendMessage,
+    resetSession,
+    handleNewSession,
+    handleDeleteSession,
+    renameSessionMutate: renameSessionMutation.mutate,
+    dispatchChat,
+    toast,
+  });
 
-  const handleSend = useCallback(
-    async (message: string, images?: ImageAttachment[]) => {
-      if (message.startsWith("/")) {
-        const handled = await executeSlashCommand(message, commandCtx);
-        if (handled) return;
-      }
-
-      let session = chatSession;
-
-      if (!session) {
-        const title = message.slice(0, 50) || `Session ${sessions.length + 1}`;
-        useAppStore.getState().setCreatingSession(true);
-        try {
-          session = await addSession(title);
-        } finally {
-          useAppStore.getState().setCreatingSession(false);
-        }
-        if (!session) return;
-      }
-
-      if (turns.length === 0 && activeSessionId) {
-        const newTitle = message.slice(0, 50);
-        if (newTitle) {
-          renameSessionMutation.mutate({ id: activeSessionId, title: newTitle });
-        }
-      }
-
-      await sendMessage(message, session, selectedModel ?? undefined, images);
-    },
-    [
-      commandCtx,
-      chatSession,
-      turns.length,
-      activeSessionId,
-      addSession,
-      sessions.length,
-      sendMessage,
-      selectedModel,
-      renameSessionMutation,
-    ],
-  );
-
-  const handleClearConversation = useCallback(() => {
-    if (!activeSessionId) return;
-    if (window.confirm("Clear this conversation?")) {
-      resetSession();
-      toast("Conversation cleared", "info");
-    }
-  }, [activeSessionId, resetSession, toast]);
-
-  const handleDeleteCurrentSession = useCallback(() => {
-    if (!activeSessionId || !window.confirm("Delete this session? This cannot be undone.")) return;
-    handleDeleteSession(activeSessionId);
-  }, [activeSessionId, handleDeleteSession]);
+  useMessageDequeue({ handleSend });
 
   useKeyboardShortcuts({
     onNewSession: handleNewSession,
@@ -245,6 +174,9 @@ function AppInner() {
           onEffortChange={setEffort}
           chatMode={chatMode}
           onModeChange={setChatMode}
+          messageQueue={messageQueue}
+          onCancelQueued={cancelQueuedMessage}
+          queueCount={messageQueue.length}
         />
       </>
     );

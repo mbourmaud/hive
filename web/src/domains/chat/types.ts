@@ -185,6 +185,15 @@ export interface ImageAttachment {
   name: string;
 }
 
+// ── Queued message (typed while Claude is streaming) ────────────────────────
+
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  images?: ImageAttachment[];
+  queuedAt: number;
+}
+
 // ── Slash command definition ────────────────────────────────────────────────
 
 export interface SlashCommand {
@@ -215,6 +224,7 @@ export interface ChatState {
   isStale: boolean;
   error: string | null;
   contextUsage: ContextUsage | null;
+  messageQueue: QueuedMessage[];
 }
 
 export type ChatAction =
@@ -233,4 +243,23 @@ export type ChatAction =
       events: StreamEvent[];
       tokenCounts?: { inputTokens: number; outputTokens: number };
     }
-  | { type: "DRONE_LAUNCHED"; droneName: string; prompt: string };
+  | { type: "DRONE_LAUNCHED"; droneName: string; prompt: string }
+  | { type: "ENQUEUE_MESSAGE"; message: QueuedMessage }
+  | { type: "DEQUEUE_MESSAGE" }
+  | { type: "CANCEL_QUEUED_MESSAGE"; messageId: string }
+  | { type: "CLEAR_QUEUE" };
+
+// ── Per-project snapshot (saved/restored on project switch) ────────────────
+
+export interface ProjectChatSnapshot {
+  chatState: ChatState;
+  activeSessionId: string | null;
+  promptDraft: string;
+  selectedModel: string | null;
+  effort: "low" | "medium" | "high";
+  chatMode: "code" | "hive-plan" | "plan";
+  wasStreaming: boolean;
+  streamingSessionId: string | null;
+  streamingTurnId: string | null;
+  messageQueue: QueuedMessage[];
+}

@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type {
-  HistoryNavState,
-} from "../prompt-helpers";
-import {
-  handleHistoryDown,
-  handleHistoryUp,
-  handleSlashPopoverKeys,
-} from "../prompt-helpers";
+import { useAppStore } from "@/store";
 import type { ImageAttachment, SlashCommand } from "../../types";
+import type { HistoryNavState } from "../prompt-helpers";
+import { handleHistoryDown, handleHistoryUp, handleSlashPopoverKeys } from "../prompt-helpers";
 import { ACCEPTED_IMAGE_TYPES, fileToAttachment } from "./attachments";
-import { MAX_HISTORY, loadHistory, saveHistory } from "./history";
-import { PLACEHOLDER_INTERVAL_MS, ROTATING_PLACEHOLDERS, getPlainText, setPlainText } from "./utils";
+import { loadHistory, MAX_HISTORY, saveHistory } from "./history";
+import {
+  getPlainText,
+  PLACEHOLDER_INTERVAL_MS,
+  ROTATING_PLACEHOLDERS,
+  setPlainText,
+} from "./utils";
 
 // ── Placeholder hook ─────────────────────────────────────────────────────────
 
-export function usePlaceholder(isStreaming: boolean, value: string): string {
+export function usePlaceholder(isStreaming: boolean, value: string, queueCount: number): string {
   const [placeholderIndex, setPlaceholderIndex] = useState(() =>
     Math.floor(Math.random() * ROTATING_PLACEHOLDERS.length),
   );
@@ -27,9 +27,10 @@ export function usePlaceholder(isStreaming: boolean, value: string): string {
     return () => clearInterval(timer);
   }, [isStreaming, value]);
 
-  return isStreaming
-    ? "Waiting for response..."
-    : (ROTATING_PLACEHOLDERS[placeholderIndex] ?? "Ask anything...");
+  if (isStreaming) {
+    return queueCount > 0 ? "Type another message to queue..." : "Type to queue a message...";
+  }
+  return ROTATING_PLACEHOLDERS[placeholderIndex] ?? "Ask anything...";
 }
 
 // ── Editor state + handlers hook ─────────────────────────────────────────────
@@ -57,6 +58,32 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // ── Sync prompt draft with store per-project cache ────────────────────
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const storePromptDraft = useAppStore((s) => s.promptDraft);
+  const setPromptDraft = useAppStore((s) => s.setPromptDraft);
+
+  // Restore draft from store when active session changes
+  const prevSessionRef = useRef(activeSessionId);
+  useEffect(() => {
+    if (activeSessionId === prevSessionRef.current) return;
+    prevSessionRef.current = activeSessionId;
+    const el = editorRef.current;
+    if (!el) return;
+    setPlainText(el, storePromptDraft);
+    setValue(storePromptDraft);
+  }, [activeSessionId, storePromptDraft]);
+
+  // Debounced sync editor → store
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => setPromptDraft(value), 300);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
+  }, [value, setPromptDraft]);
 
   // Auto-resize contenteditable
   useLayoutEffect(() => {
@@ -88,7 +115,7 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim();
-    if ((!trimmed && attachments.length === 0) || isStreaming || disabled) return;
+    if ((!trimmed && attachments.length === 0) || disabled) return;
     if (trimmed) {
       const history = historyRef.current;
       if (history[history.length - 1] !== trimmed) {
@@ -107,7 +134,7 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
     const imgs = attachments.length > 0 ? [...attachments] : undefined;
     setAttachments([]);
     onSend(trimmed, imgs);
-  }, [value, attachments, isStreaming, disabled, onSend]);
+  }, [value, attachments, disabled, onSend]);
 
   const handleSlashSelect = useCallback(
     (cmd: SlashCommand) => {
@@ -120,7 +147,12 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
         setValue(`/${cmd.name} `);
         return;
       }
-      if (cmd.name === "model" || cmd.name === "launch" || cmd.name === "stop" || cmd.name === "logs") {
+      if (
+        cmd.name === "model" ||
+        cmd.name === "launch" ||
+        cmd.name === "stop" ||
+        cmd.name === "logs"
+      ) {
         setPlainText(el, `/${cmd.name} `);
         setValue(`/${cmd.name} `);
         return;
@@ -133,7 +165,16 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
   );
 
   const historyNavState: HistoryNavState = useMemo(
-    () => ({ historyRef, historyIndex, setHistoryIndex, value, setValue, draftValue, setDraftValue, setPlainText }),
+    () => ({
+      historyRef,
+      historyIndex,
+      setHistoryIndex,
+      value,
+      setValue,
+      draftValue,
+      setDraftValue,
+      setPlainText,
+    }),
     [historyIndex, value, draftValue],
   );
 
@@ -142,10 +183,17 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
       if (e.nativeEvent.isComposing || composing || e.keyCode === 229) return;
       if (handleSlashPopoverKeys(e, slashVisible, setSlashVisible)) return;
       if (e.key === "Escape") {
-        if (isStreaming) { e.preventDefault(); onAbort(); }
+        if (isStreaming) {
+          e.preventDefault();
+          onAbort();
+        }
         return;
       }
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); return; }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
       if (handleHistoryUp(e, editorRef.current, historyNavState)) return;
       handleHistoryDown(e, editorRef.current, historyNavState);
     },
@@ -165,38 +213,51 @@ export function useEditor({ onSend, onAbort, isStreaming, disabled }: UseEditorO
     if (imageFiles.length > 0) {
       e.preventDefault();
       void Promise.all(imageFiles.map(fileToAttachment))
-        .then((a) => { setAttachments((prev) => [...prev, ...a]); })
+        .then((a) => {
+          setAttachments((prev) => [...prev, ...a]);
+        })
         .catch(() => {});
       return;
     }
     const text = e.clipboardData.getData("text/plain");
-    if (text) { e.preventDefault(); document.execCommand("insertText", false, text); }
+    if (text) {
+      e.preventDefault();
+      document.execCommand("insertText", false, text);
+    }
   }, []);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     dragCounterRef.current += 1;
     if (dragCounterRef.current === 1) setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     dragCounterRef.current -= 1;
     if (dragCounterRef.current === 0) setIsDragging(false);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     dragCounterRef.current = 0;
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files).filter((f) => ACCEPTED_IMAGE_TYPES.includes(f.type));
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      ACCEPTED_IMAGE_TYPES.includes(f.type),
+    );
     if (files.length > 0) {
       void Promise.all(files.map(fileToAttachment))
-        .then((a) => { setAttachments((prev) => [...prev, ...a]); })
+        .then((a) => {
+          setAttachments((prev) => [...prev, ...a]);
+        })
         .catch(() => {});
     }
   }, []);

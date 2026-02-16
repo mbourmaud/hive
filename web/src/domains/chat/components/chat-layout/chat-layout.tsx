@@ -4,9 +4,15 @@ import beeIcon from "@/assets/bee-icon.png";
 import type { ChatMode, EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
 import { useAppStore } from "@/store";
-import type { ChatTurn, ContextUsage, ImageAttachment } from "../../types";
+import type {
+  ChatTurn,
+  ContextUsage,
+  ImageAttachment,
+  QueuedMessage as QueuedMessageType,
+} from "../../types";
 import { DroneStatusCard } from "../drone-status-card";
 import { PromptInput } from "../prompt-input";
+import { QueuedMessage } from "../queued-message";
 import { SessionTurn } from "../session-turn";
 import "../chat-layout.css";
 
@@ -37,6 +43,9 @@ interface ChatLayoutProps {
   onEffortChange?: (effort: EffortLevel) => void;
   chatMode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  messageQueue?: QueuedMessageType[];
+  onCancelQueued?: (id: string) => void;
+  queueCount?: number;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -57,6 +66,9 @@ export function ChatLayout({
   onEffortChange,
   chatMode,
   onModeChange,
+  messageQueue = [],
+  onCancelQueued,
+  queueCount = 0,
 }: ChatLayoutProps) {
   // Auto-compact when context usage exceeds 80% threshold
   useAutoCompact();
@@ -112,12 +124,7 @@ export function ChatLayout({
         className="flex-1 flex flex-col relative overflow-hidden bg-background"
       >
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
-          <img
-            src={beeIcon}
-            alt="Hive"
-            data-slot="empty-state-bee"
-            className="animate-pulse"
-          />
+          <img src={beeIcon} alt="Hive" data-slot="empty-state-bee" className="animate-pulse" />
           <div className="text-center">
             <p className="text-sm font-medium text-muted-foreground animate-pulse">
               Starting Claude...
@@ -190,6 +197,7 @@ export function ChatLayout({
           onEffortChange={onEffortChange}
           chatMode={chatMode}
           onModeChange={onModeChange}
+          queueCount={queueCount}
         />
       </div>
     );
@@ -219,6 +227,9 @@ export function ChatLayout({
               />
             ),
           )}
+          {messageQueue.map((msg) => (
+            <QueuedMessage key={msg.id} message={msg} onCancel={onCancelQueued ?? (() => {})} />
+          ))}
         </div>
       </div>
 
@@ -248,6 +259,7 @@ export function ChatLayout({
         onEffortChange={onEffortChange}
         chatMode={chatMode}
         onModeChange={onModeChange}
+        queueCount={queueCount}
       />
     </div>
   );

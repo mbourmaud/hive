@@ -60,7 +60,8 @@ export function useSessionManager({
   const { data: allSessions = [], isLoading: sessionsLoading } = useSessionsQuery();
   const renameSessionMutation = useRenameSession();
   const deleteSessionMutation = useDeleteSession();
-  const { sendMessage, abort, createSession, resetSession } = useChat();
+  const { sendMessage, abort, createSession, resetSession, disconnect, connectToSession } =
+    useChat();
 
   // ── Sessions filtered by project ──────────────────────────────────────
   const filtered = selectedProject
@@ -175,25 +176,12 @@ export function useSessionManager({
   }, [activeSessionId, allSessions, selectedProject, dispatchChat]);
 
   // ── Auto-resume session ────────────────────────────────────────────────
-  // Picks the most recent session for the current project when none is active.
-  // Fires on mount AND on project switch (when activeSessionId becomes null).
-  const prevProjectRef = useRef(selectedProject);
-
+  // Picks the most recent session when none is active (e.g. first mount).
+  // Project-switch logic is handled by useProjectSwitch.
   useEffect(() => {
-    // Reset when project changes so auto-resume can fire for new project
-    if (selectedProject !== prevProjectRef.current) {
-      prevProjectRef.current = selectedProject;
-    }
-  }, [selectedProject]);
-
-  useEffect(() => {
-    // Wait for sessions to load
     if (sessionsLoading) return;
-    // Already have an active session
     if (activeSessionId) return;
-    // No sessions for this project
     if (sessions.length === 0) return;
-    // URL-based session selection takes priority
     const segments = window.location.pathname.split("/").filter(Boolean);
     if (segments.length >= 2) return;
 
@@ -202,25 +190,6 @@ export function useSessionManager({
       setActiveSessionId(mostRecent.id);
     }
   }, [sessionsLoading, activeSessionId, sessions, setActiveSessionId]);
-
-  // ── Reset session when switching projects ─────────────────────────────
-  // Guard: don't reset until sessions have loaded (prevents race on reload)
-  useEffect(() => {
-    if (sessionsLoading) return;
-    if (!activeSessionId || !selectedProject) return;
-    const sessionBelongs = sessions.some((s) => s.id === activeSessionId);
-    if (!sessionBelongs) {
-      setActiveSessionId(null);
-      resetSession();
-    }
-  }, [
-    sessionsLoading,
-    selectedProject,
-    activeSessionId,
-    sessions,
-    resetSession,
-    setActiveSessionId,
-  ]);
 
   return {
     sessions,
@@ -235,6 +204,8 @@ export function useSessionManager({
     sendMessage,
     abort,
     resetSession,
+    disconnect,
+    connectToSession,
     renameSessionMutation,
     dispatchChat,
   };
