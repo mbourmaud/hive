@@ -20,10 +20,21 @@ pub async fn discover_tools_for_cwd(cwd: &Path) -> Vec<ToolDefinition> {
         return Vec::new();
     }
 
-    let mut all_tools = Vec::new();
+    // Spawn all MCP server discoveries in parallel
+    let futures: Vec<_> = configs
+        .iter()
+        .map(|(name, config)| {
+            let name = name.clone();
+            let config = config.clone();
+            async move { (name.clone(), discover_server_tools(&name, &config).await) }
+        })
+        .collect();
 
-    for (server_name, server_config) in &configs {
-        match discover_server_tools(server_name, server_config).await {
+    let results = futures_util::future::join_all(futures).await;
+
+    let mut all_tools = Vec::new();
+    for (server_name, result) in results {
+        match result {
             Ok(tools) => all_tools.extend(tools),
             Err(e) => {
                 eprintln!("MCP server '{server_name}' tool discovery failed: {e:#}");
