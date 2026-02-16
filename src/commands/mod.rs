@@ -4,7 +4,6 @@ pub mod init;
 pub mod install;
 pub mod kill_clean;
 pub mod logs;
-pub mod monitor;
 pub mod profile;
 pub mod setup;
 pub mod start;

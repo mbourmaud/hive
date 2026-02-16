@@ -173,40 +173,9 @@ fn parse_cost_from_ndjson(path: &Path) -> CostSummary {
     }
 }
 
-/// Format a token count as human-readable (e.g., "12.3k", "1.2M").
-pub(crate) fn format_token_count(count: u64) -> String {
-    if count >= 1_000_000 {
-        format!("{:.1}M", count as f64 / 1_000_000.0)
-    } else if count >= 1_000 {
-        format!("{:.1}k", count as f64 / 1_000.0)
-    } else {
-        count.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_format_token_count_small() {
-        assert_eq!(format_token_count(0), "0");
-        assert_eq!(format_token_count(500), "500");
-        assert_eq!(format_token_count(999), "999");
-    }
-
-    #[test]
-    fn test_format_token_count_thousands() {
-        assert_eq!(format_token_count(1000), "1.0k");
-        assert_eq!(format_token_count(12345), "12.3k");
-        assert_eq!(format_token_count(999999), "1000.0k");
-    }
-
-    #[test]
-    fn test_format_token_count_millions() {
-        assert_eq!(format_token_count(1_000_000), "1.0M");
-        assert_eq!(format_token_count(2_500_000), "2.5M");
-    }
 
     #[test]
     fn test_cost_summary_default() {

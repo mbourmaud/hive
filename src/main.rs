@@ -5,11 +5,19 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser)]
 #[command(name = "hive")]
-#[command(about = "High-performance CLI tool for orchestrating multiple Claude Code instances")]
+#[command(about = "🐝 High-performance CLI tool for orchestrating multiple Claude Code instances")]
 #[command(version = VERSION)]
 struct Cli {
+    /// Port for web dashboard
+    #[arg(long, env = "HIVE_PORT", default_value = "3333")]
+    port: u16,
+
+    /// Print version details
+    #[arg(long = "version-info")]
+    version_info: bool,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -35,13 +43,10 @@ enum Commands {
         dry_run: bool,
     },
 
-    /// Monitor drone status with auto-refreshing TUI dashboard
+    /// Monitor drone status via web dashboard
     Monitor {
         /// Drone name (optional)
         name: Option<String>,
-        /// Open web dashboard in browser instead of TUI
-        #[arg(long)]
-        web: bool,
         /// Port for the web dashboard
         #[arg(long, env = "HIVE_PORT", default_value = "3333")]
         port: u16,
@@ -76,9 +81,6 @@ enum Commands {
 
     /// List all drones
     List,
-
-    /// Display version information
-    Version,
 
     /// Self-update via GitHub releases
     Update,
@@ -149,7 +151,23 @@ fn main() {
     // Check for updates in background (non-blocking, once per day)
     commands::utils::check_for_updates_background();
 
-    match cli.command {
+    // If --version-info, print and exit
+    if cli.version_info {
+        println!("🐝 Hive v{}", VERSION);
+        println!("Drone orchestration for Claude Code");
+        return;
+    }
+
+    // If no subcommand, launch web dashboard
+    if cli.command.is_none() {
+        if let Err(e) = hive_lib::webui::run_server(cli.port) {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    match cli.command.unwrap() {
         Commands::Init => {
             if let Err(e) = commands::init::run() {
                 eprintln!("Error: {}", e);
@@ -168,8 +186,8 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Monitor { name, web, port } => {
-            if let Err(e) = commands::monitor::run_monitor(name, web, port) {
+        Commands::Monitor { name: _, port } => {
+            if let Err(e) = hive_lib::webui::run_server(port) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -201,10 +219,6 @@ fn main() {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
-        }
-        Commands::Version => {
-            println!("🐝 Hive v{}", VERSION);
-            println!("Drone orchestration for Claude Code");
         }
         Commands::Update => {
             if let Err(e) = commands::utils::update() {

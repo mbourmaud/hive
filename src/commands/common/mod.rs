@@ -3,6 +3,7 @@
 //! This module extracts duplicated functionality from status.rs and utils.rs
 //! to provide a single source of truth for common operations.
 
+pub(crate) mod cost;
 mod time;
 
 use anyhow::{Context, Result};
@@ -64,8 +65,7 @@ pub fn load_prd(path: &Path) -> Option<Plan> {
 ///
 /// Reads from `~/.claude/tasks/<drone>/` — no events.ndjson fallback.
 /// Returns (completed_tasks, total_tasks). Filters out internal tracking tasks.
-/// Note: This is a simple read-only function. The snapshot store in the TUI
-/// provides monotonicity guarantees on top of this.
+/// Note: This is a simple read-only function for progress reporting.
 pub fn agent_teams_progress(drone_name: &str) -> (usize, usize) {
     use crate::agent_teams;
 

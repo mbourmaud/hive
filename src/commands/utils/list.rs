@@ -2,7 +2,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 use super::super::common::agent_teams_progress;
-use super::super::monitor::cost::parse_cost_from_log;
+use super::super::common::cost::parse_cost_from_log;
 use crate::types::{DroneState, DroneStatus};
 
 /// List all drones with compact output
