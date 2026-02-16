@@ -13,9 +13,9 @@ import { GeneralTab } from "./general-tab";
 import { KeybindsTab } from "./keybinds-tab";
 import {
   type AppSettings,
+  loadSettings,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
-  loadSettings,
   saveSettings,
 } from "./storage";
 import "./settings-dialog.css";

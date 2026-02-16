@@ -78,7 +78,9 @@ const REQUIRED_KEYS: readonly (keyof CustomThemeColors)[] = [
   "surface-raised",
 ] as const;
 
-export function validateThemeFile(data: unknown): { ok: true; theme: CustomThemeFile } | { ok: false; error: string } {
+export function validateThemeFile(
+  data: unknown,
+): { ok: true; theme: CustomThemeFile } | { ok: false; error: string } {
   if (typeof data !== "object" || data === null) {
     return { ok: false, error: "Theme file must be a JSON object" };
   }
@@ -108,11 +110,13 @@ export function validateThemeFile(data: unknown): { ok: true; theme: CustomTheme
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 32) || "custom";
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 32) || "custom"
+  );
 }
 
 export function generateThemeId(name: string): string {

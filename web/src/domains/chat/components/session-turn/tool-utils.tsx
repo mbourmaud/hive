@@ -158,10 +158,19 @@ interface SubtitleRule {
 }
 
 const SUBTITLE_RULES: SubtitleRule[] = [
-  { tools: new Set(["read", "readfile", "edit", "write", "writefile"]), keys: ["file_path", "path"], maxLen: 0, format: "filepath" },
+  {
+    tools: new Set(["read", "readfile", "edit", "write", "writefile"]),
+    keys: ["file_path", "path"],
+    maxLen: 0,
+    format: "filepath",
+  },
   { tools: new Set(["grep", "glob", "search"]), keys: ["pattern", "query"], maxLen: 40 },
   { tools: new Set(["bash", "execute", "run"]), keys: ["command"], maxLen: 50 },
-  { tools: new Set(["task", "sendmessage", "delegate"]), keys: ["description", "subject", "prompt"], maxLen: 60 },
+  {
+    tools: new Set(["task", "sendmessage", "delegate"]),
+    keys: ["description", "subject", "prompt"],
+    maxLen: 60,
+  },
   { tools: new Set(["webfetch", "websearch"]), keys: ["url", "query"], maxLen: 50 },
 ];
 

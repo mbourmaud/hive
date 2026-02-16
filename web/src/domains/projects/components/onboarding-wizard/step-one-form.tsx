@@ -117,11 +117,7 @@ export function StepOneForm({
             Cancel
           </Button>
         )}
-        <Button
-          onClick={onContinue}
-          disabled={!canContinue || isPending}
-          className="flex-1"
-        >
+        <Button onClick={onContinue} disabled={!canContinue || isPending} className="flex-1">
           {isPending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

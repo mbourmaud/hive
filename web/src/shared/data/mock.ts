@@ -5,7 +5,8 @@ export const MOCK_DRONES: DroneInfo[] = [
   {
     name: "auth-service",
     title: "Authentication Service",
-    description: "Add JWT-based auth with refresh tokens, role-based access control, and session management.",
+    description:
+      "Add JWT-based auth with refresh tokens, role-based access control, and session management.",
     status: "in_progress",
     liveness: "working",
     branch: "feat/auth-service",
@@ -98,7 +99,12 @@ export const MOCK_DRONES: DroneInfo[] = [
         model: "claude-sonnet-4-5-20250929",
         liveness: "working",
       },
-      { name: "integration-tests", agent_type: "", model: "claude-haiku-4-5-20251001", liveness: "idle" },
+      {
+        name: "integration-tests",
+        agent_type: "",
+        model: "claude-haiku-4-5-20251001",
+        liveness: "idle",
+      },
     ],
     messages: [
       {
@@ -154,7 +160,8 @@ export const MOCK_DRONES: DroneInfo[] = [
   {
     name: "frontend-revamp",
     title: "Frontend UI Revamp",
-    description: "Redesign the dashboard with new component library, dark mode support, and responsive layouts.",
+    description:
+      "Redesign the dashboard with new component library, dark mode support, and responsive layouts.",
     status: "completed",
     liveness: "completed",
     branch: "feat/frontend-revamp",
@@ -273,7 +280,8 @@ export const MOCK_DRONES: DroneInfo[] = [
   {
     name: "db-migration",
     title: "Database Migration v3",
-    description: "Migrate from PostgreSQL 14 to 16 with zero-downtime schema changes and data backfill.",
+    description:
+      "Migrate from PostgreSQL 14 to 16 with zero-downtime schema changes and data backfill.",
     status: "stopped",
     liveness: "stopped",
     branch: "feat/db-migration",
@@ -332,7 +340,12 @@ export const MOCK_DRONES: DroneInfo[] = [
         model: "claude-sonnet-4-5-20250929",
         liveness: "stopped",
       },
-      { name: "rollback-verify", agent_type: "", model: "claude-haiku-4-5-20251001", liveness: "stopped" },
+      {
+        name: "rollback-verify",
+        agent_type: "",
+        model: "claude-haiku-4-5-20251001",
+        liveness: "stopped",
+      },
     ],
     messages: [
       {

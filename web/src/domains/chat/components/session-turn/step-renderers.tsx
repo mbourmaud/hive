@@ -4,11 +4,23 @@ import "./thinking.css";
 import { Brain, Check, ChevronRight, Copy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import type { AssistantPart, TextPart, ThinkingPart, ToolResultPart, ToolUsePart } from "../../types";
+import type {
+  AssistantPart,
+  TextPart,
+  ThinkingPart,
+  ToolResultPart,
+  ToolUsePart,
+} from "../../types";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { getToolComponent } from "../tool-registry";
 import { ToolExpandedBody } from "./tool-bodies";
-import { ToolIcon, formatToolDuration, registryKeyForTool, toolDisplayName, toolSubtitle } from "./tool-utils";
+import {
+  formatToolDuration,
+  registryKeyForTool,
+  ToolIcon,
+  toolDisplayName,
+  toolSubtitle,
+} from "./tool-utils";
 
 // ── Copy button (reusable) ───────────────────────────────────────────────────
 

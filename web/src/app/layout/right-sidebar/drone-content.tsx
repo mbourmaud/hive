@@ -75,7 +75,9 @@ export function DroneContent({ drones, connectionStatus }: DroneContentProps) {
     setCleaning(name);
     try {
       await fetch(`/api/drones/${encodeURIComponent(name)}/clean`, { method: "POST" });
-    } catch { /* drone disappears on next SSE poll */ }
+    } catch {
+      /* drone disappears on next SSE poll */
+    }
     // Don't clear cleaning here — wait for drone to disappear from SSE
   }, []);
 
@@ -202,7 +204,10 @@ function DroneListItem({
               <button
                 type="button"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                onClick={(e) => { e.stopPropagation(); onClean(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClean();
+                }}
                 disabled={isCleaning}
               >
                 <Trash2 className="h-3 w-3" />

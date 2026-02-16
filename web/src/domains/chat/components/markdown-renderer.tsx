@@ -101,9 +101,7 @@ async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
       const pre = codeEl.parentElement;
       if (!pre || pre.getAttribute("data-highlighted") === "true") continue;
 
-      const langClass = codeEl.className
-        .split(/\s+/)
-        .find((c) => c.startsWith("language-"));
+      const langClass = codeEl.className.split(/\s+/).find((c) => c.startsWith("language-"));
       if (!langClass) continue;
 
       const lang = resolveLanguage(langClass.replace("language-", ""));

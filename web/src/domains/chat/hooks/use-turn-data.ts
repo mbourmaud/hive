@@ -1,11 +1,5 @@
 import { useMemo } from "react";
-import type {
-  AssistantPart,
-  ChatTurn,
-  ThinkingPart,
-  ToolResultPart,
-  ToolUsePart,
-} from "../types";
+import type { AssistantPart, ChatTurn, ThinkingPart, ToolResultPart, ToolUsePart } from "../types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,6 +86,14 @@ export function useTurnData(turn: ChatTurn): TurnData {
 
     const errorText = deriveTurnError(parts, turn.status);
 
-    return { toolUseParts, toolResultMap, thinkingParts, stepsParts, stepsCount, summaryText, errorText };
+    return {
+      toolUseParts,
+      toolResultMap,
+      thinkingParts,
+      stepsParts,
+      stepsCount,
+      summaryText,
+      errorText,
+    };
   }, [turn.assistantParts, turn.status]);
 }

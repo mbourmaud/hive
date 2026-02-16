@@ -158,12 +158,7 @@ export function SlashPopover({ query, visible, onSelect, onClose, anchorRef }: S
       if (!(target instanceof Node)) return;
       const popoverEl = listRef.current;
       const anchorEl = anchorRef.current;
-      if (
-        popoverEl &&
-        !popoverEl.contains(target) &&
-        anchorEl &&
-        !anchorEl.contains(target)
-      ) {
+      if (popoverEl && !popoverEl.contains(target) && anchorEl && !anchorEl.contains(target)) {
         onClose();
       }
     };

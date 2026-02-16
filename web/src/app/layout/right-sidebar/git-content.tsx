@@ -1,9 +1,9 @@
-import { GitBranch, Plus, Minus, FileQuestion, FilePen, FileX, FilePlus } from "lucide-react";
+import { FilePen, FilePlus, FileQuestion, FileX, GitBranch, Minus, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
-import type { ChangedFile, FileStatus } from "@/domains/git/types";
-import { useGitStatus, useFileDiff } from "@/domains/git/use-git-status";
-import { useAppStore } from "@/store";
 import { DiffViewer } from "@/domains/chat/components/diff-viewer";
+import type { ChangedFile, FileStatus } from "@/domains/git/types";
+import { useFileDiff, useGitStatus } from "@/domains/git/use-git-status";
+import { useAppStore } from "@/store";
 
 // ── File status icons ────────────────────────────────────────────────────────
 
@@ -36,7 +36,9 @@ export function GitContent() {
   }, []);
 
   if (!selectedProject) {
-    return <div className="p-4 text-xs text-muted-foreground">Select a project to view git status.</div>;
+    return (
+      <div className="p-4 text-xs text-muted-foreground">Select a project to view git status.</div>
+    );
   }
 
   if (isLoading) {
@@ -47,7 +49,8 @@ export function GitContent() {
     return <div className="p-4 text-xs text-muted-foreground">Could not load git status.</div>;
   }
 
-  const hasChanges = status.staged.length > 0 || status.unstaged.length > 0 || status.untracked.length > 0;
+  const hasChanges =
+    status.staged.length > 0 || status.unstaged.length > 0 || status.untracked.length > 0;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -65,9 +68,7 @@ export function GitContent() {
 
       {/* File list */}
       <div className="flex-1 overflow-y-auto">
-        {!hasChanges && (
-          <div className="p-4 text-xs text-muted-foreground">Working tree clean</div>
-        )}
+        {!hasChanges && <div className="p-4 text-xs text-muted-foreground">Working tree clean</div>}
 
         {status.staged.length > 0 && (
           <FileSection
@@ -84,7 +85,7 @@ export function GitContent() {
             title="Changes"
             files={status.unstaged}
             staged={false}
-            selectedPath={!selectedFile?.staged ? selectedFile?.path ?? null : null}
+            selectedPath={!selectedFile?.staged ? (selectedFile?.path ?? null) : null}
             onFileClick={handleFileClick}
           />
         )}
@@ -116,7 +117,13 @@ export function GitContent() {
 
 // ── File section ─────────────────────────────────────────────────────────────
 
-function FileSection({ title, files, staged, selectedPath, onFileClick }: {
+function FileSection({
+  title,
+  files,
+  staged,
+  selectedPath,
+  onFileClick,
+}: {
   title: string;
   files: ChangedFile[];
   staged: boolean;
@@ -144,12 +151,14 @@ function FileSection({ title, files, staged, selectedPath, onFileClick }: {
             <span className="flex items-center gap-1 text-[10px] shrink-0">
               {file.additions > 0 && (
                 <span className="text-success flex items-center gap-0.5">
-                  <Plus className="h-2.5 w-2.5" />{file.additions}
+                  <Plus className="h-2.5 w-2.5" />
+                  {file.additions}
                 </span>
               )}
               {file.deletions > 0 && (
                 <span className="text-destructive flex items-center gap-0.5">
-                  <Minus className="h-2.5 w-2.5" />{file.deletions}
+                  <Minus className="h-2.5 w-2.5" />
+                  {file.deletions}
                 </span>
               )}
             </span>

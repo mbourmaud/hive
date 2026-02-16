@@ -2,8 +2,8 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { Archive, ArchiveRestore, ChevronDown, Eye, FileText, Rocket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { MarkdownRenderer } from "@/domains/chat/components/markdown-renderer";
-import { useAppStore } from "@/store";
 import { useToast } from "@/shared/ui/toast";
+import { useAppStore } from "@/store";
 import { type PlanDetail, PlanViewerModal } from "./plan-viewer-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -26,7 +26,11 @@ interface PlansContentProps {
 const POLL_INTERVAL_MS = 10_000;
 
 /** Build API URL with optional project_path scoping. */
-function planApiUrl(path: string, projectPath: string | null, extra?: Record<string, string>): string {
+function planApiUrl(
+  path: string,
+  projectPath: string | null,
+  extra?: Record<string, string>,
+): string {
   const params = new URLSearchParams(extra);
   if (projectPath) params.set("project_path", projectPath);
   const qs = params.toString();
@@ -67,79 +71,108 @@ export function PlansContent({ onDispatch }: PlansContentProps) {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  const handleView = useCallback(async (id: string, isArchived: boolean) => {
-    try {
-      const res = await fetch(planApiUrl(`/api/plans/${id}`, selectedProject));
-      if (res.ok) {
-        setViewingPlan((await res.json()) as PlanDetail);
-        setViewingArchived(isArchived);
+  const handleView = useCallback(
+    async (id: string, isArchived: boolean) => {
+      try {
+        const res = await fetch(planApiUrl(`/api/plans/${id}`, selectedProject));
+        if (res.ok) {
+          setViewingPlan((await res.json()) as PlanDetail);
+          setViewingArchived(isArchived);
+        }
+      } catch {
+        /* silent */
       }
-    } catch { /* silent */ }
-  }, [selectedProject]);
+    },
+    [selectedProject],
+  );
 
-  const handleDispatch = useCallback(async (planId: string) => {
-    setDispatching(planId);
-    try {
-      const res = await fetch(planApiUrl(`/api/plans/${planId}/dispatch`, selectedProject), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ droneName: planId, model: "sonnet" }),
-      });
-      if (res.ok) {
-        toast(`Drone '${planId}' dispatched`, "success");
-        setViewingPlan(null);
-        onDispatch?.(planId);
-      } else {
-        const body = await res.text().catch(() => "");
-        toast(body || `Dispatch failed (${res.status})`, "error");
-      }
-    } catch {
-      toast("Network error — could not dispatch", "error");
-    } finally {
-      setDispatching(null);
-    }
-  }, [selectedProject, onDispatch, toast]);
-
-  const handleArchive = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(planApiUrl(`/api/plans/${id}/archive`, selectedProject), { method: "POST" });
-      if (res.ok) {
-        setPlans((prev) => {
-          const plan = prev.find((p) => p.id === id);
-          if (plan) setArchived((a) => [plan, ...a]);
-          return prev.filter((p) => p.id !== id);
+  const handleDispatch = useCallback(
+    async (planId: string) => {
+      setDispatching(planId);
+      try {
+        const res = await fetch(planApiUrl(`/api/plans/${planId}/dispatch`, selectedProject), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ droneName: planId, model: "sonnet" }),
         });
-        if (expandedId === id) setExpandedId(null);
-        toast("Plan archived", "success");
+        if (res.ok) {
+          toast(`Drone '${planId}' dispatched`, "success");
+          setViewingPlan(null);
+          onDispatch?.(planId);
+        } else {
+          const body = await res.text().catch(() => "");
+          toast(body || `Dispatch failed (${res.status})`, "error");
+        }
+      } catch {
+        toast("Network error — could not dispatch", "error");
+      } finally {
+        setDispatching(null);
       }
-    } catch { /* silent */ }
-  }, [selectedProject, expandedId, toast]);
+    },
+    [selectedProject, onDispatch, toast],
+  );
 
-  const handleUnarchive = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(planApiUrl(`/api/plans/${id}/unarchive`, selectedProject), { method: "POST" });
-      if (res.ok) {
-        setArchived((prev) => {
-          const plan = prev.find((p) => p.id === id);
-          if (plan) setPlans((a) => [plan, ...a]);
-          return prev.filter((p) => p.id !== id);
+  const handleArchive = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(planApiUrl(`/api/plans/${id}/archive`, selectedProject), {
+          method: "POST",
         });
-        toast("Plan restored", "success");
+        if (res.ok) {
+          setPlans((prev) => {
+            const plan = prev.find((p) => p.id === id);
+            if (plan) setArchived((a) => [plan, ...a]);
+            return prev.filter((p) => p.id !== id);
+          });
+          if (expandedId === id) setExpandedId(null);
+          toast("Plan archived", "success");
+        }
+      } catch {
+        /* silent */
       }
-    } catch { /* silent */ }
-  }, [selectedProject, toast]);
+    },
+    [selectedProject, expandedId, toast],
+  );
 
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(planApiUrl(`/api/plans/${id}`, selectedProject), { method: "DELETE" });
-      if (res.ok) {
-        setPlans((prev) => prev.filter((p) => p.id !== id));
-        setArchived((prev) => prev.filter((p) => p.id !== id));
-        if (expandedId === id) setExpandedId(null);
-        if (viewingPlan?.id === id) setViewingPlan(null);
+  const handleUnarchive = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(planApiUrl(`/api/plans/${id}/unarchive`, selectedProject), {
+          method: "POST",
+        });
+        if (res.ok) {
+          setArchived((prev) => {
+            const plan = prev.find((p) => p.id === id);
+            if (plan) setPlans((a) => [plan, ...a]);
+            return prev.filter((p) => p.id !== id);
+          });
+          toast("Plan restored", "success");
+        }
+      } catch {
+        /* silent */
       }
-    } catch { /* silent */ }
-  }, [selectedProject, expandedId, viewingPlan?.id]);
+    },
+    [selectedProject, toast],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(planApiUrl(`/api/plans/${id}`, selectedProject), {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          setPlans((prev) => prev.filter((p) => p.id !== id));
+          setArchived((prev) => prev.filter((p) => p.id !== id));
+          if (expandedId === id) setExpandedId(null);
+          if (viewingPlan?.id === id) setViewingPlan(null);
+        }
+      } catch {
+        /* silent */
+      }
+    },
+    [selectedProject, expandedId, viewingPlan?.id],
+  );
 
   // ── Empty state ──────────────────────────────────────────────────────
 
@@ -210,10 +243,24 @@ export function PlansContent({ onDispatch }: PlansContentProps) {
 
 // ── Active plan item ──────────────────────────────────────────────────────
 
-function ActivePlanItem({ plan, isExpanded, isDispatching, onToggle, onView, onDispatch, onArchive, onDelete }: {
-  plan: PlanSummary; isExpanded: boolean; isDispatching: boolean;
-  onToggle: () => void; onView: () => void; onDispatch: () => void;
-  onArchive: () => void; onDelete: () => void;
+function ActivePlanItem({
+  plan,
+  isExpanded,
+  isDispatching,
+  onToggle,
+  onView,
+  onDispatch,
+  onArchive,
+  onDelete,
+}: {
+  plan: PlanSummary;
+  isExpanded: boolean;
+  isDispatching: boolean;
+  onToggle: () => void;
+  onView: () => void;
+  onDispatch: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
 }) {
   return (
     <Collapsible.Root open={isExpanded} onOpenChange={onToggle}>
@@ -232,13 +279,25 @@ function ActivePlanItem({ plan, isExpanded, isDispatching, onToggle, onView, onD
         <div data-slot="drone-panel-detail">
           {plan.tldr && (
             <div className="mb-3">
-              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">TL;DR</div>
-              <MarkdownRenderer text={plan.tldr} cacheKey={`plan-tldr-${plan.id}`} className="plan-tldr" />
+              <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                TL;DR
+              </div>
+              <MarkdownRenderer
+                text={plan.tldr}
+                cacheKey={`plan-tldr-${plan.id}`}
+                className="plan-tldr"
+              />
             </div>
           )}
           <div className="flex items-center flex-wrap gap-1.5 mt-2">
             <PlanButton icon={Eye} label="View" onClick={onView} />
-            <PlanButton icon={Rocket} label={isDispatching ? "Dispatching..." : "Dispatch"} onClick={onDispatch} disabled={isDispatching} variant="accent" />
+            <PlanButton
+              icon={Rocket}
+              label={isDispatching ? "Dispatching..." : "Dispatch"}
+              onClick={onDispatch}
+              disabled={isDispatching}
+              variant="accent"
+            />
             <PlanButton icon={Archive} label="Archive" onClick={onArchive} variant="muted" />
             <PlanButton icon={Trash2} label="Delete" onClick={onDelete} variant="destructive" />
           </div>
@@ -250,16 +309,35 @@ function ActivePlanItem({ plan, isExpanded, isDispatching, onToggle, onView, onD
 
 // ── Archived plan item (compact) ──────────────────────────────────────────
 
-function ArchivedPlanItem({ plan, onView, onUnarchive, onDelete }: {
-  plan: PlanSummary; onView: () => void; onUnarchive: () => void; onDelete: () => void;
+function ArchivedPlanItem({
+  plan,
+  onView,
+  onUnarchive,
+  onDelete,
+}: {
+  plan: PlanSummary;
+  onView: () => void;
+  onUnarchive: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div data-slot="archived-plan-item">
       <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
       <span className="text-xs text-muted-foreground truncate flex-1">{plan.title}</span>
-      <button type="button" className="archived-action" title="View" onClick={onView}><Eye className="h-3 w-3" /></button>
-      <button type="button" className="archived-action" title="Restore" onClick={onUnarchive}><ArchiveRestore className="h-3 w-3" /></button>
-      <button type="button" className="archived-action text-destructive" title="Delete" onClick={onDelete}><Trash2 className="h-3 w-3" /></button>
+      <button type="button" className="archived-action" title="View" onClick={onView}>
+        <Eye className="h-3 w-3" />
+      </button>
+      <button type="button" className="archived-action" title="Restore" onClick={onUnarchive}>
+        <ArchiveRestore className="h-3 w-3" />
+      </button>
+      <button
+        type="button"
+        className="archived-action text-destructive"
+        title="Delete"
+        onClick={onDelete}
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
     </div>
   );
 }
@@ -273,15 +351,27 @@ const VARIANT_CLASSES: Record<string, string> = {
   destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20",
 };
 
-function PlanButton({ icon: Icon, label, onClick, disabled, variant = "default" }: {
-  icon: React.ComponentType<{ className?: string }>; label: string;
-  onClick: () => void; disabled?: boolean; variant?: string;
+function PlanButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  variant = "default",
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: string;
 }) {
   return (
     <button
       type="button"
       className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${VARIANT_CLASSES[variant] ?? VARIANT_CLASSES.default}`}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       disabled={disabled}
     >
       <Icon className="h-3 w-3" />

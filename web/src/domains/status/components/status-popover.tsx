@@ -1,7 +1,7 @@
 import * as Popover from "@radix-ui/react-popover";
-import { StatusButton } from "./status-button";
-import { useStatusQuery, deriveHealth } from "../queries";
+import { deriveHealth, useStatusQuery } from "../queries";
 import type { DroneStatusBrief, McpServerInfo, OverallHealth, SystemStatus } from "../types";
+import { StatusButton } from "./status-button";
 import "./status-popover.css";
 
 interface StatusPopoverProps {
@@ -45,10 +45,7 @@ function StatusContent({ status, health }: { status: SystemStatus; health: Overa
         <span data-slot="status-version">v{status.version}</span>
       </div>
 
-      <SessionSection
-        auth={status.auth}
-        session={status.session}
-      />
+      <SessionSection auth={status.auth} session={status.session} />
       <McpSection servers={status.mcp_servers} />
       <DronesSection drones={status.drones} />
     </>
@@ -56,9 +53,7 @@ function StatusContent({ status, health }: { status: SystemStatus; health: Overa
 }
 
 function LoadingState() {
-  return (
-    <div data-slot="status-loading">Loading...</div>
-  );
+  return <div data-slot="status-loading">Loading...</div>;
 }
 
 // ── Session / Auth Section ───────────────────────────────────────────────────
@@ -88,7 +83,9 @@ function SessionSection({
       </div>
       <div data-slot="status-row">
         <span data-slot="status-label">Active sessions</span>
-        <span data-slot="status-value">{session.active_count} / {session.total_count}</span>
+        <span data-slot="status-value">
+          {session.active_count} / {session.total_count}
+        </span>
       </div>
     </div>
   );

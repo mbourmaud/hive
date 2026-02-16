@@ -7,7 +7,7 @@ import { useDetection } from "@/domains/projects/use-detection";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import "@/domains/settings/components/settings-dialog/theme-grid.css";
-import { type WizardStep, STEP_HEADERS, pickFolder } from "./constants";
+import { pickFolder, STEP_HEADERS, type WizardStep } from "./constants";
 import { StepIndicator } from "./step-indicator";
 import { StepOneForm } from "./step-one-form";
 

@@ -114,18 +114,14 @@ function MetaPills({ meta }: { meta: TaskMeta }) {
   return (
     <>
       <div className="plan-meta">
-        {meta.type && (
-          <span className="plan-meta-pill plan-meta-pill-type">{meta.type}</span>
-        )}
+        {meta.type && <span className="plan-meta-pill plan-meta-pill-type">{meta.type}</span>}
         {meta.model && (
           <span className={`plan-meta-pill plan-meta-pill-model ${getModelClass(meta.model)}`}>
             {meta.model}
           </span>
         )}
         {meta.dependsOn && (
-          <span className="plan-meta-pill plan-meta-pill-depends">
-            depends on {meta.dependsOn}
-          </span>
+          <span className="plan-meta-pill plan-meta-pill-depends">depends on {meta.dependsOn}</span>
         )}
       </div>
       {meta.files && <PlanFilesList files={meta.files} />}
@@ -169,17 +165,18 @@ export function PlanViewerModal({
 
           {/* Body */}
           <div data-slot="plan-viewer-body">
-            {plan && segments.map((seg) =>
-              seg.kind === "markdown" ? (
-                <MarkdownRenderer
-                  key={seg.key}
-                  text={seg.content}
-                  cacheKey={`plan-${plan.id}-${seg.key}`}
-                />
-              ) : (
-                <MetaPills key={seg.key} meta={seg.meta} />
-              ),
-            )}
+            {plan &&
+              segments.map((seg) =>
+                seg.kind === "markdown" ? (
+                  <MarkdownRenderer
+                    key={seg.key}
+                    text={seg.content}
+                    cacheKey={`plan-${plan.id}-${seg.key}`}
+                  />
+                ) : (
+                  <MetaPills key={seg.key} meta={seg.meta} />
+                ),
+              )}
           </div>
 
           {/* Footer */}

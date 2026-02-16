@@ -2,7 +2,7 @@ import { FileEdit } from "lucide-react";
 import { BasicTool } from "../basic-tool";
 import { CodeBlock } from "../code-block";
 import { DiffChanges } from "../diff-changes";
-import { DiffViewer } from "../diff-viewer";
+import { SideBySideDiff } from "../side-by-side-diff";
 import type { ToolProps } from "../tool-registry";
 import { registerTool } from "../tool-registry";
 
@@ -42,7 +42,7 @@ function EditTool({
       locked={locked}
     >
       {oldString !== undefined && newString !== undefined ? (
-        <DiffViewer oldText={oldString} newText={newString} filePath={filePath} />
+        <SideBySideDiff oldText={oldString} newText={newString} filePath={filePath} />
       ) : (
         output && <CodeBlock code={output} language="diff" maxHeight={400} />
       )}

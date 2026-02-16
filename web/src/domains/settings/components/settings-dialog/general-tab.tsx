@@ -49,7 +49,9 @@ export function GeneralTab({
             type="button"
             data-slot="settings-option"
             data-active={theme === "light" || undefined}
-            onClick={() => { if (theme === "dark") toggleTheme(); }}
+            onClick={() => {
+              if (theme === "dark") toggleTheme();
+            }}
           >
             Light
           </button>
@@ -57,7 +59,9 @@ export function GeneralTab({
             type="button"
             data-slot="settings-option"
             data-active={theme === "dark" || undefined}
-            onClick={() => { if (theme === "light") toggleTheme(); }}
+            onClick={() => {
+              if (theme === "light") toggleTheme();
+            }}
           >
             Dark
           </button>
