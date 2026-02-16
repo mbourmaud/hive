@@ -73,14 +73,8 @@ pub async fn create_session(
     };
     write_meta(&meta);
 
-    // Populate built-in tools
+    // Populate built-in tools only — MCP tools are discovered in background
     let builtin_tools = tools::definitions::builtin_tool_definitions();
-
-    // Load MCP tools for this session's cwd
-    let mcp_tools = crate::webui::mcp_client::discover_tools_for_cwd(&cwd).await;
-
-    let mut all_tools = builtin_tools;
-    all_tools.extend(mcp_tools);
 
     // Filter tools based on agent profile allowed_tools
     let allowed_tools = agent_profile
@@ -102,7 +96,7 @@ pub async fn create_session(
         model: model.clone(),
         system_prompt,
         abort_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        tools: all_tools,
+        tools: builtin_tools,
         effort: Effort::Medium,
         chat_mode: ChatMode::Code,
         total_input_tokens: 0,
@@ -115,6 +109,20 @@ pub async fn create_session(
     };
 
     store.lock().await.insert(id.clone(), session);
+
+    // Discover MCP tools in background and merge into session when ready
+    let bg_store = store.clone();
+    let bg_id = id.clone();
+    let bg_cwd = cwd.clone();
+    tokio::spawn(async move {
+        let mcp_tools = crate::webui::mcp_client::discover_tools_for_cwd(&bg_cwd).await;
+        if !mcp_tools.is_empty() {
+            let mut sessions = bg_store.lock().await;
+            if let Some(s) = sessions.get_mut(&bg_id) {
+                s.tools.extend(mcp_tools);
+            }
+        }
+    });
 
     let resp = SessionResponse {
         id,
@@ -139,17 +147,14 @@ pub(super) async fn restore_session_from_disk(store: &SessionStore, id: &str) ->
         .ok()?
         .with_timezone(&chrono::Utc);
 
-    // Load tools for this session's cwd
+    // Load built-in tools immediately — MCP tools discovered in background
     let builtin_tools = tools::definitions::builtin_tool_definitions();
-    let mcp_tools = crate::webui::mcp_client::discover_tools_for_cwd(&cwd).await;
-    let mut all_tools = builtin_tools;
-    all_tools.extend(mcp_tools);
 
     let mcp_pool = Arc::new(tokio::sync::Mutex::new(McpPool::new(cwd.clone())));
 
     let session = ChatSession {
         id: id.to_string(),
-        cwd,
+        cwd: cwd.clone(),
         created_at,
         status: SessionStatus::Idle,
         tx,
@@ -158,7 +163,7 @@ pub(super) async fn restore_session_from_disk(store: &SessionStore, id: &str) ->
         model: meta.model,
         system_prompt: meta.system_prompt,
         abort_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        tools: all_tools,
+        tools: builtin_tools,
         effort: Effort::Medium,
         chat_mode: ChatMode::Code,
         total_input_tokens: meta.total_input_tokens,
@@ -170,7 +175,21 @@ pub(super) async fn restore_session_from_disk(store: &SessionStore, id: &str) ->
         agent: None,
     };
 
-    store.lock().await.insert(id.to_string(), session);
+    let id_owned = id.to_string();
+    store.lock().await.insert(id_owned.clone(), session);
+
+    // Discover MCP tools in background and merge into session when ready
+    let bg_store = store.clone();
+    tokio::spawn(async move {
+        let mcp_tools = crate::webui::mcp_client::discover_tools_for_cwd(&cwd).await;
+        if !mcp_tools.is_empty() {
+            let mut sessions = bg_store.lock().await;
+            if let Some(s) = sessions.get_mut(&id_owned) {
+                s.tools.extend(mcp_tools);
+            }
+        }
+    });
+
     Some(())
 }
 
