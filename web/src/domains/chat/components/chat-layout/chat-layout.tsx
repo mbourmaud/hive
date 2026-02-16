@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import beeIcon from "@/assets/bee-icon.png";
 import type { ChatMode, EffortLevel } from "@/domains/settings/store";
 import type { Model } from "@/domains/settings/types";
+import { useAppStore } from "@/store";
 import type { ChatTurn, ContextUsage, ImageAttachment } from "../../types";
 import { DroneStatusCard } from "../drone-status-card";
 import { PromptInput } from "../prompt-input";
@@ -100,6 +101,32 @@ export function ChatLayout({
 
   // j/k message navigation (extracted hook)
   const { focusedTurnIndex } = useMessageNavigation(visibleTurns);
+
+  const isCreatingSession = useAppStore((s) => s.isCreatingSession);
+
+  // Show loading splash while Claude CLI is starting
+  if (isCreatingSession && turns.length === 0) {
+    return (
+      <div
+        data-component="chat-view"
+        className="flex-1 flex flex-col relative overflow-hidden bg-background"
+      >
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
+          <img
+            src={beeIcon}
+            alt="Hive"
+            data-slot="empty-state-bee"
+            className="animate-pulse"
+          />
+          <div className="text-center">
+            <p className="text-sm font-medium text-muted-foreground animate-pulse">
+              Starting Claude...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!hasSession && turns.length === 0) {
     return (

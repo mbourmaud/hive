@@ -18,9 +18,11 @@ function extractChatState(slice: ChatSlice): ChatState {
 export interface ChatSlice extends ChatState {
   activeSessionId: string | null;
   promptDraft: string;
+  isCreatingSession: boolean;
 
   setActiveSession: (id: string | null) => void;
   setPromptDraft: (text: string) => void;
+  setCreatingSession: (v: boolean) => void;
   dispatchChat: (action: ChatAction) => void;
   resetChat: () => void;
 }
@@ -30,9 +32,11 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set,
 
   activeSessionId: null,
   promptDraft: "",
+  isCreatingSession: false,
 
   setActiveSession: (id) => set({ activeSessionId: id }),
   setPromptDraft: (text) => set({ promptDraft: text }),
+  setCreatingSession: (v) => set({ isCreatingSession: v }),
 
   dispatchChat: (action) => {
     const next = chatReducer(extractChatState(get()), action);

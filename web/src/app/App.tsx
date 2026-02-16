@@ -151,7 +151,12 @@ function AppInner() {
 
       if (!session) {
         const title = message.slice(0, 50) || `Session ${sessions.length + 1}`;
-        session = await addSession(title);
+        useAppStore.getState().setCreatingSession(true);
+        try {
+          session = await addSession(title);
+        } finally {
+          useAppStore.getState().setCreatingSession(false);
+        }
         if (!session) return;
       }
 
