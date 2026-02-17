@@ -14,6 +14,7 @@ export interface DroneInfo {
   branch: string;
   worktree: string;
   lead_model: string | null;
+  phase: string | null;
   started: string;
   updated: string;
   elapsed: string;
@@ -34,6 +35,7 @@ export interface TaskInfo {
   active_form: string | null;
   is_internal: boolean;
   duration: string | null;
+  retry_count: number;
   blocked_by: string | null;
 }
 
@@ -42,6 +44,7 @@ export interface MemberInfo {
   agent_type: string;
   model: string;
   liveness: string;
+  current_task_id: string | null;
 }
 
 export interface MessageInfo {
@@ -55,4 +58,6 @@ export interface CostInfo {
   total_usd: number;
   input_tokens: number;
   output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
 }

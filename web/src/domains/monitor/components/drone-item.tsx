@@ -26,6 +26,25 @@ function livenessColor(liveness: string) {
   }
 }
 
+function phaseBadge(phase: string | null) {
+  if (!phase) return null;
+  const config: Record<string, { label: string; cls: string }> = {
+    dispatch: { label: "Dispatch", cls: "bg-blue-500/15 text-blue-400" },
+    monitor: { label: "Working", cls: "bg-honey/15 text-honey" },
+    verify: { label: "Verify", cls: "bg-purple-500/15 text-purple-400" },
+    pr: { label: "PR", cls: "bg-green-500/15 text-green-400" },
+    complete: { label: "Done", cls: "bg-success/15 text-success" },
+    failed: { label: "Failed", cls: "bg-destructive/15 text-destructive" },
+  };
+  const c = config[phase];
+  if (!c) return null;
+  return (
+    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", c.cls)}>
+      {c.label}
+    </span>
+  );
+}
+
 export function DroneItem({ drone, selected, onClick }: DroneItemProps) {
   const [done, total] = drone.progress;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -48,7 +67,10 @@ export function DroneItem({ drone, selected, onClick }: DroneItemProps) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-foreground truncate">{drone.name}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground truncate">{drone.name}</span>
+          {phaseBadge(drone.phase)}
+        </div>
         <div className="flex items-center gap-3 mt-1">
           <span className="text-xs text-muted-foreground">
             {done}/{total} ({pct}%)

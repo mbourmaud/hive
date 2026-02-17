@@ -58,6 +58,35 @@
   text-decoration: line-through;
 }
 
+[data-slot="task-active-form"] {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  flex-shrink: 0;
+}
+
+[data-slot="task-duration"] {
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+[data-slot="task-retry"] {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--color-warning, oklch(0.8 0.15 85));
+  color: oklch(0.2 0.05 85);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 [data-slot="task-owner"] {
   font-size: 10px;
   font-weight: 500;

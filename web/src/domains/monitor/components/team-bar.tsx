@@ -55,6 +55,9 @@ export function TeamBar({ members, leadModel, droneLiveness }: TeamBarProps) {
           style={{ backgroundColor: agentColor(i + 1) }}
         >
           {member.name}
+          {member.current_task_id && (
+            <span className="text-[10px] font-normal text-white/60">#{member.current_task_id}</span>
+          )}
           <span className="text-[10px] font-normal text-white/60">{shortModel(member.model)}</span>
           <PulseDot isWorking={member.liveness === "working"} />
         </span>

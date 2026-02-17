@@ -12,11 +12,12 @@ export const MOCK_DRONES: DroneInfo[] = [
     branch: "feat/auth-service",
     worktree: "",
     lead_model: "claude-sonnet-4-5-20250929",
+    phase: null,
     started: "",
     updated: "",
     elapsed: "1h 2m",
     progress: [2, 5],
-    cost: { total_usd: 1.24, input_tokens: 145234, output_tokens: 32456 },
+    cost: { cache_creation_tokens: 0, cache_read_tokens: 0, total_usd: 1.24, input_tokens: 145234, output_tokens: 32456 },
     tasks: [
       {
         id: "1",
@@ -27,6 +28,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "15m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -38,6 +40,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "18m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -49,6 +52,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: "Implementing JWT refresh endpoint",
         duration: null,
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -60,6 +64,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: "Writing auth middleware",
         duration: null,
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -71,6 +76,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: null,
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
     ],
@@ -80,30 +86,35 @@ export const MOCK_DRONES: DroneInfo[] = [
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "completed",
+        current_task_id: null,
       },
       {
         name: "user-model",
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "completed",
+        current_task_id: null,
       },
       {
         name: "jwt-refresh",
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "working",
+        current_task_id: null,
       },
       {
         name: "auth-middleware",
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "working",
+        current_task_id: null,
       },
       {
         name: "integration-tests",
         agent_type: "",
         model: "claude-haiku-4-5-20251001",
         liveness: "idle",
+        current_task_id: null,
       },
     ],
     messages: [
@@ -167,11 +178,12 @@ export const MOCK_DRONES: DroneInfo[] = [
     branch: "feat/frontend-revamp",
     worktree: "",
     lead_model: "claude-sonnet-4-5-20250929",
+    phase: null,
     started: "",
     updated: "",
     elapsed: "2h 15m",
     progress: [4, 4],
-    cost: { total_usd: 3.87, input_tokens: 389000, output_tokens: 87000 },
+    cost: { cache_creation_tokens: 0, cache_read_tokens: 0, total_usd: 3.87, input_tokens: 389000, output_tokens: 87000 },
     tasks: [
       {
         id: "1",
@@ -182,6 +194,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "25m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -193,6 +206,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "30m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -204,6 +218,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "20m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -215,6 +230,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "18m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
     ],
@@ -224,24 +240,28 @@ export const MOCK_DRONES: DroneInfo[] = [
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "completed",
+        current_task_id: null,
       },
       {
         name: "component-lib",
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "completed",
+        current_task_id: null,
       },
       {
         name: "dark-mode",
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "completed",
+        current_task_id: null,
       },
       {
         name: "e2e-tests",
         agent_type: "",
         model: "claude-haiku-4-5-20251001",
         liveness: "completed",
+        current_task_id: null,
       },
     ],
     messages: [
@@ -287,11 +307,12 @@ export const MOCK_DRONES: DroneInfo[] = [
     branch: "feat/db-migration",
     worktree: "",
     lead_model: "claude-sonnet-4-5-20250929",
+    phase: null,
     started: "",
     updated: "",
     elapsed: "1h 48m",
     progress: [1, 3],
-    cost: { total_usd: 0.52, input_tokens: 54000, output_tokens: 12800 },
+    cost: { cache_creation_tokens: 0, cache_read_tokens: 0, total_usd: 0.52, input_tokens: 54000, output_tokens: 12800 },
     tasks: [
       {
         id: "1",
@@ -302,6 +323,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: "13m 00s",
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -313,6 +335,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: "Migrating session storage to Redis",
         duration: null,
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
       {
@@ -324,6 +347,7 @@ export const MOCK_DRONES: DroneInfo[] = [
         active_form: null,
         duration: null,
         is_internal: false,
+        retry_count: 0,
         blocked_by: null,
       },
     ],
@@ -333,18 +357,21 @@ export const MOCK_DRONES: DroneInfo[] = [
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "stopped",
+        current_task_id: null,
       },
       {
         name: "redis-sessions",
         agent_type: "",
         model: "claude-sonnet-4-5-20250929",
         liveness: "stopped",
+        current_task_id: null,
       },
       {
         name: "rollback-verify",
         agent_type: "",
         model: "claude-haiku-4-5-20251001",
         liveness: "stopped",
+        current_task_id: null,
       },
     ],
     messages: [

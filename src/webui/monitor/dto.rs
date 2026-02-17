@@ -18,6 +18,7 @@ pub struct DroneInfo {
     pub branch: String,
     pub worktree: String,
     pub lead_model: Option<String>,
+    pub phase: Option<String>,
     pub started: String,
     pub updated: String,
     pub elapsed: String,
@@ -47,6 +48,7 @@ pub struct TaskInfo {
     pub active_form: Option<String>,
     pub is_internal: bool,
     pub duration: Option<String>,
+    pub retry_count: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocked_by: Option<String>,
 }
@@ -57,6 +59,7 @@ pub struct MemberInfo {
     pub agent_type: String,
     pub model: String,
     pub liveness: String,
+    pub current_task_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -64,4 +67,6 @@ pub struct CostInfo {
     pub total_usd: f64,
     pub input_tokens: u64,
     pub output_tokens: u64,
+    pub cache_creation_tokens: u64,
+    pub cache_read_tokens: u64,
 }

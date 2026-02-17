@@ -53,6 +53,15 @@ function TaskRow({ task, members }: { task: TaskInfo; members: MemberInfo[] }) {
       <span data-slot="task-label" title={task.subject}>
         {label}
       </span>
+      {task.active_form && status === "in_progress" && (
+        <span data-slot="task-active-form">{task.active_form}</span>
+      )}
+      {task.duration && (
+        <span data-slot="task-duration">{task.duration}</span>
+      )}
+      {task.retry_count > 0 && (
+        <span data-slot="task-retry">retry {task.retry_count}</span>
+      )}
       {task.owner && (
         <span
           data-slot="task-owner"

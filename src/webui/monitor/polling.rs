@@ -78,7 +78,6 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
                 .iter()
                 .map(|t| {
                     let duration = compute_task_duration(t.created_at, t.updated_at, &t.status);
-                    // Only show blocked_by for pending tasks with unresolved dependencies
                     let blocked_by = if !t.blocked_by.is_empty() && t.status != "completed" {
                         Some(t.blocked_by.join(", "))
                     } else {
@@ -93,12 +92,12 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
                         active_form: t.active_form.clone(),
                         is_internal: t.is_internal,
                         duration,
+                        retry_count: 0, // TODO(mbourmaud): read from task metadata
                         blocked_by,
                     }
                 })
                 .collect();
 
-            // Sort tasks by numeric ID so they display in plan order
             let mut tasks = tasks;
             tasks.sort_by_key(|t| t.id.parse::<usize>().unwrap_or(usize::MAX));
 
@@ -107,11 +106,17 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
                 .iter()
                 .map(|m| {
                     let member_liveness = determine_member_liveness(&m.name, &tasks);
+                    // Find current task assigned to this member
+                    let current_task_id = tasks
+                        .iter()
+                        .find(|t| t.status == "in_progress" && t.owner.as_deref() == Some(&m.name))
+                        .map(|t| t.id.clone());
                     MemberInfo {
                         name: m.name.clone(),
                         agent_type: m.agent_type.clone(),
                         model: m.model.clone(),
                         liveness: member_liveness,
+                        current_task_id,
                     }
                 })
                 .collect();
@@ -127,6 +132,7 @@ pub fn poll_all_projects(snapshot_stores: &SnapshotStores) -> Vec<ProjectInfo> {
                 branch: status.branch.clone(),
                 worktree: status.worktree.clone(),
                 lead_model: status.lead_model.clone(),
+                phase: status.phase.clone(),
                 started: status.started.clone(),
                 updated: status.updated.clone(),
                 elapsed,
@@ -187,5 +193,7 @@ fn cost_to_info(cost: &CostSummary) -> CostInfo {
         total_usd: cost.total_cost_usd,
         input_tokens: cost.input_tokens,
         output_tokens: cost.output_tokens,
+        cache_creation_tokens: cost.cache_creation_tokens,
+        cache_read_tokens: cost.cache_read_tokens,
     }
 }
