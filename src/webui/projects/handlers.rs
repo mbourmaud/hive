@@ -244,3 +244,24 @@ pub async fn serve_image(AxumPath(id): AxumPath<String>) -> ApiResult<impl IntoR
         data,
     ))
 }
+
+/// Open a native folder picker dialog and return the selected path.
+///
+/// The dialog runs on a blocking thread via `spawn_blocking` since `rfd`
+/// uses the OS file dialog which blocks the calling thread.
+pub async fn pick_folder() -> ApiResult<Json<serde_json::Value>> {
+    let path = tokio::task::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Select project folder")
+            .pick_folder()
+    })
+    .await
+    .map_err(|e| ApiError::Internal(anyhow::anyhow!("Dialog thread panicked: {e}")))?;
+
+    match path {
+        Some(p) => Ok(Json(
+            serde_json::json!({ "path": p.to_string_lossy(), "name": p.file_name().map(|n| n.to_string_lossy().to_string()) }),
+        )),
+        None => Ok(Json(serde_json::json!({ "path": null, "name": null }))),
+    }
+}

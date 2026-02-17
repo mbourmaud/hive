@@ -27,4 +27,5 @@ pub fn routes() -> Router {
             "/api/registry/projects/{id}/image",
             post(handlers::upload_image).get(handlers::serve_image),
         )
+        .route("/api/pick-folder", get(handlers::pick_folder))
 }

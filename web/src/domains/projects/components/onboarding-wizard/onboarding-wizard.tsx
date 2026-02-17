@@ -33,10 +33,11 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
   const canContinue = name.trim().length > 0 && path.trim().length > 0;
 
   const handlePickFolder = useCallback(async () => {
-    const folderName = await pickFolder();
-    if (folderName) {
-      if (!name) {
-        setName(folderName);
+    const result = await pickFolder();
+    if (result.path) {
+      setPath(result.path);
+      if (!name && result.name) {
+        setName(result.name);
       }
     }
   }, [name]);

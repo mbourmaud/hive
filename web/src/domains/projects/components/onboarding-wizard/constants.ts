@@ -1,3 +1,5 @@
+import { apiClient } from "@/shared/api/client";
+
 export type WizardStep = 1 | 2 | 3;
 
 export const STEP_HEADERS: Record<WizardStep, { title: string; subtitle: string }> = {
@@ -6,23 +8,18 @@ export const STEP_HEADERS: Record<WizardStep, { title: string; subtitle: string 
   3: { title: "Ready!", subtitle: "Your project is configured and ready to go" },
 };
 
-// ── Folder picker ───────────────────────────────────────────────────────────
+// ── Folder picker (native dialog via backend) ───────────────────────────────
 
-interface DirectoryPickerWindow {
-  showDirectoryPicker: () => Promise<FileSystemDirectoryHandle>;
+interface PickFolderResult {
+  path: string | null;
+  name: string | null;
 }
 
-function hasDirectoryPicker(w: Window): w is Window & DirectoryPickerWindow {
-  return "showDirectoryPicker" in w;
-}
-
-export async function pickFolder(): Promise<string | null> {
-  if (!hasDirectoryPicker(window)) return null;
+export async function pickFolder(): Promise<PickFolderResult> {
   try {
-    const handle = await window.showDirectoryPicker();
-    return handle.name;
+    const result = await apiClient.get<PickFolderResult>("/api/pick-folder");
+    return result;
   } catch {
-    // User cancelled
-    return null;
+    return { path: null, name: null };
   }
 }

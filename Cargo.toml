@@ -47,6 +47,7 @@ aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
 aws-config = { version = "1", features = ["sso"] }
 http = "1"
 regex = "1"
+rfd = "0.15"
 
 [dev-dependencies]
 tempfile = "3"
