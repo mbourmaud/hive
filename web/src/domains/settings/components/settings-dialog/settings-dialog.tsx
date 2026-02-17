@@ -14,9 +14,13 @@ import { KeybindsTab } from "./keybinds-tab";
 import { ProfilesTab } from "./profiles-tab";
 import {
   type AppSettings,
+  HEADING_FONTS,
   loadSettings,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
+  MONO_FONTS,
+  resolveFontValue,
+  SANS_FONTS,
   saveSettings,
 } from "./storage";
 import "./settings-dialog.css";
@@ -58,11 +62,14 @@ export function SettingsDialog({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Apply font size via CSS custom properties on :root
+  // Apply font settings via CSS custom properties on :root
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--font-size-base", `${settings.fontSize}px`);
     root.style.setProperty("--font-size-code", `${settings.fontSize - 1}px`);
+    root.style.setProperty("--font-sans", resolveFontValue(settings.fontSans, SANS_FONTS));
+    root.style.setProperty("--font-heading", resolveFontValue(settings.fontHeading, HEADING_FONTS));
+    root.style.setProperty("--font-mono", resolveFontValue(settings.fontMono, MONO_FONTS));
     saveSettings(settings);
   }, [settings]);
 
@@ -72,6 +79,13 @@ export function SettingsDialog({
       fontSize: Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, prev.fontSize + delta)),
     }));
   }, []);
+
+  const setFontFamily = useCallback(
+    (key: "fontSans" | "fontHeading" | "fontMono", id: string) => {
+      setSettings((prev) => ({ ...prev, [key]: id }));
+    },
+    [],
+  );
 
   const handleImportClick = useCallback(() => {
     setImportError(null);
@@ -174,6 +188,7 @@ export function SettingsDialog({
                 handleFileChange={handleFileChange}
                 settings={settings}
                 adjustFontSize={adjustFontSize}
+                setFontFamily={setFontFamily}
               />
             </Tabs.Content>
 

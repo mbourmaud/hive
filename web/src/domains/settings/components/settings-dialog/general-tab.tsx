@@ -1,8 +1,8 @@
 import { Download, Minus, Plus, Upload } from "lucide-react";
 import type { ThemeName } from "@/shared/theme/use-theme";
 import { THEMES } from "@/shared/theme/use-theme";
-import type { AppSettings } from "./storage";
-import { MAX_FONT_SIZE, MIN_FONT_SIZE } from "./storage";
+import type { AppSettings, FontPreset } from "./storage";
+import { HEADING_FONTS, MAX_FONT_SIZE, MIN_FONT_SIZE, MONO_FONTS, SANS_FONTS } from "./storage";
 import { CustomThemeCard, ThemeCard } from "./theme-card";
 
 interface GeneralTabProps {
@@ -21,6 +21,39 @@ interface GeneralTabProps {
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   settings: AppSettings;
   adjustFontSize: (delta: number) => void;
+  setFontFamily: (key: "fontSans" | "fontHeading" | "fontMono", id: string) => void;
+}
+
+function FontSelector({
+  label,
+  presets,
+  activeId,
+  onChange,
+}: {
+  label: string;
+  presets: FontPreset[];
+  activeId: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div data-slot="settings-group">
+      <span data-slot="settings-label">{label}</span>
+      <div data-slot="settings-font-list">
+        {presets.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            data-slot="settings-font-option"
+            data-active={activeId === f.id || undefined}
+            style={{ fontFamily: f.value }}
+            onClick={() => onChange(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function GeneralTab({
@@ -39,6 +72,7 @@ export function GeneralTab({
   handleFileChange,
   settings,
   adjustFontSize,
+  setFontFamily,
 }: GeneralTabProps) {
   return (
     <>
@@ -156,6 +190,27 @@ export function GeneralTab({
           </button>
         </div>
       </div>
+
+      <FontSelector
+        label="Body font"
+        presets={SANS_FONTS}
+        activeId={settings.fontSans}
+        onChange={(id) => setFontFamily("fontSans", id)}
+      />
+
+      <FontSelector
+        label="Heading font"
+        presets={HEADING_FONTS}
+        activeId={settings.fontHeading}
+        onChange={(id) => setFontFamily("fontHeading", id)}
+      />
+
+      <FontSelector
+        label="Code font"
+        presets={MONO_FONTS}
+        activeId={settings.fontMono}
+        onChange={(id) => setFontFamily("fontMono", id)}
+      />
     </>
   );
 }

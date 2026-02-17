@@ -53,6 +53,40 @@
   cursor: not-allowed;
 }
 
+/* ── Font family selector ─────────────────────────────────────────────── */
+
+[data-slot="settings-font-list"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+[data-slot="settings-font-option"] {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+  white-space: nowrap;
+}
+
+[data-slot="settings-font-option"]:hover {
+  color: var(--color-foreground);
+  border-color: var(--color-foreground);
+}
+
+[data-slot="settings-font-option"][data-active] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: oklch(from var(--color-accent) l c h / 8%);
+}
+
 /* ── Keybinds grid ─────────────────────────────────────────────────────── */
 
 [data-slot="settings-keybinds-grid"] {
