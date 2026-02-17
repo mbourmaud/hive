@@ -2,6 +2,10 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use super::output;
+
+const MAX_OUTPUT_BYTES: usize = 15_000;
+
 pub async fn execute(input: &serde_json::Value, cwd: &Path) -> Result<String> {
     let pattern = input
         .get("pattern")
@@ -53,7 +57,7 @@ pub async fn execute(input: &serde_json::Value, cwd: &Path) -> Result<String> {
     args.push(pattern.to_string());
     args.push(search_path);
 
-    let output = tokio::process::Command::new("rg")
+    let rg_output = tokio::process::Command::new("rg")
         .args(&args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -63,15 +67,15 @@ pub async fn execute(input: &serde_json::Value, cwd: &Path) -> Result<String> {
         .await
         .context("Ripgrep execution failed")?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&rg_output.stdout);
+    let stderr = String::from_utf8_lossy(&rg_output.stderr);
 
-    if !output.status.success() && stdout.is_empty() {
+    if !rg_output.status.success() && stdout.is_empty() {
         if !stderr.is_empty() {
             anyhow::bail!("Grep error: {}", stderr.trim());
         }
         return Ok("No matches found".to_string());
     }
 
-    Ok(stdout.to_string())
+    Ok(output::truncate_output(&stdout, MAX_OUTPUT_BYTES))
 }

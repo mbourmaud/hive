@@ -3,6 +3,7 @@ pub mod definitions;
 pub mod edit;
 pub mod glob;
 pub mod grep;
+pub mod output;
 pub mod read;
 pub mod sandbox;
 pub mod write;

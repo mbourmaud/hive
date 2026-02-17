@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use super::output;
 use super::sandbox;
 
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
@@ -32,21 +33,22 @@ pub async fn execute(input: &serde_json::Value, cwd: &Path) -> Result<String> {
         .context("Failed to spawn bash process")?;
 
     let timeout_duration = std::time::Duration::from_millis(timeout_ms);
-    let output = match tokio::time::timeout(timeout_duration, child.wait_with_output()).await {
+    let output_result = match tokio::time::timeout(timeout_duration, child.wait_with_output()).await
+    {
         Ok(result) => result.context("Command execution failed")?,
         Err(_) => {
             anyhow::bail!("Command timed out after {}ms", timeout_ms);
         }
     };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let exit_code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output_result.stdout);
+    let stderr = String::from_utf8_lossy(&output_result.stderr);
+    let exit_code = output_result.status.code().unwrap_or(-1);
 
     let mut result = String::new();
 
     if !stdout.is_empty() {
-        let truncated_stdout = truncate_output(&stdout, MAX_OUTPUT_BYTES);
+        let truncated_stdout = output::truncate_output(&stdout, MAX_OUTPUT_BYTES);
         result.push_str(&truncated_stdout);
     }
 
@@ -54,7 +56,7 @@ pub async fn execute(input: &serde_json::Value, cwd: &Path) -> Result<String> {
         if !result.is_empty() {
             result.push('\n');
         }
-        let truncated_stderr = truncate_output(&stderr, MAX_OUTPUT_BYTES);
+        let truncated_stderr = output::truncate_output(&stderr, MAX_OUTPUT_BYTES);
         result.push_str("STDERR:\n");
         result.push_str(&truncated_stderr);
     }
@@ -71,19 +73,4 @@ pub async fn execute(input: &serde_json::Value, cwd: &Path) -> Result<String> {
     }
 
     Ok(result)
-}
-
-fn truncate_output(output: &str, max_bytes: usize) -> String {
-    if output.len() <= max_bytes {
-        return output.to_string();
-    }
-
-    let truncated = &output[..max_bytes];
-    // Find the last newline to avoid cutting mid-line
-    let end = truncated.rfind('\n').unwrap_or(max_bytes);
-    let remaining = output.len() - end;
-    format!(
-        "{}\n\n... (truncated, {remaining} bytes omitted)",
-        &output[..end]
-    )
 }
