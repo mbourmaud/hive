@@ -3,20 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>HIVE Monitor</title>
-    <meta name="description" content="Multi-drone orchestration dashboard for Claude Code" />
+    <title>Hive — Claude Code Orchestrator</title>
+    <meta name="description" content="Orchestrate multiple Claude Code drones from a single dashboard" />
 
-    <!-- Favicon (base64-inlined for single-file embed) -->
-    <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,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" />
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#d4a017" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#b8860b" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="HIVE" />
+    <meta name="apple-mobile-web-app-title" content="Hive" />
 
     <!-- OG / Social -->
-    <meta property="og:title" content="HIVE Monitor" />
-    <meta property="og:description" content="Multi-drone orchestration dashboard for Claude Code" />
+    <meta property="og:title" content="Hive — Claude Code Orchestrator" />
+    <meta property="og:description" content="Orchestrate multiple Claude Code drones from a single dashboard" />
     <meta property="og:type" content="website" />
   </head>
   <body>

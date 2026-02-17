@@ -1,7 +1,7 @@
 {
-  "name": "HIVE Monitor",
-  "short_name": "HIVE",
-  "description": "Multi-drone orchestration dashboard",
+  "name": "Hive — Claude Code Orchestrator",
+  "short_name": "Hive",
+  "description": "Orchestrate multiple Claude Code drones from a single dashboard",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c0c0c",
