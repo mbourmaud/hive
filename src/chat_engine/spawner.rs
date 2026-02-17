@@ -101,14 +101,21 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
                 }
                 Err(e) => {
                     eprintln!("Agentic loop error: {e:#}");
-                    // Send error to frontend so the user sees it in the UI
-                    let error_event = serde_json::json!({
-                        "type": "result",
-                        "subtype": "error",
-                        "result": format!("{e:#}"),
-                        "is_error": true
-                    });
-                    let _ = tx.send(error_event.to_string());
+                    // Bedrock provider already sends SSE error events for credential
+                    // and API errors. Only broadcast here for other loop failures
+                    // (e.g. tool execution panics) to avoid duplicate error cards.
+                    let msg = format!("{e:#}");
+                    let already_broadcast =
+                        msg.contains("SSO session expired") || msg.contains("Bedrock API error");
+                    if !already_broadcast {
+                        let error_event = serde_json::json!({
+                            "type": "result",
+                            "subtype": "error",
+                            "result": &msg,
+                            "is_error": true
+                        });
+                        let _ = tx.send(error_event.to_string());
+                    }
                 }
             }
             s.status = SessionStatus::Idle;

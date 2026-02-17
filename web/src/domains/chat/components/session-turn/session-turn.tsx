@@ -2,7 +2,7 @@ import "./session-turn.css";
 import "./summary.css";
 import "./animations.css";
 
-import { ChevronDown, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { useAwsSsoLogin } from "@/domains/settings/profile-mutations";
@@ -84,6 +84,18 @@ function SsoLoginBanner() {
   const ssoLogin = useAwsSsoLogin();
   const awsProfile = activeProfile?.name ?? "default";
 
+  if (ssoLogin.isSuccess) {
+    return (
+      <div data-slot="turn-sso-success-banner">
+        <CheckCircle2 className="h-5 w-5" />
+        <div>
+          <p data-slot="turn-sso-success-title">SSO authentication successful</p>
+          <p data-slot="turn-sso-success-hint">You can now retry your message.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div data-slot="turn-sso-banner">
       <p>AWS SSO session expired. Re-authenticate to continue.</p>
@@ -100,7 +112,6 @@ function SsoLoginBanner() {
           SSO login failed. Run manually: aws sso login --profile {awsProfile}
         </p>
       )}
-      {ssoLogin.isSuccess && <p data-slot="turn-sso-success">SSO login successful. Retry your message.</p>}
     </div>
   );
 }

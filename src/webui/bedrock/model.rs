@@ -7,45 +7,53 @@ use crate::webui::auth::credentials::Credentials;
 
 use super::request::{resolve_aws_creds, sign_aws_request};
 
-/// Resolve a short model alias to a Bedrock model ID.
+/// Resolve a short model alias to a Bedrock inference profile ID.
 ///
-/// Bedrock uses its own model ID format: `anthropic.{model}-v{version}:0`.
-/// Pass-through IDs that already start with `anthropic.` unchanged.
+/// Newer Claude models (4.x) require cross-region inference profile IDs
+/// (`us.anthropic.{model}`) instead of plain model IDs (`anthropic.{model}`).
+/// See: <https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles.html>
 pub fn resolve_bedrock_model(short: &str) -> &str {
     match short.to_lowercase().as_str() {
-        "sonnet" | "claude-sonnet" | "sonnet-4.5" => "anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "opus" | "claude-opus" | "opus-4" => "anthropic.claude-opus-4-20250514-v1:0",
-        "opus-4.6" | "claude-opus-4.6" => "anthropic.claude-opus-4-6-20260213-v1:0",
-        "haiku" | "claude-haiku" | "haiku-4.5" => "anthropic.claude-haiku-4-5-20251001-v1:0",
-        // Full Anthropic model IDs → wrap for Bedrock
-        "claude-sonnet-4-5-20250929" => "anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "claude-opus-4-20250514" => "anthropic.claude-opus-4-20250514-v1:0",
-        "claude-opus-4-6-20260213" => "anthropic.claude-opus-4-6-20260213-v1:0",
-        "claude-haiku-4-5-20251001" => "anthropic.claude-haiku-4-5-20251001-v1:0",
-        // Already a Bedrock ID — pass through
-        other if other.starts_with("anthropic.") => short,
+        "sonnet" | "claude-sonnet" | "sonnet-4.5" => "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "opus" | "claude-opus" | "opus-4" => "us.anthropic.claude-opus-4-20250514-v1:0",
+        "opus-4.6" | "claude-opus-4.6" => "us.anthropic.claude-opus-4-6-20260213-v1:0",
+        "haiku" | "claude-haiku" | "haiku-4.5" => "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        // Full Anthropic model IDs → wrap for Bedrock inference profile
+        "claude-sonnet-4-5-20250929" => "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "claude-opus-4-20250514" => "us.anthropic.claude-opus-4-20250514-v1:0",
+        "claude-opus-4-6-20260213" => "us.anthropic.claude-opus-4-6-20260213-v1:0",
+        "claude-haiku-4-5-20251001" => "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        // Already a Bedrock inference profile ID — pass through
+        other if other.starts_with("us.anthropic.") || other.starts_with("eu.anthropic.") => short,
+        // Legacy plain Bedrock ID → add us. prefix for inference profile
+        other if other.starts_with("anthropic.") => {
+            // Can't return owned string from &str fn, so common cases covered above.
+            // Unknown anthropic.* IDs passed through as-is (may fail at API level).
+            short
+        }
         // Default
-        _ => "anthropic.claude-sonnet-4-5-20250929-v1:0",
+        _ => "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     }
 }
 
 /// Known Bedrock Claude models for the model listing API (fallback).
+/// Uses cross-region inference profile IDs required for Claude 4.x models.
 pub fn bedrock_model_list() -> Vec<(&'static str, &'static str)> {
     vec![
         (
-            "anthropic.claude-opus-4-6-20260213-v1:0",
+            "us.anthropic.claude-opus-4-6-20260213-v1:0",
             "Claude Opus 4.6 (Bedrock)",
         ),
         (
-            "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
             "Claude Sonnet 4.5 (Bedrock)",
         ),
         (
-            "anthropic.claude-opus-4-20250514-v1:0",
+            "us.anthropic.claude-opus-4-20250514-v1:0",
             "Claude Opus 4 (Bedrock)",
         ),
         (
-            "anthropic.claude-haiku-4-5-20251001-v1:0",
+            "us.anthropic.claude-haiku-4-5-20251001-v1:0",
             "Claude Haiku 4.5 (Bedrock)",
         ),
     ]
@@ -103,9 +111,16 @@ async fn try_discover(creds: &Credentials) -> Result<Vec<DiscoveredModel>> {
         .into_iter()
         .filter(|m| m.model_id.contains("claude"))
         .map(|m| {
+            // ListFoundationModels returns base model IDs (anthropic.claude-*).
+            // Claude 4.x requires cross-region inference profile IDs (us.anthropic.claude-*).
+            let inference_id = if m.model_id.starts_with("anthropic.") {
+                format!("us.{}", m.model_id)
+            } else {
+                m.model_id
+            };
             let display = format!("{} (Bedrock)", m.model_name);
             DiscoveredModel {
-                model_id: m.model_id,
+                model_id: inference_id,
                 display_name: display,
             }
         })
