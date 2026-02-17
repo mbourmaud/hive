@@ -2,11 +2,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::backend::SpawnConfig;
-use crate::webui::anthropic::model::resolve_model;
 use crate::webui::anthropic::types::{ContentBlock, Message, MessageContent};
 use crate::webui::auth::credentials::Credentials;
 use crate::webui::chat::handlers::agentic::{run_agentic_loop, AgenticLoopParams};
 use crate::webui::chat::session::{Effort, SessionStore};
+use crate::webui::provider;
 use crate::webui::tools::definitions::builtin_tool_definitions;
 
 const MAX_VERIFY_ATTEMPTS: usize = 3;
@@ -53,7 +53,7 @@ async fn run_single_agent(
     creds: &Credentials,
     store: SessionStore,
 ) -> String {
-    let model_id = resolve_model(&config.model).to_string();
+    let model_id = provider::resolve_model(&config.model, creds);
     let (tx, _rx) = tokio::sync::broadcast::channel::<String>(256);
     let abort = Arc::new(AtomicBool::new(false));
 

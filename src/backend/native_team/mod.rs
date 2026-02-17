@@ -3,8 +3,10 @@ pub mod events;
 pub mod file_ownership;
 mod phases;
 pub mod prompts;
+pub mod quality_gate;
 pub mod scheduler;
 pub mod worker;
+pub mod worker_notes;
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
@@ -61,7 +63,7 @@ impl ExecutionBackend for NativeTeamBackend {
     }
 
     fn is_available(&self) -> bool {
-        credentials::load_credentials().ok().flatten().is_some()
+        credentials::resolve_credentials().ok().flatten().is_some()
     }
 }
 
@@ -72,9 +74,9 @@ impl ExecutionBackend for NativeTeamBackend {
 /// waits for all non-daemon threads to exit. The PID is the current process
 /// (not a child), so `hive stop` can signal us via SIGTERM.
 fn launch_native_team(config: &SpawnConfig) -> Result<SpawnHandle> {
-    let creds = credentials::load_credentials()?.ok_or_else(|| {
+    let creds = credentials::resolve_credentials()?.ok_or_else(|| {
         anyhow::anyhow!(
-            "No API credentials found. Set credentials at {:?}",
+            "No API credentials found. Set credentials at {:?} or configure a profile",
             credentials::credentials_path()
         )
     })?;

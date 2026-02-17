@@ -83,6 +83,27 @@ pub enum HiveEvent {
         ts: String,
         todos: Vec<TodoItem>,
     },
+    /// Quality gate check result
+    QualityGateResult {
+        ts: String,
+        task_id: String,
+        passed: bool,
+        #[serde(default)]
+        output: String,
+    },
+    /// Worker error (task failure details)
+    WorkerError {
+        ts: String,
+        task_id: String,
+        #[serde(default)]
+        error_message: String,
+    },
+    /// Phase transition in the coordinator lifecycle
+    PhaseTransition {
+        ts: String,
+        from_phase: String,
+        to_phase: String,
+    },
 }
 
 /// A single todo item from Claude Code's TodoWrite tool.
@@ -110,6 +131,9 @@ impl HiveEvent {
             HiveEvent::SubagentStop { ts, .. } => ts,
             HiveEvent::ToolDone { ts, .. } => ts,
             HiveEvent::TodoSnapshot { ts, .. } => ts,
+            HiveEvent::QualityGateResult { ts, .. } => ts,
+            HiveEvent::WorkerError { ts, .. } => ts,
+            HiveEvent::PhaseTransition { ts, .. } => ts,
         }
     }
 }

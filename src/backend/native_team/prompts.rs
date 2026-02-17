@@ -1,6 +1,8 @@
 use crate::backend::SpawnConfig;
 use crate::types::StructuredTask;
 
+use super::worker_notes::{self, WorkerNote};
+
 // Re-export shared helpers from agent_team prompts
 pub use crate::backend::agent_team::prompts::{
     build_verification_commands, detect_pr_instructions,
@@ -11,8 +13,10 @@ pub fn build_worker_prompt(
     task: &StructuredTask,
     config: &SpawnConfig,
     ownership_hint: &str,
+    dependency_notes: &[WorkerNote],
 ) -> String {
     let plan_content = std::fs::read_to_string(&config.prd_path).unwrap_or_default();
+    let notes_section = worker_notes::format_notes_for_prompt(dependency_notes);
 
     let worker_name = task.worker_name();
     format!(
@@ -31,7 +35,7 @@ pub fn build_worker_prompt(
 ## File Ownership
 
 {ownership_hint}
-
+{notes_section}
 ## Rules
 
 - Focus ONLY on your assigned task — do not work on other tasks
@@ -48,6 +52,7 @@ pub fn build_worker_prompt(
         body = task.body,
         plan_content = plan_content.trim(),
         ownership_hint = ownership_hint,
+        notes_section = notes_section,
     )
 }
 

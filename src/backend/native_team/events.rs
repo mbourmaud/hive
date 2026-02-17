@@ -177,6 +177,44 @@ impl EventEmitter {
         status.updated = now();
         self.update_status(&status);
     }
+
+    /// Update DroneStatus to persist the current coordinator phase.
+    pub fn set_drone_phase(&self, phase: &str) {
+        let Ok(contents) = fs::read_to_string(&self.status_path) else {
+            return;
+        };
+        let Ok(mut status) = serde_json::from_str::<DroneStatus>(&contents) else {
+            return;
+        };
+        status.phase = Some(phase.to_string());
+        status.updated = now();
+        self.update_status(&status);
+    }
+
+    pub fn emit_quality_gate(&self, task_id: &str, passed: bool, output: &str) {
+        self.emit(&HiveEvent::QualityGateResult {
+            ts: now(),
+            task_id: task_id.to_string(),
+            passed,
+            output: output.to_string(),
+        });
+    }
+
+    pub fn emit_worker_error(&self, task_id: &str, error: &str) {
+        self.emit(&HiveEvent::WorkerError {
+            ts: now(),
+            task_id: task_id.to_string(),
+            error_message: error.to_string(),
+        });
+    }
+
+    pub fn emit_phase_transition(&self, from: &str, to: &str) {
+        self.emit(&HiveEvent::PhaseTransition {
+            ts: now(),
+            from_phase: from.to_string(),
+            to_phase: to.to_string(),
+        });
+    }
 }
 
 /// Info about a worker for team config.
