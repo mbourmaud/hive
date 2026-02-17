@@ -55,6 +55,7 @@ fn create_test_drone(
         title: None,
         description: None,
         active_agents: HashMap::new(),
+        phase: None,
     };
 
     let status_json = serde_json::to_string_pretty(&drone_status).unwrap();

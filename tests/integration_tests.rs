@@ -52,6 +52,7 @@ fn create_test_drone(drones_dir: &Path, drone_name: &str, prd_name: &str) {
         title: None,
         description: None,
         active_agents: HashMap::new(),
+        phase: None,
     };
 
     let status_json = serde_json::to_string_pretty(&status).unwrap();
@@ -278,6 +279,7 @@ fn test_drone_state_transitions() {
             title: None,
             description: None,
             active_agents: HashMap::new(),
+            phase: None,
         };
 
         let json = serde_json::to_string(&status).unwrap();

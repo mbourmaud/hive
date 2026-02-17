@@ -86,7 +86,7 @@ async fn api_status(State(state): State<Arc<StatusState>>) -> Json<SystemStatus>
 // ── Builders ─────────────────────────────────────────────────────────────────
 
 fn build_auth_summary() -> AuthStatusSummary {
-    match credentials::load_credentials() {
+    match credentials::resolve_credentials() {
         Ok(Some(creds)) => match &creds {
             credentials::Credentials::ApiKey { .. } => AuthStatusSummary {
                 configured: true,
@@ -97,6 +97,12 @@ fn build_auth_summary() -> AuthStatusSummary {
                 configured: true,
                 auth_type: Some("oauth".to_string()),
                 expired: credentials::is_token_expired(*expires_at),
+            },
+            credentials::Credentials::Bedrock { .. }
+            | credentials::Credentials::BedrockProfile { .. } => AuthStatusSummary {
+                configured: true,
+                auth_type: Some("bedrock".to_string()),
+                expired: false,
             },
         },
         _ => AuthStatusSummary {

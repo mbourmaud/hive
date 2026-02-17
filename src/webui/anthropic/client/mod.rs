@@ -1,3 +1,4 @@
+pub(crate) mod event_processor;
 mod request;
 mod sse_parser;
 

@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+use super::provider::{BedrockConfig, Provider};
+
 /// Claude wrapper profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -15,6 +17,10 @@ pub struct Profile {
     pub claude_wrapper: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<Vec<(String, String)>>,
+    #[serde(default)]
+    pub provider: Provider,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bedrock: Option<BedrockConfig>,
     pub created: String,
     pub updated: String,
 }
@@ -26,6 +32,8 @@ impl Default for Profile {
             description: Some("Default Claude profile".to_string()),
             claude_wrapper: "claude".to_string(),
             environment: None,
+            provider: Provider::Anthropic,
+            bedrock: None,
             created: chrono::Utc::now().to_rfc3339(),
             updated: chrono::Utc::now().to_rfc3339(),
         }
@@ -124,6 +132,8 @@ pub fn create(name: String) -> Result<()> {
         description: None,
         claude_wrapper: "claude".to_string(),
         environment: None,
+        provider: Provider::Anthropic,
+        bedrock: None,
         created: chrono::Utc::now().to_rfc3339(),
         updated: chrono::Utc::now().to_rfc3339(),
     };
@@ -221,16 +231,62 @@ pub fn get_active_profile() -> Result<String> {
 /// Load the active profile
 pub fn load_active_profile() -> Result<Profile> {
     let active_name = get_active_profile()?;
+    load_profile(&active_name)
+}
+
+/// Load a profile by name.
+pub fn load_profile(name: &str) -> Result<Profile> {
     let profiles_dir = get_profiles_dir()?;
-    let profile_path = profiles_dir.join(format!("{}.json", active_name));
+    let profile_path = profiles_dir.join(format!("{name}.json"));
 
     if !profile_path.exists() {
-        // Return default profile
-        return Ok(Profile::default());
+        if name == "default" {
+            return Ok(Profile::default());
+        }
+        bail!("Profile '{name}' not found");
     }
 
     let contents = fs::read_to_string(&profile_path)?;
-    let profile: Profile = serde_json::from_str(&contents)?;
-
+    let profile: Profile = serde_json::from_str(&contents).context("Parsing profile")?;
     Ok(profile)
+}
+
+/// List all profiles as data (for API use, not CLI printing).
+pub fn list_profiles() -> Result<Vec<Profile>> {
+    let profiles_dir = get_profiles_dir()?;
+    if !profiles_dir.exists() {
+        return Ok(vec![Profile::default()]);
+    }
+
+    let mut profiles = Vec::new();
+    for entry in fs::read_dir(&profiles_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.file_name().and_then(|n| n.to_str()) == Some(".active") {
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            if let Ok(contents) = fs::read_to_string(&path) {
+                if let Ok(profile) = serde_json::from_str::<Profile>(&contents) {
+                    profiles.push(profile);
+                }
+            }
+        }
+    }
+
+    if profiles.is_empty() {
+        profiles.push(Profile::default());
+    }
+    profiles.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(profiles)
+}
+
+/// Save a profile to disk.
+pub fn save_profile(profile: &Profile) -> Result<()> {
+    let profiles_dir = get_profiles_dir()?;
+    fs::create_dir_all(&profiles_dir)?;
+    let profile_path = profiles_dir.join(format!("{}.json", profile.name));
+    let contents = serde_json::to_string_pretty(profile)?;
+    fs::write(&profile_path, contents)?;
+    Ok(())
 }

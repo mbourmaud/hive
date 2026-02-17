@@ -239,6 +239,9 @@ pub struct DroneStatus {
     /// Active agents and their current task (for Agent Teams mode)
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub active_agents: HashMap<String, String>,
+    /// Current coordinator phase (dispatch, monitor, verify, pr, complete, failed)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
 }
 
 fn default_backend() -> String {

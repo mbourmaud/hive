@@ -258,6 +258,7 @@ fn create_drone_status(
         description: plan.description(),
         lead_model: Some("opus".to_string()),
         active_agents: Default::default(),
+        phase: None,
     };
 
     let status_json = serde_json::to_string_pretty(&status)?;

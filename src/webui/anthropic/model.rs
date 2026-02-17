@@ -8,3 +8,16 @@ pub fn resolve_model(short: &str) -> &str {
         _ => "claude-sonnet-4-5-20250929",
     }
 }
+
+/// Maximum output tokens allowed by the Anthropic API for a given model.
+/// With extended thinking enabled, Sonnet 4.5 supports up to 128K output.
+/// Opus models are capped at 32K. Haiku at 16K.
+pub fn max_output_tokens(model_id: &str, thinking_enabled: bool) -> u32 {
+    if model_id.contains("opus") {
+        32_000
+    } else if model_id.contains("sonnet") && thinking_enabled {
+        128_000
+    } else {
+        16_384
+    }
+}

@@ -5,6 +5,7 @@ pub mod install;
 pub mod kill_clean;
 pub mod logs;
 pub mod profile;
+pub mod provider;
 pub mod setup;
 pub mod start;
 pub mod statusline;

@@ -1,5 +1,6 @@
 pub mod anthropic;
 pub mod auth;
+pub mod bedrock;
 pub mod chat;
 pub mod error;
 pub mod extractors;
@@ -8,6 +9,7 @@ pub mod logs;
 pub mod mcp_client;
 pub mod monitor;
 pub mod projects;
+pub mod provider;
 pub mod status;
 pub mod tools;
 

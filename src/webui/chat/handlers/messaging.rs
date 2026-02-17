@@ -17,6 +17,7 @@ use crate::webui::anthropic::{
 use crate::webui::auth::credentials;
 use crate::webui::error::{ApiError, ApiResult};
 use crate::webui::extractors::ValidJson;
+use crate::webui::provider;
 
 use super::super::dto::SendMessageRequest;
 use super::super::persistence::{
@@ -77,11 +78,11 @@ pub async fn send_message(
     Path(id): Path<String>,
     ValidJson(body): ValidJson<SendMessageRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    let creds = match credentials::load_credentials() {
+    let creds = match credentials::resolve_credentials() {
         Ok(Some(c)) => c,
         Ok(None) => {
             return Err(ApiError::Unauthorized(
-                "No credentials configured. Please set up an API key or OAuth connection."
+                "No credentials configured. Please set up an API key, OAuth, or Bedrock profile."
                     .to_string(),
             ));
         }
@@ -189,7 +190,7 @@ pub async fn send_message(
         .clone()
         .or_else(|| Some(build_mode_system_prompt(session.chat_mode, &session.cwd)));
 
-    let model_resolved = anthropic::model::resolve_model(&session.model).to_string();
+    let model_resolved = provider::resolve_model(&session.model, &creds);
     let mut session_tools: Vec<anthropic::types::ToolDefinition> = session.tools.clone();
 
     // Apply tool permission filters

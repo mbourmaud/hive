@@ -1,5 +1,6 @@
 pub mod agent_teams;
 pub mod backend;
+pub mod chat_engine;
 pub mod commands;
 pub mod config;
 pub mod events;

@@ -110,5 +110,6 @@ fn make_test_status(state: DroneState) -> DroneStatus {
         title: None,
         description: None,
         active_agents: Default::default(),
+        phase: None,
     }
 }

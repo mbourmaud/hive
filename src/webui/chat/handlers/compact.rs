@@ -6,6 +6,7 @@ use axum::{
 use crate::webui::anthropic::{self, types::*};
 use crate::webui::auth::credentials;
 use crate::webui::error::{ApiError, ApiResult};
+use crate::webui::provider;
 
 use super::super::persistence::{self, save_messages, update_meta_tokens};
 use super::super::session::{SessionStatus, SessionStore};
@@ -31,7 +32,7 @@ pub async fn compact_session(
     State(store): State<SessionStore>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let creds = match credentials::load_credentials() {
+    let creds = match credentials::resolve_credentials() {
         Ok(Some(c)) => c,
         Ok(None) => {
             return Err(ApiError::Unauthorized(
@@ -76,7 +77,7 @@ pub async fn compact_session(
     };
 
     // Build a summarization request from the full conversation
-    let model_resolved = anthropic::model::resolve_model(&model_short).to_string();
+    let model_resolved = provider::resolve_model(&model_short, &creds);
     let mut summary_messages = messages.clone();
     summary_messages.push(Message {
         role: "user".to_string(),
