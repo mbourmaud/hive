@@ -1,9 +1,10 @@
-//! `GET /api/aws/profiles` — list available AWS CLI profiles from `~/.aws/config`.
+//! AWS profile discovery and SSO login handlers.
 
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::webui::error::ApiResult;
+use crate::webui::bedrock::aws_resolve;
+use crate::webui::error::{ApiError, ApiResult};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AwsProfileInfo {
@@ -87,6 +88,22 @@ fn parse_aws_config(content: &str) -> Vec<AwsProfileInfo> {
     }
 
     profiles
+}
+
+#[derive(Deserialize)]
+pub struct SsoLoginRequest {
+    pub profile: String,
+}
+
+/// `POST /api/aws/sso-login` — run `aws sso login --profile <name>`.
+pub async fn aws_sso_login(
+    Json(body): Json<SsoLoginRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    aws_resolve::run_sso_login(&body.profile)
+        .await
+        .map_err(ApiError::Internal)?;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 #[cfg(test)]

@@ -169,6 +169,9 @@ function processUserEvent(state: ChatState, event: UserEvent): ChatState {
 
 function deriveFinishReason(event: ResultEvent): FinishReason {
   if (event.is_error) {
+    if (event.error_code === "aws_sso_expired" || event.error_code === "aws_credentials") {
+      return "aws_sso_expired";
+    }
     const lower = (event.result ?? "").toLowerCase();
     if (lower.includes("cancel") || lower.includes("abort")) {
       return "canceled";

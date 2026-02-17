@@ -5,6 +5,8 @@ import "./animations.css";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
+import { useAwsSsoLogin } from "@/domains/settings/profile-mutations";
+import { useActiveProfileQuery } from "@/domains/settings/profile-queries";
 import { useTurnData } from "../../hooks/use-turn-data";
 import type { ChatTurn } from "../../types";
 import { MarkdownRenderer } from "../markdown-renderer";
@@ -74,7 +76,34 @@ function StepsTrigger({
 const FINISH_REASON_LABELS: Record<string, string> = {
   error: "error",
   canceled: "canceled",
+  aws_sso_expired: "SSO expired",
 };
+
+function SsoLoginBanner() {
+  const { data: activeProfile } = useActiveProfileQuery();
+  const ssoLogin = useAwsSsoLogin();
+  const awsProfile = activeProfile?.name ?? "default";
+
+  return (
+    <div data-slot="turn-sso-banner">
+      <p>AWS SSO session expired. Re-authenticate to continue.</p>
+      <button
+        type="button"
+        data-slot="turn-sso-login-btn"
+        disabled={ssoLogin.isPending}
+        onClick={() => ssoLogin.mutate(awsProfile)}
+      >
+        {ssoLogin.isPending ? "Logging in..." : `aws sso login --profile ${awsProfile}`}
+      </button>
+      {ssoLogin.isError && (
+        <p data-slot="turn-sso-error">
+          SSO login failed. Run manually: aws sso login --profile {awsProfile}
+        </p>
+      )}
+      {ssoLogin.isSuccess && <p data-slot="turn-sso-success">SSO login successful. Retry your message.</p>}
+    </div>
+  );
+}
 
 function TurnFinishInfo({
   turn,
@@ -227,6 +256,8 @@ export function SessionTurn({
             <pre>{errorText}</pre>
           </div>
         )}
+
+        {turn.finishReason === "aws_sso_expired" && <SsoLoginBanner />}
 
         <TurnFinishInfo turn={turn} displayDuration={displayDuration} />
       </div>

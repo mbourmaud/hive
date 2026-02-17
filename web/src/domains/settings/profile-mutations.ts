@@ -31,6 +31,19 @@ export function useActivateProfile() {
   });
 }
 
+export function useAwsSsoLogin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (profile: string) =>
+      apiClient.post<unknown>("/api/aws/sso-login", { profile }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.status() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.models() });
+    },
+  });
+}
+
 export function useDeleteProfile() {
   const queryClient = useQueryClient();
 

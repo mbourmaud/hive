@@ -75,7 +75,9 @@ pub async fn discover_bedrock_models(creds: &Credentials) -> Vec<DiscoveredModel
 }
 
 async fn try_discover(creds: &Credentials) -> Result<Vec<DiscoveredModel>> {
-    let aws = resolve_aws_creds(creds).await?;
+    let aws = resolve_aws_creds(creds)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let url = format!(
         "https://bedrock.{}.amazonaws.com/foundation-models?byProvider=Anthropic",

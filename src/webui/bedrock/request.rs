@@ -23,7 +23,11 @@ pub(super) struct AwsCreds {
 }
 
 /// Extract or resolve AWS credentials from any Bedrock credential variant.
-pub(super) async fn resolve_aws_creds(creds: &Credentials) -> Result<AwsCreds> {
+///
+/// Propagates `AwsCredentialError` for SSO issues so callers can skip retries.
+pub(super) async fn resolve_aws_creds(
+    creds: &Credentials,
+) -> std::result::Result<AwsCreds, aws_resolve::AwsCredentialError> {
     match creds {
         Credentials::Bedrock {
             region,
@@ -48,7 +52,9 @@ pub(super) async fn resolve_aws_creds(creds: &Credentials) -> Result<AwsCreds> {
                 session_token: resolved.session_token,
             })
         }
-        _ => anyhow::bail!("Expected Bedrock credentials"),
+        _ => Err(aws_resolve::AwsCredentialError::Other(anyhow::anyhow!(
+            "Expected Bedrock credentials"
+        ))),
     }
 }
 
@@ -57,7 +63,9 @@ pub(super) async fn build_bedrock_request(
     creds: &Credentials,
     request: &MessagesRequest,
 ) -> Result<reqwest::Response> {
-    let aws = resolve_aws_creds(creds).await?;
+    let aws = resolve_aws_creds(creds)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let model_id = resolve_bedrock_model(&request.model);
     let url = format!(

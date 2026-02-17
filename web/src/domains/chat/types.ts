@@ -68,6 +68,7 @@ export interface ResultEvent {
   subtype: "success" | "error";
   result: string;
   is_error: boolean;
+  error_code?: string;
   cost?: {
     input_tokens: number;
     output_tokens: number;
@@ -150,7 +151,7 @@ export type AssistantPart = TextPart | ThinkingPart | ToolUsePart | ToolResultPa
 
 export type TurnStatus = "pending" | "streaming" | "completed" | "error";
 
-export type FinishReason = "end_turn" | "canceled" | "error" | "max_tokens";
+export type FinishReason = "end_turn" | "canceled" | "error" | "max_tokens" | "aws_sso_expired";
 
 export interface ChatTurn {
   id: string;

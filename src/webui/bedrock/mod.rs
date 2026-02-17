@@ -17,6 +17,7 @@ use tokio::sync::broadcast;
 use crate::webui::anthropic::types::{Message, MessagesRequest, UsageStats};
 use crate::webui::auth::credentials::Credentials;
 
+use aws_resolve::AwsCredentialError;
 use request::build_bedrock_request;
 use stream_parser::parse_event_stream;
 
@@ -35,6 +36,29 @@ pub async fn stream_messages(
     session_id: &str,
     abort_flag: &Arc<AtomicBool>,
 ) -> Result<(Message, UsageStats, String)> {
+    // Pre-validate credentials before entering retry loop.
+    // SSO/auth errors are not retryable — fail fast with a clear message.
+    if let Err(e) = request::resolve_aws_creds(creds).await {
+        let error_msg = match &e {
+            AwsCredentialError::SsoLoginRequired { profile } => {
+                format!(
+                    "AWS SSO session expired for profile '{profile}'. \
+                     Use the SSO Login button or run: aws sso login --profile {profile}"
+                )
+            }
+            AwsCredentialError::Other(err) => format!("AWS credentials error: {err}"),
+        };
+        let error_event = serde_json::json!({
+            "type": "result",
+            "subtype": "error",
+            "result": &error_msg,
+            "is_error": true,
+            "error_code": "aws_sso_expired"
+        });
+        let _ = tx.send(error_event.to_string());
+        anyhow::bail!("{error_msg}");
+    }
+
     let mut last_error = String::new();
 
     for attempt in 0..=MAX_API_RETRIES {
@@ -45,6 +69,19 @@ pub async fn stream_messages(
         let response = match build_bedrock_request(creds, request).await {
             Ok(r) => r,
             Err(e) => {
+                let msg = format!("{e:#}");
+                // Credential errors are not retryable
+                if is_credential_error(&msg) {
+                    let error_event = serde_json::json!({
+                        "type": "result",
+                        "subtype": "error",
+                        "result": &msg,
+                        "is_error": true,
+                        "error_code": "aws_credentials"
+                    });
+                    let _ = tx.send(error_event.to_string());
+                    return Err(e);
+                }
                 if attempt < MAX_API_RETRIES {
                     let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
                     eprintln!(
@@ -64,10 +101,7 @@ pub async fn stream_messages(
             let body = response.text().await.unwrap_or_default();
             last_error = format!("Bedrock API error ({status}): {body}");
 
-            let is_retryable = status.as_u16() == 429
-                || status.as_u16() == 500
-                || status.as_u16() == 529
-                || status.as_u16() == 503;
+            let is_retryable = matches!(status.as_u16(), 429 | 500 | 503 | 529);
 
             if is_retryable && attempt < MAX_API_RETRIES {
                 let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
@@ -102,4 +136,14 @@ pub async fn stream_messages(
     }
 
     anyhow::bail!("{last_error}")
+}
+
+/// Check if an error message indicates a credential/auth issue (not retryable).
+fn is_credential_error(msg: &str) -> bool {
+    let lower = msg.to_lowercase();
+    lower.contains("sso")
+        || lower.contains("credentials")
+        || lower.contains("expired")
+        || lower.contains("token")
+        || lower.contains("authorization")
 }

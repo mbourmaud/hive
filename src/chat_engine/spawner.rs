@@ -101,6 +101,14 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
                 }
                 Err(e) => {
                     eprintln!("Agentic loop error: {e:#}");
+                    // Send error to frontend so the user sees it in the UI
+                    let error_event = serde_json::json!({
+                        "type": "result",
+                        "subtype": "error",
+                        "result": format!("{e:#}"),
+                        "is_error": true
+                    });
+                    let _ = tx.send(error_event.to_string());
                 }
             }
             s.status = SessionStatus::Idle;

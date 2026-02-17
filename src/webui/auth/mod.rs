@@ -23,4 +23,5 @@ pub fn routes() -> Router {
         .route("/api/profiles/active", get(handlers::active_profile))
         .route("/api/profiles/{name}", delete(handlers::delete_profile))
         .route("/api/aws/profiles", get(handlers::list_aws_profiles))
+        .route("/api/aws/sso-login", post(handlers::aws_sso_login))
 }

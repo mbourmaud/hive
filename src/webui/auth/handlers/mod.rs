@@ -11,7 +11,7 @@ use crate::webui::error::{ApiError, ApiResult};
 use super::credentials::{self, Credentials};
 use super::dto::AuthStatusResponse;
 
-pub use aws_profiles::list_aws_profiles;
+pub use aws_profiles::{aws_sso_login, list_aws_profiles};
 pub use commands::list_commands;
 pub use models::list_models;
 pub use oauth::{oauth_authorize, oauth_callback, setup_api_key};
