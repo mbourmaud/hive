@@ -9,6 +9,8 @@ import "./task-tool";
 import "./web-fetch-tool";
 import "./web-search-tool";
 import "./todo-write-tool";
+import "./session-search-tool";
+import "./tool-search-tool";
 
 export type { ToolProps } from "../tool-registry";
 export { getToolComponent, registerTool } from "../tool-registry";

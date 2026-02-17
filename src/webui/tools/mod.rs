@@ -6,6 +6,8 @@ pub mod grep;
 pub mod output;
 pub mod read;
 pub mod sandbox;
+pub mod session_search;
+pub mod tool_search;
 pub mod write;
 
 use std::path::Path;
@@ -29,6 +31,8 @@ pub async fn execute_tool(
         "Bash" => bash::execute(input, cwd).await,
         "Grep" => grep::execute(input, cwd).await,
         "Glob" => glob::execute(input, cwd).await,
+        "SessionSearch" => session_search::execute_search(input, cwd).await,
+        "RecentSessions" => session_search::execute_recent(input, cwd).await,
         _ => return None,
     };
 

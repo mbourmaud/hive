@@ -121,6 +121,7 @@ async fn run_worker(config: WorkerConfig, abort_flag: Arc<AtomicBool>) -> Result
             effort: Effort::High,
             max_turns: Some(25),
             mcp_pool: None,
+            deferred_tools_active: false,
         };
 
         let result_messages = run_agentic_loop(params).await?;

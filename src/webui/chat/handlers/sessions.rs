@@ -106,6 +106,7 @@ pub async fn create_session(
         max_turns: body.max_turns,
         mcp_pool: Some(mcp_pool),
         agent: body.agent.clone(),
+        deferred_tools_active: false,
     };
 
     store.lock().await.insert(id.clone(), session);
@@ -173,6 +174,7 @@ pub(super) async fn restore_session_from_disk(store: &SessionStore, id: &str) ->
         max_turns: None,
         mcp_pool: Some(mcp_pool),
         agent: None,
+        deferred_tools_active: false,
     };
 
     let id_owned = id.to_string();

@@ -85,6 +85,7 @@ pub async fn create_session(
         max_turns: opts.max_turns,
         mcp_pool: Some(mcp_pool),
         agent: opts.agent,
+        deferred_tools_active: false,
     };
 
     store.lock().await.insert(id.clone(), session);
@@ -142,6 +143,7 @@ pub async fn restore_session(store: &SessionStore, id: &str) -> Option<()> {
         max_turns: None,
         mcp_pool: Some(mcp_pool),
         agent: None,
+        deferred_tools_active: false,
     };
 
     let id_owned = id.to_string();

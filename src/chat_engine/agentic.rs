@@ -9,12 +9,12 @@ use crate::webui::anthropic::{
 use crate::webui::auth::credentials;
 use crate::webui::mcp_client::pool::McpPool;
 use crate::webui::provider;
-use crate::webui::tools;
 
-use super::compressor;
 use super::context;
 use super::persistence;
 use super::session::{Effort, SessionStore};
+use super::tool_executor;
+use super::tool_tier;
 
 /// Parameters for the agentic loop, grouped to avoid too-many-arguments.
 pub struct AgenticLoopParams<'a> {
@@ -31,6 +31,7 @@ pub struct AgenticLoopParams<'a> {
     pub effort: Effort,
     pub max_turns: Option<usize>,
     pub mcp_pool: Option<Arc<tokio::sync::Mutex<McpPool>>>,
+    pub deferred_tools_active: bool,
 }
 
 /// The agentic loop: stream API response, execute tools, repeat until end_turn.
@@ -40,7 +41,7 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
         model,
         mut messages,
         system_prompt,
-        tools: session_tools,
+        tools: all_session_tools,
         cwd,
         tx,
         session_id,
@@ -49,6 +50,7 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
         effort,
         max_turns,
         mcp_pool,
+        mut deferred_tools_active,
     } = params;
     let max_tool_turns = max_turns.unwrap_or(25);
 
@@ -57,7 +59,6 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
     let output_reserve: u32 = 16_384;
 
     let (thinking, base_max_tokens) = if effort.thinking_enabled() {
-        // Thinking budget must leave room for output: max_tokens > budget
         let budget = effort.thinking_budget().min(model_limit - output_reserve);
         let max_tokens = (budget + output_reserve).min(model_limit);
         let thinking = ThinkingConfig {
@@ -69,10 +70,30 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
         (None, output_reserve.min(model_limit))
     };
 
+    // Extract MCP server names for keyword detection
+    let mcp_server_names: Vec<String> = all_session_tools
+        .as_ref()
+        .map(|tools| extract_mcp_server_names(tools))
+        .unwrap_or_default();
+
     for _turn in 0..max_tool_turns {
         if abort_flag.load(Ordering::Relaxed) {
             break;
         }
+
+        // Check if latest user message implies MCP tool usage
+        if !deferred_tools_active {
+            if let Some(user_text) = last_user_text(&messages) {
+                if tool_tier::should_activate_deferred(&user_text, &mcp_server_names) {
+                    deferred_tools_active = true;
+                }
+            }
+        }
+
+        // Filter tools by tier: Core always, Deferred only when activated
+        let api_tools = all_session_tools
+            .as_ref()
+            .map(|tools| tool_tier::filter_by_tier(tools, deferred_tools_active));
 
         // Context window management: truncate if needed
         let estimated = context::estimate_total_tokens(&messages);
@@ -84,14 +105,27 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
             context::truncate_messages(&stripped, stripped_estimated)
         };
 
+        // Inject fresh project context into system prompt (30s TTL cache)
+        let effective_system = match system_prompt {
+            Some(ref base) => {
+                let ctx = super::project_context::gather_project_context(cwd).await;
+                if ctx.is_empty() {
+                    Some(base.clone())
+                } else {
+                    Some(format!("{base}{ctx}"))
+                }
+            }
+            None => None,
+        };
+
         let request = MessagesRequest {
             model: model.to_string(),
             max_tokens: base_max_tokens,
             messages: api_messages,
-            system: system_prompt.clone(),
+            system: effective_system,
             stream: true,
             metadata: None,
-            tools: session_tools.clone(),
+            tools: api_tools,
             tool_choice: None,
             thinking: thinking.clone(),
             temperature: if effort.thinking_enabled() {
@@ -105,7 +139,6 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
             provider::stream_messages(creds, &request, tx, session_id, abort_flag).await?;
 
         messages.push(assistant_msg.clone());
-
         broadcast_usage(tx, session_id, &usage, &store).await;
 
         if stop_reason != "tool_use" || abort_flag.load(Ordering::Relaxed) {
@@ -117,12 +150,32 @@ pub async fn run_agentic_loop(params: AgenticLoopParams<'_>) -> anyhow::Result<V
             break;
         }
 
-        let tool_results = execute_tools(&tool_uses, abort_flag, &mcp_pool, cwd, tx).await;
+        // Pass full tool list so ToolSearch can enumerate all available tools
+        let all_tools_ref = all_session_tools.as_deref().unwrap_or(&[]);
+        let tool_results = tool_executor::execute_tools(
+            &tool_uses,
+            abort_flag,
+            &mcp_pool,
+            cwd,
+            tx,
+            all_tools_ref,
+            &mut deferred_tools_active,
+        )
+        .await;
+
         let tool_result_message = Message {
             role: "user".to_string(),
             content: MessageContent::Blocks(tool_results),
         };
         messages.push(tool_result_message);
+    }
+
+    // Persist deferred activation state back to session
+    if deferred_tools_active {
+        let mut sessions = store.lock().await;
+        if let Some(s) = sessions.get_mut(session_id) {
+            s.deferred_tools_active = deferred_tools_active;
+        }
     }
 
     Ok(messages)
@@ -163,75 +216,6 @@ async fn broadcast_usage(
     }
 }
 
-async fn execute_tools(
-    tool_uses: &[(String, String, serde_json::Value)],
-    abort_flag: &Arc<std::sync::atomic::AtomicBool>,
-    mcp_pool: &Option<Arc<tokio::sync::Mutex<McpPool>>>,
-    cwd: &std::path::Path,
-    tx: &broadcast::Sender<String>,
-) -> Vec<ContentBlock> {
-    let mut tool_result_blocks: Vec<ContentBlock> = Vec::new();
-
-    for (tool_id, tool_name, tool_input) in tool_uses {
-        if abort_flag.load(Ordering::Relaxed) {
-            break;
-        }
-
-        let result = if tool_name.contains("__") {
-            let mcp_result = if let Some(ref pool) = mcp_pool {
-                let mut pool = pool.lock().await;
-                pool.call_tool(tool_name, tool_input).await
-            } else {
-                crate::webui::mcp_client::call_mcp_tool(tool_name, tool_input, cwd).await
-            };
-            match mcp_result {
-                Ok(content) => tools::ToolExecutionResult {
-                    content,
-                    is_error: false,
-                },
-                Err(e) => tools::ToolExecutionResult {
-                    content: format!("{e:#}"),
-                    is_error: true,
-                },
-            }
-        } else {
-            match tools::execute_tool(tool_name, tool_input, cwd).await {
-                Some(r) => r,
-                None => tools::ToolExecutionResult {
-                    content: format!("Unknown tool: {tool_name}"),
-                    is_error: true,
-                },
-            }
-        };
-
-        // Broadcast full (uncompressed) output to the frontend via SSE
-        let tool_result_event = serde_json::json!({
-            "type": "user",
-            "message": {
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": tool_id,
-                    "content": result.content,
-                    "is_error": result.is_error
-                }]
-            }
-        });
-        let _ = tx.send(tool_result_event.to_string());
-
-        // Compress output for API context (saves tokens on subsequent turns)
-        let api_content = compressor::compress_tool_output(&result.content, result.is_error);
-
-        tool_result_blocks.push(ContentBlock::ToolResult {
-            tool_use_id: tool_id.clone(),
-            content: api_content,
-            is_error: Some(result.is_error),
-        });
-    }
-
-    tool_result_blocks
-}
-
-/// Extract (id, name, input) tuples from tool_use blocks in an assistant message.
 fn extract_tool_uses(msg: &Message) -> Vec<(String, String, serde_json::Value)> {
     match &msg.content {
         MessageContent::Blocks(blocks) => blocks
@@ -247,7 +231,6 @@ fn extract_tool_uses(msg: &Message) -> Vec<(String, String, serde_json::Value)> 
     }
 }
 
-/// Remove thinking blocks from conversation history before sending to the API.
 fn strip_thinking_from_history(messages: &[Message]) -> Vec<Message> {
     messages
         .iter()
@@ -262,7 +245,7 @@ fn strip_thinking_from_history(messages: &[Message]) -> Vec<Message> {
                     Message {
                         role: msg.role.clone(),
                         content: MessageContent::Blocks(vec![ContentBlock::Text {
-                            text: String::new(),
+                            text: ".".to_string(),
                         }]),
                     }
                 } else {
@@ -275,4 +258,37 @@ fn strip_thinking_from_history(messages: &[Message]) -> Vec<Message> {
             _ => msg.clone(),
         })
         .collect()
+}
+
+/// Extract the text of the last user message (for keyword detection).
+fn last_user_text(messages: &[Message]) -> Option<String> {
+    messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .and_then(|m| match &m.content {
+            MessageContent::Text(t) => Some(t.clone()),
+            MessageContent::Blocks(blocks) => blocks.iter().find_map(|b| match b {
+                ContentBlock::Text { text } => Some(text.clone()),
+                _ => None,
+            }),
+        })
+}
+
+/// Extract unique MCP server names from tool definitions (e.g. "playwright" from "mcp__playwright__click").
+fn extract_mcp_server_names(tools: &[anthropic::types::ToolDefinition]) -> Vec<String> {
+    let mut names: Vec<String> = tools
+        .iter()
+        .filter_map(|t| {
+            let parts: Vec<&str> = t.name.splitn(3, "__").collect();
+            if parts.len() >= 2 {
+                Some(parts[1].to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
 }

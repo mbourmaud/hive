@@ -155,6 +155,8 @@ pub struct ChatSession {
     pub mcp_pool: Option<Arc<tokio::sync::Mutex<McpPool>>>,
     /// Agent name (if loaded from .claude/agents/)
     pub agent: Option<String>,
+    /// Whether deferred (MCP) tools have been activated for this session
+    pub deferred_tools_active: bool,
 }
 
 pub type SessionStore = Arc<Mutex<HashMap<String, ChatSession>>>;

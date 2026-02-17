@@ -211,6 +211,7 @@ pub async fn send_message(
     let chat_mode = session.chat_mode;
     let max_turns = session.max_turns;
     let mcp_pool = session.mcp_pool.clone();
+    let deferred_tools_active = session.deferred_tools_active;
     let messages_snapshot = session.messages.clone();
     let session_cwd = session.cwd.clone();
     let tx = session.tx.clone();
@@ -244,6 +245,7 @@ pub async fn send_message(
         chat_mode,
         max_turns,
         mcp_pool,
+        deferred_tools_active,
     });
 
     Ok(Json(serde_json::json!({"ok": true})))

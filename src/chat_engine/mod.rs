@@ -8,10 +8,13 @@ pub mod agentic;
 pub mod compressor;
 pub mod context;
 pub mod persistence;
+pub mod project_context;
 pub mod session;
 pub mod session_mgmt;
 pub mod spawner;
 pub mod system_prompt;
+pub mod tool_executor;
+pub mod tool_tier;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -140,6 +143,7 @@ impl ChatEngine {
             chat_mode: session.chat_mode,
             max_turns: session.max_turns,
             mcp_pool: session.mcp_pool.clone(),
+            deferred_tools_active: session.deferred_tools_active,
         };
 
         drop(sessions);

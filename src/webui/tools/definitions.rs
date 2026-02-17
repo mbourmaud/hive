@@ -136,5 +136,38 @@ pub fn builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["pattern"]
             }),
         },
+        ToolDefinition {
+            name: "SessionSearch".to_string(),
+            description: "Search past chat sessions by keyword. Matches against session titles and first user messages. Use this to find previous conversations about specific topics.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The keyword to search for in session titles and messages"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 10)"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
+        super::tool_search::tool_search_definition(),
+        ToolDefinition {
+            name: "RecentSessions".to_string(),
+            description: "List the most recent chat sessions with titles and summaries. Use this to see what was discussed recently.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of recent sessions to list (default: 10)"
+                    }
+                },
+                "required": []
+            }),
+        },
     ]
 }

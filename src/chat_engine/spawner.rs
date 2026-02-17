@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tracing::{error, info, warn};
 
 use crate::webui::anthropic;
 use crate::webui::auth::credentials;
@@ -26,6 +27,7 @@ pub struct AgenticTaskParams {
     pub chat_mode: ChatMode,
     pub max_turns: Option<usize>,
     pub mcp_pool: Option<Arc<tokio::sync::Mutex<McpPool>>>,
+    pub deferred_tools_active: bool,
 }
 
 pub fn spawn_agentic_task(params: AgenticTaskParams) {
@@ -44,6 +46,7 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
         chat_mode,
         max_turns,
         mcp_pool,
+        deferred_tools_active,
     } = params;
 
     // Filter tools based on chat mode policy
@@ -64,6 +67,13 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
     };
 
     tokio::spawn(async move {
+        info!(
+            %session_id,
+            model = %model_resolved,
+            chat_mode = ?chat_mode,
+            "Spawning agentic task"
+        );
+
         let mut rx = tx.subscribe();
         let persist_id = session_id.clone();
         let persist_handle = tokio::spawn(async move {
@@ -86,6 +96,7 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
             effort,
             max_turns,
             mcp_pool,
+            deferred_tools_active,
         })
         .await;
 
@@ -96,11 +107,12 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
         if let Some(s) = sessions.get_mut(&session_id) {
             match loop_result {
                 Ok(final_messages) => {
+                    info!(%session_id, "Agentic loop completed successfully");
                     s.messages = final_messages;
                     save_messages(&session_id, &s.messages);
                 }
                 Err(e) => {
-                    eprintln!("Agentic loop error: {e:#}");
+                    error!(%session_id, error = %e, "Agentic loop error");
                     // Bedrock provider already sends SSE error events for credential
                     // and API errors. Only broadcast here for other loop failures
                     // (e.g. tool execution panics) to avoid duplicate error cards.
@@ -108,6 +120,7 @@ pub fn spawn_agentic_task(params: AgenticTaskParams) {
                     let already_broadcast =
                         msg.contains("SSO session expired") || msg.contains("Bedrock API error");
                     if !already_broadcast {
+                        warn!(%session_id, "Broadcasting error to frontend (not already sent by provider)");
                         let error_event = serde_json::json!({
                             "type": "result",
                             "subtype": "error",

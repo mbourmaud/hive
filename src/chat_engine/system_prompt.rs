@@ -141,6 +141,9 @@ You have access to these tools — use them to accomplish tasks:
 - **Bash**: Execute shell commands. Use for git, build tools, tests, and other CLI operations.
 - **Grep**: Search file contents using regex patterns (powered by ripgrep).
 - **Glob**: Find files by name patterns.
+- **SessionSearch**: Search past chat sessions by keyword (titles + first messages).
+- **RecentSessions**: List recent chat sessions with summaries.
+- **ToolSearch**: Discover available MCP tools (browser automation, docs, etc). Use when you need external tools.
 
 # Guidelines
 

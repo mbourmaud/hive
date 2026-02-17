@@ -4,6 +4,7 @@ import {
   FileText,
   GitBranch,
   Globe,
+  History,
   Loader2,
   Pencil,
   Search,
@@ -69,6 +70,15 @@ export function ToolIcon({ name, status }: { name: string; status: ToolUsePart["
   if (lower === "webfetch" || lower === "websearch") {
     return <Globe className={iconClass} />;
   }
+  if (lower === "sessionsearch") {
+    return <Search className={iconClass} />;
+  }
+  if (lower === "recentsessions") {
+    return <History className={iconClass} />;
+  }
+  if (lower === "toolsearch") {
+    return <Search className={iconClass} />;
+  }
 
   return <FileText className={iconClass} />;
 }
@@ -106,6 +116,12 @@ export function toolDisplayName(name: string): string {
       return "Fetch";
     case "websearch":
       return "Search";
+    case "sessionsearch":
+      return "Session Search";
+    case "recentsessions":
+      return "Recent Sessions";
+    case "toolsearch":
+      return "Tool Search";
     default:
       return name;
   }
@@ -145,6 +161,12 @@ export function registryKeyForTool(name: string): string {
       return "WebSearch";
     case "todowrite":
       return "TodoWrite";
+    case "sessionsearch":
+      return "SessionSearch";
+    case "recentsessions":
+      return "RecentSessions";
+    case "toolsearch":
+      return "ToolSearch";
     default:
       return name;
   }
@@ -172,6 +194,8 @@ const SUBTITLE_RULES: SubtitleRule[] = [
     maxLen: 60,
   },
   { tools: new Set(["webfetch", "websearch"]), keys: ["url", "query"], maxLen: 50 },
+  { tools: new Set(["sessionsearch"]), keys: ["query"], maxLen: 40 },
+  { tools: new Set(["toolsearch"]), keys: ["query"], maxLen: 40 },
 ];
 
 function truncate(text: string, maxLen: number): string {

@@ -78,6 +78,7 @@ async fn run_single_agent(
         effort: Effort::Medium,
         max_turns: Some(25),
         mcp_pool: None,
+        deferred_tools_active: false,
     };
 
     match run_agentic_loop(params).await {
