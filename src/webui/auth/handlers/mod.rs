@@ -1,6 +1,8 @@
+pub mod aws_profiles;
 mod commands;
 mod models;
 mod oauth;
+pub mod profiles;
 
 use axum::Json;
 
@@ -9,12 +11,19 @@ use crate::webui::error::{ApiError, ApiResult};
 use super::credentials::{self, Credentials};
 use super::dto::AuthStatusResponse;
 
+pub use aws_profiles::list_aws_profiles;
 pub use commands::list_commands;
 pub use models::list_models;
 pub use oauth::{oauth_authorize, oauth_callback, setup_api_key};
+pub use profiles::{
+    activate_profile, active_profile, create_profile, delete_profile, list_profiles,
+};
 
 pub async fn auth_status() -> ApiResult<Json<AuthStatusResponse>> {
-    match credentials::load_credentials() {
+    let provider = credentials::resolve_provider();
+    let profile_name = crate::commands::profile::get_active_profile().unwrap_or_default();
+
+    match credentials::resolve_credentials() {
         Ok(Some(creds)) => {
             let (auth_type, expired) = match &creds {
                 Credentials::ApiKey { .. } => ("api_key".to_string(), false),
@@ -22,17 +31,24 @@ pub async fn auth_status() -> ApiResult<Json<AuthStatusResponse>> {
                     "oauth".to_string(),
                     credentials::is_token_expired(*expires_at),
                 ),
+                Credentials::Bedrock { .. } | Credentials::BedrockProfile { .. } => {
+                    ("bedrock".to_string(), false)
+                }
             };
             Ok(Json(AuthStatusResponse {
                 configured: true,
                 auth_type: Some(auth_type),
                 expired,
+                profile: Some(profile_name),
+                provider: Some(provider.to_string()),
             }))
         }
         _ => Ok(Json(AuthStatusResponse {
             configured: false,
             auth_type: None,
             expired: false,
+            profile: Some(profile_name),
+            provider: Some(provider.to_string()),
         })),
     }
 }

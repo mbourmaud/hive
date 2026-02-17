@@ -1,6 +1,8 @@
 use axum::Json;
 use serde::Deserialize;
 
+use crate::commands::provider::Provider;
+use crate::webui::bedrock::model::discover_bedrock_models;
 use crate::webui::error::ApiResult;
 
 use super::super::credentials::{self, Credentials};
@@ -8,6 +10,23 @@ use super::super::dto::ModelInfo;
 use super::read_keychain_credentials;
 
 pub async fn list_models() -> ApiResult<Json<Vec<ModelInfo>>> {
+    // Bedrock provider → discover models dynamically (falls back to hardcoded list)
+    if credentials::resolve_provider() == Provider::Bedrock {
+        if let Ok(Some(creds)) = credentials::resolve_credentials() {
+            let discovered = discover_bedrock_models(&creds).await;
+            let models = discovered
+                .into_iter()
+                .map(|m| ModelInfo {
+                    id: m.model_id,
+                    name: m.display_name,
+                    description: String::new(),
+                })
+                .collect();
+            return Ok(Json(models));
+        }
+        return Ok(Json(Vec::new()));
+    }
+
     if let Some(models) = try_fetch_models().await {
         return Ok(Json(models));
     }
@@ -15,7 +34,7 @@ pub async fn list_models() -> ApiResult<Json<Vec<ModelInfo>>> {
 }
 
 async fn try_fetch_models() -> Option<Vec<ModelInfo>> {
-    if let Ok(Some(creds)) = credentials::load_credentials() {
+    if let Ok(Some(creds)) = credentials::resolve_credentials() {
         if let Ok((header_name, header_value)) = credentials::get_auth_header(&creds).await {
             let is_oauth = matches!(creds, Credentials::OAuth { .. });
             if let Ok(models) = fetch_models_from_api(header_name, &header_value, is_oauth).await {

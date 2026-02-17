@@ -17,4 +17,10 @@ pub fn routes() -> Router {
         .route("/api/auth/logout", delete(handlers::logout))
         .route("/api/models", get(handlers::list_models))
         .route("/api/commands", get(handlers::list_commands))
+        .route("/api/profiles", get(handlers::list_profiles))
+        .route("/api/profiles", post(handlers::create_profile))
+        .route("/api/profiles/activate", post(handlers::activate_profile))
+        .route("/api/profiles/active", get(handlers::active_profile))
+        .route("/api/profiles/{name}", delete(handlers::delete_profile))
+        .route("/api/aws/profiles", get(handlers::list_aws_profiles))
 }

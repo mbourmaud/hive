@@ -1,6 +1,7 @@
 import { Plus, Settings } from "lucide-react";
 import beeIcon from "@/assets/bee-icon.png";
 import type { ProjectProfile } from "@/domains/projects/types";
+import { ProfileSwitcher } from "@/domains/settings/components/profile-switcher";
 import { StatusPopover } from "@/domains/status/components/status-popover";
 import { ThemeToggle } from "@/shared/theme/theme-toggle";
 import { THEMES } from "@/shared/theme/use-theme";
@@ -84,6 +85,7 @@ export function IconBar({
 
       {/* Footer */}
       <div data-slot="icon-bar-footer">
+        <ProfileSwitcher />
         <StatusPopover open={statusPopoverOpen} onOpenChange={onStatusPopoverChange} />
         {onOpenSettings && (
           <button

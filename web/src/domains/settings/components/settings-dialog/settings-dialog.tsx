@@ -11,6 +11,7 @@ import { useTheme } from "@/shared/theme/use-theme";
 import { useAppStore } from "@/store";
 import { GeneralTab } from "./general-tab";
 import { KeybindsTab } from "./keybinds-tab";
+import { ProfilesTab } from "./profiles-tab";
 import {
   type AppSettings,
   loadSettings,
@@ -142,6 +143,9 @@ export function SettingsDialog({
               <Tabs.Trigger value="general" data-slot="settings-tab">
                 General
               </Tabs.Trigger>
+              <Tabs.Trigger value="profiles" data-slot="settings-tab">
+                Profiles
+              </Tabs.Trigger>
               <Tabs.Trigger value="model" data-slot="settings-tab">
                 Model
               </Tabs.Trigger>
@@ -171,6 +175,10 @@ export function SettingsDialog({
                 settings={settings}
                 adjustFontSize={adjustFontSize}
               />
+            </Tabs.Content>
+
+            <Tabs.Content value="profiles" data-slot="settings-panel">
+              <ProfilesTab />
             </Tabs.Content>
 
             <Tabs.Content value="model" data-slot="settings-panel">

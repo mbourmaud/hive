@@ -3,6 +3,13 @@ export const queryKeys = {
     status: () => ["auth", "status"] as const,
     models: () => ["auth", "models"] as const,
   },
+  profiles: {
+    all: () => ["profiles"] as const,
+    active: () => ["profiles", "active"] as const,
+  },
+  aws: {
+    profiles: () => ["aws", "profiles"] as const,
+  },
   sessions: {
     all: () => ["sessions"] as const,
     list: () => ["sessions", "list"] as const,

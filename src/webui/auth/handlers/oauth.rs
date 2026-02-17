@@ -39,7 +39,9 @@ pub async fn setup_api_key(
     }
 
     let creds = Credentials::ApiKey { api_key };
-    credentials::save_credentials(&creds)
+    // Save per-profile if possible, otherwise global
+    let active_name = crate::commands::profile::get_active_profile().unwrap_or_default();
+    credentials::save_credentials_for_profile(&active_name, &creds)
         .map_err(|e| ApiError::Internal(e.context("Failed to save credentials")))?;
 
     Ok(Json(serde_json::json!({"ok": true})))
@@ -149,7 +151,9 @@ pub async fn oauth_callback(
                 refresh_token: token.refresh_token,
                 expires_at,
             };
-            credentials::save_credentials(&creds)
+            // Save per-profile if possible, otherwise global
+            let active_name = crate::commands::profile::get_active_profile().unwrap_or_default();
+            credentials::save_credentials_for_profile(&active_name, &creds)
                 .map_err(|e| ApiError::Internal(e.context("Failed to save credentials")))?;
 
             Ok(Json(serde_json::json!({"ok": true})))
