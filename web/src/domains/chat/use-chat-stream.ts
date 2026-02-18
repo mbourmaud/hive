@@ -90,43 +90,48 @@ export function useChat(baseUrl: string = "") {
   // ── SSE connection ──────────────────────────────────────────────────────
 
   const connectToSession = useCallback(
-    (sessionId: string, turnId: string) => {
+    (sessionId: string, turnId: string): Promise<void> => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
 
       const url = `${baseUrl}/api/chat/sessions/${sessionId}/stream`;
-      const es = new EventSource(url);
-      eventSourceRef.current = es;
-      lastEventTimeRef.current = Date.now();
+      return new Promise<void>((resolve) => {
+        const es = new EventSource(url);
+        eventSourceRef.current = es;
+        lastEventTimeRef.current = Date.now();
 
-      const gen = ++generationRef.current;
-      es.onmessage = (msg) => {
-        if (generationRef.current !== gen) return;
-        try {
-          const parsed: unknown = JSON.parse(msg.data);
-          if (isStreamEvent(parsed)) {
-            enqueueEvent(parsed);
+        const gen = ++generationRef.current;
+        es.onmessage = (msg) => {
+          if (generationRef.current !== gen) return;
+          try {
+            const parsed: unknown = JSON.parse(msg.data);
+            if (isStreamEvent(parsed)) {
+              enqueueEvent(parsed);
+            }
+          } catch {
+            // skip malformed lines
           }
-        } catch {
-          // skip malformed lines
-        }
-      };
+        };
 
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
+        es.onopen = () => resolve();
 
-        retryTimeoutRef.current = setTimeout(() => {
-          const store = useAppStore.getState();
-          if (store.isStreaming && store.currentTurnId === turnId) {
-            connectToSession(sessionId, turnId);
-          }
-        }, SSE_RETRY_MS);
-      };
+        es.onerror = () => {
+          resolve(); // Don't block sendMessage forever
+          es.close();
+          eventSourceRef.current = null;
 
-      startHeartbeatCheck();
+          retryTimeoutRef.current = setTimeout(() => {
+            const store = useAppStore.getState();
+            if (store.isStreaming && store.currentTurnId === turnId) {
+              connectToSession(sessionId, turnId);
+            }
+          }, SSE_RETRY_MS);
+        };
+
+        startHeartbeatCheck();
+      });
     },
     [baseUrl, enqueueEvent, startHeartbeatCheck],
   );
@@ -166,7 +171,7 @@ export function useChat(baseUrl: string = "") {
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      connectToSession(session.id, turnId);
+      await connectToSession(session.id, turnId);
 
       const effort = useAppStore.getState().effort;
       const chatMode = useAppStore.getState().chatMode;
@@ -275,8 +280,9 @@ export function useChat(baseUrl: string = "") {
   // ── Reset ─────────────────────────────────────────────────────────────
 
   const resetSession = useCallback(() => {
+    disconnect();
     dispatchChat({ type: "SESSION_RESET" });
-  }, [dispatchChat]);
+  }, [disconnect, dispatchChat]);
 
   // ── Cleanup on unmount ────────────────────────────────────────────────
 
