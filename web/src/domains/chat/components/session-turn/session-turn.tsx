@@ -194,7 +194,14 @@ export function SessionTurn({
             data-can-expand={canExpandUser || undefined}
             data-expanded={userExpanded || undefined}
           >
-            <p>{turn.userMessage}</p>
+            <p>
+              {turn.userMessage.split("\n").map((line, i, arr) => (
+                <span key={`${turn.id}-line-${i}`}>
+                  {line}
+                  {i < arr.length - 1 && <br />}
+                </span>
+              ))}
+            </p>
             {turn.images && turn.images.length > 0 && (
               <div data-slot="user-message-images">
                 {turn.images.map((img) => (

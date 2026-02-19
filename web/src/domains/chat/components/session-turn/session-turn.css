@@ -42,10 +42,12 @@
 
 [data-slot="user-message"] {
   position: relative;
-  background: var(--color-surface-inset);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 8px 12px;
+  --user-msg-accent: var(--color-accent);
+  background: color-mix(in oklch, var(--user-msg-accent) 6%, transparent);
+  border: 1px solid color-mix(in oklch, var(--user-msg-accent) 15%, transparent);
+  border-left: 3px solid var(--user-msg-accent);
+  border-radius: 6px;
+  padding: 10px 14px;
   font-size: var(--font-size-base, 14px);
   line-height: 1.65;
   color: var(--color-foreground);
@@ -83,14 +85,14 @@
   overflow: hidden;
 }
 
-[data-slot="user-message"][data-can-expand]:not([data-expanded])::before {
+[data-slot="user-message"][data-can-expand]:not([data-expanded])::after {
   content: "";
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 8px;
-  background: linear-gradient(to bottom, transparent, var(--color-surface-inset));
+  height: 32px;
+  background: linear-gradient(to bottom, transparent, color-mix(in oklch, var(--user-msg-accent) 6%, var(--color-background)));
   pointer-events: none;
   z-index: 1;
 }

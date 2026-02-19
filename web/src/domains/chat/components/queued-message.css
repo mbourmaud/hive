@@ -1,12 +1,14 @@
 /* ── Queued message card ────────────────────────────────────────────────── */
 
 [data-component="queued-message"] {
+  --queued-accent: var(--color-accent);
   position: relative;
   margin-top: 0.75rem;
   padding: 0.75rem 1rem;
-  border-left: 3px solid oklch(0.65 0.15 180);
-  border-radius: 0.5rem;
-  background: oklch(0.65 0.15 180 / 0.06);
+  border: 1px solid color-mix(in oklch, var(--queued-accent) 12%, transparent);
+  border-left: 3px solid color-mix(in oklch, var(--queued-accent) 50%, transparent);
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--queued-accent) 4%, transparent);
   animation: queued-slide-in 0.2s ease-out;
 }
 
@@ -28,8 +30,8 @@
   align-items: center;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  background: oklch(0.65 0.15 180 / 0.15);
-  color: oklch(0.65 0.15 180);
+  background: color-mix(in oklch, var(--queued-accent) 15%, transparent);
+  color: var(--color-accent);
   font-size: 0.625rem;
   font-weight: 700;
   font-family: var(--font-mono);
