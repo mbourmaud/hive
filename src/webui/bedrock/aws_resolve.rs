@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use aws_credential_types::provider::ProvideCredentials;
+use tracing::{debug, error, info, warn};
 
 /// Temporary AWS credentials resolved from the credential chain.
 pub struct ResolvedAwsCreds {
@@ -50,6 +51,7 @@ pub async fn resolve_from_profile(
     profile_name: &str,
     region: &str,
 ) -> std::result::Result<ResolvedAwsCreds, AwsCredentialError> {
+    debug!(%profile_name, %region, "Loading AWS config for profile");
     let aws_region = aws_config::Region::new(region.to_owned());
 
     let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -59,24 +61,33 @@ pub async fn resolve_from_profile(
         .await;
 
     let provider = config.credentials_provider().ok_or_else(|| {
+        error!(%profile_name, "No credentials provider found in AWS config");
         AwsCredentialError::Other(anyhow::anyhow!(
             "No credentials provider found in AWS config for profile '{profile_name}'"
         ))
     })?;
 
+    debug!(%profile_name, "Credentials provider found, resolving credentials");
     let creds = provider.provide_credentials().await.map_err(|e| {
         let msg = e.to_string();
         if is_sso_error(&msg) {
+            warn!(%profile_name, error = %msg, "SSO login required");
             AwsCredentialError::SsoLoginRequired {
                 profile: profile_name.to_string(),
             }
         } else {
+            error!(%profile_name, error = %msg, "Failed to resolve AWS credentials");
             AwsCredentialError::Other(anyhow::anyhow!(
                 "Failed to resolve AWS credentials for profile '{profile_name}': {msg}"
             ))
         }
     })?;
 
+    info!(
+        %profile_name,
+        has_session_token = creds.session_token().is_some(),
+        "AWS credentials resolved successfully"
+    );
     Ok(ResolvedAwsCreds {
         access_key_id: creds.access_key_id().to_string(),
         secret_access_key: creds.secret_access_key().to_string(),
@@ -86,6 +97,7 @@ pub async fn resolve_from_profile(
 
 /// Run `aws sso login --profile <name>` and return success/failure.
 pub async fn run_sso_login(profile_name: &str) -> Result<()> {
+    info!(%profile_name, "Running `aws sso login`");
     let output = tokio::process::Command::new("aws")
         .args(["sso", "login", "--profile", profile_name])
         .output()
@@ -94,8 +106,10 @@ pub async fn run_sso_login(profile_name: &str) -> Result<()> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        error!(%profile_name, %stderr, "aws sso login failed");
         anyhow::bail!("aws sso login failed: {stderr}");
     }
 
+    info!(%profile_name, "aws sso login succeeded");
     Ok(())
 }

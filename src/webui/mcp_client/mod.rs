@@ -6,6 +6,7 @@ pub mod types;
 use std::path::Path;
 
 use anyhow::{bail, Result};
+use tracing::warn;
 
 use crate::webui::anthropic::types::ToolDefinition;
 use transport::McpTransport;
@@ -37,7 +38,7 @@ pub async fn discover_tools_for_cwd(cwd: &Path) -> Vec<ToolDefinition> {
         match result {
             Ok(tools) => all_tools.extend(tools),
             Err(e) => {
-                eprintln!("MCP server '{server_name}' tool discovery failed: {e:#}");
+                warn!(%server_name, error = %e, "MCP server tool discovery failed");
             }
         }
     }

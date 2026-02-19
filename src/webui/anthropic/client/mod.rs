@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tracing::{debug, error, info, warn};
 
 use super::types::{ContentBlock, Message, MessageContent, MessagesRequest, UsageStats};
 use crate::webui::auth::credentials::Credentials;
@@ -93,12 +94,20 @@ pub async fn stream_messages(
     session_id: &str,
     abort_flag: &Arc<AtomicBool>,
 ) -> Result<(Message, UsageStats, String)> {
+    info!(model = %request.model, %session_id, "Starting Anthropic stream_messages");
     let mut last_error = String::new();
 
     for attempt in 0..=MAX_API_RETRIES {
         if abort_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            info!("Anthropic stream aborted by user");
             anyhow::bail!("Aborted");
         }
+
+        debug!(
+            attempt = attempt + 1,
+            max = MAX_API_RETRIES + 1,
+            "Anthropic API attempt"
+        );
 
         let response = match build_request(creds, request).await {
             Ok(r) => r,
@@ -106,14 +115,17 @@ pub async fn stream_messages(
                 // Network-level error (DNS, connection refused, timeout)
                 if attempt < MAX_API_RETRIES {
                     let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
-                    eprintln!(
-                        "[hive] API request failed (attempt {}/{}): {e:#}, retrying in {delay}ms",
-                        attempt + 1,
-                        MAX_API_RETRIES + 1
+                    warn!(
+                        attempt = attempt + 1,
+                        max = MAX_API_RETRIES + 1,
+                        delay_ms = delay,
+                        error = %e,
+                        "Anthropic API request failed, retrying"
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                     continue;
                 }
+                error!(error = %e, "Anthropic API request failed after all retries");
                 return Err(e);
             }
         };
@@ -131,15 +143,18 @@ pub async fn stream_messages(
 
             if is_retryable && attempt < MAX_API_RETRIES {
                 let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
-                eprintln!(
-                    "[hive] API error {status} (attempt {}/{}), retrying in {delay}ms",
-                    attempt + 1,
-                    MAX_API_RETRIES + 1
+                warn!(
+                    %status,
+                    attempt = attempt + 1,
+                    max = MAX_API_RETRIES + 1,
+                    delay_ms = delay,
+                    "Anthropic API error (retryable), retrying"
                 );
                 tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                 continue;
             }
 
+            error!(%status, response_body = %body, "Anthropic API error (non-retryable or exhausted retries)");
             let error_event = serde_json::json!({
                 "type": "result",
                 "subtype": "error",
@@ -150,6 +165,7 @@ pub async fn stream_messages(
             anyhow::bail!("{last_error}");
         }
 
+        info!("Anthropic API response OK, starting SSE parse");
         // Success — send init event and parse SSE stream
         let init_event = serde_json::json!({
             "type": "system",

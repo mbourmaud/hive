@@ -51,7 +51,7 @@ impl EventAccumulator {
 
         if content_blocks.is_empty() {
             content_blocks.push(ContentBlock::Text {
-                text: String::new(),
+                text: ".".to_string(),
             });
         }
 

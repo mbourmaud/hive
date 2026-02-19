@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use serde::Deserialize;
+use tracing::{debug, info, warn};
 
 use crate::webui::auth::credentials::Credentials;
 
@@ -71,15 +72,32 @@ pub struct DiscoveredModel {
 /// and filters for Claude models. Falls back to the hardcoded list on any error.
 pub async fn discover_bedrock_models(creds: &Credentials) -> Vec<DiscoveredModel> {
     match try_discover(creds).await {
-        Ok(models) if !models.is_empty() => models,
-        _ => bedrock_model_list()
-            .into_iter()
-            .map(|(id, name)| DiscoveredModel {
-                model_id: id.to_string(),
-                display_name: name.to_string(),
-            })
-            .collect(),
+        Ok(models) if !models.is_empty() => {
+            info!(count = models.len(), "Discovered Bedrock models via API");
+            for m in &models {
+                debug!(id = %m.model_id, name = %m.display_name, "Bedrock model");
+            }
+            models
+        }
+        Ok(_) => {
+            warn!("Bedrock ListFoundationModels returned no Claude models, using fallback");
+            fallback_models()
+        }
+        Err(e) => {
+            warn!(error = %e, "Bedrock model discovery failed, using fallback list");
+            fallback_models()
+        }
     }
+}
+
+fn fallback_models() -> Vec<DiscoveredModel> {
+    bedrock_model_list()
+        .into_iter()
+        .map(|(id, name)| DiscoveredModel {
+            model_id: id.to_string(),
+            display_name: name.to_string(),
+        })
+        .collect()
 }
 
 async fn try_discover(creds: &Credentials) -> Result<Vec<DiscoveredModel>> {
@@ -91,6 +109,7 @@ async fn try_discover(creds: &Credentials) -> Result<Vec<DiscoveredModel>> {
         "https://bedrock.{}.amazonaws.com/foundation-models?byProvider=Anthropic",
         aws.region
     );
+    debug!(%url, "Discovering Bedrock models");
 
     let signed_headers = sign_aws_request("GET", &url, &[], &aws, "bedrock")?;
 
@@ -101,11 +120,18 @@ async fn try_discover(creds: &Credentials) -> Result<Vec<DiscoveredModel>> {
     }
 
     let res = req.send().await?;
-    if !res.status().is_success() {
-        anyhow::bail!("ListFoundationModels returned {}", res.status());
+    let status = res.status();
+    if !status.is_success() {
+        let body = res.text().await.unwrap_or_default();
+        warn!(%status, %body, "ListFoundationModels failed");
+        anyhow::bail!("ListFoundationModels returned {status}: {body}");
     }
 
     let body: ListModelsResponse = res.json().await?;
+    debug!(
+        raw_count = body.model_summaries.len(),
+        "ListFoundationModels raw response"
+    );
     let mut models: Vec<DiscoveredModel> = body
         .model_summaries
         .into_iter()

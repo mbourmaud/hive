@@ -7,6 +7,7 @@ use aws_sigv4::http_request::{
 };
 use aws_sigv4::sign::v4;
 use std::time::SystemTime;
+use tracing::{debug, info, warn};
 
 use crate::webui::anthropic::types::MessagesRequest;
 use crate::webui::auth::credentials::Credentials;
@@ -34,17 +35,22 @@ pub(super) async fn resolve_aws_creds(
             access_key_id,
             secret_access_key,
             session_token,
-        } => Ok(AwsCreds {
-            region: region.clone(),
-            access_key_id: access_key_id.clone(),
-            secret_access_key: secret_access_key.clone(),
-            session_token: session_token.clone(),
-        }),
+        } => {
+            debug!(%region, has_session_token = session_token.is_some(), "Using static Bedrock credentials");
+            Ok(AwsCreds {
+                region: region.clone(),
+                access_key_id: access_key_id.clone(),
+                secret_access_key: secret_access_key.clone(),
+                session_token: session_token.clone(),
+            })
+        }
         Credentials::BedrockProfile {
             region,
             aws_profile,
         } => {
+            debug!(%region, %aws_profile, "Resolving Bedrock credentials from AWS profile");
             let resolved = aws_resolve::resolve_from_profile(aws_profile, region).await?;
+            info!(%region, %aws_profile, "AWS profile credentials resolved successfully");
             Ok(AwsCreds {
                 region: region.clone(),
                 access_key_id: resolved.access_key_id,
@@ -52,9 +58,12 @@ pub(super) async fn resolve_aws_creds(
                 session_token: resolved.session_token,
             })
         }
-        _ => Err(aws_resolve::AwsCredentialError::Other(anyhow::anyhow!(
-            "Expected Bedrock credentials"
-        ))),
+        _ => {
+            warn!("resolve_aws_creds called with non-Bedrock credentials");
+            Err(aws_resolve::AwsCredentialError::Other(anyhow::anyhow!(
+                "Expected Bedrock credentials"
+            )))
+        }
     }
 }
 
@@ -73,10 +82,23 @@ pub(super) async fn build_bedrock_request(
         aws.region
     );
 
+    info!(
+        requested_model = %request.model,
+        resolved_model_id = %model_id,
+        region = %aws.region,
+        %url,
+        "Building Bedrock request"
+    );
+
     let body = build_bedrock_body(request)?;
     let body_bytes = serde_json::to_vec(&body)?;
+    debug!(
+        body_size = body_bytes.len(),
+        "Bedrock request body serialized"
+    );
 
     let signed_headers = sign_aws_request("POST", &url, &body_bytes, &aws, "bedrock")?;
+    debug!(header_count = signed_headers.len(), "SigV4 headers signed");
 
     let client = reqwest::Client::new();
     let mut req_builder = client

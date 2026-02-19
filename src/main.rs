@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use hive_lib::commands;
+use tracing_subscriber::EnvFilter;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -146,6 +147,16 @@ enum ProfileCommands {
 }
 
 fn main() {
+    // Initialize structured logging. Default level: info.
+    // Override with HIVE_LOG env var, e.g. HIVE_LOG=debug or HIVE_LOG=hive_lib::webui::bedrock=trace
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_env("HIVE_LOG").unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_target(true)
+        .with_timer(tracing_subscriber::fmt::time::uptime())
+        .init();
+
     let cli = Cli::parse();
 
     // Check for updates in background (non-blocking, once per day)

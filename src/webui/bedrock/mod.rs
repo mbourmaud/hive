@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::broadcast;
+use tracing::{debug, error, info, warn};
 
 use crate::webui::anthropic::types::{Message, MessagesRequest, UsageStats};
 use crate::webui::auth::credentials::Credentials;
@@ -36,17 +37,27 @@ pub async fn stream_messages(
     session_id: &str,
     abort_flag: &Arc<AtomicBool>,
 ) -> Result<(Message, UsageStats, String)> {
+    info!(
+        model = %request.model,
+        %session_id,
+        "Starting Bedrock stream_messages"
+    );
+
     // Pre-validate credentials before entering retry loop.
     // SSO/auth errors are not retryable — fail fast with a clear message.
     if let Err(e) = request::resolve_aws_creds(creds).await {
         let error_msg = match &e {
             AwsCredentialError::SsoLoginRequired { profile } => {
+                error!(%profile, "AWS SSO session expired — cannot retry");
                 format!(
                     "AWS SSO session expired for profile '{profile}'. \
                      Use the SSO Login button or run: aws sso login --profile {profile}"
                 )
             }
-            AwsCredentialError::Other(err) => format!("AWS credentials error: {err}"),
+            AwsCredentialError::Other(err) => {
+                error!(error = %err, "AWS credentials error — cannot retry");
+                format!("AWS credentials error: {err}")
+            }
         };
         let error_event = serde_json::json!({
             "type": "result",
@@ -63,8 +74,15 @@ pub async fn stream_messages(
 
     for attempt in 0..=MAX_API_RETRIES {
         if abort_flag.load(Ordering::Relaxed) {
+            info!("Bedrock stream aborted by user");
             anyhow::bail!("Aborted");
         }
+
+        debug!(
+            attempt = attempt + 1,
+            max = MAX_API_RETRIES + 1,
+            "Bedrock API attempt"
+        );
 
         let response = match build_bedrock_request(creds, request).await {
             Ok(r) => r,
@@ -72,6 +90,7 @@ pub async fn stream_messages(
                 let msg = format!("{e:#}");
                 // Credential errors are not retryable
                 if is_credential_error(&msg) {
+                    error!(error = %msg, "Bedrock credential error (not retryable)");
                     let error_event = serde_json::json!({
                         "type": "result",
                         "subtype": "error",
@@ -84,14 +103,17 @@ pub async fn stream_messages(
                 }
                 if attempt < MAX_API_RETRIES {
                     let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
-                    eprintln!(
-                        "[hive] Bedrock request failed (attempt {}/{}): {e:#}, retrying in {delay}ms",
-                        attempt + 1,
-                        MAX_API_RETRIES + 1
+                    warn!(
+                        attempt = attempt + 1,
+                        max = MAX_API_RETRIES + 1,
+                        delay_ms = delay,
+                        error = %e,
+                        "Bedrock request failed, retrying"
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                     continue;
                 }
+                error!(error = %e, "Bedrock request failed after all retries");
                 return Err(e);
             }
         };
@@ -105,15 +127,19 @@ pub async fn stream_messages(
 
             if is_retryable && attempt < MAX_API_RETRIES {
                 let delay = RETRY_BASE_DELAY_MS * (1 << attempt);
-                eprintln!(
-                    "[hive] Bedrock error {status} (attempt {}/{}), retrying in {delay}ms",
-                    attempt + 1,
-                    MAX_API_RETRIES + 1
+                warn!(
+                    %status,
+                    attempt = attempt + 1,
+                    max = MAX_API_RETRIES + 1,
+                    delay_ms = delay,
+                    response_body = %body,
+                    "Bedrock API error (retryable), retrying"
                 );
                 tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                 continue;
             }
 
+            error!(%status, response_body = %body, "Bedrock API error (non-retryable or exhausted retries)");
             let error_event = serde_json::json!({
                 "type": "result",
                 "subtype": "error",
@@ -124,6 +150,7 @@ pub async fn stream_messages(
             anyhow::bail!("{last_error}");
         }
 
+        info!("Bedrock API response OK, starting EventStream parse");
         // Success — send init event and parse EventStream
         let init_event = serde_json::json!({
             "type": "system",

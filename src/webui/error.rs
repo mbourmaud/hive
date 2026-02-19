@@ -3,6 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use tracing::error;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
@@ -32,7 +33,7 @@ impl IntoResponse for ApiError {
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             ApiError::Conflict(msg) => (StatusCode::CONFLICT, msg),
             ApiError::Internal(err) => {
-                eprintln!("Internal server error: {err:#}");
+                error!(error = %err, "Internal server error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal server error".to_string(),
