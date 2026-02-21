@@ -2,7 +2,7 @@ use axum::Json;
 use serde::Deserialize;
 
 use crate::commands::provider::Provider;
-use crate::webui::bedrock::model::discover_bedrock_models;
+use crate::webui::bedrock::model::{bedrock_model_list, discover_bedrock_models};
 use crate::webui::error::ApiResult;
 
 use super::super::credentials::{self, Credentials};
@@ -24,7 +24,15 @@ pub async fn list_models() -> ApiResult<Json<Vec<ModelInfo>>> {
                 .collect();
             return Ok(Json(models));
         }
-        return Ok(Json(Vec::new()));
+        let fallback: Vec<ModelInfo> = bedrock_model_list()
+            .into_iter()
+            .map(|(id, name)| ModelInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                description: String::new(),
+            })
+            .collect();
+        return Ok(Json(fallback));
     }
 
     if let Some(models) = try_fetch_models().await {

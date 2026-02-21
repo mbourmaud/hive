@@ -282,6 +282,7 @@ export function useChat(baseUrl: string = "") {
   const resetSession = useCallback(() => {
     disconnect();
     dispatchChat({ type: "SESSION_RESET" });
+    useAppStore.getState().setActiveSession(null);
   }, [disconnect, dispatchChat]);
 
   // ── Cleanup on unmount ────────────────────────────────────────────────

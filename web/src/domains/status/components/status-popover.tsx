@@ -92,7 +92,8 @@ function SessionSection({
 }
 
 function AuthBadge({ type }: { type: string | null }) {
-  const label = type === "api_key" ? "API Key" : type === "oauth" ? "OAuth" : "Unknown";
+  const label =
+    type === "api_key" ? "API Key" : type === "oauth" ? "OAuth" : type === "bedrock" ? "Bedrock" : "Unknown";
   return <span data-slot="status-badge">{label}</span>;
 }
 
